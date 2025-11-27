@@ -168,3 +168,28 @@ CREATE INDEX IF NOT EXISTS idx_notification_delivery_log_notification_id ON noti
 CREATE INDEX IF NOT EXISTS idx_notification_delivery_log_user_id ON notification_delivery_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_notification_delivery_log_status ON notification_delivery_log(status);
 CREATE INDEX IF NOT EXISTS idx_notification_delivery_log_attempted_at ON notification_delivery_log(attempted_at);
+
+-- Migration: Create reminders table (2025-11-27)
+-- This migration creates the reminders table for the reminder system
+
+CREATE TABLE IF NOT EXISTS reminders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NULL,
+    reminder_type TEXT NOT NULL CHECK (reminder_type IN ('once', 'daily', 'weekly', 'monthly')),
+    scheduled_at DATETIME NOT NULL,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    is_completed BOOLEAN DEFAULT FALSE,
+    notification_sent BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Create indexes for reminders table
+CREATE INDEX IF NOT EXISTS idx_reminders_user_id ON reminders(user_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_scheduled_at ON reminders(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_reminders_is_enabled ON reminders(is_enabled);
+CREATE INDEX IF NOT EXISTS idx_reminders_is_completed ON reminders(is_completed);
+CREATE INDEX IF NOT EXISTS idx_reminders_notification_sent ON reminders(notification_sent);
