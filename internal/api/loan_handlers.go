@@ -532,7 +532,7 @@ func RespondToGuarantorRequest(c *gin.Context) {
 	var currentStatus string
 	var actualLoanID string
 	err = db.(*sql.DB).QueryRow(`
-		SELECT l.user_id as requester_id, g.status, g.loan_id
+		SELECT l.borrower_id as requester_id, g.status, g.loan_id
 		FROM guarantors g
 		JOIN loans l ON g.loan_id = l.id
 		WHERE g.id = ? AND g.user_id = ?
@@ -694,7 +694,7 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 
 	// Get loan requester for notification
 	var requesterID string
-	err = db.QueryRow(`SELECT user_id FROM loans WHERE id = ?`, loanID).Scan(&requesterID)
+	err = db.QueryRow(`SELECT borrower_id FROM loans WHERE id = ?`, loanID).Scan(&requesterID)
 	if err != nil {
 		fmt.Printf("Error getting loan requester for loan %s: %v\n", loanID, err)
 		return
@@ -1024,7 +1024,7 @@ func GetGuarantorRequests(c *gin.Context) {
 			c.name as chama_name
 		FROM guarantors g
 		JOIN loans l ON g.loan_id = l.id
-		JOIN users u ON l.user_id = u.id
+		JOIN users u ON l.borrower_id = u.id
 		JOIN chamas c ON l.chama_id = c.id
 		WHERE g.user_id = ?
 		ORDER BY g.created_at DESC
