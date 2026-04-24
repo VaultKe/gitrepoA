@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors } from '../../../utils/theme';
+import { getThemeColors, spacing, borderRadius } from '../../../utils/theme';
 import ReminderTypeSelector from './ReminderTypeSelector';
 
 const AddEditReminderModal = ({
@@ -59,11 +59,32 @@ const AddEditReminderModal = ({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
+      animationType="fade"
+      transparent={true}
       onRequestClose={onCancel}
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+      }}>
+        <View style={{
+          backgroundColor: colors.background,
+          borderRadius: borderRadius.lg,
+          borderWidth: 1,
+          borderColor: colors.border,
+          maxHeight: '90%',
+          width: '100%',
+          maxWidth: 500,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          elevation: 5,
+        }}>
+          <SafeAreaView style={{ flex: 1 }}>
         <View style={{
           flexDirection: 'row',
           justifyContent: 'space-between',
@@ -282,7 +303,9 @@ const AddEditReminderModal = ({
             </View>
           </View>
         </View>
-      </SafeAreaView>
+        </SafeAreaView>
+        </View>
+      </View>
     </Modal>
   );
 };

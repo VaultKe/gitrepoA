@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   SafeAreaView,
   RefreshControl,
   TouchableOpacity,
@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors } from '../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
 import { formatDate } from '../../utils/dateUtils';
 import Button from '../../components/common/Button';
 import ReminderService from '../../services/reminderService';
@@ -51,6 +51,8 @@ const ReminderScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingReminder, setEditingReminder] = useState(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [filterValue, setFilterValue] = useState('all');
 
   // Form state
   const getDefaultDateTime = () => {
@@ -305,15 +307,6 @@ const ReminderScreen = () => {
     const dateTimeString = `${formData.date}T${formData.time}:00`;
     const selectedDateTime = new Date(dateTimeString);
     const currentDateTime = new Date();
-
-    // console.log('📅 Date & Time validation:');
-    // console.log('  - Selected date:', formData.date);
-    // console.log('  - Selected time:', formData.time);
-    // console.log('  - Combined datetime:', dateTimeString);
-    // console.log('  - Parsed datetime:', selectedDateTime);
-    // console.log('  - Current datetime:', currentDateTime);
-    // console.log('  - Is datetime valid?', !isNaN(selectedDateTime.getTime()));
-    // console.log('  - Is datetime in future?', selectedDateTime > currentDateTime);
 
     if (isNaN(selectedDateTime.getTime())) {
       // console.log('❌ Validation failed: Invalid date/time combination');
@@ -611,6 +604,19 @@ const ReminderScreen = () => {
     setRefreshing(false);
   }, []);
 
+  // Filter reminders based on search and filter
+  const filteredReminders = reminders.filter(reminder => {
+    // Search filter
+    const matchesSearch = !searchValue ||
+      reminder.title.toLowerCase().includes(searchValue.toLowerCase()) ||
+      (reminder.description && reminder.description.toLowerCase().includes(searchValue.toLowerCase()));
+
+    // Type filter
+    const matchesFilter = filterValue === 'all' || reminder.type === filterValue;
+
+    return matchesSearch && matchesFilter;
+  });
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
 
@@ -619,19 +625,8 @@ const ReminderScreen = () => {
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading reminders...</Text>
         </View>
       ) : (
-        <FlatList
+        <ScrollView
           style={{ flex: 1 }}
-          data={reminders}
-          renderItem={({ item }) => (
-            <ReminderItem
-              reminder={item}
-              onToggle={handleToggleReminder}
-              onEdit={openEditModal}
-              onDelete={handleDeleteReminder}
-            />
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 100 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -640,10 +635,35 @@ const ReminderScreen = () => {
               tintColor={colors.primary}
             />
           }
-          ListHeaderComponent={<ReminderTableHeader isDesktop={true} />}
-          ListEmptyComponent={<EmptyRemindersState onAddReminder={openAddModal} />}
           showsVerticalScrollIndicator={false}
-        />
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
+        >
+          {/* Table Header */}
+          <ReminderTableHeader
+            isDesktop={true}
+            searchValue={searchValue}
+            onSearchChange={setSearchValue}
+            filterValue={filterValue}
+            onFilterChange={setFilterValue}
+            onCreate={openAddModal}
+          />
+
+          {/* Table Body */}
+          {filteredReminders.length > 0 ? (
+            filteredReminders.map((item, index) => (
+              <ReminderItem
+                key={item.id}
+                reminder={item}
+                onToggle={handleToggleReminder}
+                onEdit={openEditModal}
+                onDelete={handleDeleteReminder}
+                index={index}
+              />
+            ))
+          ) : (
+            <EmptyRemindersState onAddReminder={openAddModal} />
+          )}
+        </ScrollView>
       )}
 
       <AddEditReminderModal

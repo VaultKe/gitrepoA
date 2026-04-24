@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors } from '../../../utils/theme';
+import { getThemeColors, spacing } from '../../../utils/theme';
 import { formatDate } from '../../../utils/dateUtils';
 
 const ReminderItem = ({
@@ -10,6 +10,7 @@ const ReminderItem = ({
   onToggle,
   onEdit,
   onDelete,
+  index,
 }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
@@ -39,13 +40,16 @@ const ReminderItem = ({
   const isPast = isReminderPast(reminder.dateTime);
   const reminderDate = new Date(reminder.dateTime);
 
+  // Zebra design: alternate background colors
+  const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
+
   // Table row layout
   return (
     <View style={{
       flexDirection: 'row',
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      backgroundColor: colors.surface,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: rowBackgroundColor,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
       alignItems: 'center',

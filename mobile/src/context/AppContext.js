@@ -181,12 +181,12 @@ export function AppProvider({ children }) {
     // Suppress harmless SVG filter warnings
     const originalConsoleWarn = console.warn;
     console.warn = (...args) => {
-      const message = args.join(' ');
-      // Suppress SVG filter operator warnings
-      if (message.includes('<feComposite> attribute operator: Unrecognized enumerated value')) {
-        return; // Suppress these warnings
-      }
-      originalConsoleWarn.apply(console, args);
+      // const message = args.join(' ');
+      // // Suppress SVG filter operator warnings
+      // if (message.includes('<feComposite> attribute operator: Unrecognized enumerated value')) {
+      //   return; // Suppress these warnings
+      // }
+      // originalConsoleWarn.apply(console, args);
     };
 
     // Cleanup on unmount
