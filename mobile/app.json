@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "VaultKe",
+    "slug": "vaultke",
+    "version": "1.0.0",
+    "main": "index.js",
+    "orientation": "portrait",
+    "icon": "./assets/app-icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D1117"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.somulo1.vaultke"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/badge.png",
+        "backgroundColor": "#0D1117"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.somulo1.vaultke"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "8dfd6170-6062-4304-b0a6-19e4b1530000"
+      }
+    }
+  }
+}

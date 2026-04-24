@@ -1,0 +1,380 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VaultKe Asset Generator</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            background: #0D1117; 
+            color: white; 
+            font-family: Arial, sans-serif;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+        }
+        .asset-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #161B22;
+            border-radius: 10px;
+        }
+        .asset-preview {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 5px;
+        }
+        .instructions {
+            background: #1E293B;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 VaultKe Web Assets Generator</h1>
+        
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <p>1. Right-click on each logo below and "Save image as..."</p>
+            <p>2. Save with the exact filenames shown</p>
+            <p>3. Place files in the assets/ directory</p>
+        </div>
+        
+        <div class="asset-section">
+            <h2>Favicon (32x32)</h2>
+            <div class="asset-preview">
+                <canvas id="favicon" width="32" height="32"></canvas>
+                <p>Save as: <strong>favicon.png</strong></p>
+            </div>
+        </div>
+        
+        <div class="asset-section">
+            <h2>Full Logo (512x512)</h2>
+            <div class="asset-preview">
+                <canvas id="fullLogo" width="512" height="512"></canvas>
+                <p>Save as: <strong>vaultke-logo-full.png</strong></p>
+            </div>
+        </div>
+
+        <div class="asset-section">
+            <h2>Badge Logo (512x512)</h2>
+            <div class="asset-preview">
+                <canvas id="badgeLogo" width="512" height="512"></canvas>
+                <p>Save as: <strong>vaultke-logo-badge.png</strong></p>
+            </div>
+        </div>
+
+        <div class="asset-section">
+            <h2>Icon Logo (512x512)</h2>
+            <div class="asset-preview">
+                <canvas id="iconLogo" width="512" height="512"></canvas>
+                <p>Save as: <strong>vaultke-logo-icon.png</strong></p>
+            </div>
+        </div>
+
+        <div class="asset-section">
+            <h2>Email Icon (80x80)</h2>
+            <div class="asset-preview">
+                <canvas id="emailIcon" width="80" height="80"></canvas>
+                <p>Save as: <strong>vaultke-email-icon.png</strong></p>
+            </div>
+        </div>
+
+        <div class="asset-section">
+            <h2>Favicon (32x32)</h2>
+            <div class="asset-preview">
+                <canvas id="favicon" width="32" height="32"></canvas>
+                <p>Save as: <strong>favicon.png</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // VaultKe App Icon Generator - EXACT COPY from apps/mobile/assets/app-icon.svg
+        function drawAppIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const center = size / 2;
+            const scale = size / 1024; // Scale factor from original 1024px viewBox
+
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+
+            // Create ultra-premium metallic gradients (EXACT from app-icon.svg)
+            const vaultSteelGradient = ctx.createRadialGradient(
+                center * 0.8, center * 0.5, 0,
+                center, center, center * 0.8
+            );
+            vaultSteelGradient.addColorStop(0, '#FFFFFF');
+            vaultSteelGradient.addColorStop(0.15, '#F8FAFC');
+            vaultSteelGradient.addColorStop(0.35, '#E2E8F0');
+            vaultSteelGradient.addColorStop(0.6, '#CBD5E1');
+            vaultSteelGradient.addColorStop(0.85, '#94A3B8');
+            vaultSteelGradient.addColorStop(1, '#64748B');
+
+            const vaultRimGradient = ctx.createRadialGradient(
+                center, center * 0.6, 0,
+                center, center, center
+            );
+            vaultRimGradient.addColorStop(0, '#0F172A');
+            vaultRimGradient.addColorStop(0.3, '#1E293B');
+            vaultRimGradient.addColorStop(0.7, '#334155');
+            vaultRimGradient.addColorStop(1, '#0F172A');
+
+            const goldLockGradient = ctx.createRadialGradient(
+                center * 0.75, center * 0.75, 0,
+                center, center, center * 0.35
+            );
+            goldLockGradient.addColorStop(0, '#FFFBEB');
+            goldLockGradient.addColorStop(0.2, '#FEF3C7');
+            goldLockGradient.addColorStop(0.5, '#FCD34D');
+            goldLockGradient.addColorStop(0.8, '#F59E0B');
+            goldLockGradient.addColorStop(1, '#92400E');
+
+            const brandAccentGradient = ctx.createLinearGradient(0, 0, size, 0);
+            brandAccentGradient.addColorStop(0, '#6366F1');
+            brandAccentGradient.addColorStop(0.5, '#8B5CF6');
+            brandAccentGradient.addColorStop(1, '#EC4899');
+
+            // Draw outer vault frame (dark steel) - EXACT dimensions
+            ctx.fillStyle = vaultRimGradient;
+            ctx.beginPath();
+            ctx.arc(center, center, 480 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Draw main vault door (brushed steel) - EXACT dimensions
+            ctx.fillStyle = vaultSteelGradient;
+            ctx.beginPath();
+            ctx.arc(center, center, 420 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 8 * scale;
+            ctx.stroke();
+
+            // Draw vault door bolts (industrial grade) - EXACT positions from app-icon.svg
+            ctx.fillStyle = '#0F172A';
+            ctx.strokeStyle = '#64748B';
+            ctx.lineWidth = 4 * scale;
+            const boltPositions = [
+                // Main corner bolts
+                [200 * scale, 200 * scale, 24 * scale],
+                [824 * scale, 200 * scale, 24 * scale],
+                [200 * scale, 824 * scale, 24 * scale],
+                [824 * scale, 824 * scale, 24 * scale],
+                // Edge bolts
+                [512 * scale, 120 * scale, 20 * scale],
+                [512 * scale, 904 * scale, 20 * scale],
+                [120 * scale, 512 * scale, 20 * scale],
+                [904 * scale, 512 * scale, 20 * scale],
+                // Corner reinforcement bolts
+                [300 * scale, 300 * scale, 16 * scale],
+                [724 * scale, 300 * scale, 16 * scale],
+                [300 * scale, 724 * scale, 16 * scale],
+                [724 * scale, 724 * scale, 16 * scale]
+            ];
+            boltPositions.forEach(([x, y, radius]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+            });
+
+            // Draw concentric security rings - EXACT dimensions
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 6 * scale;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.arc(center, center, 360 * scale, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#64748B';
+            ctx.lineWidth = 8 * scale;
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(center, center, 300 * scale, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 10 * scale;
+            ctx.globalAlpha = 1;
+            ctx.beginPath();
+            ctx.arc(center, center, 240 * scale, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            // Draw premium combination lock mechanism - EXACT dimensions
+            ctx.fillStyle = goldLockGradient;
+            ctx.beginPath();
+            ctx.arc(center, center, 180 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = '#92400E';
+            ctx.lineWidth = 12 * scale;
+            ctx.stroke();
+
+            // Draw lock mechanism rings - EXACT dimensions
+            ctx.strokeStyle = '#B45309';
+            ctx.lineWidth = 6 * scale;
+            ctx.fillStyle = 'none';
+            [160, 140, 120, 100].forEach(radius => {
+                ctx.beginPath();
+                ctx.arc(center, center, radius * scale, 0, 2 * Math.PI);
+                ctx.stroke();
+            });
+
+            // Draw precision combination dial markers - EXACT positions from app-icon.svg
+            ctx.strokeStyle = '#92400E';
+            ctx.lineWidth = 8 * scale;
+            ctx.lineCap = 'round';
+
+            // Main hour markers (12 positions) - EXACT coordinates
+            const mainMarkers = [
+                [512 * scale, 340 * scale, 512 * scale, 360 * scale], // 12 o'clock
+                [661 * scale, 363 * scale, 649 * scale, 375 * scale], // 1 o'clock
+                [689 * scale, 512 * scale, 669 * scale, 512 * scale], // 3 o'clock
+                [661 * scale, 661 * scale, 649 * scale, 649 * scale], // 5 o'clock
+                [512 * scale, 684 * scale, 512 * scale, 664 * scale], // 6 o'clock
+                [363 * scale, 661 * scale, 375 * scale, 649 * scale], // 7 o'clock
+                [335 * scale, 512 * scale, 355 * scale, 512 * scale], // 9 o'clock
+                [363 * scale, 363 * scale, 375 * scale, 375 * scale]  // 11 o'clock
+            ];
+            mainMarkers.forEach(([x1, y1, x2, y2]) => {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            });
+
+            // Secondary markers - EXACT coordinates
+            const secondaryMarkers = [
+                [590 * scale, 350 * scale, 586 * scale, 358 * scale],
+                [674 * scale, 434 * scale, 666 * scale, 438 * scale],
+                [674 * scale, 590 * scale, 666 * scale, 586 * scale],
+                [590 * scale, 674 * scale, 586 * scale, 666 * scale],
+                [434 * scale, 674 * scale, 438 * scale, 666 * scale],
+                [350 * scale, 590 * scale, 358 * scale, 586 * scale],
+                [350 * scale, 434 * scale, 358 * scale, 438 * scale],
+                [434 * scale, 350 * scale, 438 * scale, 358 * scale]
+            ];
+            secondaryMarkers.forEach(([x1, y1, x2, y2]) => {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            });
+
+            // Draw central handle/dial assembly - EXACT dimensions
+            ctx.fillStyle = '#FCD34D';
+            ctx.beginPath();
+            ctx.arc(center, center, 60 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = '#92400E';
+            ctx.lineWidth = 6 * scale;
+            ctx.stroke();
+
+            ctx.fillStyle = '#FEF3C7';
+            ctx.beginPath();
+            ctx.arc(center, center, 40 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = '#B45309';
+            ctx.lineWidth = 3 * scale;
+            ctx.stroke();
+
+            ctx.fillStyle = '#FBBF24';
+            ctx.beginPath();
+            ctx.arc(center, center, 25 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Draw handle grip - EXACT dimensions
+            ctx.fillStyle = '#92400E';
+            const handleX = 502 * scale;
+            const handleY = 487 * scale;
+            const handleWidth = 20 * scale;
+            const handleHeight = 50 * scale;
+            const handleRadius = 10 * scale;
+            ctx.beginPath();
+            ctx.roundRect(handleX, handleY, handleWidth, handleHeight, handleRadius);
+            ctx.fill();
+
+            ctx.fillStyle = '#FEF3C7';
+            ctx.beginPath();
+            ctx.arc(512 * scale, 500 * scale, 8 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Draw vault locking spokes (heavy duty) - EXACT positions
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 20 * scale;
+            ctx.lineCap = 'round';
+            ctx.globalAlpha = 0.9;
+
+            const spokeLines = [
+                [512 * scale, 180 * scale, 512 * scale, 240 * scale], // Top
+                [512 * scale, 784 * scale, 512 * scale, 844 * scale], // Bottom
+                [844 * scale, 512 * scale, 784 * scale, 512 * scale], // Right
+                [180 * scale, 512 * scale, 240 * scale, 512 * scale], // Left
+                [734 * scale, 290 * scale, 690 * scale, 334 * scale], // Top-right diagonal
+                [290 * scale, 734 * scale, 334 * scale, 690 * scale], // Bottom-left diagonal
+                [734 * scale, 734 * scale, 690 * scale, 690 * scale], // Bottom-right diagonal
+                [290 * scale, 290 * scale, 334 * scale, 334 * scale]  // Top-left diagonal
+            ];
+            spokeLines.forEach(([x1, y1, x2, y2]) => {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            });
+
+            // Draw brand integration - EXACT dimensions
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = brandAccentGradient;
+            ctx.beginPath();
+            ctx.roundRect(200 * scale, 950 * scale, 624 * scale, 12 * scale, 6 * scale);
+            ctx.fill();
+
+            // Draw VaultKe text - EXACT positioning
+            ctx.fillStyle = brandAccentGradient;
+            ctx.font = `bold ${36 * scale}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.fillText('VaultKe', center, 990 * scale);
+
+            // Draw security status indicators - EXACT positions
+            ctx.fillStyle = '#10B981';
+            ctx.globalAlpha = 0.8;
+            const securityIndicators = [
+                [150 * scale, 150 * scale, 12 * scale],
+                [874 * scale, 874 * scale, 12 * scale],
+                [150 * scale, 874 * scale, 8 * scale],
+                [874 * scale, 150 * scale, 8 * scale]
+            ];
+            securityIndicators.forEach(([x, y, radius]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+
+            ctx.globalAlpha = 1; // Reset alpha
+        }
+
+
+        // Generate all assets using EXACT app-icon.svg design
+        drawAppIcon(document.getElementById('fullLogo'), 512);
+        drawAppIcon(document.getElementById('badgeLogo'), 512);
+        drawAppIcon(document.getElementById('iconLogo'), 512);
+        drawAppIcon(document.getElementById('emailIcon'), 80);
+        drawAppIcon(document.getElementById('favicon'), 32);
+
+        console.log('✅ VaultKe app icons generated successfully!');
+        console.log('📋 Right-click each canvas and save as PNG with the specified filename.');
+        console.log('🎯 All icons are EXACT copies from apps/mobile/assets/app-icon.svg!');
+    </script>
+</body>
+</html>
+  

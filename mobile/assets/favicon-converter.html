@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VaultKe Favicon Converter</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            background: #0D1117; 
+            color: white; 
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+        }
+        .preview {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: inline-block;
+        }
+        canvas {
+            border: 2px solid #6366F1;
+            border-radius: 5px;
+        }
+        .instructions {
+            background: #1E293B;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .download-btn {
+            background: #6366F1;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .download-btn:hover {
+            background: #5B5CF6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 VaultKe Favicon Converter</h1>
+        <p>Converting the premium vault design to favicon format</p>
+        
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ol>
+                <li>The favicon has been generated below with the exact same design as app-icon.svg</li>
+                <li>Click the "Download Favicon" button to save as favicon.png</li>
+                <li>Replace the existing favicon.png in the assets/ directory</li>
+                <li>Restart the development server to see the new favicon</li>
+            </ol>
+        </div>
+        
+        <div class="preview">
+            <h3>32x32 Favicon Preview</h3>
+            <canvas id="favicon" width="32" height="32"></canvas>
+            <br><br>
+            <button class="download-btn" onclick="downloadFavicon()">Download Favicon (32x32)</button>
+        </div>
+        
+        <div class="preview">
+            <h3>16x16 Favicon Preview (Browser Tab Size)</h3>
+            <canvas id="favicon16" width="16" height="16"></canvas>
+            <br><br>
+            <button class="download-btn" onclick="downloadFavicon16()">Download Favicon (16x16)</button>
+        </div>
+    </div>
+
+    <script>
+        // VaultKe Premium Favicon Generator - Exact match to app-icon.svg
+        function drawVaultFavicon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const center = size / 2;
+            const scale = size / 32; // Scale factor from 32px base
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Create gradients (scaled from app-icon.svg)
+            const steelGradient = ctx.createRadialGradient(
+                center * 0.8, center * 0.5, 0,
+                center, center, center * 0.8
+            );
+            steelGradient.addColorStop(0, '#FFFFFF');
+            steelGradient.addColorStop(0.15, '#F8FAFC');
+            steelGradient.addColorStop(0.35, '#E2E8F0');
+            steelGradient.addColorStop(0.6, '#CBD5E1');
+            steelGradient.addColorStop(0.85, '#94A3B8');
+            steelGradient.addColorStop(1, '#64748B');
+            
+            const rimGradient = ctx.createRadialGradient(
+                center, center * 0.6, 0,
+                center, center, center
+            );
+            rimGradient.addColorStop(0, '#0F172A');
+            rimGradient.addColorStop(0.3, '#1E293B');
+            rimGradient.addColorStop(0.7, '#334155');
+            rimGradient.addColorStop(1, '#0F172A');
+            
+            const goldGradient = ctx.createRadialGradient(
+                center * 0.75, center * 0.75, 0,
+                center, center, center * 0.35
+            );
+            goldGradient.addColorStop(0, '#FFFBEB');
+            goldGradient.addColorStop(0.2, '#FEF3C7');
+            goldGradient.addColorStop(0.5, '#FCD34D');
+            goldGradient.addColorStop(0.8, '#F59E0B');
+            goldGradient.addColorStop(1, '#92400E');
+            
+            // Draw outer vault frame
+            ctx.fillStyle = rimGradient;
+            ctx.beginPath();
+            ctx.arc(center, center, 15 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Add shadow effect
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 2 * scale;
+            ctx.shadowOffsetY = 1 * scale;
+            
+            // Draw main vault door
+            ctx.fillStyle = steelGradient;
+            ctx.beginPath();
+            ctx.arc(center, center, 13.1 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 0.25 * scale;
+            ctx.stroke();
+            
+            // Reset shadow
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+            
+            // Draw security bolts
+            ctx.fillStyle = '#0F172A';
+            const bolts = [
+                [6.25 * scale, 6.25 * scale, 0.75 * scale],
+                [25.75 * scale, 6.25 * scale, 0.75 * scale],
+                [6.25 * scale, 25.75 * scale, 0.75 * scale],
+                [25.75 * scale, 25.75 * scale, 0.75 * scale],
+                [center, 3.75 * scale, 0.625 * scale],
+                [center, 28.25 * scale, 0.625 * scale],
+                [3.75 * scale, center, 0.625 * scale],
+                [28.25 * scale, center, 0.625 * scale],
+                [9.375 * scale, 9.375 * scale, 0.5 * scale],
+                [22.625 * scale, 9.375 * scale, 0.5 * scale],
+                [9.375 * scale, 22.625 * scale, 0.5 * scale],
+                [22.625 * scale, 22.625 * scale, 0.5 * scale]
+            ];
+            
+            bolts.forEach(([x, y, r]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+            
+            // Draw security rings
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 0.1875 * scale;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.arc(center, center, 11.25 * scale, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#64748B';
+            ctx.lineWidth = 0.25 * scale;
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(center, center, 9.375 * scale, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 0.3125 * scale;
+            ctx.globalAlpha = 1;
+            ctx.beginPath();
+            ctx.arc(center, center, 7.5 * scale, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Draw combination lock mechanism
+            ctx.fillStyle = goldGradient;
+            ctx.beginPath();
+            ctx.arc(center, center, 5.625 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = '#92400E';
+            ctx.lineWidth = 0.375 * scale;
+            ctx.stroke();
+            
+            // Draw dial markers
+            ctx.strokeStyle = '#92400E';
+            ctx.lineWidth = 0.25 * scale;
+            ctx.lineCap = 'round';
+            
+            const markers = [
+                [center, 10.625 * scale, center, 11.25 * scale],
+                [20.656 * scale, 11.344 * scale, 20.281 * scale, 11.719 * scale],
+                [21.5 * scale, center, 20.875 * scale, center],
+                [20.656 * scale, 20.656 * scale, 20.281 * scale, 20.281 * scale],
+                [center, 21.375 * scale, center, 20.75 * scale],
+                [11.344 * scale, 20.656 * scale, 11.719 * scale, 20.281 * scale],
+                [10.5 * scale, center, 11.125 * scale, center],
+                [11.344 * scale, 11.344 * scale, 11.719 * scale, 11.719 * scale]
+            ];
+            
+            markers.forEach(([x1, y1, x2, y2]) => {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            });
+            
+            // Draw central handle assembly
+            ctx.fillStyle = '#FCD34D';
+            ctx.beginPath();
+            ctx.arc(center, center, 1.875 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = '#FEF3C7';
+            ctx.beginPath();
+            ctx.arc(center, center, 1.25 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = '#FBBF24';
+            ctx.beginPath();
+            ctx.arc(center, center, 0.78125 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw handle grip
+            ctx.fillStyle = '#92400E';
+            ctx.fillRect(15.375 * scale, 15.219 * scale, 1.25 * scale, 1.5625 * scale);
+            
+            ctx.fillStyle = '#FEF3C7';
+            ctx.beginPath();
+            ctx.arc(center, 15.625 * scale, 0.25 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw locking spokes
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = Math.max(0.625 * scale, 1);
+            ctx.globalAlpha = 0.9;
+            
+            const spokes = [
+                [center, 5.625 * scale, center, 7.5 * scale],
+                [center, 24.5 * scale, center, 26.375 * scale],
+                [26.375 * scale, center, 24.5 * scale, center],
+                [5.625 * scale, center, 7.5 * scale, center]
+            ];
+            
+            spokes.forEach(([x1, y1, x2, y2]) => {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            });
+            
+            // Draw security indicators
+            ctx.fillStyle = '#10B981';
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(4.688 * scale, 4.688 * scale, 0.375 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(27.313 * scale, 27.313 * scale, 0.375 * scale, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.globalAlpha = 1;
+        }
+        
+        // Generate favicons
+        drawVaultFavicon(document.getElementById('favicon'), 32);
+        drawVaultFavicon(document.getElementById('favicon16'), 16);
+        
+        function downloadFavicon() {
+            const canvas = document.getElementById('favicon');
+            const link = document.createElement('a');
+            link.download = 'favicon.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        function downloadFavicon16() {
+            const canvas = document.getElementById('favicon16');
+            const link = document.createElement('a');
+            link.download = 'favicon-16x16.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        console.log('✅ VaultKe favicon generated with exact app-icon.svg design!');
+    </script>
+</body>
+</html>

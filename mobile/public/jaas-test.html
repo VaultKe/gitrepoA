@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>VaultKe - JaaS Meeting</title>
+    <script src='https://8x8.vc/vpaas-magic-cookie-cb055ffbd0604dedb00b5a2540349c3c/external_api.js' async></script>
+    <style>
+      html, body, #jaas-container { 
+        height: 100%; 
+        margin: 0;
+        padding: 0;
+        background: #000;
+      }
+      
+      .loading {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: #1a1a1a;
+        color: white;
+        font-family: Arial, sans-serif;
+      }
+      
+      .loading h2 {
+        margin-bottom: 20px;
+        color: #007AFF;
+      }
+      
+      .spinner {
+        border: 4px solid #333;
+        border-top: 4px solid #007AFF;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      .security-notice {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 12px;
+        border-radius: 8px;
+        border-left: 4px solid #007AFF;
+        color: white;
+        font-size: 12px;
+        z-index: 1000;
+      }
+      
+      .security-title {
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+    </style>
+    <script type="text/javascript">
+      window.onload = () => {
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomName = urlParams.get('room') || 'vpaas-magic-cookie-cb055ffbd0604dedb00b5a2540349c3c/VaultKeTestRoom';
+        const userName = urlParams.get('name') || 'VaultKe User';
+        const userEmail = urlParams.get('email') || 'user@vaultke.com';
+        const isModerator = urlParams.get('moderator') === 'true';
+        
+        console.log('🎬 JaaS: Initializing with:', {
+          roomName,
+          userName,
+          userEmail,
+          isModerator
+        });
+        
+        // Show loading
+        document.getElementById('loading').style.display = 'flex';
+        
+        // Initialize JaaS API
+        const api = new JitsiMeetExternalAPI("8x8.vc", {
+          roomName: roomName,
+          parentNode: document.querySelector('#jaas-container'),
+          
+          // JWT token for authentication and features
+          jwt: "eyJraWQiOiJ2cGFhcy1tYWdpYy1jb29raWUtY2IwNTVmZmJkMDYwNGRlZGIwMGI1YTI1NDAzNDljM2MvZmYxNWQ1LVNBTVBMRV9BUFAiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJqaXRzaSIsImlzcyI6ImNoYXQiLCJpYXQiOjE3NTIwMTAzNzksImV4cCI6MTc1MjAxNzU3OSwibmJmIjoxNzUyMDEwMzc0LCJzdWIiOiJ2cGFhcy1tYWdpYy1jb29raWUtY2IwNTVmZmJkMDYwNGRlZGIwMGI1YTI1NDAzNDljM2MiLCJjb250ZXh0Ijp7ImZlYXR1cmVzIjp7ImxpdmVzdHJlYW1pbmciOmZhbHNlLCJmaWxlLXVwbG9hZCI6ZmFsc2UsIm91dGJvdW5kLWNhbGwiOmZhbHNlLCJzaXAtb3V0Ym91bmQtY2FsbCI6ZmFsc2UsInRyYW5zY3JpcHRpb24iOmZhbHNlLCJyZWNvcmRpbmciOmZhbHNlLCJmbGlwIjpmYWxzZX0sInVzZXIiOnsiaGlkZGVuLWZyb20tcmVjb3JkZXIiOmZhbHNlLCJtb2RlcmF0b3IiOnRydWUsIm5hbWUiOiJUZXN0IFVzZXIiLCJpZCI6Imdvb2dsZS1vYXV0aDJ8MTAzNDg4MTc2MDgxMjc0OTY0NDYyIiwiYXZhdGFyIjoiIiwiZW1haWwiOiJ0ZXN0LnVzZXJAY29tcGFueS5jb20ifX0sInJvb20iOiIqIn0.MywuAboUYhDc3l-v-3n9o7bwlh4ssiCOsyBVfLkVBrO9OA84KANmHXTJEMYdzDgj9m2k_IDLNEPt_h5sAH5g12vO7OMHEc9rV8wDSDJMfOk3LSs54DQqyTHGui10p5RniGTdrG2Cx2Ldl8tjkq7gbH3sRIYZ68rSIxUR8EQAjJfb8YjN6BiTusT2NGLwTE_l_3iGBaRLU_IDURDLLkUHoP9Ltm15AY2ABGW6t0VYkalYJVh9mPNVo65IKQ821tTqta-nyyQ4Nc-4C4AefKTCNqDphZjdDMSQpN2mH35d_C_QXSdkxEoZcECaH3zYMdXnreijw5xA_HqJF0qYZOs7Pg",
+          
+          // User configuration
+          userInfo: {
+            displayName: userName,
+            email: userEmail,
+          },
+          
+          // Meeting configuration
+          configOverwrite: {
+            startWithAudioMuted: false,
+            startWithVideoMuted: false,
+            requireDisplayName: true,
+            enableWelcomePage: false,
+            enableClosePage: false,
+            prejoinPageEnabled: false,
+            
+            // Security and UI
+            disableProfile: true,
+            readOnlyName: true,
+            enableNoAudioDetection: true,
+            enableNoisyMicDetection: true,
+            disableDeepLinking: true,
+            
+            // Toolbar configuration
+            toolbarButtons: [
+              'microphone', 'camera', 'hangup', 'chat', 'raisehand', 'tileview', 'settings'
+            ],
+
+            // VaultKe branding
+            defaultLocalDisplayName: userName,
+            defaultRemoteDisplayName: 'VaultKe User',
+            subject: 'VaultKe Meeting',
+
+            // Moderator settings
+            enableLobby: !isModerator,
+            enableLobbyChat: !isModerator,
+          },
+          
+          // Interface configuration with VaultKe branding
+          interfaceConfigOverwrite: {
+            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+            DISABLE_PRESENCE_STATUS: true,
+            HIDE_INVITE_MORE_HEADER: true,
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_WATERMARK_FOR_GUESTS: false,
+            SHOW_BRAND_WATERMARK: false,
+            SHOW_POWERED_BY: false,
+
+            // VaultKe branding
+            APP_NAME: 'VaultKe',
+            NATIVE_APP_NAME: 'VaultKe',
+            DEFAULT_BACKGROUND: '#1a1a1a',
+
+            // Remove external links
+            BRAND_WATERMARK_LINK: '',
+            JITSI_WATERMARK_LINK: '',
+
+            TOOLBAR_BUTTONS: [
+              'microphone', 'camera', 'hangup', 'chat', 'raisehand', 'tileview', 'settings'
+            ],
+          }
+        });
+        
+        // Event listeners
+        api.addEventListener('videoConferenceJoined', () => {
+          console.log('🎬 JaaS: Conference joined successfully');
+          document.getElementById('loading').style.display = 'none';
+          
+          // Show security notice for non-moderators
+          if (!isModerator) {
+            document.getElementById('security-notice').style.display = 'block';
+          }
+        });
+        
+        api.addEventListener('videoConferenceLeft', () => {
+          console.log('🎬 JaaS: Conference left');
+          window.close();
+        });
+        
+        api.addEventListener('readyToClose', () => {
+          console.log('🎬 JaaS: Ready to close');
+          window.close();
+        });
+        
+        // Store API reference globally for debugging
+        window.jitsiApi = api;
+      }
+    </script>
+  </head>
+  <body>
+    <!-- Loading screen -->
+    <div id="loading" class="loading">
+      <h2>🎬 VaultKe Meeting</h2>
+      <div class="spinner"></div>
+      <p>Connecting to secure meeting...</p>
+    </div>
+    
+    <!-- Security notice -->
+    <div id="security-notice" class="security-notice" style="display: none;">
+      <div class="security-title">🔒 SECURE MEETING</div>
+      <div>You'll be placed in a waiting room. A moderator will approve your entry.</div>
+    </div>
+    
+    <!-- JaaS container -->
+    <div id="jaas-container"></div>
+  </body>
+</html>
