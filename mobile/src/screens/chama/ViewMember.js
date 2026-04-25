@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors } from '../../utils/theme';
+import { getThemeColors, spacing } from '../../utils/theme';
 import api from '../../services/api';
 
 const ViewMember = ({ route, navigation }) => {
@@ -456,6 +456,172 @@ const ViewMember = ({ route, navigation }) => {
           </View>
         </View>
 
+        {/* Member Details Table */}
+        <View style={[styles.detailsCard, { backgroundColor: colors.surface, marginTop: 16 }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 16 }]}>
+            Member Details
+          </Text>
+
+          <View style={styles.detailsTable}>
+            {/* Row 1: Role */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Role</Text>
+              <View style={styles.tableValue}>
+                <Ionicons
+                  name={getRoleIcon(memberData.role)}
+                  size={16}
+                  color={getRoleColor(memberData.role)}
+                />
+                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 8 }]}>
+                  {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Row 2: Join Date */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Join Date</Text>
+              <Text style={[styles.tableValueText, { color: colors.text }]}>
+                {formatDate(memberData.joined_at)}
+              </Text>
+            </View>
+
+            {/* Row 3: Attendance Rate */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Attendance Rate</Text>
+              <Text style={[styles.tableValueText, { color: colors.primary }]}>
+                {memberData.attendance_rate?.toFixed(1) || 0}%
+              </Text>
+            </View>
+
+            {/* Row 4: Reputation Score */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Reputation</Text>
+              <View style={styles.tableValue}>
+                <Ionicons name="star" size={16} color={colors.warning} />
+                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 4 }]}>
+                  {memberData.reputation_score?.toFixed(1) || 0}
+                </Text>
+              </View>
+            </View>
+
+            {/* Row 5: Total Contributions */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Total Contributions</Text>
+              <Text style={[styles.tableValueText, { color: colors.success }]}>
+                {formatCurrency(memberData.total_contributions || 0)}
+              </Text>
+            </View>
+
+            {/* Row 6: Savings Balance */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Savings Balance</Text>
+              <Text style={[styles.tableValueText, { color: colors.primary }]}>
+                {formatCurrency(memberData.savings_balance || 0)}
+              </Text>
+            </View>
+
+            {/* Row 7: Loan Balance */}
+            {memberData.loan_balance > 0 && (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Loan Balance</Text>
+                <Text style={[styles.tableValueText, { color: colors.error }]}>
+                  {formatCurrency(memberData.loan_balance)}
+                </Text>
+              </View>
+            )}
+
+            {/* Row 8: Business Type */}
+            {memberData.business_type && (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Business Type</Text>
+                <Text style={[styles.tableValueText, { color: colors.text }]}>
+                  {memberData.business_type}
+                </Text>
+              </View>
+            )}
+
+            {/* Row 9: Location */}
+            {memberData.location && (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Location</Text>
+                <Text style={[styles.tableValueText, { color: colors.text }]}>
+                  {memberData.location}
+                </Text>
+              </View>
+            )}
+
+            {/* Row 10: Phone Number */}
+            {(memberData.user?.phone || memberData.phone_number) && (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Phone</Text>
+                <Text style={[styles.tableValueText, { color: colors.text }]}>
+                  {memberData.user?.phone || memberData.phone_number}
+                </Text>
+              </View>
+            )}
+
+            {/* Row 11: Email Verification */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Email Verified</Text>
+              <View style={styles.tableValue}>
+                <Ionicons
+                  name={memberData.email_verified ? "checkmark-circle" : "close-circle"}
+                  size={16}
+                  color={memberData.email_verified ? colors.success : colors.error}
+                />
+                <Text style={[styles.tableValueText, {
+                  color: memberData.email_verified ? colors.success : colors.error,
+                  marginLeft: 4
+                }]}>
+                  {memberData.email_verified ? 'Yes' : 'No'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Row 12: Phone Verification */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Phone Verified</Text>
+              <View style={styles.tableValue}>
+                <Ionicons
+                  name={memberData.phone_verified ? "checkmark-circle" : "close-circle"}
+                  size={16}
+                  color={memberData.phone_verified ? colors.success : colors.error}
+                />
+                <Text style={[styles.tableValueText, {
+                  color: memberData.phone_verified ? colors.success : colors.error,
+                  marginLeft: 4
+                }]}>
+                  {memberData.phone_verified ? 'Yes' : 'No'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Row 13: Bio/Occupation */}
+            {(memberData.user?.bio || memberData.user?.occupation) && (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>
+                  {memberData.user?.occupation ? 'Occupation' : 'Bio'}
+                </Text>
+                <Text style={[styles.tableValueText, { color: colors.text }]}>
+                  {memberData.user?.occupation || memberData.user?.bio}
+                </Text>
+              </View>
+            )}
+
+            {/* Row 14: Last Contribution */}
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Last Contribution</Text>
+              <Text style={[styles.tableValueText, { color: colors.text }]}>
+                {memberData.last_contribution_date
+                  ? `${formatCurrency(memberData.last_contribution_amount || 0)} on ${new Date(memberData.last_contribution_date).toLocaleDateString()}`
+                  : 'None'
+                }
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Member Statistics */}
         {memberStats && (
           <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
@@ -804,6 +970,37 @@ const styles = StyleSheet.create({
   verificationText: {
     fontSize: 12,
     marginLeft: 4,
+  },
+  // Details Table Styles
+  detailsCard: {
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  detailsTable: {
+    marginTop: 8,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  tableLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  tableValue: {
+    flex: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tableValueText: {
+    fontSize: 14,
+    flex: 1,
   },
 });
 

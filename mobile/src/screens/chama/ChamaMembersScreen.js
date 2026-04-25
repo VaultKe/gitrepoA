@@ -581,250 +581,159 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     return 'Recently joined';
   };
 
-  const renderMemberCard = ({ item }) => (
-    <Card style={[
-      styles.memberCard,
-      {
-        width: numColumns > 1 ? cardWidth : '100%',
-        marginHorizontal: numColumns > 1 ? cardMargin / 2 : 0,
-      }
-    ]}>
-      <View style={styles.memberHeader}>
-        <View style={styles.memberAvatarContainer}>
-          {renderMemberAvatar(item)}
-          {item.user?.is_online && (
-            <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
-          )}
-        </View>
+  const renderMemberRow = ({ item, index }) => {
+    // Zebra design: alternate background colors
+    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
-        <View style={styles.memberInfo}>
-          <View style={styles.memberNameRow}>
-            <Text style={[styles.memberName, { color: colors.text }]}>
+    return (
+      <View style={{
+        flexDirection: 'row',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        backgroundColor: rowBackgroundColor,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        alignItems: 'center',
+      }}>
+        {/* Name */}
+        <View style={{ flex: 3, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ marginRight: spacing.sm }}>
+            {renderMemberAvatar(item, 32)}
+          </View>
+          <View>
+            <Text style={{
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.medium,
+              color: colors.text,
+            }}>
               {getMemberName(item)}
             </Text>
             {item.phone_verified && (
-              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Ionicons name="checkmark-circle" size={12} color={colors.success} />
             )}
           </View>
+        </View>
 
-          <View style={styles.memberRole}>
+        {/* Role */}
+        <View style={{ flex: 1.5, alignItems: 'center' }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: spacing.xs,
+            paddingVertical: 2,
+            borderRadius: borderRadius.sm,
+            backgroundColor: getRoleColor(item.role) + '20',
+          }}>
             <Ionicons
               name={getRoleIcon(item.role)}
-              size={16}
+              size={12}
               color={getRoleColor(item.role)}
             />
-            <Text style={[styles.roleText, { color: getRoleColor(item.role) }]}>
+            <Text style={{
+              fontSize: typography.fontSize.xs,
+              fontWeight: typography.fontWeight.medium,
+              color: getRoleColor(item.role),
+              marginLeft: 2,
+            }}>
               {item.role.charAt(0).toUpperCase() + item.role.slice(1)}
             </Text>
-            <View style={[styles.statusBadge, {
-              backgroundColor: item.status === 'active' ? colors.success + '20' : colors.warning + '20'
-            }]}>
-              <Text style={[styles.statusText, {
-                color: item.status === 'active' ? colors.success : colors.warning
-              }]}>
-                {item.status}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.memberDetails}>
-            <Text style={[styles.memberJoined, { color: colors.textTertiary }]}>
-              {item.business_type || 'Member'} • {item.location || 'Location not set'}
-            </Text>
-            <Text style={[styles.memberJoined, { color: colors.textTertiary }]}>
-              Joined {getMemberJoinDate(item)}
-            </Text>
           </View>
         </View>
 
-        {canManageMembers() && item.user_id !== user?.id && (
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => {
-              setSelectedMember(item);
-              setShowRoleModal(true);
-            }}
-          >
-            <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Enhanced Stats Section */}
-      <View style={styles.memberStats}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Total Contributions
-          </Text>
-          <Text style={[styles.statValue, { color: colors.success }]}>
-            {formatCurrency(item.total_contributions || 0)}
-          </Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Attendance Rate
-          </Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>
+        {/* Attendance Rate */}
+        <View style={{ flex: 1.5, alignItems: 'center' }}>
+          <Text style={{
+            fontSize: typography.fontSize.sm,
+            fontWeight: typography.fontWeight.medium,
+            color: colors.text,
+          }}>
             {item.attendance_rate?.toFixed(1) || 0}%
           </Text>
         </View>
 
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Reputation
-          </Text>
-          <View style={styles.reputationContainer}>
-            <Ionicons name="star" size={14} color={colors.warning} />
-            <Text style={[styles.statValue, { color: colors.text, marginLeft: 4 }]}>
-              {item.reputation_score?.toFixed(1) || 0}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Financial Summary */}
-      <View style={styles.financialSummary}>
-        <View style={styles.financialItem}>
-          <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-            Savings Balance
-          </Text>
-          <Text style={[styles.financialValue, { color: colors.primary }]}>
-            {formatCurrency(item.savings_balance || 0)}
+        {/* Reputation */}
+        <View style={{ flex: 1.5, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
+          <Ionicons name="star" size={14} color={colors.warning} />
+          <Text style={{
+            fontSize: typography.fontSize.sm,
+            fontWeight: typography.fontWeight.medium,
+            color: colors.text,
+            marginLeft: 4,
+          }}>
+            {item.reputation_score?.toFixed(1) || 0}
           </Text>
         </View>
 
-        {item.loan_balance > 0 && (
-          <View style={styles.financialItem}>
-            <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-              Loan Balance
-            </Text>
-            <Text style={[styles.financialValue, { color: colors.error }]}>
-              {formatCurrency(item.loan_balance || 0)}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.financialItem}>
-          <Text style={[styles.financialLabel, { color: colors.textSecondary }]}>
-            Last Contribution
-          </Text>
-          <Text style={[styles.financialValue, { color: colors.text }]}>
-            {item.last_contribution_date
-              ? `${formatCurrency(item.last_contribution_amount || 0)} on ${new Date(item.last_contribution_date).toLocaleDateString()}`
-              : 'None'
-            }
-          </Text>
-        </View>
-      </View>
-
-      {/* Activity Summary */}
-      {item.activity_summary && (
-        <View style={styles.activitySummary}>
-          <Text style={[styles.activityTitle, { color: colors.text }]}>
-            Recent Activity
-          </Text>
-          <View style={styles.activityGrid}>
-            <View style={styles.activityItem}>
-              <Text style={[styles.activityValue, { color: colors.primary }]}>
-                {item.activity_summary.meetings_attended}/{item.activity_summary.total_meetings}
-              </Text>
-              <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
-                Meetings
-              </Text>
-            </View>
-            <View style={styles.activityItem}>
-              <Text style={[styles.activityValue, { color: colors.success }]}>
-                {item.activity_summary.contributions_made}
-              </Text>
-              <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
-                Contributions
-              </Text>
-            </View>
-            <View style={styles.activityItem}>
-              <Text style={[styles.activityValue, { color: colors.warning }]}>
-                {item.activity_summary.loans_taken}
-              </Text>
-              <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
-                Loans
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      <View style={styles.memberActions}>
-        <Button
-          title={item.user_id === user?.id ? "View My Profile" : "View Details"}
-          variant={item.user_id === user?.id ? "primary" : "outline"}
-          size="small"
-          onPress={() => {
-            navigation.navigate('ViewMember', {
-              memberId: item.user_id,
-              chamaId: chamaId,
-              userRole: userRole,
-            });
-          }}
-          style={styles.memberActionButton}
-          icon={<Ionicons
-            name={item.user_id === user?.id ? "person-circle" : "person"}
-            size={16}
-            color={item.user_id === user?.id ? colors.white : colors.primary}
-          />}
-        />
-
-        {item.user_id !== user?.id && (
-          <Button
-            title="Chat"
-            size="small"
-            onPress={async () => {
-              try {
-                // Debug: Check the member data structure
-                console.log('🔍 Member data for chat:', {
-                  user_id: item.user_id,
-                  id: item.id,
-                  user: item.user,
-                  fullItem: item
-                });
-
-                // Validate user ID
-                const recipientId = item.user_id;
-                if (!recipientId) {
-                  console.error('❌ No user ID found for member:', item);
-                  Alert.alert('Error', 'Cannot start chat: User ID not found');
-                  return;
-                }
-
-                // Create or get existing private chat room
-                console.log('🔄 Creating private chat with user ID:', recipientId);
-                const response = await ApiService.createPrivateChat(recipientId);
-
-                if (response.success) {
-                  const roomName = item.user?.first_name && item.user?.last_name
-                    ? `${item.user.first_name} ${item.user.last_name}`
-                    : 'Chat';
-
-                  navigation.navigate('ChatRoom', {
-                    roomId: response.data.id,
-                    roomName: roomName,
-                    roomType: 'private'
-                  });
-                } else {
-                  console.error('❌ Failed to create chat room:', response);
-                  Alert.alert('Error', response.error || 'Failed to create chat room');
-                }
-              } catch (error) {
-                console.error('❌ Failed to create private chat:', error);
-                Alert.alert('Error', 'Failed to start chat: ' + error.message);
-              }
+        {/* Actions */}
+        <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center', gap: spacing.sm }}>
+          <TouchableOpacity
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              backgroundColor: colors.primary + '20',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-            style={styles.memberActionButton}
-            icon={<Ionicons name="chatbubble" size={16} color={colors.white} />}
-          />
-        )}
+            onPress={() => {
+              navigation.navigate('ViewMember', {
+                memberId: item.user_id,
+                chamaId: chamaId,
+                userRole: userRole,
+              });
+            }}
+          >
+            <Ionicons
+              name={item.user_id === user?.id ? "person-circle" : "person"}
+              size={14}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+
+          {item.user_id !== user?.id && (
+            <TouchableOpacity
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: colors.secondary + '20',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onPress={async () => {
+                try {
+                  const recipientId = item.user_id;
+                  if (!recipientId) {
+                    Alert.alert('Error', 'Cannot start chat: User ID not found');
+                    return;
+                  }
+
+                  const response = await ApiService.createPrivateChat(recipientId);
+                  if (response.success) {
+                    const roomName = item.user?.first_name && item.user?.last_name
+                      ? `${item.user.first_name} ${item.user.last_name}`
+                      : 'Chat';
+
+                    navigation.navigate('ChatRoom', {
+                      roomId: response.data.id,
+                      roomName: roomName,
+                      roomType: 'private'
+                    });
+                  } else {
+                    Alert.alert('Error', response.error || 'Failed to create chat room');
+                  }
+                } catch (error) {
+                  Alert.alert('Error', 'Failed to start chat: ' + error.message);
+                }
+              }}
+            >
+              <Ionicons name="chatbubble" size={14} color={colors.secondary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-    </Card>
-  );
+    );
+  };
 
   const renderRoleModal = () => (
     <Modal
@@ -1053,28 +962,70 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
       {/* Content based on active tab */}
       {activeTab === 'members' ? (
-        <FlatList
-          data={filteredMembers}
-          renderItem={renderMemberCard}
-          keyExtractor={(item) => item.id}
-          numColumns={numColumns}
-          key={numColumns} // Force re-render when columns change
-          contentContainerStyle={[
-            styles.membersList,
-            numColumns > 1 && { alignItems: 'flex-start' }
-          ]}
-          columnWrapperStyle={numColumns > 1 ? styles.row : null}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          ListEmptyComponent={!loading && renderEmptyState()}
-          showsVerticalScrollIndicator={false}
-        />
+        <View style={{ flex: 1 }}>
+          {/* Table Header */}
+          <View style={{
+            flexDirection: 'row',
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            backgroundColor: colors.surface,
+            borderBottomWidth: 2,
+            borderBottomColor: colors.primary,
+          }}>
+            <Text style={{
+              flex: 3,
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.semibold,
+              color: colors.text,
+            }}>Name</Text>
+            <Text style={{
+              flex: 1.5,
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.semibold,
+              color: colors.text,
+              textAlign: 'center',
+            }}>Role</Text>
+            <Text style={{
+              flex: 1.5,
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.semibold,
+              color: colors.text,
+              textAlign: 'center',
+            }}>Attendance</Text>
+            <Text style={{
+              flex: 1.5,
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.semibold,
+              color: colors.text,
+              textAlign: 'center',
+            }}>Reputation</Text>
+            <Text style={{
+              flex: 1.5,
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.semibold,
+              color: colors.text,
+              textAlign: 'center',
+            }}>Actions</Text>
+          </View>
+
+          {/* Table Body */}
+          <FlatList
+            data={filteredMembers}
+            renderItem={renderMemberRow}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.membersList}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            ListEmptyComponent={!loading && renderEmptyState()}
+            showsVerticalScrollIndicator={false}
+          />
+        </View>
       ) : (
         <FlatList
           data={sentInvitations.filter(inv =>
