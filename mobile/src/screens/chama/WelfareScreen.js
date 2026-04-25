@@ -27,7 +27,100 @@ const WelfareScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const { currentChamaId, selectedChama } = useChamaContext();
   const colors = getThemeColors(theme);
-  const tableStyles = createTableStyles(colors, spacing, typography, shadows);
+
+  const tableStyles = {
+    tableContainer: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.xxxl,
+    },
+    tableHeader: {
+      flexDirection: 'row',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      backgroundColor: colors.surface,
+      borderBottomWidth: 2,
+      borderBottomColor: colors.primary,
+    },
+    tableRow: {
+      flexDirection: 'row',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    tableCell: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: spacing.xs,
+    },
+    nameCell: {
+      flex: 2.5,
+      alignItems: 'flex-start',
+    },
+    amountCell: {
+      flex: 1.2,
+    },
+    dateCell: {
+      flex: 1.5,
+    },
+    typeCell: {
+      flex: 1,
+    },
+    actionsCell: {
+      flex: 0.8,
+    },
+    tableHeaderText: {
+      fontWeight: typography.fontWeight.bold,
+      color: colors.text,
+      fontSize: 9,
+      textAlign: 'center',
+    },
+    tableCellText: {
+      fontSize: 8.5,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    nameContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    typeIcon: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.xs,
+    },
+    nameText: {
+      fontWeight: typography.fontWeight.medium,
+      textAlign: 'left',
+    },
+    statusBadge: {
+      paddingHorizontal: spacing.xs,
+      paddingVertical: spacing.xs / 2,
+      borderRadius: borderRadius.sm,
+    },
+    statusText: {
+      fontSize: 7,
+      fontWeight: typography.fontWeight.bold,
+      textTransform: 'capitalize',
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: spacing.xs,
+    },
+    actionButton: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  };
 
   // Use chamaId from route params or from context
   const chamaId = routeChamaId || currentChamaId;
@@ -59,7 +152,7 @@ const WelfareScreen = ({ route, navigation }) => {
   // Pagination states
   const [requestsCurrentPage, setRequestsCurrentPage] = useState(1);
   const [contributionsCurrentPage, setContributionsCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const itemsPerPage = 12;
 
   const welfareCategories = [
     { id: 'medical', name: 'Medical Emergency', icon: 'medical', color: colors.error },
@@ -82,10 +175,8 @@ const WelfareScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (chamaId) {
       loadChamaDetails();
-      loadWelfareRequests(1);
-      loadWelfareContributions(1);
-      setRequestsCurrentPage(1);
-      setContributionsCurrentPage(1);
+      loadWelfareRequests();
+      loadWelfareContributions();
     }
   }, [chamaId]);
 
@@ -95,20 +186,6 @@ const WelfareScreen = ({ route, navigation }) => {
       loadChamaMembers();
     }
   }, [showCreateModal]);
-
-  // Load welfare requests when page changes
-  useEffect(() => {
-    if (chamaId && activeTab === 'requests') {
-      loadWelfareRequests(requestsCurrentPage);
-    }
-  }, [requestsCurrentPage, activeTab]);
-
-  // Load welfare contributions when page changes
-  useEffect(() => {
-    if (chamaId && activeTab === 'contributions') {
-      loadWelfareContributions(contributionsCurrentPage);
-    }
-  }, [contributionsCurrentPage, activeTab]);
 
   const loadChamaDetails = async () => {
     try {
@@ -174,11 +251,10 @@ const WelfareScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadWelfareContributions = async (page = contributionsCurrentPage) => {
+  const loadWelfareContributions = async () => {
     try {
       // Load all welfare requests and filter for approved ones
-      const offset = (page - 1) * itemsPerPage;
-      const response = await ApiService.getWelfareRequests(chamaId, itemsPerPage, offset);
+      const response = await ApiService.getWelfareRequests(chamaId);
       if (response.success) {
         const allRequests = response.data || [];
 
@@ -385,11 +461,9 @@ const WelfareScreen = ({ route, navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    setRequestsCurrentPage(1);
-    setContributionsCurrentPage(1);
     await Promise.all([
-      loadWelfareRequests(1),
-      loadWelfareContributions(1)
+      loadWelfareRequests(),
+      loadWelfareContributions()
     ]);
     setRefreshing(false);
   };
@@ -423,7 +497,7 @@ const WelfareScreen = ({ route, navigation }) => {
         Toast.show({
           type: 'success',
           text1: 'Request Submitted',
-          text2: 'Your welfare request has been submitted for community voting',
+          text2: 'Your welfare request has been submitted for member voting',
         });
         setShowCreateModal(false);
         setNewRequest({
@@ -435,7 +509,7 @@ const WelfareScreen = ({ route, navigation }) => {
           beneficiaryIds: [],
         });
         setFormErrors({});
-        await loadWelfareRequests(requestsCurrentPage);
+        await loadWelfareRequests();
       } else {
         Toast.show({
           type: 'error',
@@ -612,8 +686,8 @@ const WelfareScreen = ({ route, navigation }) => {
         // Refresh data from server to ensure consistency
         console.log('🗳️ Refreshing welfare data...');
         await Promise.all([
-          loadWelfareRequests(requestsCurrentPage),
-          loadWelfareContributions(contributionsCurrentPage)
+          loadWelfareRequests(),
+          loadWelfareContributions()
         ]);
         console.log('🗳️ Vote process completed successfully');
       } else {
@@ -669,6 +743,28 @@ const WelfareScreen = ({ route, navigation }) => {
     }).format(amount);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Unknown Date';
+
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      console.warn('Date formatting error:', error);
+      return 'Invalid Date';
+    }
+  };
+
   const getCategoryIcon = (category) => {
     const cat = welfareCategories.find(c => c.id === category);
     return cat?.icon || 'help-circle';
@@ -711,6 +807,10 @@ const WelfareScreen = ({ route, navigation }) => {
   // Table action modal states
   const [showActionModal, setShowActionModal] = useState(false);
   const [selectedTableItem, setSelectedTableItem] = useState(null);
+
+  // View details modal states
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewModalItem, setViewModalItem] = useState(null);
 
   const handleContribute = (requestId) => {
     const request = welfareContributions.find(r => r.id === requestId);
@@ -831,7 +931,7 @@ const WelfareScreen = ({ route, navigation }) => {
 
         // Refresh contributions data after a short delay for backend sync
         setTimeout(async () => {
-          await loadWelfareContributions(contributionsCurrentPage);
+          await loadWelfareContributions();
         }, 1000); // 1 second delay for backend processing
       } else {
         Toast.show({
@@ -896,7 +996,7 @@ const WelfareScreen = ({ route, navigation }) => {
               />
             </View>
             <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-              {item.title}
+              {item.title.length > 5 ? item.title.substring(0, 5) + '...' : item.title}
             </Text>
           </View>
         </View>
@@ -927,6 +1027,20 @@ const WelfareScreen = ({ route, navigation }) => {
               {urgencyLevels.find(l => l.id === item.urgency)?.name || item.urgency}
             </Text>
           </View>
+        </View>
+
+        {/* Requester Column */}
+        <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+          <Text style={tableStyles.tableCellText} numberOfLines={1}>
+            {getRequesterDisplayName(item)}
+          </Text>
+        </View>
+
+        {/* Date Column */}
+        <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+          <Text style={tableStyles.tableCellText}>
+            {formatDate(item.createdAt || item.created_at)}
+          </Text>
         </View>
 
         {/* Votes Column */}
@@ -980,7 +1094,7 @@ const WelfareScreen = ({ route, navigation }) => {
         {/* Title Column */}
         <View style={[tableStyles.tableCell, { flex: 2 }]}>
           <Text style={tableStyles.tableCellText} numberOfLines={1}>
-            {item.title.length > 15 ? item.title.substring(0, 15) + '...' : item.title}
+            {item.title.length > 5 ? item.title.substring(0, 5) + '...' : item.title}
           </Text>
         </View>
 
@@ -1231,7 +1345,7 @@ const WelfareScreen = ({ route, navigation }) => {
       {request.status === 'pending' && (
         <View style={styles.votingSection}>
           <Text style={[styles.votingTitle, { color: colors.text }]}>
-            Community Voting
+            members' votes
           </Text>
 
           <View style={styles.votingStats}>
@@ -1439,6 +1553,12 @@ const WelfareScreen = ({ route, navigation }) => {
                       <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
                         <Text style={tableStyles.tableHeaderText}>Priority</Text>
                       </View>
+                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Requester</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Date</Text>
+                      </View>
                       <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
                         <Text style={tableStyles.tableHeaderText}>Votes</Text>
                       </View>
@@ -1469,24 +1589,32 @@ const WelfareScreen = ({ route, navigation }) => {
                 )}
 
                 {/* Pagination */}
-                {welfareRequests.length > 0 && (
+                {welfareRequests.length > itemsPerPage && (
                   <View style={styles.pagination}>
                     <TouchableOpacity
-                      style={[styles.pageButton, requestsCurrentPage === 1 && styles.pageButtonDisabled]}
+                      style={[
+                        styles.pageButton,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                        requestsCurrentPage === 1 && styles.pageButtonDisabled
+                      ]}
                       onPress={() => requestsCurrentPage > 1 && setRequestsCurrentPage(requestsCurrentPage - 1)}
                       disabled={requestsCurrentPage === 1}
                     >
                       <Ionicons name="chevron-back" size={16} color={requestsCurrentPage === 1 ? colors.textSecondary : colors.text} />
                     </TouchableOpacity>
                     <Text style={[styles.pageText, { color: colors.text }]}>
-                      {requestsCurrentPage}
+                      {requestsCurrentPage} of {Math.ceil(welfareRequests.length / itemsPerPage)}
                     </Text>
                     <TouchableOpacity
-                      style={[styles.pageButton, welfareRequests.length < itemsPerPage && styles.pageButtonDisabled]}
-                      onPress={() => welfareRequests.length >= itemsPerPage && setRequestsCurrentPage(requestsCurrentPage + 1)}
-                      disabled={welfareRequests.length < itemsPerPage}
+                      style={[
+                        styles.pageButton,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                        requestsCurrentPage === Math.ceil(welfareRequests.length / itemsPerPage) && styles.pageButtonDisabled
+                      ]}
+                      onPress={() => requestsCurrentPage < Math.ceil(welfareRequests.length / itemsPerPage) && setRequestsCurrentPage(requestsCurrentPage + 1)}
+                      disabled={requestsCurrentPage === Math.ceil(welfareRequests.length / itemsPerPage)}
                     >
-                      <Ionicons name="chevron-forward" size={16} color={welfareRequests.length < itemsPerPage ? colors.textSecondary : colors.text} />
+                      <Ionicons name="chevron-forward" size={16} color={requestsCurrentPage === Math.ceil(welfareRequests.length / itemsPerPage) ? colors.textSecondary : colors.text} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1542,24 +1670,32 @@ const WelfareScreen = ({ route, navigation }) => {
                 )}
 
                 {/* Pagination */}
-                {welfareContributions.length > 0 && (
+                {welfareContributions.length > itemsPerPage && (
                   <View style={styles.pagination}>
                     <TouchableOpacity
-                      style={[styles.pageButton, contributionsCurrentPage === 1 && styles.pageButtonDisabled]}
+                      style={[
+                        styles.pageButton,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                        contributionsCurrentPage === 1 && styles.pageButtonDisabled
+                      ]}
                       onPress={() => contributionsCurrentPage > 1 && setContributionsCurrentPage(contributionsCurrentPage - 1)}
                       disabled={contributionsCurrentPage === 1}
                     >
                       <Ionicons name="chevron-back" size={16} color={contributionsCurrentPage === 1 ? colors.textSecondary : colors.text} />
                     </TouchableOpacity>
                     <Text style={[styles.pageText, { color: colors.text }]}>
-                      {contributionsCurrentPage}
+                      {contributionsCurrentPage} of {Math.ceil(welfareContributions.length / itemsPerPage)}
                     </Text>
                     <TouchableOpacity
-                      style={[styles.pageButton, welfareContributions.length < itemsPerPage && styles.pageButtonDisabled]}
-                      onPress={() => welfareContributions.length >= itemsPerPage && setContributionsCurrentPage(contributionsCurrentPage + 1)}
-                      disabled={welfareContributions.length < itemsPerPage}
+                      style={[
+                        styles.pageButton,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                        contributionsCurrentPage === Math.ceil(welfareContributions.length / itemsPerPage) && styles.pageButtonDisabled
+                      ]}
+                      onPress={() => contributionsCurrentPage < Math.ceil(welfareContributions.length / itemsPerPage) && setContributionsCurrentPage(contributionsCurrentPage + 1)}
+                      disabled={contributionsCurrentPage === Math.ceil(welfareContributions.length / itemsPerPage)}
                     >
-                      <Ionicons name="chevron-forward" size={16} color={welfareContributions.length < itemsPerPage ? colors.textSecondary : colors.text} />
+                      <Ionicons name="chevron-forward" size={16} color={contributionsCurrentPage === Math.ceil(welfareContributions.length / itemsPerPage) ? colors.textSecondary : colors.text} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1635,7 +1771,6 @@ const WelfareScreen = ({ route, navigation }) => {
                   }}
                   placeholder="Enter amount (e.g., 5000)"
                   keyboardType="numeric"
-                  // Removed error styling
                 />
                 <ErrorText error={formErrors.amount} />
               </View>
@@ -1668,174 +1803,105 @@ const WelfareScreen = ({ route, navigation }) => {
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.beneficiaryOption,
-                    {
-                      backgroundColor: newRequest.beneficiaryIds.length > 0 ? colors.primary + '20' : colors.background,
-                      borderColor: newRequest.beneficiaryIds.length > 0 ? colors.primary : colors.border,
-                    }
-                  ]}
-                  onPress={() => setShowBeneficiaryPicker(true)}
-                >
-                  <Ionicons
-                    name="people"
-                    size={20}
-                    color={newRequest.beneficiaryIds.length > 0 ? colors.primary : colors.textSecondary}
-                  />
-                  <View style={styles.beneficiaryOptionContent}>
-                    <Text style={[
-                      styles.beneficiaryOptionText,
-                      { color: newRequest.beneficiaryIds.length > 0 ? colors.primary : colors.text }
-                    ]}>
-                      For other member(s)
-                    </Text>
-                    {newRequest.beneficiaryIds.length > 0 && (
-                      <Text style={[styles.beneficiaryCount, { color: colors.primary }]}>
-                        {newRequest.beneficiaryIds.length} selected
-                      </Text>
-                    )}
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Show selected beneficiaries */}
-              {newRequest.beneficiaryIds.length > 0 && (
-                <View style={styles.selectedBeneficiariesContainer}>
-                  <View style={styles.selectedBeneficiariesHeader}>
-                    <Text style={[styles.selectedBeneficiariesTitle, { color: colors.text }]}>
-                      Support for ({newRequest.beneficiaryIds.length} member{newRequest.beneficiaryIds.length > 1 ? 's' : ''}):
-                    </Text>
+                {getSelectedBeneficiaries().map(member => (
+                  <View key={member.id} style={styles.selectedBeneficiary}>
+                    <View style={styles.beneficiaryInfo}>
+                      <View style={[styles.beneficiaryAvatar, { backgroundColor: colors.primary }]}>
+                        <Text style={[styles.beneficiaryAvatarText, { color: colors.white }]}>
+                          {member.first_name?.charAt(0) || member.name?.charAt(0) || '?'}
+                        </Text>
+                      </View>
+                      <View style={styles.beneficiaryDetails}>
+                        <Text style={[styles.beneficiaryName, { color: colors.text }]}>
+                          {member.first_name} {member.last_name}
+                        </Text>
+                        <Text style={[styles.beneficiaryRole, { color: colors.textSecondary }]}>
+                          {member.role || 'Member'}
+                        </Text>
+                      </View>
+                    </View>
                     <TouchableOpacity
-                      onPress={clearAllBeneficiaries}
-                      style={styles.clearAllButton}
+                      onPress={() => removeBeneficiary(member.id)}
+                      style={styles.removeBeneficiaryButton}
                     >
-                      <Text style={[styles.clearAllText, { color: colors.error }]}>
-                        Clear All
-                      </Text>
+                      <Ionicons name="close" size={16} color={colors.error} />
                     </TouchableOpacity>
                   </View>
+                ))}
 
-                  <View style={styles.selectedBeneficiariesList}>
-                    {getSelectedBeneficiaries().map((beneficiary) => {
-                      // Handle nested user data structure from backend
-                      const userData = beneficiary.user || beneficiary;
-                      const firstName = userData.first_name || beneficiary.first_name || userData.firstName || beneficiary.firstName || '';
-                      const lastName = userData.last_name || beneficiary.last_name || userData.lastName || beneficiary.lastName || '';
-                      const fullName = `${firstName} ${lastName}`.trim();
-                      const displayName = fullName || userData.name || beneficiary.name || userData.email?.split('@')[0] || beneficiary.email?.split('@')[0] || `Member ${(beneficiary.user_id || beneficiary.id)?.slice(-4)}`;
-
-                      // Generate initials for avatar
-                      const firstInitial = (firstName?.[0] || userData.name?.[0] || beneficiary.name?.[0] || userData.email?.[0] || beneficiary.email?.[0] || 'M').toUpperCase();
-                      const lastInitial = (lastName?.[0] || userData.name?.split(' ')[1]?.[0] || beneficiary.name?.split(' ')[1]?.[0] || '').toUpperCase();
-                      const avatarText = lastInitial ? `${firstInitial}${lastInitial}` : firstInitial;
-
-                      return (
-                        <View key={beneficiary.id} style={styles.selectedBeneficiaryItem}>
-                          <View style={styles.selectedBeneficiaryInfo}>
-                            <View style={styles.beneficiaryAvatar}>
-                              <Text style={[styles.beneficiaryAvatarText, { color: colors.primary }]}>
-                                {avatarText}
-                              </Text>
-                            </View>
-                            <View style={styles.selectedBeneficiaryDetails}>
-                              <Text style={[styles.selectedBeneficiaryName, { color: colors.primary }]}>
-                                {displayName}
-                              </Text>
-                              {(userData.email || beneficiary.email) && (
-                                <Text style={[styles.selectedBeneficiaryEmail, { color: colors.textSecondary }]}>
-                                  {userData.email || beneficiary.email}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                          <TouchableOpacity
-                            onPress={() => removeBeneficiary(beneficiary.id)}
-                            style={styles.removeBeneficiaryButton}
-                          >
-                            <Ionicons name="close-circle" size={20} color={colors.error} />
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
+                <TouchableOpacity
+                  style={[styles.addBeneficiaryButton, { borderColor: colors.primary }]}
+                  onPress={() => setShowBeneficiaryPicker(true)}
+                >
+                  <Ionicons name="add" size={20} color={colors.primary} />
+                  <Text style={[styles.addBeneficiaryText, { color: colors.primary }]}>
+                    Add Beneficiary
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <ErrorText error={formErrors.beneficiaries} />
 
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Category *</Text>
-              <View style={[
-                styles.categoryGrid,
-                formErrors.category ? styles.sectionError : null
-              ]}>
-                {welfareCategories.map((category) => (
-                  <TouchableOpacity
-                    key={category.id}
-                    style={[
-                      styles.categoryOption,
-                      {
-                        backgroundColor: newRequest.category === category.id ? colors.primary + '20' : colors.background,
-                        borderColor: newRequest.category === category.id ? colors.primary : colors.border,
-                      }
-                    ]}
-                    onPress={() => {
-                      setNewRequest(prev => ({ ...prev, category: category.id }));
-                      clearFieldError('category');
-                    }}
-                  >
-                    <Ionicons
-                      name={category.icon}
-                      size={20}
-                      color={newRequest.category === category.id ? colors.primary : colors.textSecondary}
-                    />
-                    <Text style={[
-                      styles.categoryOptionText,
-                      { color: newRequest.category === category.id ? colors.primary : colors.text }
-                    ]}>
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.categorySection}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Category *</Text>
+                <View style={styles.categoryOptions}>
+                  {welfareCategories.map(category => (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={[
+                        styles.categoryOption,
+                        {
+                          backgroundColor: newRequest.category === category.id ? category.color + '20' : colors.background,
+                          borderColor: newRequest.category === category.id ? category.color : colors.border,
+                        }
+                      ]}
+                      onPress={() => {
+                        setNewRequest(prev => ({ ...prev, category: category.id }));
+                        clearFieldError('category');
+                      }}
+                    >
+                      <Ionicons name={category.icon} size={20} color={newRequest.category === category.id ? category.color : colors.textSecondary} />
+                      <Text style={[
+                        styles.categoryOptionText,
+                        { color: newRequest.category === category.id ? category.color : colors.text }
+                      ]}>
+                        {category.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <ErrorText error={formErrors.category} />
               </View>
-              <ErrorText error={formErrors.category} />
 
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Priority Level *</Text>
-              <View style={[
-                styles.urgencyGrid,
-                formErrors.urgency ? styles.sectionError : null
-              ]}>
-                {urgencyLevels.map((level) => (
-                  <TouchableOpacity
-                    key={level.id}
-                    style={[
-                      styles.urgencyOption,
-                      {
-                        backgroundColor: newRequest.urgency === level.id ? level.color + '20' : colors.background,
-                        borderColor: newRequest.urgency === level.id ? level.color : colors.border,
-                      }
-                    ]}
-                    onPress={() => {
-                      setNewRequest(prev => ({ ...prev, urgency: level.id }));
-                      clearFieldError('urgency');
-                    }}
-                  >
-                    <Text style={[
-                      styles.urgencyOptionText,
-                      { color: newRequest.urgency === level.id ? level.color : colors.text }
-                    ]}>
-                      {level.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.urgencySection}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Priority Level *</Text>
+                <View style={styles.urgencyOptions}>
+                  {urgencyLevels.map(level => (
+                    <TouchableOpacity
+                      key={level.id}
+                      style={[
+                        styles.urgencyOption,
+                        {
+                          backgroundColor: newRequest.urgency === level.id ? level.color + '20' : colors.background,
+                          borderColor: newRequest.urgency === level.id ? level.color : colors.border,
+                        }
+                      ]}
+                      onPress={() => {
+                        setNewRequest(prev => ({ ...prev, urgency: level.id }));
+                        clearFieldError('urgency');
+                      }}
+                    >
+                      <Text style={[
+                        styles.urgencyOptionText,
+                        { color: newRequest.urgency === level.id ? level.color : colors.text }
+                      ]}>
+                        {level.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <ErrorText error={formErrors.urgency} />
               </View>
-              <ErrorText error={formErrors.urgency} />
 
-              {/* Form Summary */}
               {Object.keys(formErrors).length > 0 && (
                 <View style={styles.errorSummary}>
                   <View style={styles.errorSummaryHeader}>
@@ -1877,14 +1943,9 @@ const WelfareScreen = ({ route, navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  Select Beneficiaries
-                </Text>
-                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-                  Tap to select multiple members
-                </Text>
-              </View>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Select Beneficiaries
+              </Text>
               <TouchableOpacity onPress={() => setShowBeneficiaryPicker(false)}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -1894,17 +1955,11 @@ const WelfareScreen = ({ route, navigation }) => {
               <Ionicons name="search" size={20} color={colors.textSecondary} />
               <TextInput
                 style={[styles.searchInput, { color: colors.text }]}
-                placeholder="Search members by name or email..."
+                placeholder="Search members..."
                 placeholderTextColor={colors.textSecondary}
                 value={beneficiarySearch}
                 onChangeText={handleBeneficiarySearch}
-                autoFocus
               />
-              {beneficiarySearch.length > 0 && (
-                <TouchableOpacity onPress={() => handleBeneficiarySearch('')}>
-                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
             </View>
 
             <ScrollView style={styles.membersList} showsVerticalScrollIndicator={false}>
@@ -1915,88 +1970,209 @@ const WelfareScreen = ({ route, navigation }) => {
                     Loading members...
                   </Text>
                 </View>
-              ) : filteredMembers.length > 0 ? (
-                filteredMembers.map((member) => {
-                  const isSelected = newRequest.beneficiaryIds.includes(member.user_id || member.id);
-
-                  // Handle nested user data structure from backend
-                  const user = member.user || member;
-                  const firstName = user.first_name || member.first_name || user.firstName || member.firstName || '';
-                  const lastName = user.last_name || member.last_name || user.lastName || member.lastName || '';
-                  const fullName = `${firstName} ${lastName}`.trim();
-                  const displayName = fullName || user.name || member.name || user.email?.split('@')[0] || member.email?.split('@')[0] || `Member ${(member.user_id || member.id)?.slice(-4)}`;
-
-                  const memberRole = member.role || user.role || member.position || 'Member';
-                  const memberEmail = user.email || member.email || '';
-
-                  // Generate initials for avatar
-                  const firstInitial = (firstName?.[0] || user.name?.[0] || member.name?.[0] || memberEmail?.[0] || 'M').toUpperCase();
-                  const lastInitial = (lastName?.[0] || user.name?.split(' ')[1]?.[0] || member.name?.split(' ')[1]?.[0] || '').toUpperCase();
-                  const avatarText = lastInitial ? `${firstInitial}${lastInitial}` : firstInitial;
-
+              ) : filteredMembers.length === 0 ? (
+                <View style={styles.emptyMembers}>
+                  <Ionicons name="people" size={48} color={colors.textTertiary} />
+                  <Text style={[styles.emptyMembersText, { color: colors.textSecondary }]}>
+                    {beneficiarySearch ? 'No members found' : 'No eligible members'}
+                  </Text>
+                  <Text style={[styles.emptyMembersSubtext, { color: colors.textSecondary }]}>
+                    {beneficiarySearch ? 'Try a different search term' : 'All members are already selected'}
+                  </Text>
+                </View>
+              ) : (
+                filteredMembers.map(member => {
+                  const isSelected = newRequest.beneficiaryIds.includes(member.id);
                   return (
                     <TouchableOpacity
                       key={member.id}
                       style={[
-                        styles.memberItem,
-                        {
-                          backgroundColor: isSelected
-                            ? colors.primary + '20'
-                            : 'transparent',
-                          borderColor: isSelected
-                            ? colors.primary
-                            : 'transparent',
-                          borderWidth: isSelected ? 1 : 0,
-                        }
+                        styles.memberOption,
+                        isSelected && { backgroundColor: colors.primary + '10' }
                       ]}
-                      onPress={() => toggleBeneficiary({
-                        ...member,
-                        id: member.user_id || member.id,
-                        first_name: firstName,
-                        last_name: lastName,
-                        email: memberEmail,
-                        role: memberRole
-                      })}
-                      activeOpacity={0.7}
+                      onPress={() => toggleBeneficiary(member)}
                     >
-                      <View style={[styles.memberAvatar, { backgroundColor: colors.primary + '30' }]}>
-                        <Text style={[styles.memberAvatarText, { color: colors.primary }]}>
-                          {avatarText}
-                        </Text>
-                      </View>
                       <View style={styles.memberInfo}>
-                        <Text style={[styles.memberName, { color: colors.text }]}>
-                          {displayName}
-                        </Text>
-                        {memberEmail && (
-                          <Text style={[styles.memberEmail, { color: colors.textSecondary }]}>
-                            {memberEmail}
+                        <View style={[styles.memberAvatar, { backgroundColor: isSelected ? colors.primary : colors.surface }]}>
+                          <Text style={[styles.memberAvatarText, { color: isSelected ? colors.white : colors.text }]}>
+                            {member.first_name?.charAt(0) || member.name?.charAt(0) || '?'}
                           </Text>
-                        )}
-                        <Text style={[styles.memberRole, { color: colors.textTertiary }]}>
-                          {memberRole}
-                        </Text>
+                        </View>
+                        <View style={styles.memberDetails}>
+                          <Text style={[styles.memberName, { color: colors.text }]}>
+                            {member.first_name} {member.last_name}
+                          </Text>
+                          <Text style={[styles.memberEmail, { color: colors.textSecondary }]}>
+                            {member.email}
+                          </Text>
+                          <Text style={[styles.memberRole, { color: colors.textSecondary }]}>
+                            {member.role || 'Member'}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.selectionIndicator}>
-                        {isSelected ? (
-                          <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                        ) : (
-                          <Ionicons name="ellipse-outline" size={24} color={colors.textSecondary} />
-                        )}
-                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                      )}
                     </TouchableOpacity>
                   );
                 })
-              ) : (
-                <View style={styles.emptyMembers}>
-                  <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
-                  <Text style={[styles.emptyMembersText, { color: colors.textSecondary }]}>
-                    {beneficiarySearch ? 'No members found' : 'No members available'}
-                  </Text>
-                  {beneficiarySearch && (
-                    <Text style={[styles.emptyMembersSubtext, { color: colors.textTertiary }]}>
-                      Try a different search term
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* View Details Modal */}
+      <Modal
+        visible={showViewModal && viewModalItem !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowViewModal(false)}
+      >
+        <View style={styles.viewModalOverlay}>
+          <View style={[styles.viewModalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.viewModalHeader}>
+              <Text style={[styles.viewModalTitle, { color: colors.text }]}>
+                {activeTab === 'requests' ? 'Welfare Request Details' : 'Contribution Details'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowViewModal(false)}
+                style={styles.viewModalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.viewModalBody} showsVerticalScrollIndicator={false}>
+              {viewModalItem && (
+                <View style={styles.viewModalItem}>
+                  <View style={styles.viewModalSection}>
+                    <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                      Title
                     </Text>
+                    <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                      {viewModalItem.title}
+                    </Text>
+                  </View>
+
+                  <View style={styles.viewModalSection}>
+                    <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                      Description
+                    </Text>
+                    <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                      {viewModalItem.description.length > 100
+                        ? viewModalItem.description.substring(0, 100) + '...'
+                        : viewModalItem.description
+                      }
+                    </Text>
+                  </View>
+
+                  {activeTab === 'requests' ? (
+                    <>
+                      <View style={styles.viewModalRow}>
+                        <View style={styles.viewModalHalf}>
+                          <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                            Category
+                          </Text>
+                          <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                            {welfareCategories.find(c => c.id === viewModalItem.category)?.name || viewModalItem.category}
+                          </Text>
+                        </View>
+                        <View style={styles.viewModalHalf}>
+                          <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                            Priority
+                          </Text>
+                          <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                            {urgencyLevels.find(l => l.id === viewModalItem.urgency)?.name || viewModalItem.urgency}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.viewModalRow}>
+                        <View style={styles.viewModalHalf}>
+                          <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                            Amount Needed
+                          </Text>
+                          <Text style={[styles.viewModalSectionContent, { color: colors.primary }]}>
+                            {formatCurrency(viewModalItem.amount)}
+                          </Text>
+                        </View>
+                        <View style={styles.viewModalHalf}>
+                          <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                            Votes
+                          </Text>
+                          <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                            {viewModalItem.votes?.yes || viewModalItem.votes_for || 0} / {viewModalItem.votes?.no || viewModalItem.votes_against || 0}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.viewModalSection}>
+                        <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                          Requester
+                        </Text>
+                        <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                          {getRequesterDisplayName(viewModalItem)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.viewModalSection}>
+                        <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                          Date Created
+                        </Text>
+                        <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                          {formatDate(viewModalItem.createdAt || viewModalItem.created_at)}
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.viewModalRow}>
+                        <View style={styles.viewModalHalf}>
+                          <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                            Amount Needed
+                          </Text>
+                          <Text style={[styles.viewModalSectionContent, { color: colors.primary }]}>
+                            {formatCurrency(viewModalItem.amount)}
+                          </Text>
+                        </View>
+                        <View style={styles.viewModalHalf}>
+                          <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                            Amount Raised
+                          </Text>
+                          <Text style={[styles.viewModalSectionContent, { color: colors.success }]}>
+                            {formatCurrency(viewModalItem.totalContributions || 0)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.viewModalSection}>
+                        <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                          Beneficiary
+                        </Text>
+                        <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                          {getBeneficiaryDisplayName(viewModalItem)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.viewModalSection}>
+                        <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                          Progress
+                        </Text>
+                        <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                          {Math.min(Math.round(((viewModalItem.totalContributions || 0) / viewModalItem.amount) * 100), 100)}% funded
+                        </Text>
+                      </View>
+
+                      <View style={styles.viewModalSection}>
+                        <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
+                          Contributors
+                        </Text>
+                        <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                          {viewModalItem.contributionCount || 0} people
+                        </Text>
+                      </View>
+                    </>
                   )}
                 </View>
               )}
@@ -2015,16 +2191,14 @@ const WelfareScreen = ({ route, navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  Contribute to Welfare
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Contribute to Welfare
+              </Text>
+              {selectedContributionRequest && (
+                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                  Supporting: {selectedContributionRequest.title}
                 </Text>
-                {selectedContributionRequest && (
-                  <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-                    Supporting: {selectedContributionRequest.title}
-                  </Text>
-                )}
-              </View>
+              )}
               <TouchableOpacity onPress={() => setShowContributionModal(false)}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -2127,6 +2301,7 @@ const WelfareScreen = ({ route, navigation }) => {
                     onPress={handleSubmitContribution}
                     disabled={contributingInProgress || !contributionAmount.trim()}
                     style={[
+
                       styles.submitButton,
                       (!contributionAmount.trim() || contributingInProgress) ? styles.submitButtonDisabled : null
                     ]}
@@ -2139,11 +2314,11 @@ const WelfareScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Table Action Modal - Slides from bottom */}
+      {/* Action Modal */}
       <Modal
-        visible={showActionModal}
+        visible={showActionModal && selectedTableItem !== null}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowActionModal(false)}
       >
         <TouchableOpacity
@@ -2154,7 +2329,7 @@ const WelfareScreen = ({ route, navigation }) => {
           <View style={[styles.actionModalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.actionModalHeader}>
               <Text style={[styles.actionModalTitle, { color: colors.text }]}>
-                Actions for {selectedTableItem?.title}
+                Actions for {selectedTableItem?.title || 'Request'}
               </Text>
               <TouchableOpacity
                 onPress={() => setShowActionModal(false)}
@@ -2175,7 +2350,7 @@ const WelfareScreen = ({ route, navigation }) => {
                       handleContribute(selectedTableItem.id);
                     }}
                   >
-                    <Ionicons name="wallet" size={20} color={colors.primary} />
+                    <Ionicons name="wallet" size={18} color={colors.primary} />
                     <View style={styles.actionModalButtonText}>
                       <Text style={[styles.actionModalButtonTitle, { color: colors.primary }]}>
                         Contribute
@@ -2190,10 +2365,11 @@ const WelfareScreen = ({ route, navigation }) => {
                     style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
                     onPress={() => {
                       setShowActionModal(false);
-                      handleViewContributionDetails(selectedTableItem.id);
+                      setViewModalItem(selectedTableItem);
+                      setShowViewModal(true);
                     }}
                   >
-                    <Ionicons name="eye" size={20} color={colors.info} />
+                    <Ionicons name="eye" size={18} color={colors.info} />
                     <View style={styles.actionModalButtonText}>
                       <Text style={[styles.actionModalButtonTitle, { color: colors.info }]}>
                         View Details
@@ -2219,7 +2395,7 @@ const WelfareScreen = ({ route, navigation }) => {
                       }
                     }}
                   >
-                    <Ionicons name="arrow-forward" size={20} color={colors.success} />
+                    <Ionicons name="arrow-forward" size={18} color={colors.success} />
                     <View style={styles.actionModalButtonText}>
                       <Text style={[styles.actionModalButtonTitle, { color: colors.success }]}>
                         Go to Contribute
@@ -2233,7 +2409,7 @@ const WelfareScreen = ({ route, navigation }) => {
               ) : (
                 // Actions for pending requests
                 <>
-                  {!selectedTableItem.userVote && (
+                  {selectedTableItem && !selectedTableItem.userVote && (
                     <TouchableOpacity
                       style={[styles.actionModalButton, { backgroundColor: colors.success + '10' }]}
                       onPress={() => {
@@ -2241,7 +2417,7 @@ const WelfareScreen = ({ route, navigation }) => {
                         handleVote(selectedTableItem.id, 'for');
                       }}
                     >
-                      <Ionicons name="thumbs-up" size={20} color={colors.success} />
+                      <Ionicons name="thumbs-up" size={18} color={colors.success} />
                       <View style={styles.actionModalButtonText}>
                         <Text style={[styles.actionModalButtonTitle, { color: colors.success }]}>
                           Support
@@ -2253,7 +2429,7 @@ const WelfareScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                   )}
 
-                  {!selectedTableItem.userVote && (
+                  {selectedTableItem && !selectedTableItem.userVote && (
                     <TouchableOpacity
                       style={[styles.actionModalButton, { backgroundColor: colors.error + '10' }]}
                       onPress={() => {
@@ -2261,7 +2437,7 @@ const WelfareScreen = ({ route, navigation }) => {
                         handleVote(selectedTableItem.id, 'against');
                       }}
                     >
-                      <Ionicons name="thumbs-down" size={20} color={colors.error} />
+                      <Ionicons name="thumbs-down" size={18} color={colors.error} />
                       <View style={styles.actionModalButtonText}>
                         <Text style={[styles.actionModalButtonTitle, { color: colors.error }]}>
                           Oppose
@@ -2273,133 +2449,37 @@ const WelfareScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                   )}
 
-                  <TouchableOpacity
-                    style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
-                    onPress={() => {
-                      setShowActionModal(false);
-                      // Show request details (could navigate to detail screen or show inline modal)
-                      Toast.show({
-                        type: 'info',
-                        text1: selectedTableItem.title,
-                        text2: selectedTableItem.description,
-                        position: 'top',
-                        visibilityTime: 5000,
-                      });
-                    }}
-                  >
-                    <Ionicons name="information-circle" size={20} color={colors.info} />
-                    <View style={styles.actionModalButtonText}>
-                      <Text style={[styles.actionModalButtonTitle, { color: colors.info }]}>
-                        View Details
-                      </Text>
-                      <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
-                        See full request information
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                  {selectedTableItem && (
+                    <TouchableOpacity
+                      style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
+                      onPress={() => {
+                        setShowActionModal(false);
+                        setViewModalItem(selectedTableItem);
+                        setShowViewModal(true);
+                      }}
+                    >
+                      <Ionicons name="information-circle" size={18} color={colors.info} />
+                      <View style={styles.actionModalButtonText}>
+                        <Text style={[styles.actionModalButtonTitle, { color: colors.info }]}>
+                          View Details
+                        </Text>
+                        <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
+                          See full request information
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 </>
               )}
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
 };
 
-const createTableStyles = (colors, spacing, typography, shadows) => ({
-  tableContainer: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tableCell: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  nameCell: {
-    flex: 2.5,
-    alignItems: 'flex-start',
-  },
-  amountCell: {
-    flex: 1.2,
-  },
-  dateCell: {
-    flex: 1.5,
-  },
-  typeCell: {
-    flex: 1,
-  },
-  actionsCell: {
-    flex: 0.8,
-  },
-  tableHeaderText: {
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text,
-    fontSize: 9,
-    textAlign: 'center',
-  },
-  tableCellText: {
-    fontSize: 8.5,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  nameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typeIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs,
-  },
-  nameText: {
-    fontWeight: typography.fontWeight.medium,
-    textAlign: 'left',
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
-  },
-  statusText: {
-    fontSize: 7,
-    fontWeight: typography.fontWeight.bold,
-    textTransform: 'capitalize',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  actionButton: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+
 
 const styles = StyleSheet.create({
   container: {
@@ -3109,43 +3189,56 @@ const styles = StyleSheet.create({
   actionModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  actionModalContent: {
+    width: '90%',
+    maxWidth: 320,
+    maxHeight: '50%',
+    borderRadius: borderRadius.lg,
+    paddingBottom: spacing.md,
+  },
+  actionModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   actionModalContent: {
     width: '100%',
-    maxWidth: 400,
-    maxHeight: '60%',
+    maxWidth: 350,
+    maxHeight: '40%',
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.lg,
   },
   actionModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.1)',
   },
   actionModalTitle: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     flex: 1,
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
   },
   actionModalCloseButton: {
     padding: spacing.xs,
   },
   actionModalBody: {
     flex: 1,
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   actionModalButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.sm,
     ...shadows.sm,
   },
   actionModalButtonText: {
@@ -3153,12 +3246,70 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionModalButtonTitle: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs / 2,
+    marginBottom: spacing.xs / 4,
   },
   actionModalButtonSubtitle: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.xs,
+  },
+  // View Modal Styles
+  viewModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  viewModalContent: {
+    width: '95%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    borderRadius: borderRadius.lg,
+    ...shadows.lg,
+  },
+  viewModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  viewModalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  viewModalCloseButton: {
+    padding: spacing.xs,
+  },
+  viewModalBody: {
+    padding: spacing.lg,
+  },
+  viewModalItem: {
+    gap: spacing.md,
+  },
+  viewModalSection: {
+    marginBottom: spacing.md,
+  },
+  viewModalSectionTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
+  },
+  viewModalSectionContent: {
+    fontSize: typography.fontSize.base,
+    lineHeight: 22,
+  },
+  viewModalRow: {
+    flexDirection: 'row',
+    marginBottom: spacing.md,
+  },
+  viewModalHalf: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   // Pagination Styles
   pagination: {
@@ -3175,9 +3326,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   pageButtonDisabled: {
     opacity: 0.5,
@@ -3186,6 +3335,17 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     marginHorizontal: spacing.md,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: spacing.xl,
+    right: spacing.xl,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.lg,
   },
 });
 
