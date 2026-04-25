@@ -1825,7 +1825,6 @@ const AccountManagementScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Card>
-
       {/* Creation Type Selection - Enhanced Tab Interface */}
       <View style={styles.creationTypeSelector}>
         <View style={styles.creationTypeHeader}>
@@ -3260,7 +3259,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
       {/* 🔐 SECURE HEADER WITH INTEGRATED NAVIGATION */}
       {renderSecurityHeader()}
 
-      {/* 📋 MAIN CONTENT */}
+      {/* 📊 DASHBOARD CARDS */}
       <ScrollView
         style={styles.mainContent}
         refreshControl={
@@ -3268,11 +3267,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await Promise.all([
-                initializeSecureSystem(),
-                loadExistingShares(),
-                loadExistingDividends()
-              ]);
+              await initializeSecureSystem();
               setRefreshing(false);
             }}
             colors={[colors.primary]}
@@ -3281,10 +3276,125 @@ const AccountManagementScreen = ({ route, navigation }) => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {activePanel === 'disbursement' && renderDisbursementPanel()}
-        {activePanel === 'transparency' && renderTransparencyFeed()}
-        {activePanel === 'creation' && renderCreationPanel()}
-        {activePanel === 'audit' && renderAuditPanel()}
+        {/* Stat Cards Row */}
+        <View style={styles.statsContainer}>
+          <Card variant="outlined" style={styles.statCard}>
+            <View style={styles.statIcon}>
+              <Ionicons name="card" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.statContent}>
+              <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Loans</Text>
+            </View>
+          </Card>
+
+          <Card variant="outlined" style={styles.statCard}>
+            <View style={styles.statIcon}>
+              <Ionicons name="heart" size={24} color={colors.warning} />
+            </View>
+            <View style={styles.statContent}>
+              <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Welfare Funds</Text>
+            </View>
+          </Card>
+
+          <Card variant="outlined" style={styles.statCard}>
+            <View style={styles.statIcon}>
+              <Ionicons name="wallet" size={24} color={colors.secondary} />
+            </View>
+            <View style={styles.statContent}>
+              <Text style={[styles.statValue, { color: colors.text }]}>KES 0</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Savings</Text>
+            </View>
+          </Card>
+
+          <Card variant="outlined" style={styles.statCard}>
+            <View style={styles.statIcon}>
+              <Ionicons name="refresh-circle" size={24} color={colors.info} />
+            </View>
+            <View style={styles.statContent}>
+              <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MGR Cycles</Text>
+            </View>
+          </Card>
+        </View>
+
+        {/* Navigation Icons */}
+        <View style={styles.navigationContainer}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Management Modules</Text>
+
+          <View style={styles.navigationGrid}>
+            <TouchableOpacity style={styles.navCard} onPress={() => navigation.navigate('LoanManagement', { chamaId })}>
+              <Card variant="outlined" style={styles.navCardContent}>
+                <View style={[styles.navIcon, { backgroundColor: colors.primary + '20' }]}>
+                  <Ionicons name="card" size={32} color={colors.primary} />
+                </View>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Loan Management</Text>
+                <Text style={[styles.navSubtitle, { color: colors.textSecondary }]}>
+                  Track loans, collections, disbursements
+                </Text>
+              </Card>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.navCard} onPress={() => navigation.navigate('WelfareDisbursement', { chamaId })}>
+              <Card variant="outlined" style={styles.navCardContent}>
+                <View style={[styles.navIcon, { backgroundColor: colors.warning + '20' }]}>
+                  <Ionicons name="heart" size={32} color={colors.warning} />
+                </View>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Welfare Funds</Text>
+                <Text style={[styles.navSubtitle, { color: colors.textSecondary }]}>
+                  Disburse approved welfare funds
+                </Text>
+              </Card>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.navCard} onPress={() => navigation.navigate('LoanTypeCreation', { chamaId })}>
+              <Card variant="outlined" style={styles.navCardContent}>
+                <View style={[styles.navIcon, { backgroundColor: colors.textSecondary + '20' }]}>
+                  <Ionicons name="time" size={32} color={colors.textSecondary} />
+                </View>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Loan Types</Text>
+                <Text style={[styles.navSubtitle, { color: colors.textSecondary }]}>
+                  Coming soon - loan type management
+                </Text>
+              </Card>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.navCard} onPress={() => navigation.navigate('SavingsWithdrawal', { chamaId })}>
+              <Card variant="outlined" style={styles.navCardContent}>
+                <View style={[styles.navIcon, { backgroundColor: colors.secondary + '20' }]}>
+                  <Ionicons name="wallet" size={32} color={colors.secondary} />
+                </View>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Savings Withdrawal</Text>
+                <Text style={[styles.navSubtitle, { color: colors.textSecondary }]}>
+                  Process savings withdrawals
+                </Text>
+              </Card>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.navCard} onPress={() => navigation.navigate('MaryGoRoundDisbursement', { chamaId })}>
+              <Card variant="outlined" style={styles.navCardContent}>
+                <View style={[styles.navIcon, { backgroundColor: colors.primary + '20' }]}>
+                  <Ionicons name="refresh-circle" size={32} color={colors.primary} />
+                </View>
+                <Text style={[styles.navTitle, { color: colors.text }]}>Merry Go Round</Text>
+                <Text style={[styles.navSubtitle, { color: colors.textSecondary }]}>
+                  Manage MGR disbursements
+                </Text>
+              </Card>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Legacy Panels - Hidden for now */}
+        {false && (
+          <>
+            {activePanel === 'disbursement' && renderDisbursementPanel()}
+            {activePanel === 'transparency' && renderTransparencyFeed()}
+            {activePanel === 'creation' && renderCreationPanel()}
+            {activePanel === 'audit' && renderAuditPanel()}
+          </>
+        )}
       </ScrollView>
 
     </SafeAreaView>
@@ -4876,6 +4986,77 @@ const styles = StyleSheet.create({
   },
   affectedList: {
     fontSize: typography.fontSize.sm,
+  },
+
+  // 📊 DASHBOARD STYLES
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statIcon: {
+    marginBottom: spacing.sm,
+  },
+  statContent: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  statLabel: {
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+  },
+  navigationContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.lg,
+  },
+  navigationGrid: {
+    gap: spacing.md,
+  },
+  navCard: {
+    margin: spacing.sm,
+  },
+  navCardContent: {
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  navIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  navTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  navSubtitle: {
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 
 });

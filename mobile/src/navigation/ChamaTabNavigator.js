@@ -26,6 +26,15 @@ import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
 import SharesDividendsScreen from '../screens/chama/SharesDividendsScreen';
 import PollsVotingScreen from '../screens/chama/PollsVotingScreen';
 import AccountManagementScreen from '../screens/chama/AccountManagementScreen';
+import LoanManagementScreen from '../screens/chama/LoanManagementScreen';
+import WelfareDisbursementScreen from '../screens/chama/WelfareDisbursementScreen';
+import LoanTypeCreationScreen from '../screens/chama/LoanTypeCreationScreen';
+import SavingsWithdrawalScreen from '../screens/chama/SavingsWithdrawalScreen';
+import MaryGoRoundDisbursementScreen from '../screens/chama/MaryGoRoundDisbursementScreen';
+import SavingsDetails from '../screens/chama/SavingsDetails';
+import MaryGoRoundDetails from '../screens/chama/MaryGoRoundDetails';
+import WelfareDetails from '../screens/chama/WelfareDetails';
+import LoanDetails from '../screens/chama/LoanDetails';
 import ViewMember from '../screens/chama/ViewMember';
 import PhysicalMeetingScreen from '../screens/chama/PhysicalMeetingScreen';
 import JitsiMeetScreen from '../screens/chama/JitsiMeetScreen';
@@ -350,6 +359,87 @@ function ChamaTabNavigator({ route }) {
         component={AccountManagementScreen}
         options={{
           title: 'Account Management',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="LoanManagement"
+        component={LoanManagementScreen}
+        options={{
+          title: 'Loan Management',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="WelfareDisbursement"
+        component={WelfareDisbursementScreen}
+        options={{
+          title: 'Welfare Disbursement',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="LoanTypeCreation"
+        component={LoanTypeCreationScreen}
+        options={{
+          title: 'Loan Type Creation',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="SavingsWithdrawal"
+        component={SavingsWithdrawalScreen}
+        options={{
+          title: 'Savings Withdrawal',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="MaryGoRoundDisbursement"
+        component={MaryGoRoundDisbursementScreen}
+        options={{
+          title: 'Merry Go Round Disbursement',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="SavingsDetails"
+        component={SavingsDetails}
+        options={{
+          title: 'Savings Details',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="MaryGoRoundDetails"
+        component={MaryGoRoundDetails}
+        options={{
+          title: 'Merry Go Round Details',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="WelfareDetails"
+        component={WelfareDetails}
+        options={{
+          title: 'Welfare Details',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="LoanDetails"
+        component={LoanDetails}
+        options={{
+          title: 'Loan Details',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={{ chamaId, chamaName, chama }}

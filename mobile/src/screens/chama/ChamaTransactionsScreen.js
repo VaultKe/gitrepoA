@@ -324,28 +324,16 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
 
       // Fetch paginated chama contributions
       try {
-        console.log('🔍 Fetching paginated contributions for chama:', currentChamaId);
         const contributionResponse = await ApiService.getContributions(currentChamaId, itemsPerPage, offset);
         if (contributionResponse.success) {
           const contributionData = contributionResponse.data || [];
-          console.log('📊 Fetched contributions:', contributionData.length);
 
           // Debug merry-go-round contributions specifically
           const merryGoRoundContributions = contributionData.filter(item =>
             item.type === 'merry-go-round' || item.transaction_type === 'merry-go-round'
           );
           if (merryGoRoundContributions.length > 0) {
-            console.log('🎯 Found merry-go-round contributions:', merryGoRoundContributions.length);
             merryGoRoundContributions.forEach((item, index) => {
-              console.log(`🎯 MGR[${index}]:`, {
-                id: item.id,
-                amount: item.amount,
-                type: item.type,
-                paymentMethod: item.paymentMethod,
-                user: item.user,
-                metadata: item.metadata,
-                description: item.description
-              });
             });
           }
 
@@ -357,11 +345,9 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
 
       // Fetch paginated welfare transactions/contributions
       try {
-        console.log('🔍 Fetching paginated welfare data for chama:', currentChamaId);
         const welfareResponse = await ApiService.getWelfareRequests(currentChamaId, itemsPerPage, offset);
         if (welfareResponse.success) {
           const welfareData = welfareResponse.data || [];
-          console.log('📊 Fetched welfare records:', welfareData.length);
           // Add welfare data with proper type
           const welfareTransactions = welfareData.map(item => ({
             ...item,
@@ -373,18 +359,11 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
       } catch (error) {
         console.warn('Welfare API not available:', error);
       }
-
-      // Note: Merry-go-round contributions are already included in the contributions API
-      // with type: 'merry-go-round', so we don't need to fetch them separately
-      console.log('ℹ️ Merry-go-round contributions are included in the main contributions fetch');
-
       // Fetch paginated loan data
       try {
-        console.log('🔍 Fetching paginated loan data for chama:', currentChamaId);
         const loanResponse = await ApiService.getLoans(currentChamaId, itemsPerPage, offset);
         if (loanResponse.success) {
           const loanData = loanResponse.data || [];
-          console.log('📊 Fetched loan records:', loanData.length);
           // Add loan data with proper type
           const loanTransactions = loanData.map(item => ({
             ...item,
@@ -396,9 +375,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
       } catch (error) {
         console.warn('Loan API not available:', error);
       }
-
-      console.log('📊 Total records fetched for page:', allData.length);
-
       // Store all data for role-based filtering
       setAllRecords(allData);
 
@@ -415,7 +391,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
       }
 
       setTransactions(finalData);
-      console.log('📊 Displaying records for page:', finalData.length);
 
     } catch (error) {
       console.error('Error loading transactions:', error);
@@ -465,7 +440,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
         // Leadership downloading all chama records
         dataToExport = allRecords || [];
         reportTitle = `${selectedChama?.name || 'Chama'} - Complete Transaction Report`;
-        console.log('📊 Using all records:', dataToExport.length);
       } else if (scope === 'member' && canViewGroupRecords() && memberId) {
         // Leadership downloading specific member's records
         const member = chamaMembers.find(m => m.user_id === memberId || m.id === memberId);
@@ -477,12 +451,10 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
           record.member_id === memberId
         );
         reportTitle = `${selectedChama?.name || 'Chama'} - ${memberName} Transaction Report`;
-        console.log('📊 Using member records:', dataToExport.length);
       } else {
         // Personal records (default for members)
         dataToExport = transactions || []; // Already filtered for user
         reportTitle = `${selectedChama?.name || 'Chama'} - Personal Transaction Report`;
-        console.log('📊 Using personal records:', dataToExport.length);
       }
 
       if (dataToExport.length === 0) {
@@ -715,13 +687,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
 
     // For merry-go-round contributions, check if we have participant info
     if (item.type === 'merry-go-round' || item.transaction_type === 'merry-go-round') {
-      console.log('🎯 Processing merry-go-round user name for item:', item.id, {
-        type: item.type,
-        hasParticipant: !!item.participant,
-        metadata: item.metadata,
-        user: item.user
-      });
-
       // Check if we have participant information in the item
       if (item.participant) {
         const participant = item.participant;
@@ -729,7 +694,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
         const lastName = participant.last_name || participant.user?.last_name || '';
         const fullName = `${firstName} ${lastName}`.trim();
         if (fullName) {
-          console.log('🎯 Found participant name from item.participant:', fullName);
           return fullName;
         }
       }
@@ -745,7 +709,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
           const lastName = participant.last_name || participant.user?.last_name || '';
           const fullName = `${firstName} ${lastName}`.trim();
           if (fullName) {
-            console.log('🎯 Found participant name from metadata:', fullName);
             return fullName;
           }
         }
@@ -782,18 +745,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
   const getTransactionAmount = (item) => {
     // For merry-go-round contributions, try specific fields first
     if (item.type === 'merry-go-round' || item.transaction_type === 'merry-go-round') {
-      console.log('💰 Processing merry-go-round amount for item:', item.id, {
-        type: item.type,
-        amount: item.amount,
-        transaction_amount: item.transaction_amount,
-        total_amount: item.total_amount,
-        contribution_amount: item.contribution_amount,
-        merry_go_round_amount: item.merry_go_round_amount,
-        amount_per_round: item.amount_per_round,
-        metadata: item.metadata
-      });
-
-      // Try merry-go-round specific amount fields
       let amount = item.amount ||
                    item.transaction_amount ||
                    item.total_amount ||
@@ -810,8 +761,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
                  item.metadata.merry_go_round_amount ||
                  0;
       }
-
-      console.log('💰 Merry-go-round amount resolved to:', amount, 'for item:', item.id);
 
       // If still 0, this might be a configuration record, not a contribution
       if (amount === 0) {
