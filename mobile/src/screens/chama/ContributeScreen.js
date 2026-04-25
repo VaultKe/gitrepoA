@@ -1189,7 +1189,7 @@ const ContributeScreen = ({ route, navigation }) => {
           </Text>
         </View>
 
-        <Card style={styles.chamaInfoCard}>
+        <Card style={styles.chamaInfoCard} variant="outlined">
            <View style={styles.chamaInfo}>
              <View style={[styles.chamaIcon, { backgroundColor: getContributionColor() }]}>
                <Ionicons
@@ -1235,7 +1235,7 @@ const ContributeScreen = ({ route, navigation }) => {
 
          {/* Current Recipient Info for Merry-Go-Round */}
          {contributionType === 'merry-go-round' && currentRecipient && (
-           <Card style={[styles.chamaInfoCard, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]}>
+            <Card style={[styles.chamaInfoCard, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]} variant="outlined">
              <View style={styles.recipientInfo}>
                <View style={[styles.recipientIcon, { backgroundColor: colors.primary }]}>
                  <Ionicons name="person" size={20} color={colors.white} />
@@ -1329,7 +1329,7 @@ const ContributeScreen = ({ route, navigation }) => {
            </Card>
          )}
 
-        <Card style={styles.formCard}>
+        <Card style={styles.formCard} variant="outlined">
           <Text style={[styles.formTitle, { color: colors.text }]}>
             {contributionType === 'regular' ? 'Contribution Details' : `${getContributionTitle()} Details`}
           </Text>

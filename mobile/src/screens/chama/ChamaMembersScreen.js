@@ -91,6 +91,8 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const [memberStats, setMemberStats] = useState({});
   const [userProfiles, setUserProfiles] = useState({}); // Cache for user profile data
   const [failedAvatars, setFailedAvatars] = useState(new Set()); // Track failed avatar loads
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Invitations tracking state
   const [activeTab, setActiveTab] = useState('members'); // 'members' or 'invitations'
@@ -147,14 +149,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         setMembers(membersData);
         setLastUpdated(new Date().toISOString());
 
-        // Debug: Log member data structure
-        // console.log('🔍 Members data structure:', {
-        //   totalMembers: membersData.length,
-        //   firstMember: membersData[0],
-        //   sampleMemberKeys: membersData[0] ? Object.keys(membersData[0]) : [],
-        //   userKeys: membersData[0]?.user ? Object.keys(membersData[0].user) : []
-        // });
-
         // Extract member stats from response meta
         if (response.meta) {
           setMemberStats(response.meta);
@@ -172,9 +166,8 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           canManage: ['chairperson', 'secretary', 'treasurer'].includes(detectedRole),
           allMemberRoles: membersData.map(m => ({ id: m.user_id, role: m.role }))
         });
-
-        // console.log(`✅ Loaded ${membersData.length} members for chama ${chamaId}`);
       }
+      
     } catch (error) {
       console.error('Failed to load members:', error);
       if (!silent) {
@@ -380,7 +373,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     const isPending = statusInfo.status === 'pending';
 
     return (
-      <Card style={[styles.invitationCard, { opacity: isExpired ? 0.7 : 1 }]}>
+      <Card variant="outlined" style={[styles.invitationCard, { opacity: isExpired ? 0.7 : 1 }]}>
         <View style={styles.invitationHeader}>
           <View style={styles.invitationInfo}>
             <Text style={[styles.inviteeEmail, { color: colors.text }]}>
@@ -572,6 +565,24 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     return fullName;
   };
 
+  const getMemberShortName = (item) => {
+    // Access from nested user object (correct structure)
+    const user = item?.user || {};
+    const firstName = user?.first_name || item?.firstName || item?.first_name || '';
+    const lastName = user?.last_name || item?.lastName || item?.last_name || '';
+
+    if (firstName && lastName) {
+      return `${firstName} ${lastName.charAt(0)}.`;
+    } else if (firstName) {
+      return firstName;
+    } else if (lastName) {
+      return lastName;
+    }
+
+    // Fallback to email or ID if no name
+    return user?.email || item?.email || `Member ${(item?.user_id || item?.id || '').slice(-4)}`;
+  };
+
   // Helper function to get member join date
   const getMemberJoinDate = (item) => {
     const joinDate = item?.joined_at || item?.joinedAt || item?.created_at || item?.createdAt;
@@ -596,42 +607,37 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         alignItems: 'center',
       }}>
         {/* Name */}
-        <View style={{ flex: 3, flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ marginRight: spacing.sm }}>
-            {renderMemberAvatar(item, 32)}
-          </View>
-          <View>
+        <View style={{ flex: 3, justifyContent: 'center' }}>
             <Text style={{
-              fontSize: typography.fontSize.sm,
-              fontWeight: typography.fontWeight.medium,
+              fontSize: 8.5,
+              fontWeight: 'medium',
               color: colors.text,
             }}>
-              {getMemberName(item)}
+              {(item.role.charAt(0).toUpperCase() + item.role.slice(1)).length > 5
+                ? (item.role.charAt(0).toUpperCase() + item.role.slice(1)).substring(0, 5) + '...'
+                : item.role.charAt(0).toUpperCase() + item.role.slice(1)
+              }
             </Text>
-            {item.phone_verified && (
-              <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-            )}
-          </View>
         </View>
 
         {/* Role */}
-        <View style={{ flex: 1.5, alignItems: 'center' }}>
+        <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: spacing.xs,
+            paddingHorizontal: 4,
             paddingVertical: 2,
-            borderRadius: borderRadius.sm,
+            borderRadius: 4,
             backgroundColor: getRoleColor(item.role) + '20',
           }}>
             <Ionicons
               name={getRoleIcon(item.role)}
-              size={12}
+              size={10}
               color={getRoleColor(item.role)}
             />
             <Text style={{
-              fontSize: typography.fontSize.xs,
-              fontWeight: typography.fontWeight.medium,
+              fontSize: 8.5,
+              fontWeight: 'medium',
               color: getRoleColor(item.role),
               marginLeft: 2,
             }}>
@@ -641,10 +647,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         </View>
 
         {/* Attendance Rate */}
-        <View style={{ flex: 1.5, alignItems: 'center' }}>
+        <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{
-            fontSize: typography.fontSize.sm,
-            fontWeight: typography.fontWeight.medium,
+            fontSize: 8.5,
+            fontWeight: 'medium',
             color: colors.text,
           }}>
             {item.attendance_rate?.toFixed(1) || 0}%
@@ -652,25 +658,25 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         </View>
 
         {/* Reputation */}
-        <View style={{ flex: 1.5, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
-          <Ionicons name="star" size={14} color={colors.warning} />
+        <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}>
+          <Ionicons name="star" size={12} color={colors.warning} />
           <Text style={{
-            fontSize: typography.fontSize.sm,
-            fontWeight: typography.fontWeight.medium,
+            fontSize: 8.5,
+            fontWeight: 'medium',
             color: colors.text,
-            marginLeft: 4,
+            marginLeft: 2,
           }}>
             {item.reputation_score?.toFixed(1) || 0}
           </Text>
         </View>
 
         {/* Actions */}
-        <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center', gap: spacing.sm }}>
+        <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
           <TouchableOpacity
             style={{
-              width: 28,
-              height: 28,
-              borderRadius: 14,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
               backgroundColor: colors.primary + '20',
               alignItems: 'center',
               justifyContent: 'center',
@@ -685,7 +691,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           >
             <Ionicons
               name={item.user_id === user?.id ? "person-circle" : "person"}
-              size={14}
+              size={12}
               color={colors.primary}
             />
           </TouchableOpacity>
@@ -693,9 +699,9 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           {item.user_id !== user?.id && (
             <TouchableOpacity
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
+                width: 24,
+                height: 24,
+                borderRadius: 12,
                 backgroundColor: colors.secondary + '20',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -727,7 +733,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
                 }
               }}
             >
-              <Ionicons name="chatbubble" size={14} color={colors.secondary} />
+              <Ionicons name="chatbubble" size={12} color={colors.secondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -883,6 +889,16 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   const filteredMembers = getFilteredMembers();
 
+  // Get paginated members for current page
+  const getCurrentPageMembers = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredMembers.slice(startIndex, endIndex);
+  };
+
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -914,51 +930,69 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
+      {/* Header Card */}
+      <View style={[styles.headerCard, {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 8,
+        marginHorizontal: spacing.md,
+        marginTop: spacing.sm,
+        marginBottom: spacing.sm
+      }]}>
         <Input
           placeholder={activeTab === 'members' ? "Search members..." : "Search invitations..."}
           value={searchQuery}
           onChangeText={setSearchQuery}
           leftIcon="search"
-          style={styles.searchInput}
+          style={[styles.searchInput, { marginBottom: spacing.sm }]}
         />
 
-        {/* Real-time Stats Header */}
-        <View style={styles.statsHeader}>
-          <View style={styles.memberCount}>
-            <Text style={[styles.countText, { color: colors.textSecondary }]}>
-              {activeTab === 'members'
-                ? `${filteredMembers.length} member${filteredMembers.length !== 1 ? 's' : ''}`
-                : `${sentInvitations.length} invitation${sentInvitations.length !== 1 ? 's' : ''}`
-              }
+        {/* Compact Tab Navigation */}
+        <View style={[styles.tabContainer, { backgroundColor: 'transparent', paddingHorizontal: 0 }]}>
+          <TouchableOpacity
+            style={[
+              styles.compactTab,
+              activeTab === 'members' && { backgroundColor: colors.primary + '15', borderBottomColor: colors.primary }
+            ]}
+            onPress={() => setActiveTab('members')}
+          >
+            <Ionicons
+              name="people"
+              size={16}
+              color={activeTab === 'members' ? colors.primary : colors.textSecondary}
+            />
+            <Text style={[
+              styles.compactTabText,
+              { color: activeTab === 'members' ? colors.primary : colors.textSecondary }
+            ]}>
+              Members ({filteredMembers.length})
             </Text>
-            {activeTab === 'members' && memberStats.total_members && (
-              <Text style={[styles.statsText, { color: colors.textTertiary }]}>
-                {memberStats.active_members} active • {memberStats.pending_members} pending
-              </Text>
-            )}
-            {activeTab === 'invitations' && sentInvitations.length > 0 && (
-              <Text style={[styles.statsText, { color: colors.textTertiary }]}>
-                {sentInvitations.filter(inv => inv.status === 'pending').length} pending • {' '}
-                {sentInvitations.filter(inv => inv.status === 'accepted').length} accepted • {' '}
-                {sentInvitations.filter(inv => new Date(inv.expires_at) < new Date()).length} expired
-              </Text>
-            )}
-          </View>
+          </TouchableOpacity>
 
-          {lastUpdated && (
-            <View style={styles.lastUpdated}>
-              <Ionicons name="time" size={12} color={colors.textTertiary} />
-              <Text style={[styles.lastUpdatedText, { color: colors.textTertiary }]}>
-                Updated {new Date(lastUpdated).toLocaleTimeString()}
+          {canManageMembers() && (
+            <TouchableOpacity
+              style={[
+                styles.compactTab,
+                activeTab === 'invitations' && { backgroundColor: colors.primary + '15', borderBottomColor: colors.primary }
+              ]}
+              onPress={() => setActiveTab('invitations')}
+            >
+              <Ionicons
+                name="mail"
+                size={16}
+                color={activeTab === 'invitations' ? colors.primary : colors.textSecondary}
+              />
+              <Text style={[
+                styles.compactTabText,
+                { color: activeTab === 'invitations' ? colors.primary : colors.textSecondary }
+              ]}>
+                Invitations ({sentInvitations.length})
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
       </View>
-
-      {/* Tab Navigation */}
-      {renderTabNavigation()}
 
       {/* Content based on active tab */}
       {activeTab === 'members' ? (
@@ -974,35 +1008,35 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           }}>
             <Text style={{
               flex: 3,
-              fontSize: typography.fontSize.sm,
-              fontWeight: typography.fontWeight.semibold,
+              fontSize: 9,
+              fontWeight: 'semibold',
               color: colors.text,
             }}>Name</Text>
             <Text style={{
               flex: 1.5,
-              fontSize: typography.fontSize.sm,
-              fontWeight: typography.fontWeight.semibold,
+              fontSize: 9,
+              fontWeight: 'semibold',
               color: colors.text,
               textAlign: 'center',
             }}>Role</Text>
             <Text style={{
               flex: 1.5,
-              fontSize: typography.fontSize.sm,
-              fontWeight: typography.fontWeight.semibold,
+              fontSize: 9,
+              fontWeight: 'semibold',
               color: colors.text,
               textAlign: 'center',
             }}>Attendance</Text>
             <Text style={{
               flex: 1.5,
-              fontSize: typography.fontSize.sm,
-              fontWeight: typography.fontWeight.semibold,
+              fontSize: 9,
+              fontWeight: 'semibold',
               color: colors.text,
               textAlign: 'center',
             }}>Reputation</Text>
             <Text style={{
               flex: 1.5,
-              fontSize: typography.fontSize.sm,
-              fontWeight: typography.fontWeight.semibold,
+              fontSize: 9,
+              fontWeight: 'semibold',
               color: colors.text,
               textAlign: 'center',
             }}>Actions</Text>
@@ -1010,7 +1044,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
           {/* Table Body */}
           <FlatList
-            data={filteredMembers}
+            data={getCurrentPageMembers()}
             renderItem={renderMemberRow}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.membersList}
@@ -1022,9 +1056,73 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
                 tintColor={colors.primary}
               />
             }
-            ListEmptyComponent={!loading && renderEmptyState()}
+            ListEmptyComponent={!loading && filteredMembers.length === 0 && renderEmptyState()}
             showsVerticalScrollIndicator={false}
           />
+
+          {/* Pagination Controls */}
+          {filteredMembers.length > itemsPerPage && (
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingVertical: spacing.lg,
+              paddingHorizontal: spacing.md,
+              backgroundColor: colors.surface,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+            }}>
+              <TouchableOpacity
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginHorizontal: spacing.sm,
+                  backgroundColor: currentPage === 1 ? colors.border : colors.primary
+                }}
+                onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={16}
+                  color={currentPage === 1 ? colors.textSecondary : colors.white}
+                />
+              </TouchableOpacity>
+
+              <Text style={{
+                fontSize: typography.fontSize.sm,
+                fontWeight: typography.fontWeight.medium,
+                minWidth: 80,
+                textAlign: 'center',
+                color: colors.text
+              }}>
+                Page {currentPage} of {totalPages}
+              </Text>
+
+              <TouchableOpacity
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginHorizontal: spacing.sm,
+                  backgroundColor: currentPage === totalPages ? colors.border : colors.primary
+                }}
+                onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={currentPage === totalPages ? colors.textSecondary : colors.white}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       ) : (
         <FlatList
@@ -1479,6 +1577,27 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  // Compact Header Styles
+  headerCard: {
+    padding: spacing.md,
+  },
+  compactTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    marginHorizontal: spacing.xs,
+    borderRadius: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  compactTabText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.xs,
   },
 });
 

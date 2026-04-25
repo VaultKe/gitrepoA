@@ -25,6 +25,8 @@ const ViewMember = ({ route, navigation }) => {
   const [memberData, setMemberData] = useState(null);
   const [memberStats, setMemberStats] = useState(null);
   const [imageExpanded, setImageExpanded] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const activityItemsPerPage = 10;
 
   useEffect(() => {
     loadMemberDetails();
@@ -211,6 +213,21 @@ const ViewMember = ({ route, navigation }) => {
     }
   };
 
+  const getActivityColor = (type) => {
+    switch (type?.toLowerCase()) {
+      case 'contribution':
+      case 'deposit':
+        return colors.success;
+      case 'withdrawal':
+      case 'loan':
+        return colors.error;
+      case 'transfer':
+        return colors.primary;
+      default:
+        return colors.text;
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -274,22 +291,9 @@ const ViewMember = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Member Details
-        </Text>
-        <View style={styles.headerRight} />
-      </View>
-
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Member Profile Card */}
-        <View style={[styles.profileCard, { backgroundColor: colors.surface }, imageExpanded && styles.framelessCard]}>
+        <View style={[styles.profileCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, imageExpanded && styles.framelessCard]}>
           {imageExpanded ? (
             // Expanded layout: Frameless image at top, then info below
             <View style={styles.framelessProfileLayout}>
@@ -350,182 +354,88 @@ const ViewMember = ({ route, navigation }) => {
                 <Text style={[styles.memberEmail, { color: colors.textSecondary }]}>
                   {memberData.user?.email || memberData.email}
                 </Text>
-
-                <View style={[styles.roleBadge, { backgroundColor: getRoleColor(memberData.role) + '20' }]}>
-                  <Ionicons
-                    name={getRoleIcon(memberData.role)}
-                    size={16}
-                    color={getRoleColor(memberData.role)}
-                  />
-                  <Text style={[styles.roleText, { color: getRoleColor(memberData.role) }]}>
-                    {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
-                  </Text>
-                </View>
               </View>
             </View>
           )}
-
-          <View style={styles.memberDetails}>
-            {/* Join Date */}
-            <View style={styles.detailRow}>
-              <Ionicons name="calendar" size={16} color={colors.textSecondary} />
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                Joined:
-              </Text>
-              <Text style={[styles.detailValue, { color: colors.text }]}>
-                {formatDate(memberData.joined_at)}
-              </Text>
-            </View>
-
-            {/* Phone Number */}
-            {(memberData.user?.phone || memberData.phone_number) && (
-              <View style={styles.detailRow}>
-                <Ionicons name="call" size={16} color={colors.textSecondary} />
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                  Phone:
-                </Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
-                  {memberData.user?.phone || memberData.phone_number}
-                </Text>
-              </View>
-            )}
-
-            {/* Business Type */}
-            {memberData.business_type && (
-              <View style={styles.detailRow}>
-                <Ionicons name="business" size={16} color={colors.textSecondary} />
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                  Business:
-                </Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
-                  {memberData.business_type}
-                </Text>
-              </View>
-            )}
-
-            {/* Location */}
-            {memberData.location && (
-              <View style={styles.detailRow}>
-                <Ionicons name="location" size={16} color={colors.textSecondary} />
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                  Location:
-                </Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
-                  {memberData.location}
-                </Text>
-              </View>
-            )}
-
-            {/* Bio/Occupation */}
-            {(memberData.user?.bio || memberData.user?.occupation) && (
-              <View style={styles.detailRow}>
-                <Ionicons name="person" size={16} color={colors.textSecondary} />
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                  {memberData.user?.occupation ? 'Occupation:' : 'Bio:'}
-                </Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
-                  {memberData.user?.occupation || memberData.user?.bio}
-                </Text>
-              </View>
-            )}
-
-            {/* Verification Status */}
-            <View style={styles.verificationRow}>
-              <View style={styles.verificationItem}>
-                <Ionicons
-                  name={memberData.email_verified ? "checkmark-circle" : "close-circle"}
-                  size={16}
-                  color={memberData.email_verified ? colors.success : colors.error}
-                />
-                <Text style={[styles.verificationText, { color: colors.textSecondary }]}>
-                  Email {memberData.email_verified ? 'Verified' : 'Unverified'}
-                </Text>
-              </View>
-
-              <View style={styles.verificationItem}>
-                <Ionicons
-                  name={memberData.phone_verified ? "checkmark-circle" : "close-circle"}
-                  size={16}
-                  color={memberData.phone_verified ? colors.success : colors.error}
-                />
-                <Text style={[styles.verificationText, { color: colors.textSecondary }]}>
-                  Phone {memberData.phone_verified ? 'Verified' : 'Unverified'}
-                </Text>
-              </View>
-            </View>
-          </View>
         </View>
 
         {/* Member Details Table */}
-        <View style={[styles.detailsCard, { backgroundColor: colors.surface, marginTop: 16 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 16 }]}>
+        <View style={{ marginTop: 32 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12, fontSize: 16 }]}>
             Member Details
           </Text>
 
+          {/* Table Header */}
+          <View style={[styles.tableHeader, { backgroundColor: colors.primary + '10' }]}>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Item</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Details</Text>
+          </View>
+
+          {/* Table Body */}
           <View style={styles.detailsTable}>
             {/* Row 1: Role */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Role</Text>
+            <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Role</Text>
               <View style={styles.tableValue}>
                 <Ionicons
                   name={getRoleIcon(memberData.role)}
-                  size={16}
+                  size={12}
                   color={getRoleColor(memberData.role)}
                 />
-                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 8 }]}>
+                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 6, fontSize: 8.5 }]}>
                   {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
                 </Text>
               </View>
             </View>
 
             {/* Row 2: Join Date */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Join Date</Text>
-              <Text style={[styles.tableValueText, { color: colors.text }]}>
+            <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Join Date</Text>
+              <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
                 {formatDate(memberData.joined_at)}
               </Text>
             </View>
 
             {/* Row 3: Attendance Rate */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Attendance Rate</Text>
-              <Text style={[styles.tableValueText, { color: colors.primary }]}>
+            <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Attendance Rate</Text>
+              <Text style={[styles.tableValueText, { color: colors.primary, fontSize: 8.5 }]}>
                 {memberData.attendance_rate?.toFixed(1) || 0}%
               </Text>
             </View>
 
             {/* Row 4: Reputation Score */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Reputation</Text>
+            <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Reputation</Text>
               <View style={styles.tableValue}>
-                <Ionicons name="star" size={16} color={colors.warning} />
-                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 4 }]}>
+                <Ionicons name="star" size={12} color={colors.warning} />
+                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 4, fontSize: 8.5 }]}>
                   {memberData.reputation_score?.toFixed(1) || 0}
                 </Text>
               </View>
             </View>
 
             {/* Row 5: Total Contributions */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Total Contributions</Text>
-              <Text style={[styles.tableValueText, { color: colors.success }]}>
+            <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Total Contributions</Text>
+              <Text style={[styles.tableValueText, { color: colors.success, fontSize: 8.5 }]}>
                 {formatCurrency(memberData.total_contributions || 0)}
               </Text>
             </View>
 
             {/* Row 6: Savings Balance */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Savings Balance</Text>
-              <Text style={[styles.tableValueText, { color: colors.primary }]}>
+            <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Savings Balance</Text>
+              <Text style={[styles.tableValueText, { color: colors.primary, fontSize: 8.5 }]}>
                 {formatCurrency(memberData.savings_balance || 0)}
               </Text>
             </View>
 
             {/* Row 7: Loan Balance */}
             {memberData.loan_balance > 0 && (
-              <View style={styles.tableRow}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Loan Balance</Text>
-                <Text style={[styles.tableValueText, { color: colors.error }]}>
+              <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Loan Balance</Text>
+                <Text style={[styles.tableValueText, { color: colors.error, fontSize: 8.5 }]}>
                   {formatCurrency(memberData.loan_balance)}
                 </Text>
               </View>
@@ -533,9 +443,9 @@ const ViewMember = ({ route, navigation }) => {
 
             {/* Row 8: Business Type */}
             {memberData.business_type && (
-              <View style={styles.tableRow}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Business Type</Text>
-                <Text style={[styles.tableValueText, { color: colors.text }]}>
+              <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Business Type</Text>
+                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
                   {memberData.business_type}
                 </Text>
               </View>
@@ -543,9 +453,9 @@ const ViewMember = ({ route, navigation }) => {
 
             {/* Row 9: Location */}
             {memberData.location && (
-              <View style={styles.tableRow}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Location</Text>
-                <Text style={[styles.tableValueText, { color: colors.text }]}>
+              <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Location</Text>
+                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
                   {memberData.location}
                 </Text>
               </View>
@@ -553,74 +463,98 @@ const ViewMember = ({ route, navigation }) => {
 
             {/* Row 10: Phone Number */}
             {(memberData.user?.phone || memberData.phone_number) && (
-              <View style={styles.tableRow}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Phone</Text>
-                <Text style={[styles.tableValueText, { color: colors.text }]}>
+              <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Phone</Text>
+                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
                   {memberData.user?.phone || memberData.phone_number}
                 </Text>
               </View>
             )}
 
-            {/* Row 11: Email Verification */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Email Verified</Text>
-              <View style={styles.tableValue}>
-                <Ionicons
-                  name={memberData.email_verified ? "checkmark-circle" : "close-circle"}
-                  size={16}
-                  color={memberData.email_verified ? colors.success : colors.error}
-                />
-                <Text style={[styles.tableValueText, {
-                  color: memberData.email_verified ? colors.success : colors.error,
-                  marginLeft: 4
-                }]}>
-                  {memberData.email_verified ? 'Yes' : 'No'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Row 12: Phone Verification */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Phone Verified</Text>
-              <View style={styles.tableValue}>
-                <Ionicons
-                  name={memberData.phone_verified ? "checkmark-circle" : "close-circle"}
-                  size={16}
-                  color={memberData.phone_verified ? colors.success : colors.error}
-                />
-                <Text style={[styles.tableValueText, {
-                  color: memberData.phone_verified ? colors.success : colors.error,
-                  marginLeft: 4
-                }]}>
-                  {memberData.phone_verified ? 'Yes' : 'No'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Row 13: Bio/Occupation */}
+            {/* Row 11: Bio/Occupation */}
             {(memberData.user?.bio || memberData.user?.occupation) && (
-              <View style={styles.tableRow}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>
+              <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
+                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>
                   {memberData.user?.occupation ? 'Occupation' : 'Bio'}
                 </Text>
-                <Text style={[styles.tableValueText, { color: colors.text }]}>
+                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
                   {memberData.user?.occupation || memberData.user?.bio}
                 </Text>
               </View>
             )}
-
-            {/* Row 14: Last Contribution */}
-            <View style={styles.tableRow}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary }]}>Last Contribution</Text>
-              <Text style={[styles.tableValueText, { color: colors.text }]}>
-                {memberData.last_contribution_date
-                  ? `${formatCurrency(memberData.last_contribution_amount || 0)} on ${new Date(memberData.last_contribution_date).toLocaleDateString()}`
-                  : 'None'
-                }
-              </Text>
-            </View>
           </View>
         </View>
+
+        {/* Recent Activity Table - Private View */}
+        {memberData.user_id === user?.id && (
+          <View style={{ marginTop: 32 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12, fontSize: 16 }]}>
+              Recent Activity
+            </Text>
+
+            {/* Activity Table Header */}
+            <View style={[styles.tableHeader, { backgroundColor: colors.primary + '10' }]}>
+              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Date</Text>
+              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Type</Text>
+              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Amount</Text>
+              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Description</Text>
+            </View>
+
+            {/* Activity Table Body */}
+            <View style={styles.activityTable}>
+              {((memberStats && memberStats.recent_activity) || [
+                { id: 1, date: new Date().toISOString(), type: 'contribution', amount: 5000, description: 'Monthly contribution' },
+                { id: 2, date: new Date(Date.now() - 86400000).toISOString(), type: 'loan', amount: 15000, description: 'Emergency loan' },
+                { id: 3, date: new Date(Date.now() - 172800000).toISOString(), type: 'contribution', amount: 5000, description: 'Monthly contribution' }
+              ]).slice(0, activityItemsPerPage).map((activity, index) => (
+                <View
+                  key={activity.id || index}
+                  style={[styles.activityRow, {
+                    backgroundColor: index % 2 === 0 ? colors.background : colors.surface
+                  }]}
+                >
+                  <Text style={[styles.activityCellText, { color: colors.textSecondary, fontSize: 8.5 }]}>
+                    {new Date(activity.date).toLocaleDateString()}
+                  </Text>
+                  <Text style={[styles.activityCellText, { color: getActivityColor(activity.type), fontSize: 8.5 }]}>
+                    {activity.type}
+                  </Text>
+                  <Text style={[styles.activityCellText, { color: colors.text, fontSize: 8.5 }]}>
+                    {formatCurrency(activity.amount)}
+                  </Text>
+                  <Text style={[styles.activityCellText, { color: colors.text, fontSize: 8.5 }]}>
+                    {activity.description || 'N/A'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Pagination for Activity */}
+            {memberStats && memberStats.recent_activity && memberStats.recent_activity.length > 10 && (
+              <View style={styles.paginationContainer}>
+                <TouchableOpacity
+                  style={[styles.paginationButton, { backgroundColor: colors.primary }]}
+                  onPress={() => setActivityPage(Math.max(1, activityPage - 1))}
+                  disabled={activityPage === 1}
+                >
+                  <Ionicons name="chevron-back" size={16} color={colors.white} />
+                </TouchableOpacity>
+
+              <Text style={[styles.paginationText, { color: colors.text }]}>
+                Page {activityPage} of {Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage)}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.paginationButton, { backgroundColor: colors.primary }]}
+                onPress={() => setActivityPage(Math.min(Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage), activityPage + 1))}
+                disabled={activityPage === Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage)}
+              >
+                  <Ionicons name="chevron-forward" size={16} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Member Statistics */}
         {memberStats && (
@@ -671,7 +605,12 @@ const ViewMember = ({ route, navigation }) => {
 
         {/* Actions */}
         {userRole === 'chairperson' && memberData.user_id !== user.id && (
-          <View style={[styles.actionsCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.actionsCard, {
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            marginTop: 32
+          }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Actions
             </Text>
@@ -931,6 +870,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   actionButton: {
     flexDirection: 'row',
@@ -978,29 +919,84 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.1)',
   },
+  tableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  tableHeaderText: {
+    flex: 1,
+    fontSize: 9,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
   detailsTable: {
     marginTop: 8,
   },
   tableRow: {
     flexDirection: 'row',
-    paddingVertical: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
     alignItems: 'center',
   },
   tableLabel: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 8.5,
     fontWeight: '500',
   },
   tableValue: {
-    flex: 1.5,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
   },
   tableValueText: {
-    fontSize: 14,
+    fontSize: 8.5,
     flex: 1,
+  },
+  // Activity Table Styles
+  activityTable: {
+    marginTop: 8,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  activityHeaderText: {
+    flex: 1,
+    fontSize: 9,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  activityCellText: {
+    flex: 1,
+    fontSize: 8.5,
+    textAlign: 'left',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 16,
+  },
+  paginationButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paginationText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 

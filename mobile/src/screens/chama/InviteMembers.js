@@ -467,28 +467,8 @@ const InviteMembers = ({ route, navigation, onRouteChange }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            if (onRouteChange) {
-              onRouteChange('members', 'ChamaMembersScreen');
-            } else {
-              navigation.goBack();
-            }
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Invite Members
-        </Text>
-        <View style={styles.headerRight} />
-      </View>
-
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
           <Ionicons name="information-circle" size={24} color={colors.primary} />
           <View style={styles.infoTextContainer}>
             <Text style={[styles.infoTitle, { color: colors.text }]}>
@@ -501,7 +481,7 @@ const InviteMembers = ({ route, navigation, onRouteChange }) => {
         </View>
 
         {/* Invitation Mode Selection */}
-        <View style={[styles.modeCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.modeCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Invitation Method
           </Text>
@@ -552,7 +532,7 @@ const InviteMembers = ({ route, navigation, onRouteChange }) => {
         </View>
 
         {/* Role Selection */}
-        <View style={[styles.roleCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.roleCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
           <View style={styles.roleHeader}>
             <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
             <View style={styles.roleHeaderText}>
@@ -620,7 +600,7 @@ const InviteMembers = ({ route, navigation, onRouteChange }) => {
 
         {/* Email Invitation Form */}
         {invitationMode === 'email' && (
-          <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.formCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Email Invitation
             </Text>
@@ -683,7 +663,7 @@ const InviteMembers = ({ route, navigation, onRouteChange }) => {
 
         {/* User Search Form */}
         {invitationMode === 'users' && (
-          <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.formCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Search & Select Users
             </Text>
@@ -815,7 +795,7 @@ const InviteMembers = ({ route, navigation, onRouteChange }) => {
         )}
 
         {/* Message Section (Common for both modes) */}
-        <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.formCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginTop: spacing.lg }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Personal Message
           </Text>
@@ -905,7 +885,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   infoTextContainer: {
     flex: 1,
@@ -927,10 +907,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   inputLabel: {
     fontSize: 14,
@@ -998,7 +978,7 @@ const styles = StyleSheet.create({
   modeCard: {
     padding: 20,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   modeButtons: {
     flexDirection: 'row',
@@ -1107,12 +1087,12 @@ const styles = StyleSheet.create({
   roleCard: {
     padding: 20,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   roleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   roleHeaderText: {
     marginLeft: 12,

@@ -209,7 +209,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
 
     if (participants.length === 0) {
       return (
-        <Card style={styles.section}>
+        <Card style={styles.section} variant="outlined">
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Member Order
           </Text>
@@ -224,7 +224,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     }
 
     return (
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Member Order ({participants.length} participants)
         </Text>
@@ -342,7 +342,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
   };
 
   const renderRoundSelector = () => (
-    <Card style={styles.section}>
+    <Card style={styles.section} variant="outlined">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Active Merry-Go-Rounds
@@ -424,7 +424,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     }
 
     return (
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Current Round Status
         </Text>
@@ -508,7 +508,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     if (!selectedRound?.contributions) return null;
 
     return (
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Recent Contributions
         </Text>
@@ -562,7 +562,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     const isCurrentRecipient = selectedRound.current_position === selectedRound.members?.findIndex(m => m.user_id === user?.id);
 
     return (
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Actions
         </Text>

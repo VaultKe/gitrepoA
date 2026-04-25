@@ -27,6 +27,7 @@ const WelfareScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const { currentChamaId, selectedChama } = useChamaContext();
   const colors = getThemeColors(theme);
+  const tableStyles = createTableStyles(colors, spacing, typography, shadows);
 
   // Use chamaId from route params or from context
   const chamaId = routeChamaId || currentChamaId;
@@ -55,6 +56,11 @@ const WelfareScreen = ({ route, navigation }) => {
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [formErrors, setFormErrors] = useState({});
 
+  // Pagination states
+  const [requestsCurrentPage, setRequestsCurrentPage] = useState(1);
+  const [contributionsCurrentPage, setContributionsCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+
   const welfareCategories = [
     { id: 'medical', name: 'Medical Emergency', icon: 'medical', color: colors.error },
     { id: 'education', name: 'Education Support', icon: 'school', color: colors.info },
@@ -76,8 +82,10 @@ const WelfareScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (chamaId) {
       loadChamaDetails();
-      loadWelfareRequests();
-      loadWelfareContributions();
+      loadWelfareRequests(1);
+      loadWelfareContributions(1);
+      setRequestsCurrentPage(1);
+      setContributionsCurrentPage(1);
     }
   }, [chamaId]);
 
@@ -87,6 +95,20 @@ const WelfareScreen = ({ route, navigation }) => {
       loadChamaMembers();
     }
   }, [showCreateModal]);
+
+  // Load welfare requests when page changes
+  useEffect(() => {
+    if (chamaId && activeTab === 'requests') {
+      loadWelfareRequests(requestsCurrentPage);
+    }
+  }, [requestsCurrentPage, activeTab]);
+
+  // Load welfare contributions when page changes
+  useEffect(() => {
+    if (chamaId && activeTab === 'contributions') {
+      loadWelfareContributions(contributionsCurrentPage);
+    }
+  }, [contributionsCurrentPage, activeTab]);
 
   const loadChamaDetails = async () => {
     try {
@@ -100,10 +122,11 @@ const WelfareScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadWelfareRequests = async () => {
+  const loadWelfareRequests = async (page = requestsCurrentPage) => {
     try {
       setLoading(true);
-      const response = await ApiService.getWelfareRequests(chamaId);
+      const offset = (page - 1) * itemsPerPage;
+      const response = await ApiService.getWelfareRequests(chamaId, itemsPerPage, offset);
       console.log('🔍 Welfare requests API response:', response);
 
       if (response.success) {
@@ -151,10 +174,11 @@ const WelfareScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadWelfareContributions = async () => {
+  const loadWelfareContributions = async (page = contributionsCurrentPage) => {
     try {
       // Load all welfare requests and filter for approved ones
-      const response = await ApiService.getWelfareRequests(chamaId);
+      const offset = (page - 1) * itemsPerPage;
+      const response = await ApiService.getWelfareRequests(chamaId, itemsPerPage, offset);
       if (response.success) {
         const allRequests = response.data || [];
 
@@ -361,9 +385,11 @@ const WelfareScreen = ({ route, navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setRequestsCurrentPage(1);
+    setContributionsCurrentPage(1);
     await Promise.all([
-      loadWelfareRequests(),
-      loadWelfareContributions()
+      loadWelfareRequests(1),
+      loadWelfareContributions(1)
     ]);
     setRefreshing(false);
   };
@@ -409,7 +435,7 @@ const WelfareScreen = ({ route, navigation }) => {
           beneficiaryIds: [],
         });
         setFormErrors({});
-        await loadWelfareRequests();
+        await loadWelfareRequests(requestsCurrentPage);
       } else {
         Toast.show({
           type: 'error',
@@ -586,8 +612,8 @@ const WelfareScreen = ({ route, navigation }) => {
         // Refresh data from server to ensure consistency
         console.log('🗳️ Refreshing welfare data...');
         await Promise.all([
-          loadWelfareRequests(),
-          loadWelfareContributions()
+          loadWelfareRequests(requestsCurrentPage),
+          loadWelfareContributions(contributionsCurrentPage)
         ]);
         console.log('🗳️ Vote process completed successfully');
       } else {
@@ -681,6 +707,10 @@ const WelfareScreen = ({ route, navigation }) => {
   const [contributionAmount, setContributionAmount] = useState('');
   const [contributionMessage, setContributionMessage] = useState('');
   const [contributingInProgress, setContributingInProgress] = useState(false);
+
+  // Table action modal states
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [selectedTableItem, setSelectedTableItem] = useState(null);
 
   const handleContribute = (requestId) => {
     const request = welfareContributions.find(r => r.id === requestId);
@@ -801,7 +831,7 @@ const WelfareScreen = ({ route, navigation }) => {
 
         // Refresh contributions data after a short delay for backend sync
         setTimeout(async () => {
-          await loadWelfareContributions();
+          await loadWelfareContributions(contributionsCurrentPage);
         }, 1000); // 1 second delay for backend processing
       } else {
         Toast.show({
@@ -848,6 +878,159 @@ const WelfareScreen = ({ route, navigation }) => {
     const lastName = userData.last_name || requester.last_name || userData.lastName || '';
     const fullName = `${firstName} ${lastName}`.trim();
     return fullName || userData.name || requester.name || userData.email?.split('@')[0] || requester.email?.split('@')[0] || 'Unknown Requester';
+  };
+
+  const renderWelfareRequestTableRow = ({ item, index }) => {
+    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
+
+    return (
+      <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
+        {/* Title Column */}
+        <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+          <View style={tableStyles.nameContainer}>
+            <View style={[tableStyles.typeIcon, { backgroundColor: getCategoryColor(item.category) + '20' }]}>
+              <Ionicons
+                name={getCategoryIcon(item.category)}
+                size={12}
+                color={getCategoryColor(item.category)}
+              />
+            </View>
+            <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
+              {item.title}
+            </Text>
+          </View>
+        </View>
+
+        {/* Category Column */}
+        <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+          <View style={[tableStyles.statusBadge, { backgroundColor: getCategoryColor(item.category) + '20' }]}>
+            <Text style={[tableStyles.statusText, { color: getCategoryColor(item.category) }]}>
+              {welfareCategories.find(c => c.id === item.category)?.name || item.category}
+            </Text>
+          </View>
+        </View>
+
+        {/* Amount Column */}
+        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+          <Text style={[
+            tableStyles.tableCellText,
+            { color: colors.primary, fontWeight: typography.fontWeight.medium }
+          ]}>
+            {formatCurrency(item.amount)}
+          </Text>
+        </View>
+
+        {/* Urgency Column */}
+        <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+          <View style={[tableStyles.statusBadge, { backgroundColor: getUrgencyColor(item.urgency) + '20' }]}>
+            <Text style={[tableStyles.statusText, { color: getUrgencyColor(item.urgency) }]}>
+              {urgencyLevels.find(l => l.id === item.urgency)?.name || item.urgency}
+            </Text>
+          </View>
+        </View>
+
+        {/* Votes Column */}
+        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+          <Text style={tableStyles.tableCellText}>
+            {item.votes?.yes || item.votes_for || 0}/{item.votes?.no || item.votes_against || 0}
+          </Text>
+        </View>
+
+        {/* Actions Column */}
+        <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+          <TouchableOpacity
+            style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => {
+              setSelectedTableItem(item);
+              setShowActionModal(true);
+            }}
+          >
+            <Ionicons
+              name="ellipsis-vertical"
+              size={12}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderTableRow = ({ item, index }) => {
+    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
+
+    return (
+      <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
+        {/* Name/Beneficiary Column */}
+        <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+          <View style={tableStyles.nameContainer}>
+            <View style={[tableStyles.typeIcon, { backgroundColor: getCategoryColor(item.category) + '20' }]}>
+              <Ionicons
+                name={getCategoryIcon(item.category)}
+                size={12}
+                color={getCategoryColor(item.category)}
+              />
+            </View>
+            <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
+              {getBeneficiaryDisplayName(item)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Title Column */}
+        <View style={[tableStyles.tableCell, { flex: 2 }]}>
+          <Text style={tableStyles.tableCellText} numberOfLines={1}>
+            {item.title.length > 15 ? item.title.substring(0, 15) + '...' : item.title}
+          </Text>
+        </View>
+
+        {/* Amount Needed Column */}
+        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+          <Text style={[
+            tableStyles.tableCellText,
+            { color: colors.primary, fontWeight: typography.fontWeight.medium }
+          ]}>
+            {formatCurrency(item.amount)}
+          </Text>
+        </View>
+
+        {/* Amount Raised Column */}
+        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+          <Text style={[
+            tableStyles.tableCellText,
+            { color: colors.success, fontWeight: typography.fontWeight.medium }
+          ]}>
+            {formatCurrency(item.totalContributions || 0)}
+          </Text>
+        </View>
+
+        {/* Progress Column */}
+        <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+          <View style={[tableStyles.statusBadge, { backgroundColor: colors.primary + '20' }]}>
+            <Text style={[tableStyles.statusText, { color: colors.primary }]}>
+              {Math.min(Math.round(((item.totalContributions || 0) / item.amount) * 100), 100)}%
+            </Text>
+          </View>
+        </View>
+
+        {/* Actions Column */}
+        <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+          <TouchableOpacity
+            style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => {
+              setSelectedTableItem(item);
+              setShowActionModal(true);
+            }}
+          >
+            <Ionicons
+              name="ellipsis-vertical"
+              size={12}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const renderWelfareContribution = (request) => (
@@ -1191,15 +1374,6 @@ const WelfareScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Welfare Support
-        </Text>
-        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-          Community support for emergencies
-        </Text>
-      </View>
-
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
@@ -1247,35 +1421,149 @@ const WelfareScreen = ({ route, navigation }) => {
         <View style={styles.content}>
           {activeTab === 'requests' ? (
             <>
-              {welfareRequests.map(renderWelfareRequest)}
+              {/* Table Container */}
+              <View style={tableStyles.tableContainer}>
+                {/* Table Header */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View>
+                    <View style={tableStyles.tableHeader}>
+                      <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                        <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Category</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Amount</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Priority</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Votes</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Actions</Text>
+                      </View>
+                    </View>
 
-              {welfareRequests.length === 0 && !loading && (
-                <View style={styles.emptyState}>
-                  <Ionicons name="heart-outline" size={64} color={colors.textTertiary} />
-                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                    No welfare requests
-                  </Text>
-                  <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                    Be the first to create a welfare request for your community
-                  </Text>
-                </View>
-              )}
+                    {/* Table Body */}
+                    {welfareRequests.map((item, index) => (
+                      <View key={item.id}>
+                        {renderWelfareRequestTableRow({ item, index })}
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+
+                {welfareRequests.length === 0 && !loading && (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="heart-outline" size={64} color={colors.textTertiary} />
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                      No welfare requests
+                    </Text>
+                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                      Be the first to create a welfare request for your community
+                    </Text>
+                  </View>
+                )}
+
+                {/* Pagination */}
+                {welfareRequests.length > 0 && (
+                  <View style={styles.pagination}>
+                    <TouchableOpacity
+                      style={[styles.pageButton, requestsCurrentPage === 1 && styles.pageButtonDisabled]}
+                      onPress={() => requestsCurrentPage > 1 && setRequestsCurrentPage(requestsCurrentPage - 1)}
+                      disabled={requestsCurrentPage === 1}
+                    >
+                      <Ionicons name="chevron-back" size={16} color={requestsCurrentPage === 1 ? colors.textSecondary : colors.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.pageText, { color: colors.text }]}>
+                      {requestsCurrentPage}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.pageButton, welfareRequests.length < itemsPerPage && styles.pageButtonDisabled]}
+                      onPress={() => welfareRequests.length >= itemsPerPage && setRequestsCurrentPage(requestsCurrentPage + 1)}
+                      disabled={welfareRequests.length < itemsPerPage}
+                    >
+                      <Ionicons name="chevron-forward" size={16} color={welfareRequests.length < itemsPerPage ? colors.textSecondary : colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             </>
           ) : (
             <>
-              {welfareContributions.map(renderWelfareContribution)}
+              {/* Table Container */}
+              <View style={tableStyles.tableContainer}>
+                {/* Table Header */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View>
+                    <View style={tableStyles.tableHeader}>
+                      <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                        <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Beneficiary</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, { flex: 2 }]}>
+                        <Text style={tableStyles.tableHeaderText}>Title</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Needed</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Raised</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Progress</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Actions</Text>
+                      </View>
+                    </View>
 
-              {welfareContributions.length === 0 && !loading && (
-                <View style={styles.emptyState}>
-                  <Ionicons name="wallet-outline" size={64} color={colors.textTertiary} />
-                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                    No approved welfare requests
-                  </Text>
-                  <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                    Approved welfare requests will appear here for contributions
-                  </Text>
-                </View>
-              )}
+                    {/* Table Body */}
+                    {welfareContributions.map((item, index) => (
+                      <View key={item.id}>
+                        {renderTableRow({ item, index })}
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+
+                {welfareContributions.length === 0 && !loading && (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="wallet-outline" size={64} color={colors.textTertiary} />
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                      No approved welfare requests
+                    </Text>
+                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                      Approved welfare requests will appear here for contributions
+                    </Text>
+                  </View>
+                )}
+
+                {/* Pagination */}
+                {welfareContributions.length > 0 && (
+                  <View style={styles.pagination}>
+                    <TouchableOpacity
+                      style={[styles.pageButton, contributionsCurrentPage === 1 && styles.pageButtonDisabled]}
+                      onPress={() => contributionsCurrentPage > 1 && setContributionsCurrentPage(contributionsCurrentPage - 1)}
+                      disabled={contributionsCurrentPage === 1}
+                    >
+                      <Ionicons name="chevron-back" size={16} color={contributionsCurrentPage === 1 ? colors.textSecondary : colors.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.pageText, { color: colors.text }]}>
+                      {contributionsCurrentPage}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.pageButton, welfareContributions.length < itemsPerPage && styles.pageButtonDisabled]}
+                      onPress={() => welfareContributions.length >= itemsPerPage && setContributionsCurrentPage(contributionsCurrentPage + 1)}
+                      disabled={welfareContributions.length < itemsPerPage}
+                    >
+                      <Ionicons name="chevron-forward" size={16} color={welfareContributions.length < itemsPerPage ? colors.textSecondary : colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             </>
           )}
         </View>
@@ -1850,9 +2138,268 @@ const WelfareScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Table Action Modal - Slides from bottom */}
+      <Modal
+        visible={showActionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowActionModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.actionModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowActionModal(false)}
+        >
+          <View style={[styles.actionModalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.actionModalHeader}>
+              <Text style={[styles.actionModalTitle, { color: colors.text }]}>
+                Actions for {selectedTableItem?.title}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowActionModal(false)}
+                style={styles.actionModalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.actionModalBody}>
+              {activeTab === 'contributions' ? (
+                // Actions for approved contributions
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionModalButton, { backgroundColor: colors.primary + '10' }]}
+                    onPress={() => {
+                      setShowActionModal(false);
+                      handleContribute(selectedTableItem.id);
+                    }}
+                  >
+                    <Ionicons name="wallet" size={20} color={colors.primary} />
+                    <View style={styles.actionModalButtonText}>
+                      <Text style={[styles.actionModalButtonTitle, { color: colors.primary }]}>
+                        Contribute
+                      </Text>
+                      <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
+                        Make a contribution to this request
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
+                    onPress={() => {
+                      setShowActionModal(false);
+                      handleViewContributionDetails(selectedTableItem.id);
+                    }}
+                  >
+                    <Ionicons name="eye" size={20} color={colors.info} />
+                    <View style={styles.actionModalButtonText}>
+                      <Text style={[styles.actionModalButtonTitle, { color: colors.info }]}>
+                        View Details
+                      </Text>
+                      <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
+                        See detailed contribution information
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionModalButton, { backgroundColor: colors.success + '10' }]}
+                    onPress={() => {
+                      setShowActionModal(false);
+                      if (navigation) {
+                        navigation.navigate('ContributeScreen', {
+                          chamaId: chamaId,
+                          contributionType: 'welfare',
+                          proposalId: selectedTableItem.id,
+                          proposalTitle: selectedTableItem.title,
+                          requestedAmount: selectedTableItem.amount
+                        });
+                      }
+                    }}
+                  >
+                    <Ionicons name="arrow-forward" size={20} color={colors.success} />
+                    <View style={styles.actionModalButtonText}>
+                      <Text style={[styles.actionModalButtonTitle, { color: colors.success }]}>
+                        Go to Contribute
+                      </Text>
+                      <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
+                        Navigate to full contribution screen
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // Actions for pending requests
+                <>
+                  {!selectedTableItem.userVote && (
+                    <TouchableOpacity
+                      style={[styles.actionModalButton, { backgroundColor: colors.success + '10' }]}
+                      onPress={() => {
+                        setShowActionModal(false);
+                        handleVote(selectedTableItem.id, 'for');
+                      }}
+                    >
+                      <Ionicons name="thumbs-up" size={20} color={colors.success} />
+                      <View style={styles.actionModalButtonText}>
+                        <Text style={[styles.actionModalButtonTitle, { color: colors.success }]}>
+                          Support
+                        </Text>
+                        <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
+                          Vote in favor of this request
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  {!selectedTableItem.userVote && (
+                    <TouchableOpacity
+                      style={[styles.actionModalButton, { backgroundColor: colors.error + '10' }]}
+                      onPress={() => {
+                        setShowActionModal(false);
+                        handleVote(selectedTableItem.id, 'against');
+                      }}
+                    >
+                      <Ionicons name="thumbs-down" size={20} color={colors.error} />
+                      <View style={styles.actionModalButtonText}>
+                        <Text style={[styles.actionModalButtonTitle, { color: colors.error }]}>
+                          Oppose
+                        </Text>
+                        <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
+                          Vote against this request
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
+                    onPress={() => {
+                      setShowActionModal(false);
+                      // Show request details (could navigate to detail screen or show inline modal)
+                      Toast.show({
+                        type: 'info',
+                        text1: selectedTableItem.title,
+                        text2: selectedTableItem.description,
+                        position: 'top',
+                        visibilityTime: 5000,
+                      });
+                    }}
+                  >
+                    <Ionicons name="information-circle" size={20} color={colors.info} />
+                    <View style={styles.actionModalButtonText}>
+                      <Text style={[styles.actionModalButtonTitle, { color: colors.info }]}>
+                        View Details
+                      </Text>
+                      <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
+                        See full request information
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
+
+const createTableStyles = (colors, spacing, typography, shadows) => ({
+  tableContainer: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tableCell: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  nameCell: {
+    flex: 2.5,
+    alignItems: 'flex-start',
+  },
+  amountCell: {
+    flex: 1.2,
+  },
+  dateCell: {
+    flex: 1.5,
+  },
+  typeCell: {
+    flex: 1,
+  },
+  actionsCell: {
+    flex: 0.8,
+  },
+  tableHeaderText: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text,
+    fontSize: 9,
+    textAlign: 'center',
+  },
+  tableCellText: {
+    fontSize: 8.5,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typeIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.xs,
+  },
+  nameText: {
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'left',
+  },
+  statusBadge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+  },
+  statusText: {
+    fontSize: 7,
+    fontWeight: typography.fontWeight.bold,
+    textTransform: 'capitalize',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  actionButton: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -2070,7 +2617,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius.xl,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl,
-    maxHeight: '90%',
+    maxHeight: '80%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '95%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2554,6 +3104,88 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
+  },
+  // Action Modal Styles
+  actionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '60%',
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    paddingBottom: spacing.xl,
+  },
+  actionModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  actionModalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  actionModalCloseButton: {
+    padding: spacing.xs,
+  },
+  actionModalBody: {
+    flex: 1,
+    padding: spacing.md,
+  },
+  actionModalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  actionModalButtonText: {
+    marginLeft: spacing.md,
+    flex: 1,
+  },
+  actionModalButtonTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing.xs / 2,
+  },
+  actionModalButtonSubtitle: {
+    fontSize: typography.fontSize.sm,
+  },
+  // Pagination Styles
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  pageButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pageButtonDisabled: {
+    opacity: 0.5,
+  },
+  pageText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    marginHorizontal: spacing.md,
   },
 });
 

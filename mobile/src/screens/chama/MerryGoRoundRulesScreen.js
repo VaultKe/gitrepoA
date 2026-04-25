@@ -54,24 +54,11 @@ const MerryGoRoundRulesScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Merry-Go-Round Rules
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        <Card style={styles.introCard}>
+        <Card style={styles.introCard} variant="outlined">
           <View style={styles.introContent}>
             <Ionicons name="information-circle" size={32} color={colors.primary} />
             <Text style={[styles.introText, { color: colors.text }]}>
@@ -81,7 +68,7 @@ const MerryGoRoundRulesScreen = ({ navigation, route }) => {
         </Card>
 
         {rules.map((rule, index) => (
-          <Card key={index} style={styles.ruleCard}>
+          <Card key={index} style={styles.ruleCard} variant="outlined">
             <View style={styles.ruleHeader}>
               <View style={[styles.ruleNumber, { backgroundColor: colors.primary }]}>
                 <Text style={[styles.ruleNumberText, { color: colors.white }]}>
@@ -98,7 +85,7 @@ const MerryGoRoundRulesScreen = ({ navigation, route }) => {
           </Card>
         ))}
 
-        <Card style={styles.disclaimerCard}>
+        <Card style={styles.disclaimerCard} variant="outlined">
           <View style={styles.disclaimerContent}>
             <Ionicons name="warning" size={24} color={colors.warning} />
             <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
