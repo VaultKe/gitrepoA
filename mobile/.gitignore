@@ -20,6 +20,9 @@ yarn-error.*
 *.key
 *.mobileprovision
 
+.db-wall
+.db
+.db.shm
 # Metro
 .metro-health-check*
 
