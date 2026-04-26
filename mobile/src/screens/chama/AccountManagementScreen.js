@@ -895,8 +895,8 @@ const AccountManagementScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           ))}
         </View>
-      </View>
-    </View>
+        </View>
+        </View>
   );
 
   const getRoleColor = (role) => {
@@ -3276,47 +3276,51 @@ const AccountManagementScreen = ({ route, navigation }) => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Stat Cards Row */}
+        {/* Stat Cards 2x2 Grid */}
         <View style={styles.statsContainer}>
-          <Card variant="outlined" style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="card" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Loans</Text>
-            </View>
-          </Card>
+          <View style={styles.statRow}>
+            <Card variant="outlined" style={styles.statCard}>
+              <View style={styles.statIcon}>
+                <Ionicons name="card" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.statContent}>
+                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Loans</Text>
+              </View>
+            </Card>
 
-          <Card variant="outlined" style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="heart" size={24} color={colors.warning} />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Welfare Funds</Text>
-            </View>
-          </Card>
+            <Card variant="outlined" style={styles.statCard}>
+              <View style={styles.statIcon}>
+                <Ionicons name="heart" size={24} color={colors.warning} />
+              </View>
+              <View style={styles.statContent}>
+                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Welfare Funds</Text>
+              </View>
+            </Card>
+          </View>
 
-          <Card variant="outlined" style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="wallet" size={24} color={colors.secondary} />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={[styles.statValue, { color: colors.text }]}>KES 0</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Savings</Text>
-            </View>
-          </Card>
+          <View style={styles.statRow}>
+            <Card variant="outlined" style={styles.statCard}>
+              <View style={styles.statIcon}>
+                <Ionicons name="wallet" size={24} color={colors.secondary} />
+              </View>
+              <View style={styles.statContent}>
+                <Text style={[styles.statValue, { color: colors.text }]}>KES 0</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Savings</Text>
+              </View>
+            </Card>
 
-          <Card variant="outlined" style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="refresh-circle" size={24} color={colors.info} />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MGR Cycles</Text>
-            </View>
-          </Card>
+            <Card variant="outlined" style={styles.statCard}>
+              <View style={styles.statIcon}>
+                <Ionicons name="refresh-circle" size={24} color={colors.info} />
+              </View>
+              <View style={styles.statContent}>
+                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MGR Cycles</Text>
+              </View>
+            </Card>
+          </View>
         </View>
 
         {/* Navigation Icons */}
@@ -4990,10 +4994,19 @@ const styles = StyleSheet.create({
 
   // 📊 DASHBOARD STYLES
   statsContainer: {
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: borderRadius.lg,
+    backgroundColor: 'white',
+  },
+  statRow: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   statCard: {
     flex: 1,
