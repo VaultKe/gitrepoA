@@ -1341,7 +1341,7 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
     const remainingMinutes = isMeetingActive ? Math.floor((meetingEndTime - currentTime) / (1000 * 60)) : 0;
 
     return (
-      <Card style={[ 
+      <Card variant="outlined" style={[
         styles.meetingCard,
         {
           width: numColumns > 1 ? cardWidth : '100%',
