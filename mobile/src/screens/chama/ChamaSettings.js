@@ -413,32 +413,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            if (onRouteChange) {
-              onRouteChange('overview', 'ChamaDashboard');
-            } else {
-              navigation.goBack();
-            }
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Chama Settings
-        </Text>
-        <View style={styles.headerRight}>
-          {isChairperson && (
-            <Text style={[styles.roleIndicator, { color: colors.primary }]}>
-              Chairperson
-            </Text>
-          )}
-        </View>
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -722,6 +696,8 @@ const styles = StyleSheet.create({
     margin: spacing.md,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
     ...shadows.sm,
   },
   sectionTitle: {
