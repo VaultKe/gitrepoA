@@ -286,18 +286,9 @@ const ProfileScreen = ({ navigation }) => {
       // Try API update first
       try {
         const response = await apiService.updateProfile(updateData);
-        console.log('✅ Profile update response:', response);
-        console.log('✅ Updated user avatar field:', response.data?.avatar);
-        console.log('✅ Updated user profile_image field:', response.data?.profile_image);
-
         if (response.success) {
-          // API update successful
-          console.log('🔍 Full API response data:', response.data);
-
           // Extract user data from response (API returns { data: { user: {...} } })
           const updatedUserData = response.data?.user || response.data;
-          console.log('🔍 Extracted user data:', updatedUserData);
-
           await updateUser(updatedUserData);
 
           // Update local profileData state with the new values
@@ -332,8 +323,6 @@ const ProfileScreen = ({ navigation }) => {
 
           // Update profile image display immediately
           const newAvatarUrl = updatedUserData?.avatar || updatedUserData?.profile_image;
-          console.log('🖼️ Avatar from API response:', newAvatarUrl);
-
           if (newAvatarUrl) {
             let fullAvatarUrl;
             if (newAvatarUrl.startsWith('http') || newAvatarUrl.startsWith('data:')) {
@@ -341,11 +330,9 @@ const ProfileScreen = ({ navigation }) => {
             } else {
               fullAvatarUrl = `${apiService.baseURL}${newAvatarUrl.startsWith('/') ? '' : '/'}${newAvatarUrl}`;
             }
-            console.log('🖼️ Setting updated profile image URL:', fullAvatarUrl);
             setProfileImage(fullAvatarUrl);
           } else {
             // If no new avatar URL, preserve the existing one
-            console.log('🖼️ No new avatar URL, preserving existing avatar');
           }
 
           setEditing(false);
@@ -441,7 +428,6 @@ const ProfileScreen = ({ navigation }) => {
 
 
   const handleLogout = async () => {
-    console.log('🔴 Logout button pressed - starting immediate logout');
     setLoading(true);
 
     // Show immediate feedback
@@ -454,18 +440,12 @@ const ProfileScreen = ({ navigation }) => {
     try {
       // Call API logout if available
       try {
-        console.log('🔴 Calling API logout...');
         await apiService.logout();
-        console.log('🔴 API logout successful');
       } catch (apiError) {
-        console.warn('🔴 API logout failed, continuing with local logout:', apiError);
       }
 
       // Clear local data and logout
-      console.log('🔴 Calling context logout...');
       await logout();
-      console.log('🔴 Context logout completed');
-
       // Show success message
       Toast.show({
         type: 'success',
@@ -474,7 +454,6 @@ const ProfileScreen = ({ navigation }) => {
       });
 
     } catch (error) {
-      console.error('🔴 Logout error:', error);
       Toast.show({
         type: 'error',
         text1: 'Logout Failed',
@@ -502,8 +481,6 @@ const ProfileScreen = ({ navigation }) => {
                 source={{ uri: profileImage || avatarData }}
                 style={styles.framelessImage}
                 onError={(error) => {
-                  console.log('🖼️ Expanded profile image failed to load:', error.nativeEvent.error);
-                  console.log('🖼️ Failed expanded URL:', profileImage || avatarData);
                 }}
               />
             ) : (
@@ -604,18 +581,14 @@ const ProfileScreen = ({ navigation }) => {
                 source={{ uri: profileImage }}
                 style={styles.profileImage}
                 onError={(error) => {
-                  console.log('🖼️ Profile image failed to load:', error.nativeEvent.error);
-                  console.log('🖼️ Failed URL:', profileImage);
                   setImageLoading(false);
                   // Don't immediately set to null, let user manually refresh or try different image
                   // setProfileImage(null); // Fallback to placeholder
                 }}
                 onLoadStart={() => {
-                  // console.log('🖼️ Profile image loading started');
                   setImageLoading(true);
                 }}
                 onLoadEnd={() => {
-                  // console.log('🖼️ Profile image loading finished');
                   setImageLoading(false);
                 }}
               />
@@ -624,7 +597,6 @@ const ProfileScreen = ({ navigation }) => {
                 source={{ uri: avatarData }}
                 style={styles.profileImage}
                 onError={(error) => {
-                  console.log('🖼️ Cached avatar failed to load:', error.nativeEvent.error);
                   setImageLoading(false);
                   setAvatarData(null); // Clear invalid cached data
                 }}
