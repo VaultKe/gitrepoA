@@ -301,24 +301,135 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
       const response = await ApiService.getMerryGoRounds(currentChamaId, pageSize, offset);
 
       if (response.success) {
-        const cyclesData = response.data || [];
-        setMaryGoRoundCycles(cyclesData);
+        let cyclesData = response.data || [];
+
+        // Enrich cycles with recipient user information (similar to loans)
+        const enrichedCycles = await Promise.all(
+          cyclesData.map(async (cycle) => {
+            try {
+              // Find the current recipient based on round position
+              const participants = cycle.members || cycle.participants || [];
+              const currentPosition = cycle.current_position || cycle.currentRound || 1;
+              const currentRecipient = participants[currentPosition - 1];
+
+              if (currentRecipient) {
+                const userId = currentRecipient.user_id || currentRecipient.user?.id || currentRecipient.id;
+                if (userId) {
+                  console.log(`🔍 Enriching cycle ${cycle.id} with recipient user ID: ${userId}`);
+                  const userResponse = await ApiService.makeRequest(`/users/${userId}`);
+                  console.log(`🔍 User response for recipient ${userId}:`, userResponse);
+
+                  if (userResponse.success && userResponse.data) {
+                    const userData = userResponse.data;
+                    const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
+                    console.log(`✅ Enriched cycle ${cycle.id} with recipient: ${fullName}`);
+
+                    return {
+                      ...cycle,
+                      recipientId: userId,
+                      recipientName: fullName,
+                      recipient: {
+                        id: userId,
+                        first_name: userData.firstName || userData.first_name,
+                        last_name: userData.lastName || userData.last_name,
+                        name: fullName,
+                        username: userData.username || userData.email
+                      }
+                    };
+                  }
+                }
+              }
+
+              // Return cycle with placeholder recipient data
+              return {
+                ...cycle,
+                recipientId: currentRecipient?.user_id || currentRecipient?.id,
+                recipientName: currentRecipient?.name || 'Unknown Recipient',
+                recipient: {
+                  id: currentRecipient?.user_id || currentRecipient?.id,
+                  name: currentRecipient?.name || 'Unknown Recipient',
+                  first_name: 'Unknown',
+                  last_name: 'Recipient',
+                  username: 'unknown'
+                }
+              };
+            } catch (error) {
+              console.warn(`❌ Failed to enrich cycle ${cycle.id}:`, error);
+              return {
+                ...cycle,
+                recipientId: cycle.recipientId,
+                recipientName: cycle.recipientName || 'Unknown Recipient',
+              };
+            }
+          })
+        );
+
+        setMaryGoRoundCycles(enrichedCycles);
 
         // For search functionality, if searching, load all data
         if (search.trim()) {
           const allResponse = await ApiService.getMerryGoRounds(currentChamaId, 1000, 0); // Load more for search
           if (allResponse.success) {
-            setAllMaryGoRoundCycles(allResponse.data || []);
+            let allCyclesData = allResponse.data || [];
+
+            // Enrich all cycles data as well
+            const enrichedAllCycles = await Promise.all(
+              allCyclesData.map(async (cycle) => {
+                try {
+                  const participants = cycle.members || cycle.participants || [];
+                  const currentPosition = cycle.current_position || cycle.currentRound || 1;
+                  const currentRecipient = participants[currentPosition - 1];
+
+                  if (currentRecipient) {
+                    const userId = currentRecipient.user_id || currentRecipient.user?.id || currentRecipient.id;
+                    if (userId) {
+                      const userResponse = await ApiService.makeRequest(`/users/${userId}`);
+                      if (userResponse.success && userResponse.data) {
+                        const userData = userResponse.data;
+                        const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
+
+                        return {
+                          ...cycle,
+                          recipientId: userId,
+                          recipientName: fullName,
+                          recipient: {
+                            id: userId,
+                            first_name: userData.firstName || userData.first_name,
+                            last_name: userData.lastName || userData.last_name,
+                            name: fullName,
+                            username: userData.username || userData.email
+                          }
+                        };
+                      }
+                    }
+                  }
+
+                  return {
+                    ...cycle,
+                    recipientId: currentRecipient?.user_id || currentRecipient?.id,
+                    recipientName: currentRecipient?.name || 'Unknown Recipient',
+                  };
+                } catch (error) {
+                  return {
+                    ...cycle,
+                    recipientId: cycle.recipientId,
+                    recipientName: cycle.recipientName || 'Unknown Recipient',
+                  };
+                }
+              })
+            );
+
+            setAllMaryGoRoundCycles(enrichedAllCycles);
             // Calculate pagination info from all data
-            const filteredData = filterMaryGoRoundCyclesData(allResponse.data || [], search, selectedFilter);
+            const filteredData = filterMaryGoRoundCyclesData(enrichedAllCycles, search, selectedFilter);
             setTotalItems(filteredData.length);
             setTotalPages(Math.ceil(filteredData.length / pageSize));
           }
         } else {
-          setAllMaryGoRoundCycles(cyclesData);
+          setAllMaryGoRoundCycles(enrichedCycles);
           // Use pagination info from API if available, otherwise estimate
-          setTotalItems(response.totalCount || response.data?.length || cyclesData.length);
-          setTotalPages(Math.ceil((response.totalCount || cyclesData.length) / pageSize));
+          setTotalItems(response.totalCount || response.data?.length || enrichedCycles.length);
+          setTotalPages(Math.ceil((response.totalCount || enrichedCycles.length) / pageSize));
         }
       } else {
         console.error('Failed to load merry go round cycles:', response.error);
@@ -352,6 +463,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     if (search.trim()) {
       filtered = filtered.filter(cycle =>
         cycle.recipientName?.toLowerCase().includes(search.toLowerCase()) ||
+        cycle.name?.toLowerCase().includes(search.toLowerCase()) ||
         cycle.cycleNumber?.toString().includes(search) ||
         cycle.amount?.toString().includes(search)
       );
@@ -366,15 +478,34 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     setRefreshing(false);
   };
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'pending': return colors.warning;
-      case 'ready for disbursement':
-      case 'ready': return colors.success;
-      case 'disbursed': return colors.info;
-      case 'completed': return colors.primary;
-      default: return colors.textSecondary;
+  const getStatusColor = (item) => {
+    // Determine status based on round position and participants
+    const participants = item.members || item.participants || [];
+    const totalParticipants = participants.length || item.total_participants || 0;
+    const currentPosition = item.current_position || item.currentRound || 1;
+    const roundComplete = item.roundComplete || false;
+
+    if (roundComplete || currentPosition > totalParticipants) {
+      return colors.primary; // Completed
+    } else if (currentPosition >= 1) {
+      return colors.success; // Ready for disbursement
     }
+    return colors.textSecondary; // Default
+  };
+
+  const getStatusText = (item) => {
+    // Determine status text based on round position and participants
+    const participants = item.members || item.participants || [];
+    const totalParticipants = participants.length || item.total_participants || 0;
+    const currentPosition = item.current_position || item.currentRound || 1;
+    const roundComplete = item.roundComplete || false;
+
+    if (roundComplete || currentPosition > totalParticipants) {
+      return 'Completed';
+    } else if (currentPosition >= 1) {
+      return 'Ready for Disbursement';
+    }
+    return 'Pending';
   };
 
   const formatCurrency = (amount) => {
@@ -410,8 +541,8 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     }
     setSelectedCycle(cycle);
     setDisburseForm({
-      amount: cycle.amount?.toString() || '',
-      description: `Merry Go Round disbursement - Cycle ${cycle.cycleNumber} to ${cycle.recipientName}`,
+      amount: cycle.amount?.toString() || cycle.totalAmount?.toString() || '',
+      description: `Merry Go Round disbursement - ${cycle.name || `Cycle ${cycle.cycleNumber || cycle.currentRound || 1}`}} to ${cycle.recipientName || cycle.recipient?.name || 'recipient'}`,
       privateNote: '',
     });
     setShowDisburseModal(true);
@@ -442,9 +573,9 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     try {
       const disbursementData = {
         cycleId: selectedCycle.id,
-        recipientId: selectedCycle.recipientId,
-        recipientName: selectedCycle.recipientName,
-        cycleNumber: selectedCycle.cycleNumber,
+        recipientId: selectedCycle.recipientId || selectedCycle.recipient?.id,
+        recipientName: selectedCycle.recipientName || selectedCycle.recipient?.name || 'Unknown',
+        cycleNumber: selectedCycle.cycleNumber || selectedCycle.currentRound || 1,
         amount: parseFloat(disburseForm.amount),
         description: disburseForm.description,
         privateNote: disburseForm.privateNote,
@@ -473,10 +604,10 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
       const bulkData = {
         disbursements: bulkDisburseData.selectedCycles.map(cycle => ({
           cycleId: cycle.id,
-          recipientId: cycle.recipientId,
-          recipientName: cycle.recipientName,
-          cycleNumber: cycle.cycleNumber,
-          amount: cycle.amount,
+          recipientId: cycle.recipientId || cycle.recipient?.id,
+          recipientName: cycle.recipientName || cycle.recipient?.name || 'Unknown',
+          cycleNumber: cycle.cycleNumber || cycle.currentRound || 1,
+          amount: cycle.amount || cycle.totalAmount,
         })),
         description: bulkDisburseData.description,
         disbursedBy: userRole,
@@ -511,31 +642,31 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
         {/* Recipient Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-            {item.recipientName || 'Unknown Recipient'}
+            {item.recipientName || item.recipient?.name || 'Unknown Recipient'}
           </Text>
           <Text style={[tableStyles.tableCellText, { fontSize: 7, color: colors.textSecondary }]}>
-            Cycle {item.cycleNumber}
+            {item.name || 'Merry Go Round'}
           </Text>
         </View>
 
         {/* Amount */}
         <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
           <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium }]}>
-            {formatCurrency(item.amount)}
+            {formatCurrency(item.amount_per_round || item.amountPerRound || item.amount || item.totalAmount || 0)}
           </Text>
         </View>
 
         {/* Round Info */}
         <View style={[tableStyles.tableCell, tableStyles.roundCell]}>
           <Text style={tableStyles.tableCellText}>
-            {item.cycleNumber}
+            {item.current_position || item.currentRound || item.cycleNumber || 1}
           </Text>
         </View>
 
         {/* Expected Date */}
         <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
           <Text style={tableStyles.tableCellText}>
-            {formatDate(item.expectedDate || item.createdAt)}
+            {formatDate(item.next_payout_date || item.nextPayoutDate || item.expectedDate || item.createdAt)}
           </Text>
         </View>
 
@@ -897,7 +1028,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
                 {bulkDisburseData.selectedCycles.map((cycle, index) => (
                   <View key={cycle.id} style={styles.summaryItem}>
                     <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
-                      {index + 1}. Cycle {cycle.cycleNumber} - {cycle.recipientName}
+                      {index + 1}. {cycle.name || `Cycle ${cycle.cycleNumber || cycle.currentRound || 1}`} - {cycle.recipientName || cycle.recipient?.name}
                     </Text>
                     <Text style={[styles.summaryAmount, { color: colors.primary }]}>
                       {formatCurrency(cycle.amount)}
