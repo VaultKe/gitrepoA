@@ -15,8 +15,67 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
 import Card from '../../components/common/Card';
+
+const createTableStyles = (colors, spacing, typography, shadows) => ({
+  tableContainer: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tableCell: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  nameCell: {
+    flex: 2,
+    alignItems: 'flex-start',
+  },
+  statusCell: {
+    flex: 1.5,
+  },
+  tableHeaderText: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text,
+    fontSize: 9,
+    textAlign: 'center',
+  },
+  tableCellText: {
+    fontSize: 8.5,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  nameText: {
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'left',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+    gap: spacing.xs,
+  },
+});
 import api from '../../services/api';
 import Toast from 'react-native-toast-message';
 
@@ -24,6 +83,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
   const { meetingId, meetingData, chamaId, chamaName, fromUserDashboard, showAllMeetings } = route.params || {};
   const { theme } = useApp();
   const colors = getThemeColors(theme);
+  const tableStyles = createTableStyles(colors, spacing, typography, shadows);
 
   const isHistoryMode = fromUserDashboard && showAllMeetings;
 
@@ -32,12 +92,19 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [meetingDetails, setMeetingDetails] = useState(meetingData || null);
   const [attendanceData, setAttendanceData] = useState([]);
+  const [allAttendanceData, setAllAttendanceData] = useState([]);
   const [meetingMinutes, setMeetingMinutes] = useState(null);
   const [meetingDocuments, setMeetingDocuments] = useState([]);
   const [chamaMembers, setChamaMembers] = useState([]);
   const [allMeetings, setAllMeetings] = useState([]);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [downloadingDocId, setDownloadingDocId] = useState(null);
+
+  // Attendance pagination state
+  const [attendancePage, setAttendancePage] = useState(1);
+  const [totalAttendancePages, setTotalAttendancePages] = useState(1);
+  const [totalAttendanceItems, setTotalAttendanceItems] = useState(0);
+  const attendancePageSize = 10;
 
   const handleDocumentPress = async (document) => {
     if (!document.url) {
@@ -229,6 +296,15 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
     }
   }, [meetingId, isHistoryMode]);
 
+  // Handle attendance pagination
+  useEffect(() => {
+    if (allAttendanceData.length > 0) {
+      const startIndex = (attendancePage - 1) * attendancePageSize;
+      const endIndex = startIndex + attendancePageSize;
+      setAttendanceData(allAttendanceData.slice(startIndex, endIndex));
+    }
+  }, [attendancePage, allAttendanceData]);
+
   const loadChamaMembers = async () => {
     try {
       const response = await api.getChamaMembers(chamaId);
@@ -258,7 +334,16 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
         setMeetingDetails(detailsResponse.value.data);
       }
       if (attendanceResponse.status === 'fulfilled' && attendanceResponse.value.success) {
-        setAttendanceData(attendanceResponse.value.data || []);
+        const attendance = attendanceResponse.value.data || [];
+        setAllAttendanceData(attendance);
+        setTotalAttendanceItems(attendance.length);
+        setTotalAttendancePages(Math.ceil(attendance.length / attendancePageSize));
+
+        // Set initial page data
+        const startIndex = 0;
+        const endIndex = attendancePageSize;
+        setAttendanceData(attendance.slice(startIndex, endIndex));
+        setAttendancePage(1);
       }
       if (minutesResponse.status === 'fulfilled' && minutesResponse.value.success) {
         setMeetingMinutes(minutesResponse.value.data);
@@ -326,7 +411,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
     const meeting = meetingDetails || meetingData;
     if (!meeting) {
       return (
-        <Card style={styles.meetingHeaderCard}>
+        <Card variant="outlined" style={styles.meetingHeaderCard}>
           <View style={styles.emptyState}>
             <Ionicons name="document-outline" size={48} color={colors.textSecondary} />
             <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>Meeting details not available</Text>
@@ -335,7 +420,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
       );
     }
     return (
-      <Card style={styles.meetingHeaderCard}>
+      <Card variant="outlined" style={styles.meetingHeaderCard}>
         <View style={styles.meetingHeader}>
           <View style={[styles.meetingTypeIcon, { backgroundColor: colors.primary + '20' }]}>
             <Ionicons name={getMeetingTypeIcon(meeting.meetingType)} size={24} color={colors.primary} />
@@ -346,7 +431,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
             <Text style={[styles.meetingTime, { color: colors.textSecondary }]}>
               {formatTime(meeting.scheduledAt)} • {meeting.meetingType?.charAt(0).toUpperCase() + meeting.meetingType?.slice(1)}
             </Text>
-            {meeting.location && <Text style={[styles.meetingLocation, { color: colors.textSecondary }]}>📌 {meeting.location}</Text>}
+            {meeting.location && <Text style={[styles.meetingLocation, { color: colors.textSecondary }]}>📌Location: {meeting.location}</Text>}
           </View>
         </View>
         {meeting.description && <Text style={[styles.meetingDescription, { color: colors.textSecondary }]}>{meeting.description}</Text>}
@@ -363,7 +448,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
 
     return (
       <View style={styles.detailsContainer}>
-        <Card style={styles.overviewCard}>
+        <Card variant="outlined" style={styles.overviewCard}>
           <Text style={[styles.detailsTitle, { color: colors.text }]}>Attendance Summary</Text>
           <View style={styles.attendanceStats}>
             <View style={styles.statItem}>
@@ -381,34 +466,102 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
           </View>
         </Card>
 
-        <Card style={styles.attendanceCard}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Attendance Details</Text>
-          {attendanceData.length > 0 ? (
-            <View style={styles.attendanceList}>
-              {attendanceData.map((attendance, index) => (
-                <View key={index} style={styles.attendanceItem}>
-                  <View style={styles.attendanceInfo}>
-                    <Text style={[styles.attendeeName, { color: colors.text }]}>{getAttendeeName(attendance)}</Text>
-                    <Text style={[styles.attendanceType, { color: colors.textSecondary }]}>{attendance.attendanceType || 'physical'} attendance</Text>
-                  </View>
-                  <View style={[styles.attendanceStatus, { backgroundColor: attendance.isPresent ? colors.success + '20' : colors.error + '20' }]}>
-                    <Ionicons name={attendance.isPresent ? "checkmark-circle" : "close-circle"} size={16} color={attendance.isPresent ? colors.success : colors.error} />
-                    <Text style={[styles.attendanceStatusText, { color: attendance.isPresent ? colors.success : colors.error }]}>
+        {/* Attendance Details Table */}
+        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.md }]}>Attendance Details</Text>
+        {totalAttendanceItems > 0 ? (
+          <View style={styles.attendanceTable}>
+            {/* Table Header */}
+            <View style={tableStyles.tableHeader}>
+              <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member Name</Text>
+              </View>
+              <View style={tableStyles.tableCell}>
+                <Text style={tableStyles.tableHeaderText}>Meeting Type</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                <Text style={tableStyles.tableHeaderText}>Status</Text>
+              </View>
+            </View>
+
+            {/* Table Body */}
+            {attendanceData.map((attendance, index) => (
+              <View
+                key={attendance.id || index}
+                style={[
+                  tableStyles.tableRow,
+                  index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }
+                ]}
+              >
+                {/* Member Name */}
+                <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                  <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
+                    {getAttendeeName(attendance)}
+                  </Text>
+                </View>
+
+                {/* Attendance Type */}
+                <View style={tableStyles.tableCell}>
+                  <Text style={tableStyles.tableCellText}>
+                    {attendance.attendanceType || 'Physical'}
+                  </Text>
+                </View>
+
+                {/* Status */}
+                <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                  <View style={[
+                    tableStyles.statusBadge,
+                    { backgroundColor: attendance.isPresent ? colors.success + '20' : colors.error + '20' }
+                  ]}>
+                    <Ionicons
+                      name={attendance.isPresent ? "checkmark-circle" : "close-circle"}
+                      size={14}
+                      color={attendance.isPresent ? colors.success : colors.error}
+                    />
+                    <Text style={[
+                      { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: attendance.isPresent ? colors.success : colors.error }
+                    ]}>
                       {attendance.isPresent ? 'Present' : 'Absent'}
                     </Text>
                   </View>
                 </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
-              <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No attendance data available</Text>
-            </View>
-          )}
-        </Card>
+              </View>
+            ))}
 
-        <Card style={styles.minutesCard}>
+            {/* Pagination */}
+            {totalAttendanceItems > attendancePageSize && (
+              <View style={styles.paginationContainer}>
+                <TouchableOpacity
+                  style={[styles.paginationButton, attendancePage === 1 && styles.paginationButtonDisabled]}
+                  onPress={() => attendancePage > 1 && setAttendancePage(attendancePage - 1)}
+                  disabled={attendancePage === 1}
+                >
+                  <Ionicons name="chevron-back" size={16} color={attendancePage === 1 ? colors.textTertiary : colors.primary} />
+                  <Text style={[styles.paginationText, attendancePage === 1 && styles.paginationTextDisabled]}>Previous</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.paginationInfo}>
+                  Page {attendancePage} of {totalAttendancePages} ({totalAttendanceItems} total)
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.paginationButton, attendancePage === totalAttendancePages && styles.paginationButtonDisabled]}
+                  onPress={() => attendancePage < totalAttendancePages && setAttendancePage(attendancePage + 1)}
+                  disabled={attendancePage === totalAttendancePages}
+                >
+                  <Text style={[styles.paginationText, attendancePage === totalAttendancePages && styles.paginationTextDisabled]}>Next</Text>
+                  <Ionicons name="chevron-forward" size={16} color={attendancePage === totalAttendancePages ? colors.textTertiary : colors.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No attendance data available</Text>
+          </View>
+        )}
+
+        <Card variant="outlined" style={styles.minutesCard}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Meeting Minutes</Text>
           {meetingMinutes ? (
             <>
@@ -426,7 +579,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
           )}
         </Card>
 
-        <Card style={styles.documentsCard}>
+        <Card variant="outlined" style={styles.documentsCard}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Meeting Documents ({meetingDocuments.length})</Text>
           {meetingDocuments.length > 0 ? (
             <>
@@ -489,17 +642,6 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} />
-        <View style={styles.headerContent}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Meeting Summary</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{chamaName}</Text>
-        </View>
-        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
@@ -577,8 +719,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   meetingHeaderCard: {
-    margin: spacing.md,
     marginBottom: spacing.sm,
+    padding: spacing.md,
+    marginHorizontal: -spacing.sm,
   },
   meetingHeader: {
     flexDirection: 'row',
@@ -667,6 +810,8 @@ const styles = StyleSheet.create({
   },
   overviewCard: {
     marginBottom: spacing.md,
+    padding: spacing.md,
+    marginHorizontal: -spacing.sm,
   },
   detailsTitle: {
     fontSize: typography.fontSize['2xl'],
@@ -752,6 +897,8 @@ const styles = StyleSheet.create({
   },
   minutesCard: {
     marginBottom: spacing.md,
+    padding: spacing.md,
+    marginHorizontal: -spacing.sm,
   },
   minutesContent: {
     fontSize: typography.fontSize.base,
@@ -775,6 +922,8 @@ const styles = StyleSheet.create({
   },
   documentsCard: {
     marginBottom: spacing.md,
+    padding: spacing.md,
+    marginHorizontal: -spacing.sm,
   },
   documentItem: {
     flexDirection: 'row',
@@ -850,6 +999,13 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     fontStyle: 'italic',
   },
+
+  // Attendance Table Styles
+  attendanceTable: {
+    marginTop: spacing.md,
+  },
+
+
 });
 
 export default MeetingSummaryScreen;

@@ -1437,8 +1437,7 @@ class LightningDataService {
       return decryptedMessages;
 
     } catch (error) {
-      console.error(`❌ Message decryption failed for room ${roomId}:`, error);
-      // Return original messages with fallback display content
+     // Return original messages with fallback display content
       return messages.map(message => ({
         ...message,
         displayContent: message.content || '[Decryption unavailable]',

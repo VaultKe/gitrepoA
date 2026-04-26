@@ -38,7 +38,7 @@ const MeetingItem = ({
   const isJoinable = meeting.status === 'ongoing' || (meeting.status === 'upcoming' && meeting.canJoinEarly);
 
   return (
-    <Card style={{
+    <Card variant="outlined" style={{
       width: cardWidth,
       marginBottom: 16,
       padding: 16,

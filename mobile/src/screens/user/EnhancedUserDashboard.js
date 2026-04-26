@@ -84,7 +84,6 @@ const EnhancedUserDashboard = ({ navigation }) => {
       minimumFractionDigits: 2,
     }).format(amount);
   };
-
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -101,11 +100,11 @@ const EnhancedUserDashboard = ({ navigation }) => {
       onPress: () => navigation.navigate('Wallet'),
     },
     {
-      id: 2,
-      title: 'AI Assistant',
-      icon: 'chatbubble-ellipses',
+      id: 5,
+      title: 'Groups',
+      icon: 'people',
       color: colors.secondary,
-      onPress: () => navigation.navigate('AIAssistant'),
+      onPress: () => navigation.navigate('MyChamas'),
     },
     {
       id: 3,
@@ -122,11 +121,11 @@ const EnhancedUserDashboard = ({ navigation }) => {
       onPress: () => navigation.navigate('Reminders'),
     },
     {
-      id: 5,
-      title: 'Groups',
-      icon: 'people',
+      id: 2,
+      title: 'AI Assistant',
+      icon: 'chatbubble-ellipses',
       color: colors.secondary,
-      onPress: () => navigation.navigate('MyChamas'),
+      onPress: () => navigation.navigate('AIAssistant'),
     },
     {
       id: 6,

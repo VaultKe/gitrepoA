@@ -303,24 +303,129 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       const response = await ApiService.getWelfareRequests(currentChamaId, pageSize, offset);
 
       if (response.success) {
-        const fundsData = response.data || [];
-        setWelfareFunds(fundsData);
+        let fundsData = response.data || [];
+
+        // Enrich welfare funds with requester user information
+        const enrichedFunds = await Promise.all(
+          fundsData.map(async (fund) => {
+            try {
+              // Get requester user ID from various possible field names
+              const userId = fund.requester_id || fund.requesterId || fund.user_id || fund.memberId || fund.requested_by;
+              if (userId) {
+                console.log(`🔍 Enriching welfare fund ${fund.id} with requester user ID: ${userId}`);
+                const userResponse = await ApiService.makeRequest(`/users/${userId}`);
+                console.log(`🔍 User response for requester ${userId}:`, userResponse);
+
+                if (userResponse.success && userResponse.data) {
+                  const userData = userResponse.data;
+                  const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
+                  console.log(`✅ Enriched welfare fund ${fund.id} with requester: ${fullName}`);
+
+                  return {
+                    ...fund,
+                    requester_id: userId,
+                    requester_name: fullName,
+                    memberId: userId,
+                    memberName: fullName,
+                    requester: {
+                      id: userId,
+                      first_name: userData.firstName || userData.first_name,
+                      last_name: userData.lastName || userData.last_name,
+                      name: fullName,
+                      username: userData.username || userData.email
+                    }
+                  };
+                }
+              }
+
+              // Return fund with placeholder requester data
+              return {
+                ...fund,
+                requester_id: userId,
+                requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
+                memberId: userId,
+                memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
+                requester: {
+                  id: userId,
+                  name: fund.requester_name || fund.memberName || 'Unknown Requester',
+                  first_name: 'Unknown',
+                  last_name: 'Requester',
+                  username: 'unknown'
+                }
+              };
+            } catch (error) {
+              console.warn(`❌ Failed to enrich welfare fund ${fund.id}:`, error);
+              return {
+                ...fund,
+                requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
+                memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
+              };
+            }
+          })
+        );
+
+        setWelfareFunds(enrichedFunds);
 
         // For search functionality, if searching, load all data
         if (search.trim()) {
           const allResponse = await ApiService.getWelfareRequests(currentChamaId, 1000, 0); // Load more for search
           if (allResponse.success) {
-            setAllWelfareFunds(allResponse.data || []);
+            let allFundsData = allResponse.data || [];
+
+            // Enrich all welfare funds data as well
+            const enrichedAllFunds = await Promise.all(
+              allFundsData.map(async (fund) => {
+                try {
+                  const userId = fund.requester_id || fund.requesterId || fund.user_id || fund.memberId || fund.requested_by;
+                  if (userId) {
+                    const userResponse = await ApiService.makeRequest(`/users/${userId}`);
+                    if (userResponse.success && userResponse.data) {
+                      const userData = userResponse.data;
+                      const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
+
+                      return {
+                        ...fund,
+                        requester_id: userId,
+                        requester_name: fullName,
+                        memberId: userId,
+                        memberName: fullName,
+                        requester: {
+                          id: userId,
+                          first_name: userData.firstName || userData.first_name,
+                          last_name: userData.lastName || userData.last_name,
+                          name: fullName,
+                          username: userData.username || userData.email
+                        }
+                      };
+                    }
+                  }
+
+                  return {
+                    ...fund,
+                    requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
+                    memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
+                  };
+                } catch (error) {
+                  return {
+                    ...fund,
+                    requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
+                    memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
+                  };
+                }
+              })
+            );
+
+            setAllWelfareFunds(enrichedAllFunds);
             // Calculate pagination info from all data
-            const filteredData = filterWelfareFundsData(allResponse.data || [], search, selectedFilter);
+            const filteredData = filterWelfareFundsData(enrichedAllFunds, search, selectedFilter);
             setTotalItems(filteredData.length);
             setTotalPages(Math.ceil(filteredData.length / pageSize));
           }
         } else {
-          setAllWelfareFunds(fundsData);
+          setAllWelfareFunds(enrichedFunds);
           // Use pagination info from API if available, otherwise estimate
-          setTotalItems(response.totalCount || response.data?.length || fundsData.length);
-          setTotalPages(Math.ceil((response.totalCount || fundsData.length) / pageSize));
+          setTotalItems(response.totalCount || response.data?.length || enrichedFunds.length);
+          setTotalPages(Math.ceil((response.totalCount || enrichedFunds.length) / pageSize));
         }
       } else {
         console.error('Failed to load welfare funds:', response.error);
@@ -413,9 +518,9 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
     setSelectedFund(fund);
     setDisburseForm({
       amount: fund.amount?.toString() || '',
-      recipientId: fund.memberId || '',
-      recipientName: fund.memberName || '',
-      description: `Welfare disbursement to ${fund.memberName}`,
+      recipientId: fund.memberId || fund.requester_id || fund.id,
+      recipientName: fund.requester_name || fund.memberName || fund.requester?.name || 'Unknown',
+      description: `Welfare disbursement to ${fund.requester_name || fund.memberName || 'member'}`,
       privateNote: '',
     });
     setShowDisburseModal(true);
@@ -475,8 +580,8 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       const bulkData = {
         funds: bulkDisburseData.selectedFunds.map(fund => ({
           fundId: fund.id,
-          recipientId: fund.memberId,
-          recipientName: fund.memberName,
+          recipientId: fund.memberId || fund.requester_id,
+          recipientName: fund.requester_name || fund.memberName || 'Unknown',
           amount: fund.amount,
         })),
         description: bulkDisburseData.description,
@@ -512,10 +617,10 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-            {item.memberName || 'Unknown Member'}
+            {item.requester_name || item.memberName || item.requester?.name || 'Unknown Member'}
           </Text>
           <Text style={[tableStyles.tableCellText, { fontSize: 7, color: colors.textSecondary }]}>
-            {item.purpose || 'General welfare'}
+            {item.purpose || item.description || 'General welfare'}
           </Text>
         </View>
 
@@ -900,7 +1005,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                 {bulkDisburseData.selectedFunds.map((fund, index) => (
                   <View key={fund.id} style={styles.summaryItem}>
                     <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
-                      {index + 1}. {fund.memberName}
+                      {index + 1}. {fund.requester_name || fund.memberName || 'Unknown'}
                     </Text>
                     <Text style={[styles.summaryAmount, { color: colors.success }]}>
                       {formatCurrency(fund.amount)}

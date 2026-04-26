@@ -1058,23 +1058,14 @@ class ApiService {
 
   // REAL: System Analytics API methods
   async getSystemAnalytics(period = '7d') {
-    // console.log(`📊 REAL: Fetching system analytics for period: ${period}`);
     try {
       // Try the dedicated analytics endpoint first
       let response = await this.makeRequest(`/admin/analytics?period=${period}`);
 
       // If dedicated endpoint doesn't exist, build analytics from multiple endpoints
       if (!response.success && response.status === 404) {
-        // console.log('📊 REAL: Building analytics from multiple endpoints...');
         response = await this.buildSystemAnalytics(period);
       }
-
-      // console.log('📊 REAL: System analytics response:', {
-      //   success: response.success,
-      //   hasData: !!response.data,
-      //   period: period
-      // });
-
       return response;
     } catch (error) {
       console.error('❌ REAL: System analytics failed:', error);
@@ -1084,7 +1075,6 @@ class ApiService {
 
   // REAL: Build system analytics from existing endpoints
   async buildSystemAnalytics(period = '7d') {
-    // console.log('📊 REAL: Building comprehensive system analytics...');
     try {
       // Fetch data from multiple endpoints in parallel
       const [usersResponse, chamasResponse, transactionsResponse] = await Promise.all([
@@ -1092,12 +1082,6 @@ class ApiService {
         this.getAllChamasForAdmin(1000, 0),
         this.getTransactions(1000, 0) // Get wallet transactions
       ]);
-
-      // console.log('📊 REAL: Raw analytics data:', {
-      //   users: usersResponse.success ? usersResponse.data?.length : 'failed',
-      //   chamas: chamasResponse.success ? chamasResponse.data?.length : 'failed',
-      //   transactions: transactionsResponse.success ? transactionsResponse.data?.length : 'failed'
-      // });
 
       // Calculate analytics from real data
       const analytics = this.calculateSystemAnalytics(
@@ -1121,8 +1105,6 @@ class ApiService {
 
   // REAL: Calculate system analytics from real data
   calculateSystemAnalytics(users, chamas, transactions, period) {
-    // console.log('📊 REAL: Calculating analytics from real data...');
-
     const now = new Date();
     const periodDays = parseInt(period.replace('d', '')) || 7;
     const periodStart = new Date(now.getTime() - (periodDays * 24 * 60 * 60 * 1000));
@@ -1195,15 +1177,6 @@ class ApiService {
         healthScore: Math.round((systemHealth.activeUserRate + systemHealth.activeChamaRate) / 2)
       }
     };
-
-    // console.log('📊 REAL: Analytics calculated:', {
-    //   users: userMetrics.total,
-    //   chamas: chamaMetrics.total,
-    //   transactions: transactionMetrics.total,
-    //   volume: transactionMetrics.totalVolume,
-    //   healthScore: analytics.summary.healthScore
-    // });
-
     return analytics;
   }
 
@@ -1262,15 +1235,7 @@ class ApiService {
   }
 
   async getChamaMembers(chamaId) {
-    // console.log('🔍 🎯 REGULAR getChamaMembers called for chamaId:', chamaId);
-    // console.log('🔍 🎯 REGULAR Calling endpoint: /chamas/' + chamaId + '/members');
     const result = await this.makeRequest(`/chamas/${chamaId}/members`);
-    // console.log('🔍 🎯 REGULAR getChamaMembers response structure:', {
-    //   success: result.success,
-    //   dataLength: result.data?.length,
-    //   firstMemberKeys: result.data?.[0] ? Object.keys(result.data[0]) : [],
-    //   firstMemberUserKeys: result.data?.[0]?.user ? Object.keys(result.data[0].user) : []
-    // });
     return result;
   }
 
@@ -1360,15 +1325,11 @@ class ApiService {
               // Try to get user details for the applicant using borrower_id from database
               const userId = loan.borrowerId || loan.borrower_id || loan.applicant_id || loan.user_id;
               if (userId) {
-                console.log(`🔍 Fetching user details for loan ${loan.id}, user ID: ${userId}`);
                 const userResponse = await this.makeRequest(`/users/${userId}`);
-                console.log(`🔍 User response for ${userId}:`, userResponse);
 
                 if (userResponse.success && userResponse.data) {
                   const userData = userResponse.data;
                   const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-                  console.log(`✅ Enriched loan ${loan.id} with user: ${fullName}`);
-
                   return {
                     ...loan,
                     applicant: {
@@ -1383,7 +1344,6 @@ class ApiService {
                     user_id: userId // Also set user_id for compatibility
                   };
                 } else {
-                  console.warn(`❌ Failed to get user data for ${userId}:`, userResponse);
                   // Return loan with placeholder user data instead of failing
                   return {
                     ...loan,

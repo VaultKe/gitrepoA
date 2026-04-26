@@ -2,9 +2,9 @@
 
 export const lightTheme = {
   // Primary colors
-  primary: '#2563EB', // Blue
-  primaryLight: '#3B82F6',
-  primaryDark: '#1D4ED8',
+    primary: '#00D4AA',        // Teal green for primary actions
+    primaryDark: '#00B894',    // Darker teal for pressed states
+    primaryLight: '#55E6C1',   // Lighter teal for highlights
 
   // Secondary colors
   secondary: '#059669', // Green
@@ -39,7 +39,7 @@ export const lightTheme = {
   success: '#059669',
   warning: '#D97706',
   error: '#DC2626',
-  info: '#2563EB',
+  info: '#eb25b0',
 
   // Utility colors
   white: '#FFFFFF',
@@ -58,13 +58,13 @@ export const lightTheme = {
 
 export const darkTheme = {
   // Primary colors
-  primary: '#3B82F6', // Blue
-  primaryLight: '#60A5FA',
-  primaryDark: '#2563EB',
+  primary: '#29a8b4', // Blue
+  primaryLight: '#35d3d5',
+  primaryDark: '#3beff6',
 
   // Secondary colors
   secondary: '#10B981', // Green
-  secondaryLight: '#34D399',
+  secondaryLight: '#135a40',
   secondaryDark: '#059669',
 
   // Accent colors
@@ -73,13 +73,13 @@ export const darkTheme = {
   accentDark: '#DC2626',
 
   // Background colors
-  background: '#081b29', // Slate 900
+  background: '#124366', // Slate 900
   backgroundSecondary: '#112e42', // Slate 800
   backgroundTertiary: '#334155', // Slate 700
 
   // Surface colors
-  surface: '#112e42', // Slate 800
-  surfaceSecondary: '#334155', // Slate 700
+  surface: '#08324e', // Slate 800
+  surfaceSecondary: '#2E8BC0', // Slate 700
 
   // Text colors
   text: '#F8FAFC', // Slate 50

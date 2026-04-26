@@ -345,7 +345,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     <Card style={styles.section} variant="outlined">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Active Merry-Go-Rounds
+          Active Merry-Go-Rounds1
         </Text>
         {autoRefreshInterval && (
           <View style={styles.autoRefreshIndicator}>
