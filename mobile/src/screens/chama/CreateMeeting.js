@@ -433,25 +433,6 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            if (onRouteChange) {
-              onRouteChange('meetings', 'ChamaMeetingsScreen');
-            } else {
-              navigation.goBack();
-            }
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Schedule Meeting
-        </Text>
-        <View style={styles.placeholder} />
-      </View>
-
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
