@@ -309,17 +309,12 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         const enrichedFunds = await Promise.all(
           fundsData.map(async (fund) => {
             try {
-              // Get requester user ID from various possible field names
               const userId = fund.requester_id || fund.requesterId || fund.user_id || fund.memberId || fund.requested_by;
               if (userId) {
-                console.log(`🔍 Enriching welfare fund ${fund.id} with requester user ID: ${userId}`);
                 const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                console.log(`🔍 User response for requester ${userId}:`, userResponse);
-
                 if (userResponse.success && userResponse.data) {
                   const userData = userResponse.data;
                   const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-                  console.log(`✅ Enriched welfare fund ${fund.id} with requester: ${fullName}`);
 
                   return {
                     ...fund,
@@ -338,23 +333,12 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                 }
               }
 
-              // Return fund with placeholder requester data
               return {
                 ...fund,
-                requester_id: userId,
                 requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
-                memberId: userId,
                 memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
-                requester: {
-                  id: userId,
-                  name: fund.requester_name || fund.memberName || 'Unknown Requester',
-                  first_name: 'Unknown',
-                  last_name: 'Requester',
-                  username: 'unknown'
-                }
               };
             } catch (error) {
-              console.warn(`❌ Failed to enrich welfare fund ${fund.id}:`, error);
               return {
                 ...fund,
                 requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
@@ -497,6 +481,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown Date';
+
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid Date';
@@ -506,8 +491,37 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         day: 'numeric',
       });
     } catch (error) {
+      console.warn('Date formatting error:', error);
       return 'Invalid Date';
     }
+  };
+
+  // Helper function to get requester display name
+  const getRequesterDisplayName = (request) => {
+    if (!request.requester) return 'Unknown Requester';
+
+    const requester = request.requester;
+    const userData = requester.user || requester;
+    const firstName = userData.first_name || requester.first_name || userData.firstName || '';
+    const lastName = userData.last_name || requester.last_name || userData.lastName || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    return fullName || userData.name || requester.name || userData.email?.split('@')[0] || requester.email?.split('@')[0] || 'Unknown Requester';
+  };
+
+  // Helper function to get beneficiary display name
+  const getBeneficiaryDisplayName = (request) => {
+    // If there's a specific beneficiary (different from requester)
+    if (request.beneficiary && request.beneficiaryId !== request.requesterId) {
+      const beneficiary = request.beneficiary;
+      const userData = beneficiary.user || beneficiary;
+      const firstName = userData.first_name || beneficiary.first_name || userData.firstName || beneficiary.firstName || '';
+      const lastName = userData.last_name || beneficiary.last_name || userData.lastName || beneficiary.lastName || '';
+      const fullName = `${firstName} ${lastName}`.trim();
+      return fullName || userData.name || beneficiary.name || userData.email?.split('@')[0] || beneficiary.email?.split('@')[0] || 'Unknown Member';
+    }
+
+    // Otherwise, it's for the requester themselves
+    return getRequesterDisplayName(request);
   };
 
   const handleDisburse = (fund) => {
@@ -617,10 +631,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-            {item.requester_name || item.memberName || item.requester?.name || 'Unknown Member'}
-          </Text>
-          <Text style={[tableStyles.tableCellText, { fontSize: 7, color: colors.textSecondary }]}>
-            {item.purpose || item.description || 'General welfare'}
+            {item.requester_name || item.memberName || getBeneficiaryDisplayName(item)}
           </Text>
         </View>
 
@@ -652,8 +663,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
           <View style={tableStyles.actionButtons}>
             <TouchableOpacity
               style={[tableStyles.actionButton, { backgroundColor: colors.info + '20' }]}
-              onPress={() => navigation.navigate('WelfareDetails', { fundId: item.id, chamaId: currentChamaId })}
-            >
+              onPress={() => navigation.navigate('WelfareDetails', { fundId: item.id, chamaId: currentChamaId })}            >
               <Ionicons name="eye" size={14} color={colors.info} />
             </TouchableOpacity>
             {canDisburseWelfare() && item.status === 'approved' && (
@@ -673,9 +683,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <Ionicons name="heart" size={64} color={colors.textTertiary} />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>
-        No Welfare Funds Found
-      </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         {selectedFilter === 'all'
           ? 'No welfare funds have been approved yet'
@@ -749,7 +756,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
           {/* Table Header */}
           <View style={tableStyles.tableHeader}>
             <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-              <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member & Purpose</Text>
+              <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member</Text>
             </View>
             <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
               <Text style={tableStyles.tableHeaderText}>Amount</Text>

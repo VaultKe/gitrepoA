@@ -1121,7 +1121,7 @@ const ContributeScreen = ({ route, navigation }) => {
   const getContributionSubtitle = () => {
     switch (contributionType) {
       case 'merry-go-round':
-        return `Contribute to ${roundName || 'Merry-Go-Round'}`;
+        return `Note that you're contributing to ${roundName || 'Merry-Go-Round'}`;
       case 'welfare':
         return proposalTitle
           ? `Support: ${proposalTitle}`
@@ -1131,7 +1131,7 @@ const ContributeScreen = ({ route, navigation }) => {
       case 'emergency':
         return `Emergency fund for ${chama?.name || 'group'}`;
       default:
-        return `Contribute to ${chama?.name || 'Loading...'}`;
+        return `Note that you're contributing to ${chama?.name || 'Loading...'}`;
     }
   };
 
@@ -1279,7 +1279,7 @@ const ContributeScreen = ({ route, navigation }) => {
                          styles.statusBannerTitle,
                          { color: contributionStatus.hasContributed ? colors.success : colors.warning }
                        ]}>
-                         {contributionStatus.hasContributed ? "✅ You Have Contributed" : "⏳ You Haven't Contributed Yet"}
+                         {contributionStatus.hasContributed ? "✅ You already Contributed.No need to!" : "⏳ You Haven't Contributed Yet"}
                        </Text>
                        <Text style={[
                          styles.statusBannerSubtitle,
@@ -1331,7 +1331,7 @@ const ContributeScreen = ({ route, navigation }) => {
 
         <Card style={styles.formCard} variant="outlined">
           <Text style={[styles.formTitle, { color: colors.text }]}>
-            {contributionType === 'regular' ? 'Contribution Details' : `${getContributionTitle()} Details`}
+            {contributionType === 'regular' ? 'Contribution Options' : `${getContributionTitle()} Details`}
           </Text>
 
           {/* Payment Method Selection */}
@@ -1764,7 +1764,7 @@ const ContributeScreen = ({ route, navigation }) => {
           <Button
             title={
               contributionType === 'merry-go-round' && contributionStatus?.hasContributed
-                ? "✅ You Have Already Contributed"
+                ? "✅ You have already contributed!"
                 : contributionType === 'merry-go-round'
                   ? (!amount || amount === '0')
                     ? (amountPerRound && amountPerRound > 0)

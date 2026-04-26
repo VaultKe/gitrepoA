@@ -49,39 +49,45 @@ const WelfareScreen = ({ route, navigation }) => {
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
-    tableCell: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: spacing.xs,
-    },
-    nameCell: {
-      flex: 2.5,
-      alignItems: 'flex-start',
-    },
-    amountCell: {
-      flex: 1.2,
-    },
-    dateCell: {
-      flex: 1.5,
-    },
-    typeCell: {
-      flex: 1,
-    },
-    actionsCell: {
-      flex: 0.8,
-    },
-    tableHeaderText: {
-      fontWeight: typography.fontWeight.bold,
-      color: colors.text,
-      fontSize: 9,
-      textAlign: 'center',
-    },
-    tableCellText: {
-      fontSize: 8.5,
-      color: colors.text,
-      textAlign: 'center',
-    },
+  tableCell: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    minWidth: 100,
+  },
+  nameCell: {
+    flex: 3,
+    alignItems: 'flex-start',
+    minWidth: 120,
+  },
+  amountCell: {
+    flex: 1.5,
+    minWidth: 100,
+  },
+  dateCell: {
+    flex: 1.5,
+    minWidth: 100,
+  },
+  typeCell: {
+    flex: 1.2,
+    minWidth: 100,
+  },
+  actionsCell: {
+    flex: 1,
+    minWidth: 80,
+  },
+  tableHeaderText: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text,
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  tableCellText: {
+    fontSize: 9,
+    color: colors.text,
+    textAlign: 'center',
+  },
     nameContainer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -151,7 +157,6 @@ const WelfareScreen = ({ route, navigation }) => {
 
   // Pagination states
   const [requestsCurrentPage, setRequestsCurrentPage] = useState(1);
-  const [contributionsCurrentPage, setContributionsCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
   const welfareCategories = [
@@ -280,6 +285,8 @@ const WelfareScreen = ({ route, navigation }) => {
       console.error('Failed to load welfare contributions:', error);
     }
   };
+
+
 
   const loadChamaMembers = async () => {
     try {
@@ -798,11 +805,7 @@ const WelfareScreen = ({ route, navigation }) => {
     );
   };
 
-  const [showContributionModal, setShowContributionModal] = useState(false);
-  const [selectedContributionRequest, setSelectedContributionRequest] = useState(null);
-  const [contributionAmount, setContributionAmount] = useState('');
-  const [contributionMessage, setContributionMessage] = useState('');
-  const [contributingInProgress, setContributingInProgress] = useState(false);
+
 
   // Table action modal states
   const [showActionModal, setShowActionModal] = useState(false);
@@ -812,145 +815,13 @@ const WelfareScreen = ({ route, navigation }) => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewModalItem, setViewModalItem] = useState(null);
 
-  const handleContribute = (requestId) => {
-    const request = welfareContributions.find(r => r.id === requestId);
-    if (!request) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Welfare request not found',
-      });
-      return;
-    }
 
-    setSelectedContributionRequest(request);
-    setContributionAmount('');
-    setContributionMessage('');
-    setShowContributionModal(true);
-  };
 
   const handleViewContributionDetails = (requestId) => {
-    const request = welfareContributions.find(r => r.id === requestId);
-    if (!request) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Welfare request not found',
-      });
-      return;
-    }
-
-    // Show detailed view of contributions
-    Toast.show({
-      type: 'info',
-      text1: 'Contribution Details',
-      text2: `${request.totalContributions || 0} KES raised so far`,
-    });
+    navigation.navigate('WelfareContributions', { welfareRequestId: requestId, chamaId });
   };
 
-  const handleSubmitContribution = async () => {
-    if (!selectedContributionRequest) return;
 
-    // Validate contribution amount
-    if (!contributionAmount.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Invalid Amount',
-        text2: 'Please enter a contribution amount',
-      });
-      return;
-    }
-
-    const amount = parseFloat(contributionAmount);
-    if (isNaN(amount) || amount <= 0) {
-      Toast.show({
-        type: 'error',
-        text1: 'Invalid Amount',
-        text2: 'Please enter a valid amount greater than 0',
-      });
-      return;
-    }
-
-    if (amount < 10) {
-      Toast.show({
-        type: 'error',
-        text1: 'Minimum Amount',
-        text2: 'Minimum contribution is KES 10',
-      });
-      return;
-    }
-
-    try {
-      setContributingInProgress(true);
-
-      const contributionData = {
-        welfareRequestId: selectedContributionRequest.id,
-        amount: amount,
-        message: contributionMessage.trim() || 'Supporting welfare request',
-        contributorId: user.id,
-        chamaId: chamaId,
-      };
-
-      const response = await ApiService.contributeToWelfare(contributionData);
-
-      if (response.success) {
-        const isSelfContribution = selectedContributionRequest.requesterId === user.id;
-        Toast.show({
-          type: 'success',
-          text1: 'Contribution Successful',
-          text2: isSelfContribution
-            ? `You have contributed KES ${amount} to your own welfare request`
-            : `You have contributed KES ${amount} to this welfare request`,
-        });
-
-        // Update local state with real-time progress calculations
-        const contributionAmountNum = parseFloat(amount);
-        setWelfareContributions(prev => prev.map(req => {
-          if (req.id === selectedContributionRequest.id) {
-            const newTotalContributions = (req.totalContributions || 0) + contributionAmountNum;
-            const newRemainingAmount = Math.max(0, req.amount - newTotalContributions);
-            const newProgressPercentage = Math.min(100, (newTotalContributions / req.amount) * 100);
-
-            return {
-              ...req,
-              totalContributions: newTotalContributions,
-              userContribution: (req.userContribution || 0) + contributionAmountNum,
-              remainingAmount: newRemainingAmount,
-              progressPercentage: newProgressPercentage,
-              contributionCount: (req.contributionCount || 0) + 1
-            };
-          }
-          return req;
-        }));
-
-        // Close modal and reset form
-        setShowContributionModal(false);
-        setSelectedContributionRequest(null);
-        setContributionAmount('');
-        setContributionMessage('');
-
-        // Refresh contributions data after a short delay for backend sync
-        setTimeout(async () => {
-          await loadWelfareContributions();
-        }, 1000); // 1 second delay for backend processing
-      } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Contribution Failed',
-          text2: response.message || 'Failed to process your contribution',
-        });
-      }
-    } catch (error) {
-      console.error('Failed to contribute to welfare:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Contribution Failed',
-        text2: 'Failed to process your contribution. Please try again.',
-      });
-    } finally {
-      setContributingInProgress(false);
-    }
-  };
 
   // Helper function to get beneficiary display name
   const getBeneficiaryDisplayName = (request) => {
@@ -1069,6 +940,8 @@ const WelfareScreen = ({ route, navigation }) => {
       </View>
     );
   };
+
+
 
   const renderTableRow = ({ item, index }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
@@ -1257,18 +1130,30 @@ const WelfareScreen = ({ route, navigation }) => {
       <View style={styles.requestActions}>
         <Button
           title="Contribute"
-          onPress={() => handleContribute(request.id)}
+          onPress={() => navigation.navigate('ContributeScreen', {
+            chamaId: chamaId,
+            contributionType: 'welfare',
+            proposalId: request.id,
+            proposalTitle: request.title,
+            requestedAmount: request.amount
+          })}
           style={[styles.actionButton, { backgroundColor: colors.primary }]}
           textStyle={{ color: colors.white }}
           icon={<Ionicons name="wallet" size={16} color={colors.white} />}
         />
 
         <Button
-          title="View Details"
-          onPress={() => handleViewContributionDetails(request.id)}
-          style={[styles.actionButton, styles.secondaryButton, { borderColor: colors.border }]}
-          textStyle={{ color: colors.text }}
-          icon={<Ionicons name="eye" size={16} color={colors.text} />}
+          title="Contribute"
+          onPress={() => navigation.navigate('ContributeScreen', {
+            chamaId: chamaId,
+            contributionType: 'welfare',
+            proposalId: request.id,
+            proposalTitle: request.title,
+            requestedAmount: request.amount
+          })}
+          style={[styles.actionButton, { backgroundColor: colors.primary }]}
+          textStyle={{ color: colors.white }}
+          icon={<Ionicons name="wallet" size={16} color={colors.white} />}
         />
       </View>
     </Card>
@@ -1666,37 +1551,6 @@ const WelfareScreen = ({ route, navigation }) => {
                     <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                       Approved welfare requests will appear here for contributions
                     </Text>
-                  </View>
-                )}
-
-                {/* Pagination */}
-                {welfareContributions.length > itemsPerPage && (
-                  <View style={styles.pagination}>
-                    <TouchableOpacity
-                      style={[
-                        styles.pageButton,
-                        { backgroundColor: colors.surface, borderColor: colors.border },
-                        contributionsCurrentPage === 1 && styles.pageButtonDisabled
-                      ]}
-                      onPress={() => contributionsCurrentPage > 1 && setContributionsCurrentPage(contributionsCurrentPage - 1)}
-                      disabled={contributionsCurrentPage === 1}
-                    >
-                      <Ionicons name="chevron-back" size={16} color={contributionsCurrentPage === 1 ? colors.textSecondary : colors.text} />
-                    </TouchableOpacity>
-                    <Text style={[styles.pageText, { color: colors.text }]}>
-                      {contributionsCurrentPage} of {Math.ceil(welfareContributions.length / itemsPerPage)}
-                    </Text>
-                    <TouchableOpacity
-                      style={[
-                        styles.pageButton,
-                        { backgroundColor: colors.surface, borderColor: colors.border },
-                        contributionsCurrentPage === Math.ceil(welfareContributions.length / itemsPerPage) && styles.pageButtonDisabled
-                      ]}
-                      onPress={() => contributionsCurrentPage < Math.ceil(welfareContributions.length / itemsPerPage) && setContributionsCurrentPage(contributionsCurrentPage + 1)}
-                      disabled={contributionsCurrentPage === Math.ceil(welfareContributions.length / itemsPerPage)}
-                    >
-                      <Ionicons name="chevron-forward" size={16} color={contributionsCurrentPage === Math.ceil(welfareContributions.length / itemsPerPage) ? colors.textSecondary : colors.text} />
-                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -2181,138 +2035,7 @@ const WelfareScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Contribution Modal */}
-      <Modal
-        visible={showContributionModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowContributionModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Contribute to Welfare
-              </Text>
-              {selectedContributionRequest && (
-                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-                  Supporting: {selectedContributionRequest.title}
-                </Text>
-              )}
-              <TouchableOpacity onPress={() => setShowContributionModal(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {selectedContributionRequest && (
-                <>
-                  <View style={styles.contributionRequestInfo}>
-                    <Text style={[styles.contributionRequestTitle, { color: colors.text }]}>
-                      {selectedContributionRequest.title}
-                    </Text>
-                    <Text style={[styles.contributionRequestDescription, { color: colors.textSecondary }]}>
-                      {selectedContributionRequest.description}
-                    </Text>
-
-                    {/* Self-contribution notice */}
-                    {selectedContributionRequest.requesterId === user.id && (
-                      <View style={[styles.selfContributionNotice, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]}>
-                        <Ionicons name="information-circle" size={16} color={colors.primary} />
-                        <Text style={[styles.selfContributionText, { color: colors.primary }]}>
-                          You can contribute to your own welfare request to show commitment.
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={styles.contributionProgressInfo}>
-                      <View style={styles.progressRow}>
-                        <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-                          Target Amount:
-                        </Text>
-                        <Text style={[styles.progressValue, { color: colors.text }]}>
-                          {formatCurrency(selectedContributionRequest.amount)}
-                        </Text>
-                      </View>
-                      <View style={styles.progressRow}>
-                        <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-                          Raised So Far:
-                        </Text>
-                        <Text style={[styles.progressValue, { color: colors.success }]}>
-                          {formatCurrency(selectedContributionRequest.totalContributions || 0)}
-                        </Text>
-                      </View>
-                      <View style={styles.progressRow}>
-                        <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-                          Remaining:
-                        </Text>
-                        <Text style={[styles.progressValue, { color: colors.warning }]}>
-                          {formatCurrency(selectedContributionRequest.amount - (selectedContributionRequest.totalContributions || 0))}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <Input
-                    label="Contribution Amount (KES) *"
-                    value={contributionAmount}
-                    onChangeText={(text) => {
-                      // Only allow numbers and decimal point
-                      const sanitized = text.replace(/[^0-9.]/g, '');
-                      setContributionAmount(sanitized);
-                    }}
-                    placeholder="Enter amount to contribute"
-                    keyboardType="numeric"
-                  />
-
-                  <Input
-                    label="Message (Optional)"
-                    value={contributionMessage}
-                    onChangeText={setContributionMessage}
-                    placeholder="Add a supportive message..."
-                    multiline
-                    numberOfLines={3}
-                  />
-
-                  <View style={styles.contributionSummary}>
-                    <Text style={[styles.contributionSummaryTitle, { color: colors.text }]}>
-                      Contribution Summary
-                    </Text>
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-                        Your Contribution:
-                      </Text>
-                      <Text style={[styles.summaryValue, { color: colors.primary }]}>
-                        {contributionAmount ? formatCurrency(parseFloat(contributionAmount) || 0) : 'KES 0'}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-                        After Your Contribution:
-                      </Text>
-                      <Text style={[styles.summaryValue, { color: colors.success }]}>
-                        {formatCurrency((selectedContributionRequest.totalContributions || 0) + (parseFloat(contributionAmount) || 0))}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Button
-                    title={contributingInProgress ? "Processing..." : "Contribute Now"}
-                    onPress={handleSubmitContribution}
-                    disabled={contributingInProgress || !contributionAmount.trim()}
-                    style={[
-
-                      styles.submitButton,
-                      (!contributionAmount.trim() || contributingInProgress) ? styles.submitButtonDisabled : null
-                    ]}
-                    icon={<Ionicons name="wallet" size={20} color={colors.white} />}
-                  />
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* Action Modal */}
       <Modal
@@ -2338,44 +2061,25 @@ const WelfareScreen = ({ route, navigation }) => {
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-
+            
             <View style={styles.actionModalBody}>
               {activeTab === 'contributions' ? (
                 // Actions for approved contributions
                 <>
                   <TouchableOpacity
-                    style={[styles.actionModalButton, { backgroundColor: colors.primary + '10' }]}
-                    onPress={() => {
-                      setShowActionModal(false);
-                      handleContribute(selectedTableItem.id);
-                    }}
-                  >
-                    <Ionicons name="wallet" size={18} color={colors.primary} />
-                    <View style={styles.actionModalButtonText}>
-                      <Text style={[styles.actionModalButtonTitle, { color: colors.primary }]}>
-                        Contribute
-                      </Text>
-                      <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
-                        Make a contribution to this request
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
                     style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
                     onPress={() => {
                       setShowActionModal(false);
-                      setViewModalItem(selectedTableItem);
-                      setShowViewModal(true);
+                      navigation.navigate('WelfareContributions', { welfareRequestId: selectedTableItem.id, chamaId });
                     }}
                   >
-                    <Ionicons name="eye" size={18} color={colors.info} />
+                    <Ionicons name="list" size={18} color={colors.info} />
                     <View style={styles.actionModalButtonText}>
                       <Text style={[styles.actionModalButtonTitle, { color: colors.info }]}>
-                        View Details
+                        View Contributions
                       </Text>
                       <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
-                        See detailed contribution information
+                        See all contributions to this request
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -2384,27 +2088,27 @@ const WelfareScreen = ({ route, navigation }) => {
                     style={[styles.actionModalButton, { backgroundColor: colors.success + '10' }]}
                     onPress={() => {
                       setShowActionModal(false);
-                      if (navigation) {
-                        navigation.navigate('ContributeScreen', {
-                          chamaId: chamaId,
-                          contributionType: 'welfare',
-                          proposalId: selectedTableItem.id,
-                          proposalTitle: selectedTableItem.title,
-                          requestedAmount: selectedTableItem.amount
-                        });
-                      }
+                      navigation.navigate('ContributeScreen', {
+                        chamaId: chamaId,
+                        contributionType: 'welfare',
+                        proposalId: selectedTableItem.id,
+                        proposalTitle: selectedTableItem.title,
+                        requestedAmount: selectedTableItem.amount
+                      });
                     }}
                   >
-                    <Ionicons name="arrow-forward" size={18} color={colors.success} />
+                    <Ionicons name="wallet" size={18} color={colors.success} />
                     <View style={styles.actionModalButtonText}>
                       <Text style={[styles.actionModalButtonTitle, { color: colors.success }]}>
                         Go to Contribute
                       </Text>
                       <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
-                        Navigate to full contribution screen
+                        Make a contribution to this request
                       </Text>
                     </View>
                   </TouchableOpacity>
+
+
                 </>
               ) : (
                 // Actions for pending requests
@@ -2977,12 +2681,7 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md,
     marginBottom: spacing.xs,
   },
-  submitButton: {
-    marginTop: spacing.lg, // Increased margin
-    minHeight: 48, // Ensure minimum touch target
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
+
   submitButtonDisabled: {
     backgroundColor: '#9CA3AF',
     opacity: 0.6,
@@ -3077,12 +2776,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 1,
   },
-  contributionRequestInfo: {
-    backgroundColor: 'rgba(59, 130, 246, 0.05)',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
+
   contributionRequestTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,

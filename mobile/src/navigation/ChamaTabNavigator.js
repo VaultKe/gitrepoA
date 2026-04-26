@@ -39,6 +39,7 @@ import ViewMember from '../screens/chama/ViewMember';
 import PhysicalMeetingScreen from '../screens/chama/PhysicalMeetingScreen';
 import JitsiMeetScreen from '../screens/chama/JitsiMeetScreen';
 import MeetingSummaryScreen from '../screens/chama/MeetingSummaryScreen';
+import WelfareContributionsScreen from '../screens/chama/WelfareContributionsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
@@ -431,6 +432,15 @@ function ChamaTabNavigator({ route }) {
         component={WelfareDetails}
         options={{
           title: 'Welfare Details',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="WelfareContributions"
+        component={WelfareContributionsScreen}
+        options={{
+          title: 'Welfare Contributions',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={{ chamaId, chamaName, chama }}

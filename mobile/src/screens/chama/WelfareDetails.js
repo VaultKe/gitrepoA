@@ -229,7 +229,7 @@ const WelfareDetails = ({ route, navigation }) => {
 
           <Button
             title="View Contributors"
-            onPress={() => Alert.alert('Coming Soon', 'Contributors view will be available in the next update.')}
+            onPress={() => navigation.navigate('WelfareContributions', { welfareRequestId: welfareFund.id, chamaId: currentChamaId })}
             style={{ backgroundColor: colors.info, marginBottom: spacing.md }}
             icon={<Ionicons name="people" size={16} color={colors.white} />}
           />

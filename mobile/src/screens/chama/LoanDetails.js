@@ -17,21 +17,103 @@ import Button from '../../components/common/Button';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ApiService from '../../services/api';
 
+const createTableStyles = (colors, spacing, typography, shadows) => ({
+  tableContainer: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tableCell: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  dateCell: {
+    flex: 1.5,
+    alignItems: 'flex-start',
+  },
+  typeCell: {
+    flex: 2,
+  },
+  amountCell: {
+    flex: 1.5,
+  },
+  statusCell: {
+    flex: 1.2,
+  },
+  tableHeaderText: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text,
+    fontSize: 9,
+    textAlign: 'center',
+  },
+  tableCellText: {
+    fontSize: 8.5,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  dateText: {
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'left',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+    gap: spacing.xs,
+  },
+});
+
 const LoanDetails = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
+  const tableStyles = createTableStyles(colors, spacing, typography, shadows);
   const { loanId, chamaId } = route?.params || {};
 
   const [loan, setLoan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [payments, setPayments] = useState([]);
+  const [allPayments, setAllPayments] = useState([]);
+
+  // Repayment history pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 10;
 
   useEffect(() => {
     if (loanId) {
       loadLoanDetails();
     }
   }, [loanId]);
+
+  // Handle pagination
+  useEffect(() => {
+    if (allPayments.length > 0) {
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      setPayments(allPayments.slice(startIndex, endIndex));
+    }
+  }, [currentPage, allPayments]);
 
   const loadLoanDetails = async () => {
     try {
@@ -44,8 +126,32 @@ const LoanDetails = ({ route, navigation }) => {
         setLoan(foundLoan);
       }
 
-      // Load payment history (placeholder - would need specific API)
-      setPayments([]);
+      // Load repayment history - simulate API call for now
+      // In production, this would be: ApiService.getLoanRepaymentHistory(loanId)
+      const mockPayments = [
+        { id: 'pay-1', date: '2024-01-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-2', date: '2024-02-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-3', date: '2024-03-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-4', date: '2024-04-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-5', date: '2024-05-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-6', date: '2024-06-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-7', date: '2024-07-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-8', date: '2024-08-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-9', date: '2024-09-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-10', date: '2024-10-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
+        { id: 'pay-11', date: '2024-11-15', amount: 5000, type: 'Principal + Interest', status: 'pending' },
+        { id: 'pay-12', date: '2024-12-15', amount: 5000, type: 'Principal + Interest', status: 'pending' },
+      ];
+
+      setAllPayments(mockPayments);
+      setTotalItems(mockPayments.length);
+      setTotalPages(Math.ceil(mockPayments.length / pageSize));
+
+      // Set initial page data
+      const startIndex = 0;
+      const endIndex = pageSize;
+      setPayments(mockPayments.slice(startIndex, endIndex));
+      setCurrentPage(1);
 
     } catch (error) {
       console.error('Error loading loan details:', error);
@@ -155,87 +261,96 @@ const LoanDetails = ({ route, navigation }) => {
           </View>
         </Card>
 
-        {/* Loan Details */}
-        <Card variant="outlined" style={styles.detailsCard}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Loan Details</Text>
-
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Loan Type</Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {loan.loanType || 'Standard Loan'}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Member ID</Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {loan.memberId}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Application Date</Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {formatDate(loan.createdAt)}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Disbursement Date</Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {loan.disbursedAt ? formatDate(loan.disbursedAt) : 'Not yet disbursed'}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Interest Rate</Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {loan.interestRate ? `${loan.interestRate}%` : 'N/A'}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Term</Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
-              {loan.termMonths ? `${loan.termMonths} months` : 'N/A'}
-            </Text>
-          </View>
-        </Card>
-
-        {/* Payment History */}
-        <Card variant="outlined" style={styles.paymentsCard}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment History</Text>
-
-          {payments.length === 0 ? (
-            <View style={styles.emptyPayments}>
-              <Ionicons name="cash-outline" size={48} color={colors.textTertiary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No payments yet
-              </Text>
-              <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-                Loan payments will appear here
-              </Text>
+        {/* Repayment History Table */}
+        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.md }]}>Repayment History</Text>
+        <View style={styles.repaymentTable}>
+          {/* Table Header */}
+          <View style={tableStyles.tableHeader}>
+            <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+              <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Date</Text>
             </View>
-          ) : (
-            <View style={styles.paymentsList}>
-              {payments.map((payment, index) => (
-                <View key={payment.id || index} style={styles.paymentItem}>
-                  <View style={styles.paymentInfo}>
-                    <Text style={[styles.paymentType, { color: colors.text }]}>
-                      {payment.type}
-                    </Text>
-                    <Text style={[styles.paymentDate, { color: colors.textSecondary }]}>
-                      {formatDate(payment.date)}
-                    </Text>
-                  </View>
-                  <Text style={[styles.paymentAmount, { color: colors.success }]}>
-                    {formatCurrency(payment.amount)}
+            <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+              <Text style={tableStyles.tableHeaderText}>Type</Text>
+            </View>
+            <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+              <Text style={tableStyles.tableHeaderText}>Amount</Text>
+            </View>
+            <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+              <Text style={tableStyles.tableHeaderText}>Status</Text>
+            </View>
+          </View>
+
+          {/* Table Body */}
+          {payments.map((payment, index) => (
+            <View
+              key={payment.id}
+              style={[
+                tableStyles.tableRow,
+                index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }
+              ]}
+            >
+              {/* Date */}
+              <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+                <Text style={[tableStyles.tableCellText, tableStyles.dateText]} numberOfLines={1}>
+                  {formatDate(payment.date)}
+                </Text>
+              </View>
+
+              {/* Type */}
+              <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                <Text style={tableStyles.tableCellText}>
+                  {payment.type}
+                </Text>
+              </View>
+
+              {/* Amount */}
+              <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium, color: colors.success }]}>
+                  {formatCurrency(payment.amount)}
+                </Text>
+              </View>
+
+              {/* Status */}
+              <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                <View style={[
+                  tableStyles.statusBadge,
+                  { backgroundColor: payment.status === 'completed' ? colors.success + '20' : colors.warning + '20' }
+                ]}>
+                  <Text style={[
+                    { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: payment.status === 'completed' ? colors.success : colors.warning }
+                  ]}>
+                    {payment.status?.toUpperCase()}
                   </Text>
                 </View>
-              ))}
+              </View>
+            </View>
+          ))}
+
+          {/* Pagination */}
+          {totalItems > pageSize && (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                style={[styles.paginationArrow, currentPage === 1 && styles.paginationArrowDisabled]}
+                onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? '#9ca3af' : '#2563eb'} />
+              </TouchableOpacity>
+
+              <Text style={styles.paginationInfo}>
+                {currentPage} / {totalPages}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.paginationArrow, currentPage === totalPages && styles.paginationArrowDisabled]}
+                onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? '#9ca3af' : '#2563eb'} />
+              </TouchableOpacity>
             </View>
           )}
-        </Card>
+        </View>
 
         {/* Actions */}
         <View style={styles.actions}>
@@ -284,6 +399,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     padding: spacing.md,
+  },
+  repaymentTable: {
+    marginTop: spacing.md,
   },
   header: {
     borderRadius: borderRadius.lg,
@@ -414,22 +532,38 @@ const styles = StyleSheet.create({
   actions: {
     marginBottom: spacing.xxxl,
   },
-  errorState: {
-    flex: 1,
-    justifyContent: 'center',
+
+  // Pagination Styles
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    padding: spacing.md,
+    backgroundColor: '#f5f5f5',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    marginTop: spacing.sm,
   },
-  errorTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+  paginationArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.sm,
   },
-  errorSubtitle: {
-    fontSize: typography.fontSize.base,
+  paginationArrowDisabled: {
+    opacity: 0.5,
+  },
+  paginationInfo: {
+    fontSize: typography.fontSize.sm,
+    color: '#6b7280',
+    fontWeight: typography.fontWeight.medium,
+    minWidth: 60,
     textAlign: 'center',
   },
+
+
 });
 
 export default LoanDetails;
