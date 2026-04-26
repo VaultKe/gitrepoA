@@ -455,7 +455,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
         {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-            {item.memberName || 'Unknown Member'}
+            {item.applicant_name || item.memberName || item.applicant?.name || 'Unknown Member'}
           </Text>
         </View>
 
@@ -673,7 +673,6 @@ const LoanManagementScreen = ({ route, navigation }) => {
             </View>
           )}
         </View>
-
         {loading && <LoadingSpinner />}
       </SafeAreaView>
 
