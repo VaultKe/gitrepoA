@@ -1016,36 +1016,7 @@ class ApiService {
     });
   }
 
-  async transferMoney(recipientId, amount, description = '', recipientType = 'user') {
-    return await this.makeRequest('/wallets/transfer', {
-      method: 'POST',
-      body: {
-        recipientId,
-        recipientType, // 'user', 'phone', 'email'
-        amount,
-        description: description || 'Money transfer',
-      },
-    });
-  }
-
-  // Money request endpoints
-  async createMoneyRequest(amount, reason, requestType = 'qr_code') {
-    return await this.makeRequest('/wallet/create-money-request', {
-      method: 'POST',
-      body: { amount, reason, requestType },
-    });
-  }
-
-  async sendMoneyRequest(amount, reason, targetUserId, targetPhone, requestType = 'direct') {
-    return await this.makeRequest('/wallet/send-money-request', {
-      method: 'POST',
-      body: { amount, reason, targetUserId, targetPhone, requestType },
-    });
-  }
-
-  async getRecentContacts() {
-    return await this.makeRequest('/wallet/recent-contacts');
-  }
+  // Chama endpoints
 
   // Chama endpoints
   async getChamas(limit = 20, offset = 0) {

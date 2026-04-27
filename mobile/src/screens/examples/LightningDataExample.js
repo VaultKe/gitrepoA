@@ -62,7 +62,6 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
     markNotificationAsRead,
     addToCart,
     addToWishlist,
-    transferMoney,
     hasPendingUpdates,
     pendingUpdates,
   } = useOptimisticUpdate();
@@ -98,15 +97,7 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
     }
   };
 
-  // Handle optimistic money transfer
-  const handleTransferMoney = async () => {
-    try {
-      await transferMoney('user123', 100, 'Lightning transfer test');
-      Alert.alert('Success', 'Money transfer initiated instantly!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to transfer money');
-    }
-  };
+
 
   const renderDataSection = (title, data, loading, source, loadTime, isInstant) => (
     <View style={[styles.section, { backgroundColor: colors.surface }]}>
@@ -284,13 +275,7 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
               <Text style={styles.actionButtonText}>Add to Cart</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.warning }]}
-              onPress={handleTransferMoney}
-            >
-              <Ionicons name="send" size={16} color="white" />
-              <Text style={styles.actionButtonText}>Transfer $100</Text>
-            </TouchableOpacity>
+
           </View>
         </View>
 

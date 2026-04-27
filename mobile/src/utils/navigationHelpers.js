@@ -16,9 +16,7 @@ export const getDashboardForScreen = (screenName) => {
     'Wallet': 'user',
     'Deposit': 'user',
     'Withdraw': 'user',
-    'Transfer': 'user',
     'TransactionHistory': 'user',
-    'RequestMoney': 'user',
     'BuyAirtime': 'user',
     'PayBills': 'user',
     
@@ -126,9 +124,7 @@ export const getScreenTitle = (screenName) => {
     'Wallet': 'My Wallet',
     'Deposit': 'Deposit Money',
     'Withdraw': 'Withdraw Money',
-    'Transfer': 'Transfer Money',
     'TransactionHistory': 'Transaction History',
-    'RequestMoney': 'Request Money',
     'BuyAirtime': 'Buy Airtime',
     'PayBills': 'Pay Bills',
     

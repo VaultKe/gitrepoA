@@ -239,13 +239,6 @@ export const useOptimisticUpdate = () => {
     );
   }, [executeUpdate]);
 
-  // Wallet operations
-  const transferMoney = useCallback((recipientId, amount, description) => {
-    return executeUpdate(
-      () => optimisticUpdateService.transferMoney(recipientId, amount, description)
-    );
-  }, [executeUpdate]);
-
   // Marketplace operations
   const addToCart = useCallback((productId, quantity) => {
     return executeUpdate(
@@ -278,7 +271,6 @@ export const useOptimisticUpdate = () => {
     markNotificationAsRead,
     deleteNotification,
     markAllNotificationsAsRead,
-    transferMoney,
     addToCart,
     removeFromCart,
     addToWishlist,

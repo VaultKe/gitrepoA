@@ -209,26 +209,6 @@ const WalletScreen = ({ navigation }) => {
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm }}>
           <TouchableOpacity
-            style={[{ flex: 1, alignItems: 'center', padding: spacing.md, borderRadius: borderRadius.lg }, themeStyles.actionButtonPrimary]}
-            onPress={() => navigation.navigate('Transfer')}
-          >
-            <Ionicons name="send" size={24} color={colors.primary} />
-            <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginTop: spacing.sm }, themeStyles.actionTextPrimary]}>
-              Send
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[{ flex: 1, alignItems: 'center', padding: spacing.md, borderRadius: borderRadius.lg }, themeStyles.actionButtonSuccess]}
-            onPress={() => navigation.navigate('RequestMoney')}
-          >
-            <Ionicons name="download" size={24} color={colors.success} />
-            <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginTop: spacing.sm }, themeStyles.actionTextSuccess]}>
-              Receive
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[{ flex: 1, alignItems: 'center', padding: spacing.md, borderRadius: borderRadius.lg }, themeStyles.actionButtonInfo]}
             onPress={() => navigation.navigate('Deposit')}
           >

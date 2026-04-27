@@ -261,7 +261,6 @@ const EnhancedUserDashboard = ({ navigation }) => {
               wallet={selectedWallet}
               onDeposit={() => navigation.navigate('Wallet')}
               onWithdraw={() => navigation.navigate('Wallet')}
-              onTransfer={() => navigation.navigate('Wallet')}
               onViewTransactions={() => navigation.navigate('TransactionHistory')}
             />
           </View>

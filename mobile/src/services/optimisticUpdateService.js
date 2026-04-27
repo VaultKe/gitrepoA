@@ -86,43 +86,7 @@ class OptimisticUpdateService {
     );
   }
 
-  async transferMoney(recipientId, amount, description) {
-    const tempTransaction = {
-      id: `temp_${Date.now()}`,
-      type: 'transfer',
-      amount: -amount,
-      recipientId,
-      status: 'pending',
-      description: description,
-      createdAt: new Date().toISOString(),
-      isOptimistic: true,
-    };
 
-    return await lightningDataService.optimisticUpdate(
-      'transactions',
-      {
-        action: 'add',
-        data: tempTransaction
-      },
-      async () => {
-        const result = await ApiService.transferMoney(recipientId, amount, description);
-        if (result.success) {
-          // Update wallet balance optimistically
-          const currentWallet = await lightningDataService.getData('wallet');
-          if (currentWallet.success) {
-            const updatedWallet = {
-              ...currentWallet.data,
-              balance: currentWallet.data.balance - amount
-            };
-            await lightningDataService.updateAllCaches('wallet', updatedWallet);
-          }
-        }
-        return result;
-      }
-    );
-  }
-
-  
 
   /**
    * CHAMA OPERATIONS - Instant membership updates

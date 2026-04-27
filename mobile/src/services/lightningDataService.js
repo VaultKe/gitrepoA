@@ -972,8 +972,6 @@ class LightningDataService {
           return await ApiService.getAllChamasForAdmin(100, 0);
         case 'support-requests':
           return await ApiService.getSupportRequests({ limit: 50 });
-        case 'recent-contacts':
-          return await ApiService.getRecentContacts();
         case 'recent-messages':
           try {
             // Get recent messages across all chat rooms
@@ -999,9 +997,8 @@ class LightningDataService {
           }
         case 'contacts':
           try {
-            // Get contacts from chat rooms and recent contacts
+            // Get contacts from chat rooms
             const contactsFromRooms = await ApiService.getChatRooms();
-            const recentContactsResponse = await ApiService.getRecentContacts();
 
             let allContacts = [];
             if (contactsFromRooms.success && contactsFromRooms.data) {
@@ -1012,10 +1009,6 @@ class LightningDataService {
                   index === self.findIndex(c => c.id === contact.id)
                 );
               allContacts = [...allContacts, ...roomContacts];
-            }
-
-            if (recentContactsResponse.success && recentContactsResponse.data) {
-              allContacts = [...allContacts, ...recentContactsResponse.data];
             }
 
             // Remove duplicates

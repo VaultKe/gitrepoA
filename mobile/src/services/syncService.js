@@ -177,8 +177,6 @@ class SyncService {
           await ApiService.initiateDeposit(data.amount, data.payment_method);
         } else if (data.type === 'withdrawal') {
           await ApiService.initiateWithdrawal(data.amount, data.payment_method);
-        } else if (data.type === 'transfer') {
-          await ApiService.transferMoney(data.to_wallet_id, data.amount, data.description);
         }
         break;
       default:

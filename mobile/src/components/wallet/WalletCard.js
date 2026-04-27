@@ -16,7 +16,6 @@ const WalletCard = ({
   wallet,
   onDeposit,
   onWithdraw,
-  onTransfer,
   onViewTransactions,
   style,
 }) => {
@@ -79,9 +78,6 @@ const WalletCard = ({
       case 'withdraw':
         onWithdraw?.(wallet);
         break;
-      case 'transfer':
-        onTransfer?.(wallet);
-        break;
       case 'transactions':
         onViewTransactions?.(wallet);
         break;
@@ -124,16 +120,6 @@ const WalletCard = ({
           <Ionicons name="remove" size={20} color={colors.white} />
           <Text style={[styles.quickActionText, { color: colors.white }]}>
             Withdraw
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.quickActionButton, { backgroundColor: colors.accent }]}
-          onPress={() => handleQuickAction('transfer')}
-        >
-          <Ionicons name="swap-horizontal" size={20} color={colors.white} />
-          <Text style={[styles.quickActionText, { color: colors.white }]}>
-            Transfer
           </Text>
         </TouchableOpacity>
 

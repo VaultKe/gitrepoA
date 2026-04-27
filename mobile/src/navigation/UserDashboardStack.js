@@ -55,9 +55,7 @@ import UserSearchScreen from '../screens/chat/UserSearchScreen';
 import WalletScreen from '../screens/user/wallet/WalletScreen';
 import DepositScreen from '../screens/user/wallet/DepositScreen';
 import WithdrawScreen from '../screens/user/wallet/WithdrawScreen';
-import TransferScreen from '../screens/user/wallet/TransferScreen';
 import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryScreen';
-import RequestMoneyScreen from '../screens/user/wallet/RequestMoneyScreen';
 
 
 // Demo Screens
@@ -262,26 +260,10 @@ function UserTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Transfer"
-        component={TransferScreen}
-        options={{
-          title: 'Transfer Money',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-      <Tab.Screen
         name="TransactionHistory"
         component={TransactionHistoryScreen}
         options={{
           title: 'Transaction History',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-      <Tab.Screen
-        name="RequestMoney"
-        component={RequestMoneyScreen}
-        options={{
-          title: 'Request Money',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />

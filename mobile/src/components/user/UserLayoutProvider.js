@@ -17,9 +17,7 @@ import UserSearchScreen from '../../screens/chat/UserSearchScreen';
 import WalletScreen from '../../screens/user/wallet/WalletScreen';
 import DepositScreen from '../../screens/user/wallet/DepositScreen';
 import WithdrawScreen from '../../screens/user/wallet/WithdrawScreen';
-import TransferScreen from '../../screens/user/wallet/TransferScreen';
 import TransactionHistoryScreen from '../../screens/user/wallet/TransactionHistoryScreen';
-import RequestMoneyScreen from '../../screens/user/wallet/RequestMoneyScreen';
 import BuyAirtimeScreen from '../../screens/services/BuyAirtimeScreen';
 import PayBillsScreen from '../../screens/services/PayBillsScreen';
 import ProfileScreen from '../../screens/user/profile/ProfileScreen';
@@ -174,19 +172,9 @@ const UserDashboardWithFooterStack = () => {
         options={{ title: 'Withdraw Money' }}
       />
       <Stack.Screen
-        name="Transfer"
-        component={withUserDashboardFooter(TransferScreen, 'Wallet')}
-        options={{ title: 'Transfer Money' }}
-      />
-      <Stack.Screen
         name="TransactionHistory"
         component={withUserDashboardFooter(TransactionHistoryScreen, 'Wallet')}
         options={{ title: 'Transaction History' }}
-      />
-      <Stack.Screen
-        name="RequestMoney"
-        component={withUserDashboardFooter(RequestMoneyScreen, 'Wallet')}
-        options={{ title: 'Request Money' }}
       />
 
       {/* Service Screens */}

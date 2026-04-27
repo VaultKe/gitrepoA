@@ -28,7 +28,7 @@ import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen
 import AccountManagementScreen from '../screens/chama/accountmanagement/AccountManagementScreen';
 import LoanManagementScreen from '../screens/chama/loans/LoanManagementScreen';
 import WelfareDisbursementScreen from '../screens/chama/accountmanagement/WelfareDisbursementScreen';
-import LoanTypeCreationScreen from '../screens/chama/loans/LoanTypeCreationScreen';
+import LoanTypeCreationScreen from '../screens/chama/accountmanagement/LoanTypeCreationScreen';
 import SavingsWithdrawalScreen from '../screens/chama/accountmanagement/SavingsWithdrawalScreen';
 import MaryGoRoundDisbursementScreen from '../screens/chama/accountmanagement/MaryGoRoundDisbursementScreen';
 import SavingsDetails from '../screens/chama/savings/SavingsDetails';
