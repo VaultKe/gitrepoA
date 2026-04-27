@@ -5,23 +5,22 @@ import ApiService from '../../services/api';
 import { useApp } from '../../context/AppContext';
 
 // Import all chama screens
-import ChamaDashboard from '../../screens/chama/ChamaDashboard';
-import ChamaMembersScreen from '../../screens/chama/ChamaMembersScreen';
-import ContributeScreen from '../../screens/chama/ContributeScreen';
-import ChamaTransactionsScreen from '../../screens/chama/ChamaTransactionsScreen';
-import ChamaLoansScreen from '../../screens/chama/ChamaLoansScreen';
-import ChamaMeetingsScreen from '../../screens/chama/ChamaMeetingsScreen';
-import MerryGoRoundScreen from '../../screens/chama/MerryGoRoundScreen';
-import WelfareScreen from '../../screens/chama/WelfareScreen';
-
-import ChamaSettings from '../../screens/chama/ChamaSettings';
-import LoanApplication from '../../screens/chama/LoanApplication';
-import CreateMeeting from '../../screens/chama/CreateMeeting';
-import CreateMerryGoRound from '../../screens/chama/CreateMerryGoRound';
-import JitsiMeetScreen from '../../screens/chama/JitsiMeetScreen';
-import PhysicalMeetingScreen from '../../screens/chama/PhysicalMeetingScreen';
-import MeetingSummaryScreen from '../../screens/chama/MeetingSummaryScreen';
-import InviteMembers from '../../screens/chama/InviteMembers';
+import ChamaDashboard from '../../screens/chama/dashboard/ChamaDashboard';
+import ChamaMembersScreen from '../../screens/chama/meeting/ChamaMembersScreen';
+import ContributeScreen from '../../screens/chama/contribute/ContributeScreen';
+import ChamaTransactionsScreen from '../../screens/chama/transactions/ChamaTransactionsScreen';
+import ChamaLoansScreen from '../../screens/chama/loans/ChamaLoansScreen';
+import ChamaMeetingsScreen from '../../screens/chama/meeting/ChamaMeetingsScreen';
+import MerryGoRoundScreen from '../../screens/chama/merry-go-round/MerryGoRoundScreen';
+import WelfareScreen from '../../screens/chama/welfare/WelfareScreen';
+import ChamaSettings from '../../screens/chama/settings/ChamaSettings';
+import LoanApplication from '../../screens/chama/loans/LoanApplication';
+import CreateMeeting from '../../screens/chama/meeting/CreateMeeting';
+import CreateMerryGoRound from '../../screens/chama/merry-go-round/CreateMerryGoRound';
+import JitsiMeetScreen from '../../screens/chama/meeting/JitsiMeetScreen';
+import PhysicalMeetingScreen from '../../screens/chama/chamamember/PhysicalMeetingScreen';
+import MeetingSummaryScreen from '../../screens/chama/meeting/MeetingSummaryScreen';
+import InviteMembers from '../../screens/chama/chamamember/InviteMembers';
 
 const ChamaLayoutProvider = ({ route, navigation }) => {
   const { chamaId, chamaName, chama, initialRoute = 'overview' } = route.params || {};

@@ -5,7 +5,7 @@ console.log('🔍 Testing Admin Button Implementation');
 const fs = require('fs');
 const path = require('path');
 
-const enhancedDashboardPath = path.join(__dirname, 'src/screens/user/EnhancedUserDashboard.js');
+const enhancedDashboardPath = path.join(__dirname, 'src/screens/user/userdashboard/EnhancedUserDashboard.js');
 const regularDashboardPath = path.join(__dirname, 'src/screens/user/UserDashboard.js');
 
 console.log('\n📁 Checking file contents...');

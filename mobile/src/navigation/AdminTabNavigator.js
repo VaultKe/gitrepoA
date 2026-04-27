@@ -25,15 +25,15 @@ import APIManagementScreen from '../screens/admin/APIManagementScreen';
 import ContentModerationScreen from '../screens/admin/ContentModerationScreen';
 import NotificationManagementScreen from '../screens/admin/NotificationManagementScreen';
 import AuditLogsScreen from '../screens/admin/AuditLogsScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
+import NotificationsScreen from '../screens/user/notification/NotificationsScreen';
+import ProfileScreen from '../screens/user/profile/ProfileScreen';
 
 // Import additional screens that users might navigate to
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/settings/SecuritySettingsScreen';
 import HelpCenterScreen from '../screens/settings/HelpCenterScreen';
 import TransactionHistoryScreen from '../screens/wallet/TransactionHistoryScreen';
-import InvitationsScreen from '../screens/chama/InvitationsScreen';
+import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
 import ContactSupportScreen from '../screens/support/ContactSupportScreen';
 import AdminSupportScreen from '../screens/admin/AdminSupportScreen';
 import AdminSupportChatScreen from '../screens/admin/AdminSupportChatScreen';

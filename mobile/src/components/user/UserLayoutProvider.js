@@ -22,12 +22,11 @@ import TransactionHistoryScreen from '../../screens/wallet/TransactionHistoryScr
 import RequestMoneyScreen from '../../screens/wallet/RequestMoneyScreen';
 import BuyAirtimeScreen from '../../screens/services/BuyAirtimeScreen';
 import PayBillsScreen from '../../screens/services/PayBillsScreen';
-import ProfileScreen from '../../screens/ProfileScreen';
+import ProfileScreen from '../../screens/user/profile/ProfileScreen';
 import SettingsScreen from '../../screens/settings/SettingsScreen';
-import NotificationsScreen from '../../screens/NotificationsScreen';
-import MyChamasScreen from '../../screens/chama/MyChamasScreen';
-import ChamaListScreen from '../../screens/chama/ChamaListScreen';
-import CreateChamaScreen from '../../screens/chama/CreateChamaScreen';
+import NotificationsScreen from '../../screens/user/notification/NotificationsScreen';
+import MyChamasScreen from '../../screens/chama/dashboard/MyChamasScreen';
+import CreateChamaScreen from '../../screens/chama/dashboard/CreateChamaScreen';
 
 // Marketplace screens removed
 
@@ -210,7 +209,7 @@ const UserDashboardWithFooterStack = () => {
       />
       <Stack.Screen
         name="ChamaList"
-        component={withUserDashboardFooter(ChamaListScreen, 'Chamas')}
+        component={withUserDashboardFooter(MyChamasScreen, 'Chamas')}
         options={{ title: 'Browse Chamas' }}
       />
       <Stack.Screen

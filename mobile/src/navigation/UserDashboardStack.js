@@ -5,20 +5,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, Text, StyleSheet } from 'react-native';
 
 // User Dashboard Screens
-import EnhancedUserDashboard from '../screens/user/EnhancedUserDashboard';
+import EnhancedUserDashboard from '../screens/user/userdashboard/EnhancedUserDashboard';
 import LearningHubScreen from '../screens/learning/LearningHubScreen';
 import CourseDetailScreen from '../screens/learning/CourseDetailScreen';
 import QuizTakingScreen from '../screens/learning/QuizTakingScreen';
 import VideoPlayerScreen from '../screens/learning/VideoPlayerScreen';
 import ArticleReaderScreen from '../screens/learning/ArticleReaderScreen';
 import CourseNavigationScreen from '../screens/learning/CourseNavigationScreen';
-import ChamaMeetingsScreen from '../screens/chama/ChamaMeetingsScreen';
-import MeetingSummaryScreen from '../screens/chama/MeetingSummaryScreen';
-import PhysicalMeetingScreen from '../screens/chama/PhysicalMeetingScreen';
-import JitsiMeetScreen from '../screens/chama/JitsiMeetScreen';
+import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
+import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
+import PhysicalMeetingScreen from '../screens/chama/chamamember/PhysicalMeetingScreen';
+import JitsiMeetScreen from '../screens/chama/meeting/JitsiMeetScreen';
 
 // Other User Screens
-import ProfileScreen from '../screens/ProfileScreen';
+import ProfileScreen from '../screens/user/profile/ProfileScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/settings/SecuritySettingsScreen';
 import NotificationToneScreen from '../screens/settings/NotificationToneScreen';
@@ -30,21 +30,20 @@ import AdminSupportScreen from '../screens/admin/AdminSupportScreen';
 import AdminSupportChatScreen from '../screens/admin/AdminSupportChatScreen';
 import UpdateSupportRequestScreen from '../screens/admin/UpdateSupportRequestScreen';
 import PaymentMethodsScreen from '../screens/settings/PaymentMethodsScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
+import NotificationsScreen from '../screens/user/notification/NotificationsScreen';
 
 
 // Reminder Screen
 import ReminderScreen from '../screens/reminders/ReminderScreen';
 
 // Chama Screens
-import InvitationsScreen from '../screens/chama/InvitationsScreen';
-import WalletScreen from '../screens/wallet/WalletScreen';
-import MyChamasScreen from '../screens/chama/MyChamasScreen';
-import CreateChamaScreen from '../screens/chama/CreateChamaScreen';
-import ChamaDetailsScreen from '../screens/chama/ChamaDetailsScreen';
-import ChamaMembersScreen from '../screens/chama/ChamaMembersScreen';
-import PollsVotingScreen from '../screens/chama/PollsVotingScreen';
-import LoanApplication from '../screens/chama/LoanApplication';
+import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
+import MyChamasScreen from '../screens/chama/dashboard/MyChamasScreen';
+import CreateChamaScreen from '../screens/chama/dashboard/CreateChamaScreen';
+import ChamaDetailsScreen from '../screens/chama/dashboard/ChamaDetailsScreen';
+import ChamaMembersScreen from '../screens/chama/meeting/ChamaMembersScreen';
+import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
+import LoanApplication from '../screens/chama/loans/LoanApplication';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
@@ -53,6 +52,7 @@ import CreateGroupChatScreen from '../screens/chat/CreateGroupChatScreen';
 import UserSearchScreen from '../screens/chat/UserSearchScreen';
 
 // Wallet Screens
+import WalletScreen from '../screens/wallet/WalletScreen';
 import DepositScreen from '../screens/wallet/DepositScreen';
 import WithdrawScreen from '../screens/wallet/WithdrawScreen';
 import TransferScreen from '../screens/wallet/TransferScreen';
