@@ -13,8 +13,8 @@ import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 
 // Legal Screens
-import PrivacyPolicyScreen from '../screens/legal/PrivacyPolicyScreen';
-import TermsOfServiceScreen from '../screens/legal/TermsOfServiceScreen';
+import PrivacyPolicyScreen from '../screens/auth/legal/PrivacyPolicyScreen';
+import TermsOfServiceScreen from '../screens/auth/legal/TermsOfServiceScreen';
 
 const Tab = createBottomTabNavigator();
 

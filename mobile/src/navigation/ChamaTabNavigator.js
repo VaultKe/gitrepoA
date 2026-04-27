@@ -44,19 +44,19 @@ import NotificationsScreen from '../screens/user/notification/NotificationsScree
 import ProfileScreen from '../screens/user/profile/ProfileScreen';
 
 // Import additional screens that users might navigate to
-import SettingsScreen from '../screens/settings/SettingsScreen';
-import SecuritySettingsScreen from '../screens/settings/SecuritySettingsScreen';
-import HelpCenterScreen from '../screens/settings/HelpCenterScreen';
-import TransactionHistoryScreen from '../screens/wallet/TransactionHistoryScreen';
+import SettingsScreen from '../screens/user/settings/SettingsScreen';
+import SecuritySettingsScreen from '../screens/user/settings/SecuritySettingsScreen';
+import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
+import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryScreen';
 import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
-import ContactSupportScreen from '../screens/support/ContactSupportScreen';
+import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
 import ChangePasswordScreen from '../screens/security/ChangePasswordScreen';
 import LoginHistoryScreen from '../screens/security/LoginHistoryScreen';
-import AdminSupportScreen from '../screens/admin/AdminSupportScreen';
-import AdminSupportChatScreen from '../screens/admin/AdminSupportChatScreen';
-import UpdateSupportRequestScreen from '../screens/admin/UpdateSupportRequestScreen';
-import ReminderScreen from '../screens/reminders/ReminderScreen';
-import NotificationToneScreen from '../screens/settings/NotificationToneScreen';
+import AdminSupportScreen from '../screens/admin/support/AdminSupportScreen';
+import AdminSupportChatScreen from '../screens/admin/support/AdminSupportChatScreen';
+import UpdateSupportRequestScreen from '../screens/admin/support/UpdateSupportRequestScreen';
+import ReminderScreen from '../screens/user/reminders/ReminderScreen';
+import NotificationToneScreen from '../screens/user/settings/NotificationToneScreen';
 
 const Tab = createBottomTabNavigator();
 

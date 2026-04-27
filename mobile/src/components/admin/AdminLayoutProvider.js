@@ -2,24 +2,24 @@ import React, { useState } from 'react';
 import AdminLayout from './AdminLayout';
 
 // Import all admin screens
-import AdminHomepage from '../../screens/admin/AdminHomepage';
-import UserManagementScreen from '../../screens/admin/UserManagementScreen';
-import ChamaManagementScreen from '../../screens/admin/ChamaManagementScreen';
-import LearningManagementScreen from '../../screens/admin/LearningManagementScreen';
-import SystemAnalyticsScreen from '../../screens/admin/SystemAnalyticsScreen';
-import SecurityCenterScreen from '../../screens/admin/SecurityCenterScreen';
-import PaymentSystemScreen from '../../screens/admin/PaymentSystemScreen';
-import BackupMaintenanceScreen from '../../screens/admin/BackupMaintenanceScreen';
-import AdminSettingsScreen from '../../screens/admin/AdminSettingsScreen';
-import CreateLearningCourseScreen from '../../screens/admin/CreateLearningCourseScreen';
-import CreateLearningCategoryScreen from '../../screens/admin/CreateLearningCategoryScreen';
-import FinancialReportsScreen from '../../screens/admin/FinancialReportsScreen';
-import SystemHealthScreen from '../../screens/admin/SystemHealthScreen';
-import APIManagementScreen from '../../screens/admin/APIManagementScreen';
-import ContentModerationScreen from '../../screens/admin/ContentModerationScreen';
-import NotificationManagementScreen from '../../screens/admin/NotificationManagementScreen';
-import AuditLogsScreen from '../../screens/admin/AuditLogsScreen';
-import AdminSupportScreen from '../../screens/admin/AdminSupportScreen';
+import AdminHomepage from '../../screens/admin/dashboard/AdminHomepage';
+import UserManagementScreen from '../../screens/admin/usermanagement/UserManagementScreen';
+import ChamaManagementScreen from '../../screens/admin/chamamanagement/ChamaManagementScreen';
+import LearningManagementScreen from '../../screens/admin/learning/LearningManagementScreen';
+import SystemAnalyticsScreen from '../../screens/admin/analytics/SystemAnalyticsScreen';
+import SecurityCenterScreen from '../../screens/admin/security/SecurityCenterScreen';
+import PaymentSystemScreen from '../../screens/admin/payments/PaymentSystemScreen';
+import BackupMaintenanceScreen from '../../screens/admin/maintenance/BackupMaintenanceScreen';
+import AdminSettingsScreen from '../../screens/admin/settings/AdminSettingsScreen';
+import CreateLearningCourseScreen from '../../screens/admin/learning/CreateLearningCourseScreen';
+import CreateLearningCategoryScreen from '../../screens/admin/learning/CreateLearningCategoryScreen';
+import FinancialReportsScreen from '../../screens/admin/financial/FinancialReportsScreen';
+import SystemHealthScreen from '../../screens/admin/system/SystemHealthScreen';
+import APIManagementScreen from '../../screens/admin/system/APIManagementScreen';
+import ContentModerationScreen from '../../screens/admin/content/ContentModerationScreen';
+import NotificationManagementScreen from '../../screens/admin/notifications/NotificationManagementScreen';
+import AuditLogsScreen from '../../screens/admin/audit/AuditLogsScreen';
+import AdminSupportScreen from '../../screens/admin/support/AdminSupportScreen';
 
 const AdminLayoutProvider = ({ route, navigation }) => {
   const { initialRoute = 'dashboard', ...routeParams } = route.params || {};
