@@ -181,41 +181,6 @@ const WelfareDetails = ({ route, navigation }) => {
           </View>
         </Card>
 
-        {/* Contributions */}
-        <Card variant="outlined" style={styles.contributionsCard}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Contributions</Text>
-
-          {contributions.length === 0 ? (
-            <View style={styles.emptyContributions}>
-              <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No contributions yet
-              </Text>
-              <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-                Member contributions will appear here
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.contributionsList}>
-              {contributions.map((contribution, index) => (
-                <View key={contribution.id || index} style={styles.contributionItem}>
-                  <View style={styles.contributionInfo}>
-                    <Text style={[styles.contributionMember, { color: colors.text }]}>
-                      {contribution.memberName}
-                    </Text>
-                    <Text style={[styles.contributionDate, { color: colors.textSecondary }]}>
-                      {formatDate(contribution.date)}
-                    </Text>
-                  </View>
-                  <Text style={[styles.contributionAmount, { color: colors.success }]}>
-                    {formatCurrency(contribution.amount)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </Card>
-
         {/* Actions */}
         <View style={styles.actions}>
           {welfareFund.status === 'approved' && (
