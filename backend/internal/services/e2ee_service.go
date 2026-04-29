@@ -574,7 +574,7 @@ func (s *MilitaryGradeE2EEService) storeKeyBundle(keyBundle *KeyBundle) error {
 		INSERT OR REPLACE INTO e2ee_key_bundles (
 			user_id, identity_key, signed_pre_key, pre_key_signature,
 			one_time_pre_keys, registration_id, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
 	oneTimePreKeysJSON, err := json.Marshal(keyBundle.OneTimePreKeys)
@@ -709,7 +709,7 @@ func (s *MilitaryGradeE2EEService) ComputeSafetyNumber(userID, targetUserID stri
 	userKeyQuery := `
 		SELECT ik.public_key FROM signal_identity_keys ik
 		JOIN devices d ON d.user_id = ik.user_id AND d.device_id = ik.device_id
-		WHERE d.user_id = ? AND d.is_active = 1
+		WHERE d.user_id = $1 AND d.is_active = 1
 		ORDER BY d.created_at ASC LIMIT 1
 	`
 
@@ -744,8 +744,8 @@ func (s *MilitaryGradeE2EEService) RotateSignedPreKey(userID string, deviceID in
 	// Update the signed pre-key in the database
 	query := `
 		UPDATE signal_signed_pre_keys
-		SET signed_pre_key_id = ?, public_key = ?, signature = ?, created_at = CURRENT_TIMESTAMP
-		WHERE user_id = ? AND device_id = ?
+		SET signed_pre_key_id = $1, public_key = $2, signature = $3, created_at = CURRENT_TIMESTAMP
+		WHERE user_id = $4 AND device_id = $5
 	`
 
 	_, err := s.db.Exec(query, newSignedPreKeyID, newSignedPreKey, signature, userID, deviceID)
@@ -756,8 +756,8 @@ func (s *MilitaryGradeE2EEService) RotateSignedPreKey(userID string, deviceID in
 	// Also update the device record
 	deviceQuery := `
 		UPDATE devices
-		SET signed_pre_key_id = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE user_id = ? AND device_id = ?
+		SET signed_pre_key_id = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = $2 AND device_id = $3
 	`
 
 	_, err = s.db.Exec(deviceQuery, newSignedPreKeyID, userID, deviceID)
@@ -773,8 +773,8 @@ func (s *MilitaryGradeE2EEService) ResetSession(userID, targetUserID string) err
 	// Delete all sessions between the two users
 	query := `
 		DELETE FROM signal_sessions
-		WHERE (user_id = ? AND session_id LIKE ?)
-		   OR (user_id = ? AND session_id LIKE ?)
+		WHERE (user_id = $1 AND session_id LIKE $2)
+		   OR (user_id = $3 AND session_id LIKE $4)
 	`
 
 	// Session IDs are typically in format "user1_user2" or similar
@@ -795,7 +795,7 @@ func (s *MilitaryGradeE2EEService) getKeyBundle(userID string) (*KeyBundle, erro
 		SELECT user_id, identity_key, signed_pre_key, pre_key_signature,
 			   one_time_pre_keys, registration_id, created_at
 		FROM e2ee_key_bundles
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	var keyBundle KeyBundle
@@ -840,7 +840,7 @@ func (s *MilitaryGradeE2EEService) getSession(userAID, userBID string) (*Session
 		SELECT id, user_a_id, user_b_id, shared_secret, sending_chain,
 			   receiving_chain, message_number, created_at, last_used
 		FROM e2ee_sessions
-		WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)
+		WHERE (user_a_id = $1 AND user_b_id = $2) OR (user_a_id = $3 AND user_b_id = $4)
 		ORDER BY last_used DESC
 		LIMIT 1
 	`
@@ -911,7 +911,7 @@ func (s *MilitaryGradeE2EEService) storeSession(session *Session) error {
 		INSERT OR REPLACE INTO e2ee_sessions (
 			id, user_a_id, user_b_id, shared_secret, sending_chain,
 			receiving_chain, message_number, created_at, last_used
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err := s.db.Exec(query,
@@ -998,7 +998,7 @@ func (s *MilitaryGradeE2EEService) GetUserDevices(userID string) ([]*Device, err
 	query := `
 		SELECT id, user_id, device_id, device_name, device_type, registration_id, signed_pre_key_id, is_active, created_at, updated_at
 		FROM devices
-		WHERE user_id = ? AND is_active = 1
+		WHERE user_id = $1 AND is_active = 1
 		ORDER BY created_at DESC
 	`
 
@@ -1050,7 +1050,7 @@ func (s *MilitaryGradeE2EEService) GetPreKeyBundle(userID string) (*PreKeyBundle
 		FROM devices d
 		JOIN signal_identity_keys ik ON d.user_id = ik.user_id AND d.device_id = ik.device_id
 		JOIN signal_signed_pre_keys spk ON d.user_id = spk.user_id AND d.device_id = spk.device_id
-		WHERE d.user_id = ? AND d.is_active = 1
+		WHERE d.user_id = $1 AND d.is_active = 1
 		ORDER BY RANDOM() LIMIT 1
 	`
 
@@ -1072,7 +1072,7 @@ func (s *MilitaryGradeE2EEService) GetPreKeyBundle(userID string) (*PreKeyBundle
 	// Get a random unused pre-key
 	preKeyQuery := `
 		SELECT pre_key_id, public_key FROM signal_pre_keys
-		WHERE user_id = ? AND device_id = ?
+		WHERE user_id = $1 AND device_id = $2
 		ORDER BY RANDOM() LIMIT 1
 	`
 
@@ -1085,7 +1085,7 @@ func (s *MilitaryGradeE2EEService) GetPreKeyBundle(userID string) (*PreKeyBundle
 	}
 
 	// Mark pre-key as used (delete it)
-	deleteQuery := `DELETE FROM signal_pre_keys WHERE user_id = ? AND device_id = ? AND pre_key_id = ?`
+	deleteQuery := `DELETE FROM signal_pre_keys WHERE user_id = $1 AND device_id = $2 AND pre_key_id = $3`
 	_, err = s.db.Exec(deleteQuery, userID, bundle.DeviceID, bundle.PreKeyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mark pre-key as used: %w", err)
@@ -1099,7 +1099,7 @@ func (s *MilitaryGradeE2EEService) SendMessage(message *SignalMessage) error {
 	query := `
 		INSERT INTO signal_messages (
 			id, sender_id, sender_device_id, recipient_id, ciphertext, message_type, timestamp, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
 	message.ID = fmt.Sprintf("msg_%d_%x", time.Now().Unix(), []byte(message.SenderID)[:4])
@@ -1125,7 +1125,7 @@ func (s *MilitaryGradeE2EEService) GetMessages(userID string) ([]*SignalMessage,
 	query := `
 		SELECT id, sender_id, sender_device_id, recipient_id, ciphertext, message_type, timestamp, is_delivered, is_read, created_at
 		FROM signal_messages
-		WHERE recipient_id = ?
+		WHERE recipient_id = $1
 		ORDER BY timestamp DESC
 	`
 
@@ -1165,7 +1165,7 @@ func (s *MilitaryGradeE2EEService) storeDevice(device *Device) error {
 	query := `
 		INSERT INTO devices (
 			id, user_id, device_id, device_name, device_type, registration_id, signed_pre_key_id, is_active, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	device.CreatedAt = time.Now()
@@ -1191,7 +1191,7 @@ func (s *MilitaryGradeE2EEService) storeIdentityKey(key *SignalIdentityKey) erro
 	query := `
 		INSERT INTO signal_identity_keys (
 			user_id, device_id, public_key, private_key, created_at
-		) VALUES (?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5)
 	`
 
 	key.CreatedAt = time.Now()
@@ -1211,7 +1211,7 @@ func (s *MilitaryGradeE2EEService) storePreKey(key *SignalPreKey) error {
 	query := `
 		INSERT INTO signal_pre_keys (
 			user_id, device_id, pre_key_id, public_key, private_key, created_at
-		) VALUES (?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
 	key.CreatedAt = time.Now()
@@ -1232,7 +1232,7 @@ func (s *MilitaryGradeE2EEService) storeSignedPreKey(key *SignalSignedPreKey) er
 	query := `
 		INSERT INTO signal_signed_pre_keys (
 			user_id, device_id, signed_pre_key_id, public_key, private_key, signature, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
 	key.CreatedAt = time.Now()

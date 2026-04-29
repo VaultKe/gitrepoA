@@ -145,7 +145,7 @@ func GetUnreadNotificationCount(c *gin.Context) {
 	query := `
 		SELECT COUNT(*)
 		FROM notifications
-		WHERE user_id = ? AND is_read = false
+		WHERE user_id = $1 AND is_read = false
 	`
 
 	var count int
@@ -202,7 +202,7 @@ func MarkNotificationAsRead(c *gin.Context) {
 	query := `
 		UPDATE notifications
 		SET is_read = true
-		WHERE id = ? AND user_id = ?
+		WHERE id = $1 AND user_id = $2
 	`
 
 	result, err := db.(*sql.DB).Exec(query, notificationID, userID)
@@ -255,7 +255,7 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 	query := `
 		UPDATE notifications
 		SET is_read = true
-		WHERE user_id = ? AND is_read = false
+		WHERE user_id = $1 AND is_read = false
 	`
 
 	result, err := db.(*sql.DB).Exec(query, userID)
@@ -306,7 +306,7 @@ func DeleteNotification(c *gin.Context) {
 
 	// First, check if this notification exists in the database
 	var count int
-	checkQuery := "SELECT COUNT(*) FROM notifications WHERE id = ? AND user_id = ?"
+	checkQuery := "SELECT COUNT(*) FROM notifications WHERE id = $1 AND user_id = $2"
 	err := db.(*sql.DB).QueryRow(checkQuery, notificationID, userID).Scan(&count)
 	if err != nil {
 		fmt.Printf("🗑️ Error checking notification existence: %v\n", err)
@@ -328,15 +328,10 @@ func DeleteNotification(c *gin.Context) {
 	// Delete notification from the notifications table
 	query := `
 		DELETE FROM notifications
-		WHERE id = ? AND user_id = ?
+		WHERE id = $1 AND user_id = $2
 	`
-
-	fmt.Printf("🗑️ Attempting to delete from notifications table with query: %s\n", query)
-	fmt.Printf("🗑️ Parameters: notificationID=%s, userID=%s\n", notificationID, userID)
-
 	result, err := db.(*sql.DB).Exec(query, notificationID, userID)
 	if err != nil {
-		fmt.Printf("🗑️ Error deleting notification from database: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to delete notification from database",
@@ -345,10 +340,7 @@ func DeleteNotification(c *gin.Context) {
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	fmt.Printf("🗑️ Database deletion completed - Rows affected: %d\n", rowsAffected)
-
 	if rowsAffected == 0 {
-		fmt.Printf("🗑️ No rows affected - notification not found in database\n")
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"error":   "Notification not found in database",
@@ -356,7 +348,6 @@ func DeleteNotification(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("🗑️ Notification successfully deleted from database\n")
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Notification deleted successfully",
@@ -371,7 +362,7 @@ func getSystemNotifications(db *sql.DB, userID string) ([]map[string]interface{}
 	query := `
 		SELECT id, user_id, title, message, type, data, is_read, created_at
 		FROM notifications
-		WHERE user_id = ?
+		WHERE user_id = $1
 		ORDER BY created_at DESC
 	`
 
@@ -433,7 +424,7 @@ func getSystemNotifications(db *sql.DB, userID string) ([]map[string]interface{}
 func getChamaInvitationNotifications(db *sql.DB, userID string) ([]map[string]interface{}, error) {
 	// Get user's email first
 	var userEmail string
-	err := db.QueryRow("SELECT email FROM users WHERE id = ?", userID).Scan(&userEmail)
+	err := db.QueryRow("SELECT email FROM users WHERE id = $1", userID).Scan(&userEmail)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +438,7 @@ func getChamaInvitationNotifications(db *sql.DB, userID string) ([]map[string]in
 		FROM chama_invitations ci
 		INNER JOIN chamas c ON ci.chama_id = c.id
 		INNER JOIN users u ON ci.inviter_id = u.id
-		WHERE ci.email = ? AND ci.status = 'pending' AND ci.expires_at > ?
+		WHERE ci.email = $1 AND ci.status = 'pending' AND ci.expires_at > $2
 		ORDER BY ci.created_at DESC
 	`
 
@@ -522,7 +513,7 @@ func getMeetingNotifications(db *sql.DB, userID string) ([]map[string]interface{
 		INNER JOIN chamas c ON m.chama_id = c.id
 		INNER JOIN users u ON m.created_by = u.id
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
-		WHERE cm.user_id = ? AND cm.is_active = true
+		WHERE cm.user_id = $1 AND cm.is_active = true
 		AND (
 			(m.status = 'scheduled' AND m.scheduled_at > datetime('now', '-1 day'))
 			OR (m.status = 'active')
@@ -638,7 +629,7 @@ func getLoanNotifications(db *sql.DB, userID string) ([]map[string]interface{}, 
 		INNER JOIN chamas c ON l.chama_id = c.id
 		INNER JOIN users u ON l.applicant_id = u.id
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
-		WHERE (cm.user_id = ? OR l.applicant_id = ?) AND cm.is_active = true
+		WHERE (cm.user_id = $1 OR l.applicant_id = $2) AND cm.is_active = true
 		AND l.created_at > datetime('now', '-30 days')
 		ORDER BY l.created_at DESC
 	`
@@ -751,7 +742,7 @@ func getWelfareNotifications(db *sql.DB, userID string) ([]map[string]interface{
 		INNER JOIN users u ON wr.beneficiary_id = u.id
 		INNER JOIN users creator ON wr.created_by = creator.id
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
-		WHERE (cm.user_id = ? OR wr.beneficiary_id = ? OR wr.created_by = ?) AND cm.is_active = true
+		WHERE (cm.user_id = $1 OR wr.beneficiary_id = $2 OR wr.created_by = $3) AND cm.is_active = true
 		AND wr.created_at > datetime('now', '-30 days')
 		ORDER BY wr.created_at DESC
 	`
@@ -861,7 +852,7 @@ func getTransactionNotifications(db *sql.DB, userID string) ([]map[string]interf
 		INNER JOIN chamas c ON t.chama_id = c.id
 		INNER JOIN users u ON t.user_id = u.id
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
-		WHERE cm.user_id = ? AND cm.is_active = true
+		WHERE cm.user_id = $1 AND cm.is_active = true
 		AND t.created_at > datetime('now', '-7 days')
 		AND t.type IN ('contribution', 'welfare_contribution', 'loan_payment')
 		ORDER BY t.created_at DESC
@@ -971,8 +962,8 @@ func getChamaActivityNotifications(db *sql.DB, userID string) ([]map[string]inte
 		INNER JOIN chamas c ON cm.chama_id = c.id
 		INNER JOIN users u ON cm.user_id = u.id
 		INNER JOIN chama_members my_membership ON c.id = my_membership.chama_id
-		WHERE my_membership.user_id = ? AND my_membership.is_active = true
-		AND cm.user_id != ? -- Don't notify about own activities
+		WHERE my_membership.user_id = $1 AND my_membership.is_active = true
+		AND cm.user_id != $2 -- Don't notify about own activities
 		AND cm.joined_at > datetime('now', '-7 days')
 		AND cm.is_active = true
 		ORDER BY cm.joined_at DESC
@@ -1097,7 +1088,7 @@ func handleSpecialNotificationRead(db *sql.DB, notificationID, userID string) bo
 	if len(notificationID) > 0 {
 		// Chama invitations are handled by accept/reject, so we consider them "read" when accessed
 		var count int
-		err := db.QueryRow("SELECT COUNT(*) FROM chama_invitations WHERE id = ?", notificationID).Scan(&count)
+		err := db.QueryRow("SELECT COUNT(*) FROM chama_invitations WHERE id = $1", notificationID).Scan(&count)
 		if err == nil && count > 0 {
 			// This is a chama invitation, consider it handled
 			return true
@@ -1114,7 +1105,7 @@ func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) 
 	// First, check if this notification actually exists in the database
 	// If it exists, we should delete it normally, not treat it as virtual
 	var count int
-	checkQuery := "SELECT COUNT(*) FROM notifications WHERE id = ? AND user_id = ?"
+	checkQuery := "SELECT COUNT(*) FROM notifications WHERE id = $1 AND user_id = $2"
 	err := db.QueryRow(checkQuery, notificationID, userID).Scan(&count)
 	if err == nil && count > 0 {
 		fmt.Printf("🗑️ SPECIAL DELETE: Notification exists in database (count=%d), allowing normal deletion\n", count)
@@ -1180,12 +1171,12 @@ func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) 
 	if len(notificationID) > 0 {
 		// For chama invitations, try to delete from chama_invitations table
 		var count int
-		err := db.QueryRow("SELECT COUNT(*) FROM chama_invitations WHERE id = ?", notificationID).Scan(&count)
+		err := db.QueryRow("SELECT COUNT(*) FROM chama_invitations WHERE id = $1", notificationID).Scan(&count)
 		if err == nil && count > 0 {
 			fmt.Printf("🗑️ SPECIAL DELETE: Chama invitation found - attempting to delete\n")
 
 			// Actually delete the chama invitation
-			deleteQuery := "DELETE FROM chama_invitations WHERE id = ? AND invited_email = (SELECT email FROM users WHERE id = ?)"
+			deleteQuery := "DELETE FROM chama_invitations WHERE id = $1 AND invited_email = (SELECT email FROM users WHERE id = $2)"
 			result, err := db.Exec(deleteQuery, notificationID, userID)
 			if err != nil {
 				fmt.Printf("🗑️ SPECIAL DELETE: Failed to delete chama invitation: %v\n", err)
@@ -1230,7 +1221,7 @@ func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notifi
 	insertQuery := `
 		INSERT OR REPLACE INTO deleted_virtual_notifications
 		(user_id, notification_id, notification_type)
-		VALUES (?, ?, ?)
+		VALUES ($1, $2, $3)
 	`
 
 	_, err = db.Exec(insertQuery, userID, notificationID, notificationType)
@@ -1269,7 +1260,7 @@ func getDeletedVirtualNotificationIDs(db *sql.DB, userID string) map[string]bool
 	query := `
 		SELECT notification_id
 		FROM deleted_virtual_notifications
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	rows, err := db.Query(query, userID)
@@ -1295,7 +1286,7 @@ func getSupportRequestNotifications(db *sql.DB, userID string) ([]map[string]int
 
 	// Get user role to determine what notifications to show
 	var userRole string
-	err := db.QueryRow("SELECT role FROM users WHERE id = ?", userID).Scan(&userRole)
+	err := db.QueryRow("SELECT role FROM users WHERE id = $1", userID).Scan(&userRole)
 	if err != nil {
 		return notifications, err
 	}
@@ -1359,7 +1350,7 @@ func getSupportRequestNotifications(db *sql.DB, userID string) ([]map[string]int
 				sr.id, sr.category, sr.subject, sr.description, sr.status, sr.priority,
 				sr.updated_at, sr.admin_notes, sr.created_at
 			FROM support_requests sr
-			WHERE sr.user_id = ?
+			WHERE sr.user_id = $1
 			AND sr.updated_at >= datetime('now', '-30 days')
 			AND sr.status != 'open'
 			ORDER BY sr.updated_at DESC
@@ -1492,7 +1483,7 @@ func AcceptChamaInvitation(c *gin.Context) {
 
 	// Get user's email
 	var userEmail string
-	err := db.(*sql.DB).QueryRow("SELECT email FROM users WHERE id = ?", userID).Scan(&userEmail)
+	err := db.(*sql.DB).QueryRow("SELECT email FROM users WHERE id = $1", userID).Scan(&userEmail)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1513,7 +1504,7 @@ func AcceptChamaInvitation(c *gin.Context) {
 	query := `
 		SELECT id, chama_id, email, status, expires_at
 		FROM chama_invitations
-		WHERE id = ? AND email = ? AND status = 'pending'
+		WHERE id = $1 AND email = $2 AND status = 'pending'
 	`
 
 	err = db.(*sql.DB).QueryRow(query, invitationID, userEmail).Scan(
@@ -1550,8 +1541,8 @@ func AcceptChamaInvitation(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Update invitation status
-	_, err = tx.Exec("UPDATE chama_invitations SET status = 'accepted', responded_at = ? WHERE id = ?",
-		time.Now(), invitationID)
+	_, err = tx.Exec("UPDATE chama_invitations SET status = 'accepted', responded_at = $2 WHERE id = $1",
+		invitationID, time.Now())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1563,7 +1554,7 @@ func AcceptChamaInvitation(c *gin.Context) {
 	// Add user to chama
 	_, err = tx.Exec(`
 		INSERT INTO chama_members (id, chama_id, user_id, role, joined_at, is_active)
-		VALUES (?, ?, ?, 'member', ?, true)
+		VALUES ($1, $2, $3, 'member', $4, true)
 	`, fmt.Sprintf("cm_%d", time.Now().UnixNano()), invitation.ChamaID, userID, time.Now())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1574,8 +1565,8 @@ func AcceptChamaInvitation(c *gin.Context) {
 	}
 
 	// Update chama member count
-	_, err = tx.Exec("UPDATE chamas SET current_members = current_members + 1, updated_at = ? WHERE id = ?",
-		time.Now(), invitation.ChamaID)
+	_, err = tx.Exec("UPDATE chamas SET current_members = current_members + 1, updated_at = $2 WHERE id = $1",
+		invitation.ChamaID, time.Now())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1647,7 +1638,7 @@ func SendSystemNotification(c *gin.Context) {
 	// Create notification record
 	query := `
 		INSERT INTO notifications (user_id, title, message, type, priority, category, data, is_read, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 'normal', 'system', ?, false, ?, ?)
+		VALUES ($1, $2, $3, $4, 'normal', 'system', $5, false, $6, $7)
 	`
 
 	// Convert data map to JSON string
@@ -1734,7 +1725,7 @@ func RejectChamaInvitation(c *gin.Context) {
 
 	// Get user's email
 	var userEmail string
-	err := db.(*sql.DB).QueryRow("SELECT email FROM users WHERE id = ?", userID).Scan(&userEmail)
+	err := db.(*sql.DB).QueryRow("SELECT email FROM users WHERE id = $1", userID).Scan(&userEmail)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1746,9 +1737,9 @@ func RejectChamaInvitation(c *gin.Context) {
 	// Update invitation status
 	result, err := db.(*sql.DB).Exec(`
 		UPDATE chama_invitations
-		SET status = 'rejected', responded_at = ?
-		WHERE id = ? AND email = ? AND status = 'pending'
-	`, time.Now(), invitationID, userEmail)
+		SET status = 'rejected', responded_at = $3
+		WHERE id = $1 AND email = $2 AND status = 'pending'
+	`, invitationID, userEmail, time.Now())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

@@ -66,7 +66,7 @@ func GetPrivacySettings(c *gin.Context) {
 	query := `
 		SELECT profile_visibility, transaction_privacy, location_sharing
 		FROM user_privacy_settings
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	err := db.(*sql.DB).QueryRow(query, userID).Scan(
@@ -140,7 +140,7 @@ func UpdatePrivacySettings(c *gin.Context) {
 	// Update or insert privacy settings
 	query := `
 		INSERT INTO user_privacy_settings (user_id, profile_visibility, transaction_privacy, location_sharing, updated_at)
-		VALUES (?, ?, ?, ?, datetime('now'))
+		VALUES ($1, $2, $3, $4, datetime('now'))
 		ON CONFLICT(user_id) DO UPDATE SET
 		profile_visibility = excluded.profile_visibility,
 		transaction_privacy = excluded.transaction_privacy,
@@ -199,7 +199,7 @@ func GetSecuritySettings(c *gin.Context) {
 		SELECT biometric_login, two_factor_auth, auto_logout, login_notifications, 
 		       suspicious_activity_alerts, device_management
 		FROM user_security_settings
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	err := db.(*sql.DB).QueryRow(query, userID).Scan(
@@ -280,7 +280,7 @@ func UpdateSecuritySettings(c *gin.Context) {
 	query := `
 		INSERT INTO user_security_settings (user_id, biometric_login, two_factor_auth, auto_logout, 
 		                                   login_notifications, suspicious_activity_alerts, device_management, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, datetime('now'))
 		ON CONFLICT(user_id) DO UPDATE SET
 		biometric_login = excluded.biometric_login,
 		two_factor_auth = excluded.two_factor_auth,
@@ -342,7 +342,7 @@ func GetUserPreferences(c *gin.Context) {
 	query := `
 		SELECT language, currency, date_format
 		FROM user_preferences
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	err := db.(*sql.DB).QueryRow(query, userID).Scan(
@@ -416,7 +416,7 @@ func UpdateUserPreferences(c *gin.Context) {
 	// Update or insert user preferences
 	query := `
 		INSERT INTO user_preferences (user_id, language, currency, date_format, updated_at)
-		VALUES (?, ?, ?, ?, datetime('now'))
+		VALUES ($1, $2, $3, $4, datetime('now'))
 		ON CONFLICT(user_id) DO UPDATE SET
 		language = excluded.language,
 		currency = excluded.currency,

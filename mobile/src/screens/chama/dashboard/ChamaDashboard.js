@@ -632,23 +632,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         },
       },
       {
-        id: 'shares-dividends',
-        title: 'Shares & Dividends',
-        icon: 'pie-chart',
-        color: '#10B981', // Emerald color
-        onPress: () => {
-          if (selectedChama) {
-            if (onRouteChange) {
-              onRouteChange('shares-dividends', 'SharesDividendsScreen');
-            } else {
-              navigation.navigate('SharesDividendsScreen', { chamaId: selectedChama.id });
-            }
-          } else {
-            Alert.alert('No Chama Selected', 'Please select a chama first');
-          }
-        },
-      },
-      {
         id: 'polls-voting',
         title: 'Polls & Voting',
         icon: 'checkmark-circle',

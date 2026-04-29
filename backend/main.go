@@ -119,7 +119,6 @@ func main() {
 		allowedOrigins := []string{
 			"https://gitrepoa-1.onrender.com", // your backend domain
 			"http://localhost:8081",           // Metro / Expo
-			"http://127.0.0.1:8081",
 			"https://localhost",           // Metro / Expo
 			"https://127.0.0.1:8081",
 			"http://localhost:8080", 
@@ -128,10 +127,9 @@ func main() {
 			"http://127.0.0.1:19006",
 			"http://localhost:3000",
 			"http://127.0.0.1:3000",
-			"http://localhost:3000",
 		}
 
-		// Check if origin is allowed - be restrictive in all environments
+		// Check if origin is allowed - be restrictive in production
 		allowedOrigin := ""
 		if origin != "" {
 			for _, allowed := range allowedOrigins {
@@ -142,18 +140,25 @@ func main() {
 			}
 		}
 
-		if origin == "" || origin == "null" {
-            allowedOrigin = "*" // safe for mobile dev
-        }
+		// In development, allow all origins; in production only allow specific ones
+		if cfg.Environment != "production" {
+			if origin == "" || origin == "null" {
+				allowedOrigin = "*"
+			} else {
+				allowedOrigin = origin
+			}
+		} else if origin == "" || origin == "null" {
+			allowedOrigin = "*"
+		}
 
-		// If origin is not in the allowed list, forbid the request
-		/*if allowedOrigin == "" {
+		// If origin is not in the allowed list (production), forbid the request
+		if cfg.Environment == "production" && allowedOrigin == "" {
 			log.Printf("🚫 CORS: Origin '%s' not allowed", origin)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Origin not allowed",
 			})
 			return
-		}*/
+		}
 
 		// Log CORS processing for debugging
 		log.Printf("🔒 CORS: Origin=%s, Method=%s, Path=%s, AllowedOrigin=%s", origin, method, path, allowedOrigin)
@@ -256,7 +261,7 @@ func main() {
 	// Initialize notification service
 	notificationService := services.NewNotificationService(db, cfg)
 
-	// Initialize LiveKit meeting service
+	// Initialize meeting service
 	api.InitializeMeetingService(db, notificationService)
 
 	// Initialize notification scheduler for reminders
@@ -264,21 +269,14 @@ func main() {
 	notificationScheduler.Start()
 
 	// Initialize scheduler service for meeting auto-unlock
-	// Note: You'll need to get the meeting service instance to pass here
-	// For now, we'll initialize it separately in the API package
-
-	// Initialize handlers
 	authHandlers := api.NewAuthHandlers(db, cfg.JWTSecret, cfg.JWTExpiration)
 	reminderHandlers := api.NewReminderHandlers(db)
-	sharesHandlers := api.NewSharesHandlers(db)
-	dividendsHandlers := api.NewDividendsHandlers(db)
+
 	pollsHandlers := api.NewPollsHandlers(db)
 	disbursementHandlers := api.NewDisbursementHandlers(db)
 	reportsHandlers := api.NewFinancialReportsHandlers(db)
-	// deliveryContactsHandlers := api.NewDeliveryContactsHandlers(db)
 	userSearchHandlers := api.NewUserSearchHandlers(db)
 	receiptHandlers := api.NewReceiptHandlers(db)
-	moneyRequestHandlers := api.NewMoneyRequestHandlers(db)
 	accountHandlers := api.NewAccountHandlers(db)
 
 	// Initialize E2EE service
@@ -360,22 +358,6 @@ func main() {
 
 		// WebSocket route (handles auth internally)
 		apiGroup.GET("/ws", wsService.HandleWebSocket)
-
-		// Public marketplace routes (no authentication required for browsing)
-		// publicMarketplace := apiGroup.Group("/marketplace")
-		// publicMarketplace.Use(dbMiddleware)
-		// publicMarketplace.Use(wsMiddleware)
-		// {
-		// 	publicProducts := publicMarketplace.Group("/products")
-		// 	{
-		// 		publicProducts.GET("/", api.GetProducts)     // ✅ Public - browse products
-		// 		publicProducts.GET("/all", api.GetProducts)  // ✅ Public - get all products (same as above but with higher default limit)
-		// 		publicProducts.GET("/:id", api.GetProduct)   // ✅ Public - view product details
-		// 	}
-
-		// 	// Public categories endpoint
-		// 	publicMarketplace.GET("/categories", api.GetMarketplaceCategories) // ✅ Public - get categories with counts
-		// }
 
 		// Public payment routes (no authentication required for callbacks)
 		publicPayments := apiGroup.Group("/payments")
@@ -486,7 +468,6 @@ func main() {
 				chamas.GET("/:id/invitations/sent", api.GetChamaSentInvitations)
 				chamas.GET("/invitations", api.GetUserInvitations)
 				// Match frontend URL pattern: /chamas/{chamaId}/invitations/{invitationId}/respond
-				// Use :id for chamaId to avoid parameter name conflicts with existing routes
 				chamas.POST("/:id/invitations/:invitationId/respond", api.RespondToInvitation)
 				chamas.POST("/:id/invitations/:invitationId/cancel", api.CancelInvitation)
 				chamas.POST("/:id/invitations/:invitationId/resend", api.ResendInvitation)
@@ -494,13 +475,12 @@ func main() {
 				// Disbursement and Creation routes
 				chamas.GET("/:id/eligible-loan-members", api.GetEligibleLoanMembers)
 				chamas.GET("/:id/eligible-welfare-members", api.GetEligibleWelfareMembers)
-				chamas.GET("/:id/eligible-dividend-members", api.GetEligibleDividendMembers)
-				chamas.GET("/:id/eligible-shares-members", api.GetEligibleSharesMembers)
+
 				chamas.GET("/:id/eligible-savings-members", api.GetEligibleSavingsMembers)
 				chamas.GET("/:id/eligible-other-members", api.GetEligibleOtherMembers)
 				chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
 				chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
-				chamas.POST("/:id/shares", api.CreateChamaShares)
+
 			}
 
 			// Wallet routes
@@ -516,72 +496,12 @@ func main() {
 				wallets.POST("/withdraw", api.WithdrawMoney)
 			}
 
-			// Money request routes (part of wallet functionality)
-			wallet := protected.Group("/wallet")
-			{
-				wallet.POST("/create-money-request", moneyRequestHandlers.CreateMoneyRequest)
-				wallet.POST("/send-money-request", moneyRequestHandlers.SendMoneyRequest)
-				wallet.GET("/recent-contacts", moneyRequestHandlers.GetRecentContacts)
-			}
-
-			// Receipt routes
+		// Receipt routes
 			receipts := protected.Group("/receipts")
 			{
 				receipts.GET("/transactions/:transactionId", receiptHandlers.GetTransactionReceipt)
 				receipts.GET("/transactions/:transactionId/download", receiptHandlers.DownloadTransactionReceipt)
 			}
-
-			// Protected marketplace routes (authentication required)
-			// marketplace := protected.Group("/marketplace")
-			// {
-			// 	products := marketplace.Group("/products")
-			// 	{
-			// 		products.GET("/manage/all", api.GetAllProducts)           // ✅ Auth required - get all products for management (including out of stock)
-			// 		products.GET("/:id/details", api.GetProductWithOwnership) // ✅ Enhanced product details with ownership
-			// 		products.POST("/", api.CreateProduct)                     // ✅ Auth required - create product
-			// 		products.PUT("/:id", api.UpdateProduct)                   // ✅ Auth required - update product
-			// 		products.DELETE("/:id", api.DeleteProduct)                // ✅ Auth required - delete product
-			// 	}
-
-			// 	marketplace.GET("/cart", api.GetCart)               // ✅ Auth required - view cart
-			// 	marketplace.POST("/cart", api.AddToCart)            // ✅ Auth required - add to cart
-			// 	marketplace.DELETE("/cart/:id", api.RemoveFromCart) // ✅ Auth required - remove from cart
-
-			// 	marketplace.GET("/wishlist", api.GetWishlist)                      // ✅ Auth required - view wishlist
-			// 	marketplace.POST("/wishlist", api.AddToWishlist)                   // ✅ Auth required - add to wishlist
-			// 	marketplace.DELETE("/wishlist/:productId", api.RemoveFromWishlist) // ✅ Auth required - remove from wishlist
-
-			// 	orders := marketplace.Group("/orders")
-			// 	{
-			// 		orders.GET("/", api.GetOrders)                                                 // ✅ Auth required - view orders
-			// 		orders.POST("/", api.CreateOrder)                                              // ✅ Auth required - create order
-			// 		orders.GET("/:id", api.GetOrder)                                               // ✅ Auth required - view order details
-			// 		orders.PUT("/:id", api.UpdateOrder)                                            // ✅ Auth required - update order
-			// 		orders.PUT("/:id/status", api.UpdateOrderStatus)                               // ✅ Auth required - update order status
-			// 		orders.POST("/:id/assign-delivery", api.AssignDeliveryPerson)                  // ✅ Auth required - assign delivery (legacy)
-			// 		orders.POST("/assign-delivery-to-products", api.AssignDeliveryPersonToProduct) // ✅ Auth required - assign delivery to specific products
-			// 	}
-
-			// 	// Analytics routes
-			// 	analytics := marketplace.Group("/analytics")
-			// 	{
-			// 		analytics.GET("/seller", api.GetSellerAnalytics) // ✅ Auth required - seller analytics
-			// 		analytics.GET("/buyer", api.GetBuyerStats)       // ✅ Auth required - buyer stats
-			// 	}
-
-			// 	// Delivery routes
-			// 	deliveries := marketplace.Group("/deliveries")
-			// 	{
-			// 		deliveries.GET("/", api.GetDeliveries)                  // ✅ Auth required - view deliveries
-			// 		deliveries.POST("/:id/accept", api.AcceptDelivery)      // ✅ Auth required - accept delivery
-			// 		deliveries.PUT("/:id/status", api.UpdateDeliveryStatus) // ✅ Auth required - update delivery status
-			// 	}
-
-			// 	marketplace.GET("/reviews/product/:productId", api.GetReviews)                  // ✅ Auth required - view product reviews
-			// 	marketplace.GET("/reviews/product/:productId/stats", api.GetProductReviewStats) // ✅ Auth required - get review stats
-			// 	marketplace.POST("/reviews", api.CreateReview)                                  // ✅ Auth required - create review
-			// 	marketplace.GET("/reviews/my", api.GetMyReviews)                                // ✅ Auth required - get user's reviews
-			// }
 
 			// Payment routes
 			payments := protected.Group("/payments")
@@ -704,32 +624,7 @@ func main() {
 				reminders.POST("/:id/toggle", reminderHandlers.ToggleReminder)
 			}
 
-			// Shares routes
-			shares := protected.Group("/chamas/:id/shares")
-			{
-				shares.POST("/offering", sharesHandlers.CreateShareOffering)
-				shares.POST("/", sharesHandlers.CreateShares) // Legacy endpoint
-				shares.POST("/buy", sharesHandlers.BuyShares)
-				shares.POST("/buy-dividends", sharesHandlers.BuyDividends)
-				shares.POST("/transfer", sharesHandlers.TransferShares)
-				shares.GET("/", sharesHandlers.GetChamaShares)
-				shares.GET("/summary", sharesHandlers.GetChamaSharesSummary)
-				shares.GET("/transactions", sharesHandlers.GetShareTransactions)
-				shares.GET("/members/:memberId", sharesHandlers.GetMemberShares)
-				shares.PUT("/:shareId", sharesHandlers.UpdateShares)
-			}
 
-			// Dividends routes
-			dividends := protected.Group("/chamas/:id/dividends")
-			{
-				dividends.POST("/", dividendsHandlers.DeclareDividend)
-				dividends.GET("/", dividendsHandlers.GetChamaDividendDeclarations)
-				dividends.GET("/:declarationId", dividendsHandlers.GetDividendDeclarationDetails)
-				dividends.POST("/:declarationId/approve", dividendsHandlers.ApproveDividend)
-				dividends.POST("/:declarationId/process", dividendsHandlers.ProcessDividendPayments)
-				dividends.GET("/members/:memberId/history", dividendsHandlers.GetMemberDividendHistory)
-				dividends.GET("/my-history", dividendsHandlers.GetMyDividendHistory)
-			}
 
 			// Polls and Voting routes (new system - currently broken due to table conflicts)
 			polls := protected.Group("/chamas/:id/polls")
@@ -796,26 +691,6 @@ func main() {
 				userSearch.GET("/:userId/profile", userSearchHandlers.GetUserProfile)
 			}
 
-			// Marketplace roles routes
-			marketplaceRoles := protected.Group("/marketplace")
-			{
-				marketplaceRoles.GET("/user-roles/:userId", userSearchHandlers.CheckMarketplaceRoles)
-			}
-
-			// Marketplace Delivery Contacts routes
-			// deliveryContacts := protected.Group("/marketplace")
-			// {
-			// 	deliveryContacts.GET("/delivery-contacts", deliveryContactsHandlers.GetDeliveryContacts)
-			// 	deliveryContacts.POST("/delivery-contacts", deliveryContactsHandlers.CreateDeliveryContact)
-			// 	deliveryContacts.PUT("/delivery-contacts/:contactId", deliveryContactsHandlers.UpdateDeliveryContact)
-			// 	deliveryContacts.DELETE("/delivery-contacts/:contactId", deliveryContactsHandlers.DeleteDeliveryContact)
-
-			// 	// Auto-seller detection routes
-			// 	deliveryContacts.GET("/products/user/:userId", api.GetUserProducts)
-			// 	deliveryContacts.POST("/auto-register-seller", api.AutoRegisterAsSeller)
-			// 	deliveryContacts.POST("/auto-register-buyer", api.AutoRegisterAsBuyer)
-			// }
-
 			// Contributions routes
 			contributions := protected.Group("/contributions")
 			{
@@ -838,7 +713,7 @@ func main() {
 				meetings.PATCH("/:id", api.UpdateMeeting) // Support PATCH requests for meeting updates
 				meetings.DELETE("/:id", api.DeleteMeeting)
 				meetings.POST("/:id/join", api.JoinMeeting)
-				meetings.POST("/:id/join-jitsi", api.JoinMeetingWithJitsi)              // New Jitsi Meet join endpoint
+
 				meetings.GET("/:id/preview", api.PreviewMeeting)                        // New meeting preview for chairperson/secretary
 				meetings.POST("/:id/start", api.StartMeeting)                           // New start meeting endpoint
 				meetings.POST("/:id/end", api.EndMeeting)                               // New end meeting endpoint

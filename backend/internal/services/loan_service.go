@@ -80,7 +80,7 @@ func (s *LoanService) ApplyForLoan(application *models.LoanApplication, borrower
 			id, borrower_id, chama_id, type, amount, interest_rate, duration,
 			purpose, status, total_amount, paid_amount, remaining_amount,
 			required_guarantors, approved_guarantors, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	_, err = tx.Exec(loanQuery,
@@ -116,7 +116,7 @@ func (s *LoanService) ApplyForLoan(application *models.LoanApplication, borrower
 
 		guarantorQuery := `
 			INSERT INTO guarantors (id, loan_id, user_id, amount, status, created_at)
-			VALUES (?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6)
 		`
 
 		_, err = tx.Exec(guarantorQuery,
@@ -179,8 +179,8 @@ func (s *LoanService) RespondToGuaranteeRequest(loanID, guarantorUserID string, 
 
 	updateQuery := `
 		UPDATE guarantors
-		SET status = ?, message = ?, responded_at = ?
-		WHERE id = ?
+		SET status = $1, message = $2, responded_at = $3
+		WHERE id = $4
 	`
 
 	_, err = tx.Exec(updateQuery, status, response.Message, now, guarantor.ID)
@@ -191,7 +191,7 @@ func (s *LoanService) RespondToGuaranteeRequest(loanID, guarantorUserID string, 
 	// Update loan's approved guarantors count if accepted
 	if response.Accept {
 		_, err = tx.Exec(
-			"UPDATE loans SET approved_guarantors = approved_guarantors + 1, updated_at = ? WHERE id = ?",
+			"UPDATE loans SET approved_guarantors = approved_guarantors + 1, updated_at = $1 WHERE id = $2",
 			now, loanID,
 		)
 		if err != nil {
@@ -266,9 +266,9 @@ func (s *LoanService) ApproveLoan(loanID, approverID string, approval *models.Lo
 	// Update loan
 	updateQuery := `
 		UPDATE loans
-		SET status = ?, interest_rate = ?, total_amount = ?, remaining_amount = ?,
-			approved_by = ?, approved_at = ?, updated_at = ?
-		WHERE id = ?
+		SET status = $1, interest_rate = $2, total_amount = $3, remaining_amount = $4,
+			approved_by = $5, approved_at = $6, updated_at = $7
+		WHERE id = $8
 	`
 
 	_, err = tx.Exec(updateQuery,
@@ -350,7 +350,7 @@ func (s *LoanService) MakeLoanPayment(loanID, payerID string, amount float64, pa
 		INSERT INTO loan_payments (
 			id, loan_id, amount, principal_amount, interest_amount,
 			payment_method, reference, paid_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err = tx.Exec(paymentQuery,
@@ -374,8 +374,8 @@ func (s *LoanService) MakeLoanPayment(loanID, payerID string, amount float64, pa
 
 	updateLoanQuery := `
 		UPDATE loans
-		SET paid_amount = ?, remaining_amount = ?, status = ?, updated_at = ?
-		WHERE id = ?
+		SET paid_amount = $1, remaining_amount = $2, status = $3, updated_at = $4
+		WHERE id = $5
 	`
 
 	_, err = tx.Exec(updateLoanQuery,
@@ -400,7 +400,7 @@ func (s *LoanService) GetLoanByID(loanID string) (*models.Loan, error) {
 			   purpose, status, approved_by, approved_at, disbursed_at, due_date,
 			   total_amount, paid_amount, remaining_amount, required_guarantors,
 			   approved_guarantors, created_at, updated_at
-		FROM loans WHERE id = ?
+		FROM loans WHERE id = $1
 	`
 
 	loan := &models.Loan{}
@@ -433,16 +433,16 @@ func (s *LoanService) GetChamaLoans(chamaID string, status *models.LoanStatus, l
 			   u.first_name, u.last_name, u.avatar
 		FROM loans l
 		INNER JOIN users u ON l.borrower_id = u.id
-		WHERE l.chama_id = ?
+		WHERE l.chama_id = $1
 	`
 	args := []interface{}{chamaID}
 
 	if status != nil {
-		query += " AND l.status = ?"
+		query += " AND l.status = $2"
 		args = append(args, *status)
 	}
 
-	query += " ORDER BY l.created_at DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY l.created_at DESC LIMIT $3 OFFSET $4"
 	args = append(args, limit, offset)
 
 	rows, err := s.db.Query(query, args...)
@@ -482,7 +482,7 @@ func (s *LoanService) GetChamaLoans(chamaID string, status *models.LoanStatus, l
 func (s *LoanService) hasActiveLoan(borrowerID, chamaID string) (bool, error) {
 	query := `
 		SELECT COUNT(*) FROM loans
-		WHERE borrower_id = ? AND chama_id = ? AND status IN (?, ?)
+		WHERE borrower_id = $1 AND chama_id = $2 AND status IN ($3, $4)
 	`
 	var count int
 	err := s.db.QueryRow(query, borrowerID, chamaID, models.LoanStatusApproved, models.LoanStatusActive).Scan(&count)
@@ -495,7 +495,7 @@ func (s *LoanService) hasActiveLoan(borrowerID, chamaID string) (bool, error) {
 func (s *LoanService) getGuarantor(loanID, userID string) (*models.Guarantor, error) {
 	query := `
 		SELECT id, loan_id, user_id, amount, status, message, responded_at, created_at
-		FROM guarantors WHERE loan_id = ? AND user_id = ?
+		FROM guarantors WHERE loan_id = $1 AND user_id = $2
 	`
 
 	guarantor := &models.Guarantor{}
@@ -519,7 +519,7 @@ func (s *LoanService) disburseLoan(tx *sql.Tx, loan *models.Loan, _ float64) err
 
 	// Update loan with disbursement details
 	_, err := tx.Exec(
-		"UPDATE loans SET status = ?, disbursed_at = ?, due_date = ? WHERE id = ?",
+		"UPDATE loans SET status = $1, disbursed_at = $2, due_date = $3 WHERE id = $4",
 		models.LoanStatusActive, now, dueDate, loan.ID,
 	)
 	if err != nil {
@@ -537,7 +537,7 @@ func (s *LoanService) notifyLoanReadyForApproval(loan *models.Loan) {
 	// Get chama leaders
 	query := `
 		SELECT user_id FROM chama_members
-		WHERE chama_id = ? AND role IN (?, ?) AND is_active = true
+		WHERE chama_id = $1 AND role IN ($2, $3) AND is_active = true
 	`
 
 	rows, err := s.db.Query(query, loan.ChamaID, models.ChamaRoleChairperson, models.ChamaRoleTreasurer)

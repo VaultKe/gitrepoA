@@ -33,11 +33,6 @@ type SupportRequest struct {
 
 // CreateSupportRequest creates a new support request
 func CreateSupportRequest(c *gin.Context) {
-	// fmt.Printf("\n🎫 ===== CREATE SUPPORT REQUEST STARTED =====\n")
-	// fmt.Printf("🎫 Request Method: %s\n", c.Request.Method)
-	// fmt.Printf("🎫 Request URL: %s\n", c.Request.URL.String())
-	// fmt.Printf("🎫 Content-Type: %s\n", c.GetHeader("Content-Type"))
-
 	userID := c.GetString("userID")
 	if userID == "" {
 		fmt.Printf("❌ CREATE SUPPORT REQUEST: User not authenticated\n")
@@ -47,8 +42,6 @@ func CreateSupportRequest(c *gin.Context) {
 		})
 		return
 	}
-
-	// fmt.Printf("🎫 CREATE SUPPORT REQUEST: UserID=%s\n", userID)
 
 	var requestData struct {
 		Category    string `json:"category" binding:"required"`
@@ -64,17 +57,12 @@ func CreateSupportRequest(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&requestData); err != nil {
-		fmt.Printf("❌ CREATE SUPPORT REQUEST: Invalid JSON data: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Invalid request data: " + err.Error(),
 		})
 		return
 	}
-
-	fmt.Printf("🎫 CREATE SUPPORT REQUEST: Parsed data - Category=%s, Subject=%s, Priority=%s\n",
-		requestData.Category, requestData.Subject, requestData.Priority)
-
 	// Get database from context
 	db, exists := c.Get("db")
 	if !exists {
@@ -88,16 +76,16 @@ func CreateSupportRequest(c *gin.Context) {
 	// Create support_requests table if it doesn't exist
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS support_requests (
-			id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id TEXT NOT NULL,
 			category TEXT NOT NULL,
 			subject TEXT NOT NULL,
 			description TEXT NOT NULL,
 			priority TEXT DEFAULT 'medium',
 			status TEXT DEFAULT 'open',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			resolved_at DATETIME,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		resolved_at TIMESTAMP,
 			admin_notes TEXT,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)
@@ -125,23 +113,17 @@ func CreateSupportRequest(c *gin.Context) {
 	// Insert support request with explicit ID
 	insertQuery := `
 		INSERT INTO support_requests (id, user_id, category, subject, description, priority)
-		VALUES (?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
 	_, err = db.(*sql.DB).Exec(insertQuery, requestID, userID, requestData.Category, requestData.Subject, requestData.Description, priority)
 	if err != nil {
-		fmt.Printf("❌ Failed to create support request: %v\n", err)
-		fmt.Printf("   UserID: %s, Category: %s, Subject: %s\n", userID, requestData.Category, requestData.Subject)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to create support request: " + err.Error(),
 		})
 		return
 	}
-
-	fmt.Printf("✅ Support request created successfully: ID=%s, UserID=%s, Category=%s\n", requestID, userID, requestData.Category)
-
-	// Create notification for admins about new support request
 	// Use a timeout context to prevent goroutine leaks
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -176,7 +158,7 @@ func CreateSupportRequest(c *gin.Context) {
 
 				notificationQuery := `
 					INSERT INTO notifications (id, user_id, type, title, message, data, created_at)
-					VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+					VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
 				`
 
 				notificationID := fmt.Sprintf("notif_%d_%s", time.Now().UnixNano(), adminID)
@@ -207,15 +189,10 @@ func CreateSupportRequest(c *gin.Context) {
 
 // GetSupportRequests retrieves support requests (for admin)
 func GetSupportRequests(c *gin.Context) {
-	fmt.Printf("\n📋 ===== GET SUPPORT REQUESTS STARTED =====\n")
-
 	userID := c.GetString("userID")
 	userRole := c.GetString("userRole")
 
-	fmt.Printf("📋 UserID: %s, UserRole: %s\n", userID, userRole)
-
 	if userID == "" {
-		fmt.Printf("❌ GET SUPPORT REQUESTS: User not authenticated\n")
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"error":   "User not authenticated",
@@ -236,16 +213,16 @@ func GetSupportRequests(c *gin.Context) {
 	// Create support_requests table if it doesn't exist
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS support_requests (
-			id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id TEXT NOT NULL,
 			category TEXT NOT NULL,
 			subject TEXT NOT NULL,
 			description TEXT NOT NULL,
 			priority TEXT DEFAULT 'medium',
 			status TEXT DEFAULT 'open',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			resolved_at DATETIME,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			resolved_at TIMESTAMP,
 			admin_notes TEXT,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)
@@ -253,7 +230,6 @@ func GetSupportRequests(c *gin.Context) {
 
 	_, err := db.(*sql.DB).Exec(createTableQuery)
 	if err != nil {
-		fmt.Printf("Failed to create support_requests table: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to initialize support system",
@@ -295,16 +271,16 @@ func GetSupportRequests(c *gin.Context) {
 		`
 
 		if status != "" {
-			query += " AND sr.status = ?"
+			query += " AND sr.status = $1"
 			args = append(args, status)
 		}
 
 		if category != "" {
-			query += " AND sr.category = ?"
+			query += " AND sr.category = $2"
 			args = append(args, category)
 		}
 
-		query += " ORDER BY sr.created_at DESC LIMIT ? OFFSET ?"
+		query += " ORDER BY sr.created_at DESC LIMIT $3 OFFSET $4"
 		args = append(args, limit, offset)
 	} else {
 		// Regular users can only see their own requests
@@ -316,25 +292,21 @@ func GetSupportRequests(c *gin.Context) {
 				u.email as user_email, u.first_name as user_first_name, u.last_name as user_last_name
 			FROM support_requests sr
 			LEFT JOIN users u ON sr.user_id = u.id
-			WHERE sr.user_id = ?
+			WHERE sr.user_id = $1
 		`
 		args = append(args, userID)
 
 		if status != "" {
-			query += " AND sr.status = ?"
+			query += " AND sr.status = $2"
 			args = append(args, status)
 		}
 
-		query += " ORDER BY sr.created_at DESC LIMIT ? OFFSET ?"
+		query += " ORDER BY sr.created_at DESC LIMIT $3 OFFSET $4"
 		args = append(args, limit, offset)
 	}
 
-	fmt.Printf("📋 Executing query: %s\n", query)
-	fmt.Printf("📋 Query args: %v\n", args)
-
 	rows, err := db.(*sql.DB).Query(query, args...)
 	if err != nil {
-		fmt.Printf("❌ Failed to get support requests: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to retrieve support requests",
@@ -360,10 +332,6 @@ func GetSupportRequests(c *gin.Context) {
 		}
 		requests = append(requests, req)
 	}
-
-	fmt.Printf("📋 Found %d support requests, returning %d requests\n", requestCount, len(requests))
-	fmt.Printf("📋 ===== GET SUPPORT REQUESTS COMPLETED =====\n\n")
-
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    requests,
@@ -421,16 +389,16 @@ func UpdateSupportRequest(c *gin.Context) {
 	// Create support_requests table if it doesn't exist
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS support_requests (
-			id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id TEXT NOT NULL,
 			category TEXT NOT NULL,
 			subject TEXT NOT NULL,
 			description TEXT NOT NULL,
 			priority TEXT DEFAULT 'medium',
 			status TEXT DEFAULT 'open',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			resolved_at DATETIME,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			resolved_at TIMESTAMP,
 			admin_notes TEXT,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)
@@ -444,9 +412,9 @@ func UpdateSupportRequest(c *gin.Context) {
 	// Update support request
 	updateQuery := `
 		UPDATE support_requests 
-		SET status = ?, admin_notes = ?, updated_at = CURRENT_TIMESTAMP,
-		    resolved_at = CASE WHEN ? = 'resolved' THEN CURRENT_TIMESTAMP ELSE resolved_at END
-		WHERE id = ?
+		SET status = $1, admin_notes = $2, updated_at = CURRENT_TIMESTAMP,
+		    resolved_at = CASE WHEN $3 = 'resolved' THEN CURRENT_TIMESTAMP ELSE resolved_at END
+		WHERE id = $4
 	`
 
 	result, err := db.(*sql.DB).Exec(updateQuery, updateData.Status, updateData.AdminNotes, updateData.Status, requestID)
@@ -468,9 +436,6 @@ func UpdateSupportRequest(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("✅ Support request updated: ID=%s, Status=%s\n", requestID, updateData.Status)
-
-	// Create notification for the user when admin updates their support request
 	// Use a timeout context to prevent goroutine leaks
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -490,7 +455,7 @@ func UpdateSupportRequest(c *gin.Context) {
 			// Get the support request details to find the user
 			var supportUserID string
 			var supportSubject string
-			err := db.(*sql.DB).QueryRow("SELECT user_id, subject FROM support_requests WHERE id = ?", requestID).Scan(&supportUserID, &supportSubject)
+			err := db.(*sql.DB).QueryRow("SELECT user_id, subject FROM support_requests WHERE id = $1", requestID).Scan(&supportUserID, &supportSubject)
 			if err != nil {
 				fmt.Printf("Failed to get support request details for notification: %v\n", err)
 				return
@@ -499,7 +464,7 @@ func UpdateSupportRequest(c *gin.Context) {
 			// Create notification
 			notificationQuery := `
 				INSERT INTO notifications (id, user_id, type, title, message, data, created_at)
-				VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+				VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
 			`
 
 			notificationID := fmt.Sprintf("notif_%d", time.Now().UnixNano())
@@ -546,16 +511,16 @@ func CreateTestSupportRequest(c *gin.Context) {
 	// Create support_requests table if it doesn't exist
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS support_requests (
-			id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id TEXT NOT NULL,
 			category TEXT NOT NULL,
 			subject TEXT NOT NULL,
 			description TEXT NOT NULL,
 			priority TEXT DEFAULT 'medium',
 			status TEXT DEFAULT 'open',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			resolved_at DATETIME,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			resolved_at TIMESTAMP,
 			admin_notes TEXT,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)
@@ -577,20 +542,17 @@ func CreateTestSupportRequest(c *gin.Context) {
 	// Insert test support request
 	insertQuery := `
 		INSERT INTO support_requests (id, user_id, category, subject, description, priority)
-		VALUES (?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
 	_, err = db.(*sql.DB).Exec(insertQuery, requestID, userID, "technical", "Test Support Request", "This is a test support request to verify the system is working correctly.", "medium")
 	if err != nil {
-		fmt.Printf("❌ Failed to create test support request: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to create test support request: " + err.Error(),
 		})
 		return
 	}
-
-	fmt.Printf("✅ Test support request created successfully: ID=%s, UserID=%s\n", requestID, userID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,

@@ -192,7 +192,7 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 			   description, reference, payment_method, metadata, fees, initiated_by,
 			   approved_by, requires_approval, approval_deadline, created_at, updated_at
 		FROM transactions 
-		WHERE id = ? AND (initiated_by = ? OR approved_by = ?)
+		WHERE id = $1 AND (initiated_by = $2 OR approved_by = $3)
 	`
 
 	var transaction models.Transaction
@@ -252,7 +252,7 @@ func (h *ReceiptHandlers) getUserInfo(userID string) (map[string]interface{}, er
 	query := `
 		SELECT first_name, last_name, email, phone, county, town
 		FROM users 
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var firstName, lastName, email, phone, county, town sql.NullString

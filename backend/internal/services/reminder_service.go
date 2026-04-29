@@ -56,7 +56,7 @@ func (s *ReminderService) CreateReminder(userID string, req *models.CreateRemind
 		INSERT INTO reminders (
 			id, user_id, title, description, reminder_type, 
 			scheduled_at, is_enabled, is_completed, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	_, err := s.db.Exec(
@@ -87,9 +87,9 @@ func (s *ReminderService) GetUserReminders(userID string, limit, offset int) ([]
 		SELECT id, user_id, title, description, reminder_type, scheduled_at, 
 			   is_enabled, is_completed, notification_sent, created_at, updated_at
 		FROM reminders 
-		WHERE user_id = ? 
+		WHERE user_id = $1 
 		ORDER BY scheduled_at ASC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := s.db.Query(query, userID, limit, offset)
@@ -129,7 +129,7 @@ func (s *ReminderService) GetReminderByID(reminderID, userID string) (*models.Re
 		SELECT id, user_id, title, description, reminder_type, scheduled_at, 
 			   is_enabled, is_completed, notification_sent, created_at, updated_at
 		FROM reminders 
-		WHERE id = ? AND user_id = ?
+		WHERE id = $1 AND user_id = $2
 	`
 
 	var reminder models.Reminder
@@ -194,9 +194,9 @@ func (s *ReminderService) UpdateReminder(reminderID, userID string, req *models.
 	// Update in database
 	query := `
 		UPDATE reminders 
-		SET title = ?, description = ?, reminder_type = ?, scheduled_at = ?, 
-			is_enabled = ?, is_completed = ?, updated_at = ?
-		WHERE id = ? AND user_id = ?
+		SET title = $1, description = $2, reminder_type = $3, scheduled_at = $4, 
+			is_enabled = $5, is_completed = $6, updated_at = $7
+		WHERE id = $8 AND user_id = $9
 	`
 
 	_, err = s.db.Exec(
@@ -222,7 +222,7 @@ func (s *ReminderService) UpdateReminder(reminderID, userID string, req *models.
 
 // DeleteReminder deletes a reminder
 func (s *ReminderService) DeleteReminder(reminderID, userID string) error {
-	query := `DELETE FROM reminders WHERE id = ? AND user_id = ?`
+	query := `DELETE FROM reminders WHERE id = $1 AND user_id = $2`
 
 	result, err := s.db.Exec(query, reminderID, userID)
 	if err != nil {
@@ -253,8 +253,8 @@ func (s *ReminderService) GetPendingReminders() ([]models.Reminder, error) {
 		WHERE is_enabled = TRUE 
 		  AND is_completed = FALSE 
 		  AND (
-		    (reminder_type = 'once' AND scheduled_at <= ? AND notification_sent = FALSE)
-		    OR (reminder_type != 'once' AND scheduled_at <= ?)
+		    (reminder_type = 'once' AND scheduled_at <= $1 AND notification_sent = FALSE)
+		    OR (reminder_type != 'once' AND scheduled_at <= $2)
 		  )
 		ORDER BY scheduled_at ASC
 	`
@@ -292,7 +292,7 @@ func (s *ReminderService) GetPendingReminders() ([]models.Reminder, error) {
 
 // MarkNotificationSent marks a reminder as having its notification sent
 func (s *ReminderService) MarkNotificationSent(reminderID string) error {
-	query := `UPDATE reminders SET notification_sent = TRUE WHERE id = ?`
+	query := `UPDATE reminders SET notification_sent = TRUE WHERE id = $1`
 
 	_, err := s.db.Exec(query, reminderID)
 	if err != nil {

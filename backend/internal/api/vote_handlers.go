@@ -82,7 +82,7 @@ func CreateVote(c *gin.Context) {
 
 	_, err := db.(*sql.DB).Exec(`
 		INSERT INTO votes (id, chama_id, title, description, type, status, ends_at, created_by, created_at)
-		VALUES (?, ?, ?, ?, ?, 'active', ?, ?, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, CURRENT_TIMESTAMP)
 	`, voteID, chamaID, req.Title, req.Description, voteType, endsAt, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -97,7 +97,7 @@ func CreateVote(c *gin.Context) {
 		optionID := fmt.Sprintf("option-%d-%s", time.Now().UnixNano(), option.OptionText[:min(10, len(option.OptionText))])
 		_, err = db.(*sql.DB).Exec(`
 			INSERT INTO vote_options (id, vote_id, option_text, vote_count)
-			VALUES (?, ?, ?, 0)
+			VALUES ($1, $2, $3, 0)
 		`, optionID, voteID, option.OptionText)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -177,10 +177,10 @@ func GetChamaVotes(c *gin.Context) {
 		       CASE WHEN uv.id IS NOT NULL THEN 1 ELSE 0 END as user_voted
 		FROM votes v
 		LEFT JOIN users u ON v.created_by = u.id
-		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = ?
-		WHERE v.chama_id = ?
+		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = $1
+		WHERE v.chama_id = $2
 		ORDER BY v.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $3 OFFSET $4
 	`, userID, chamaID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -219,7 +219,7 @@ func GetChamaVotes(c *gin.Context) {
 		optionRows, err := db.(*sql.DB).Query(`
 			SELECT id, option_text, vote_count
 			FROM vote_options
-			WHERE vote_id = ?
+			WHERE vote_id = $1
 			ORDER BY id
 		`, vote.ID)
 		if err != nil {
@@ -311,8 +311,8 @@ func GetActiveVotes(c *gin.Context) {
 		       CASE WHEN uv.id IS NOT NULL THEN 1 ELSE 0 END as user_voted
 		FROM votes v
 		LEFT JOIN users u ON v.created_by = u.id
-		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = ?
-		WHERE v.chama_id = ? AND v.status = 'active' AND v.ends_at > datetime('now')
+		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = $1
+		WHERE v.chama_id = $2 AND v.status = 'active' AND v.ends_at > datetime('now')
 		ORDER BY v.created_at DESC
 	`, userID, chamaID)
 	if err != nil {
@@ -352,7 +352,7 @@ func GetActiveVotes(c *gin.Context) {
 		optionRows, err := db.(*sql.DB).Query(`
 			SELECT id, option_text, vote_count
 			FROM vote_options
-			WHERE vote_id = ?
+			WHERE vote_id = $1
 			ORDER BY id
 		`, vote.ID)
 		if err != nil {
@@ -444,8 +444,8 @@ func GetVoteResults(c *gin.Context) {
 		       CASE WHEN uv.id IS NOT NULL THEN 1 ELSE 0 END as user_voted
 		FROM votes v
 		LEFT JOIN users u ON v.created_by = u.id
-		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = ?
-		WHERE v.chama_id = ? AND (v.status = 'completed' OR v.ends_at <= datetime('now'))
+		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = $1
+		WHERE v.chama_id = $2 AND (v.status = 'completed' OR v.ends_at <= datetime('now'))
 		ORDER BY v.created_at DESC
 	`, userID, chamaID)
 	if err != nil {
@@ -485,7 +485,7 @@ func GetVoteResults(c *gin.Context) {
 		optionRows, err := db.(*sql.DB).Query(`
 			SELECT id, option_text, vote_count
 			FROM vote_options
-			WHERE vote_id = ?
+			WHERE vote_id = $1
 			ORDER BY vote_count DESC, id
 		`, vote.ID)
 		if err != nil {
@@ -601,7 +601,7 @@ func CastVoteOnItem(c *gin.Context) {
 	var voteEndsAt string
 	err := db.(*sql.DB).QueryRow(`
 		SELECT status, ends_at FROM votes
-		WHERE id = ? AND chama_id = ?
+		WHERE id = $1 AND chama_id = $2
 	`, voteID, chamaID).Scan(&voteStatus, &voteEndsAt)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -633,7 +633,7 @@ func CastVoteOnItem(c *gin.Context) {
 	var existingVote string
 	err = db.(*sql.DB).QueryRow(`
 		SELECT id FROM user_votes
-		WHERE vote_id = ? AND user_id = ?
+		WHERE vote_id = $1 AND user_id = $2
 	`, voteID, userID).Scan(&existingVote)
 	if existingVote != "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -647,7 +647,7 @@ func CastVoteOnItem(c *gin.Context) {
 	var optionExists string
 	err = db.(*sql.DB).QueryRow(`
 		SELECT id FROM vote_options
-		WHERE id = ? AND vote_id = ?
+		WHERE id = $1 AND vote_id = $2
 	`, req.OptionID, voteID).Scan(&optionExists)
 	if optionExists == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -661,7 +661,7 @@ func CastVoteOnItem(c *gin.Context) {
 	userVoteID := fmt.Sprintf("uv-%d", time.Now().UnixNano())
 	_, err = db.(*sql.DB).Exec(`
 		INSERT INTO user_votes (id, vote_id, user_id, option_id, created_at)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
 	`, userVoteID, voteID, userID, req.OptionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -675,7 +675,7 @@ func CastVoteOnItem(c *gin.Context) {
 	_, err = db.(*sql.DB).Exec(`
 		UPDATE vote_options
 		SET vote_count = vote_count + 1
-		WHERE id = ?
+		WHERE id = $1
 	`, req.OptionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -744,7 +744,7 @@ func CreateRoleEscalationVote(c *gin.Context) {
 	// Get candidate name
 	var candidateName string
 	err := db.(*sql.DB).QueryRow(`
-		SELECT first_name || ' ' || last_name FROM users WHERE id = ?
+		SELECT first_name || ' ' || last_name FROM users WHERE id = $1
 	`, req.CandidateID).Scan(&candidateName)
 	if err != nil {
 		candidateName = "Unknown Candidate"
@@ -758,7 +758,7 @@ func CreateRoleEscalationVote(c *gin.Context) {
 
 	_, err = db.(*sql.DB).Exec(`
 		INSERT INTO votes (id, chama_id, title, description, type, status, ends_at, created_by, created_at)
-		VALUES (?, ?, ?, ?, 'Election / Voting', 'active', ?, ?, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, 'Election / Voting', 'active', $5, $6, CURRENT_TIMESTAMP)
 	`, voteID, chamaID, title, description, endsAt, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -774,8 +774,8 @@ func CreateRoleEscalationVote(c *gin.Context) {
 
 	_, err = db.(*sql.DB).Exec(`
 		INSERT INTO vote_options (id, vote_id, option_text, vote_count) VALUES
-		(?, ?, 'Yes - Approve role change', 0),
-		(?, ?, 'No - Reject role change', 0)
+		($1, $2, 'Yes - Approve role change', 0),
+		($3, $4, 'No - Reject role change', 0)
 	`, yesOptionID, voteID, noOptionID, voteID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -856,8 +856,8 @@ func GetVoteDetails(c *gin.Context) {
 		       CASE WHEN uv.id IS NOT NULL THEN 1 ELSE 0 END as user_voted
 		FROM votes v
 		LEFT JOIN users u ON v.created_by = u.id
-		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = ?
-		WHERE v.id = ? AND v.chama_id = ?
+		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = $1
+		WHERE v.id = $2 AND v.chama_id = $3
 	`, userID, voteID, chamaID).Scan(&vote.ID, &vote.Title, &vote.Description, &vote.Type, &vote.Status,
 		&vote.StartsAt, &vote.EndsAt, &vote.CreatedBy, &vote.CreatedAt,
 		&vote.FirstName, &vote.LastName, &vote.UserVoted)
@@ -873,7 +873,7 @@ func GetVoteDetails(c *gin.Context) {
 	optionRows, err := db.(*sql.DB).Query(`
 		SELECT id, option_text, vote_count
 		FROM vote_options
-		WHERE vote_id = ?
+		WHERE vote_id = $1
 		ORDER BY id
 	`, vote.ID)
 	if err != nil {

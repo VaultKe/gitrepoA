@@ -61,7 +61,7 @@ func GetMeetings(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, chamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -88,7 +88,7 @@ func GetMeetings(c *gin.Context) {
 			u.first_name, u.last_name, u.email
 		FROM meetings m
 		JOIN users u ON m.created_by = u.id
-		WHERE m.chama_id = ?
+		WHERE m.chama_id = $1
 		ORDER BY m.scheduled_at DESC
 	`, chamaID)
 	if err != nil {
@@ -231,13 +231,12 @@ func GetUserMeetings(c *gin.Context) {
 		JOIN users u ON m.created_by = u.id
 		JOIN chama_members cm ON m.chama_id = cm.chama_id
 		JOIN chamas c ON m.chama_id = c.id
-		WHERE cm.user_id = ? AND cm.is_active = TRUE
+		WHERE cm.user_id = $1 AND cm.is_active = TRUE
 		ORDER BY m.scheduled_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`, userID, limit, offset)
 
 	if err != nil {
-		log.Printf("❌ Error fetching user meetings for user %s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to fetch user meetings: " + err.Error(),
@@ -331,7 +330,7 @@ func GetUserMeetings(c *gin.Context) {
 		SELECT COUNT(DISTINCT m.id)
 		FROM meetings m
 		JOIN chama_members cm ON m.chama_id = cm.chama_id
-		WHERE cm.user_id = ? AND cm.is_active = TRUE
+		WHERE cm.user_id = $1 AND cm.is_active = TRUE
 	`, userID).Scan(&totalCount)
 
 	if err != nil {
@@ -425,7 +424,7 @@ func CreateMeeting(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, req.ChamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -463,7 +462,7 @@ func CreateMeeting(c *gin.Context) {
 		INSERT INTO meetings (
 			id, chama_id, title, description, scheduled_at, duration, location,
 			meeting_url, status, created_by, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9, CURRENT_TIMESTAMP)
 	`, meetingID, req.ChamaID, req.Title, req.Description, meetingTime, duration, location, req.MeetingURL, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -495,7 +494,7 @@ func CreateMeeting(c *gin.Context) {
 				// Get all chama members
 				rows, err := db.(*sql.DB).Query(`
 					SELECT user_id FROM chama_members
-					WHERE chama_id = ? AND user_id != ? AND is_active = TRUE
+					WHERE chama_id = $1 AND user_id != $2 AND is_active = TRUE
 				`, req.ChamaID, userID)
 				if err != nil {
 					log.Printf("Failed to get chama members for notification: %v", err)
@@ -505,7 +504,7 @@ func CreateMeeting(c *gin.Context) {
 
 				// Get chama name for notification
 				var chamaName string
-				err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = ?", req.ChamaID).Scan(&chamaName)
+				err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = $1", req.ChamaID).Scan(&chamaName)
 				if err != nil {
 					log.Printf("Failed to get chama name: %v, using default", err)
 					chamaName = "Chama"
@@ -628,24 +627,24 @@ func UpdateMeeting(c *gin.Context) {
 	paramCount := 1
 
 	if req.Status != "" {
-		query += `, status = ?`
+		query += `, status = $` + fmt.Sprint(paramCount)
 		params = append(params, req.Status)
 		paramCount++
 	}
 
 	if !req.ConductedAt.IsZero() {
-		query += `, conducted_at = ?`
+		query += `, conducted_at = $` + fmt.Sprint(paramCount)
 		params = append(params, req.ConductedAt)
 		paramCount++
 	}
 
 	if req.AttendeeCount > 0 {
-		query += `, attendee_count = ?`
+		query += `, attendee_count = $` + fmt.Sprint(paramCount)
 		params = append(params, req.AttendeeCount)
 		paramCount++
 	}
 
-	query += ` WHERE id = ?`
+	query += ` WHERE id = $` + fmt.Sprint(paramCount)
 	params = append(params, meetingID)
 
 	result, err := db.(*sql.DB).Exec(query, params...)
@@ -738,7 +737,7 @@ func JoinMeeting(c *gin.Context) {
 		SELECT id, chama_id, title, description, scheduled_at, duration,
 			   location, meeting_url, meeting_type, status, created_by
 		FROM meetings
-		WHERE id = ?
+		WHERE id = $1
 	`, meetingID).Scan(
 		&meeting.ID, &meeting.ChamaID, &meeting.Title, &meeting.Description,
 		&meeting.ScheduledAt, &meeting.Duration, &meeting.Location,
@@ -764,7 +763,7 @@ func JoinMeeting(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, meeting.ChamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -1083,7 +1082,7 @@ func EndMeeting(c *gin.Context) {
 	// Strict role check: only chairperson or secretary can end meetings
 	var role string
 	roleErr := db.(*sql.DB).QueryRow(`
-		SELECT role FROM chama_members WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+		SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 	`, meeting.ChamaID, userID.(string)).Scan(&role)
 	if roleErr != nil {
 		if roleErr == sql.ErrNoRows {
@@ -1116,7 +1115,7 @@ func EndMeeting(c *gin.Context) {
 	// Prereq 2: At least one attendance record exists
 	var attendanceCount int
 	attErr := db.(*sql.DB).QueryRow(`
-		SELECT COUNT(*) FROM meeting_attendance WHERE meeting_id = ?
+		SELECT COUNT(*) FROM meeting_attendance WHERE meeting_id = $1
 	`, meetingID).Scan(&attendanceCount)
 	if attErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1175,7 +1174,7 @@ func GetGoogleCalendarAddEventURL(c *gin.Context) {
     db, dbExists := c.Get("db")
     var chamaName string
     if dbExists {
-        _ = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = ?", meeting.ChamaID).Scan(&chamaName)
+        _ = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = $1", meeting.ChamaID).Scan(&chamaName)
     }
     if chamaName == "" {
         chamaName = "Chama"
@@ -1252,7 +1251,7 @@ func CreateGoogleCalendarEvent(c *gin.Context) {
 
     // Fetch chama name
     var chamaName string
-    err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = ?", meeting.ChamaID).Scan(&chamaName)
+    err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = $1", meeting.ChamaID).Scan(&chamaName)
     if err != nil {
         chamaName = "Chama"
     }
@@ -1373,73 +1372,7 @@ func JoinMeetingWithLiveKit(c *gin.Context) {
 }
 
 // JoinMeetingWithJitsi generates a Jitsi Meet room URL and authentication data for joining a meeting
-func JoinMeetingWithJitsi(c *gin.Context) {
-	meetingID := c.Param("id")
-	if meetingID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Meeting ID is required",
-		})
-		return
-	}
 
-	// Get user ID from context
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"error":   "User not authenticated",
-		})
-		return
-	}
-
-	var req struct {
-		UserRole string `json:"userRole"` // 'chairperson', 'secretary', 'treasurer', 'member'
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Default to member role if not specified
-		req.UserRole = "member"
-	}
-
-	// Get meeting details
-	meeting, err := meetingService.GetMeeting(meetingID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to get meeting details: " + err.Error(),
-		})
-		return
-	}
-
-	// Generate Jitsi room data
-	jitsiData, err := meetingService.GenerateJitsiRoomData(meetingID, userID.(string), req.UserRole)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to generate Jitsi room data: " + err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Jitsi room data generated successfully",
-		"data": gin.H{
-			"roomName":         jitsiData.RoomName,
-			"joinUrl":          jitsiData.JoinURL,
-			"roomPassword":     jitsiData.RoomPassword,
-			"isModerator":      jitsiData.IsModerator,
-			"displayName":      jitsiData.DisplayName,
-			"chamaId":          meeting.ChamaID,
-			"meetingId":        meetingID,
-			"userRole":         req.UserRole,
-			"meetingTitle":     meeting.Title,
-			"meetingType":      meeting.MeetingType,
-			"recordingEnabled": meeting.RecordingEnabled,
-		},
-	})
-}
 
 // MarkAttendance marks a user's attendance for a meeting
 func MarkAttendance(c *gin.Context) {
@@ -1651,7 +1584,7 @@ func UploadMeetingDocument(c *gin.Context) {
 		INSERT INTO meeting_documents (
 			id, meeting_id, uploaded_by, file_name, file_path, file_url,
 			file_size, file_type, document_type, description, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
 	`, documentID, meetingID, userID, header.Filename, filePath, fileURL,
 		header.Size, header.Header.Get("Content-Type"), documentType, description)
 	if err != nil {
@@ -1708,7 +1641,7 @@ func GetMeetingDocuments(c *gin.Context) {
 		SELECT id, meeting_id, uploaded_by, file_name, file_url, file_size,
 			   file_type, document_type, description, created_at
 		FROM meeting_documents
-		WHERE meeting_id = ?
+		WHERE meeting_id = $1
 		ORDER BY created_at DESC
 	`, meetingID)
 	if err != nil {
@@ -1799,7 +1732,7 @@ func DeleteMeetingDocument(c *gin.Context) {
 	var filePath string
 	err := db.(*sql.DB).QueryRow(`
 		SELECT file_path FROM meeting_documents
-		WHERE id = ? AND meeting_id = ?
+		WHERE id = $1 AND meeting_id = $2
 	`, documentID, meetingID).Scan(&filePath)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1819,7 +1752,7 @@ func DeleteMeetingDocument(c *gin.Context) {
 	// Delete from database first
 	_, err = db.(*sql.DB).Exec(`
 		DELETE FROM meeting_documents
-		WHERE id = ? AND meeting_id = ?
+		WHERE id = $1 AND meeting_id = $2
 	`, documentID, meetingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1893,7 +1826,7 @@ func SaveMeetingMinutes(c *gin.Context) {
 	// Check if minutes already exist for this meeting
 	var existingID string
 	err := db.(*sql.DB).QueryRow(`
-		SELECT id FROM meeting_minutes WHERE meeting_id = ?
+		SELECT id FROM meeting_minutes WHERE meeting_id = $1
 	`, meetingID).Scan(&existingID)
 
 	if err == sql.ErrNoRows {
@@ -1902,7 +1835,7 @@ func SaveMeetingMinutes(c *gin.Context) {
 		_, err = db.(*sql.DB).Exec(`
 			INSERT INTO meeting_minutes (
 				id, meeting_id, content, status, taken_by, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`, minutesID, meetingID, req.Content, req.Status, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -1934,8 +1867,8 @@ func SaveMeetingMinutes(c *gin.Context) {
 		// Update existing minutes
 		_, err = db.(*sql.DB).Exec(`
 			UPDATE meeting_minutes
-			SET content = ?, status = ?, taken_by = ?, updated_at = CURRENT_TIMESTAMP
-			WHERE id = ?
+			SET content = $1, status = $2, taken_by = $3, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $4
 		`, req.Content, req.Status, userID, existingID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -2012,7 +1945,7 @@ func UpdateMeetingMinutes(c *gin.Context) {
     // Check if minutes exist
     var existingID string
     err := db.(*sql.DB).QueryRow(`
-        SELECT id FROM meeting_minutes WHERE meeting_id = ?
+        SELECT id FROM meeting_minutes WHERE meeting_id = $1
     `, meetingID).Scan(&existingID)
 
     if err == sql.ErrNoRows {
@@ -2021,7 +1954,7 @@ func UpdateMeetingMinutes(c *gin.Context) {
         _, err = db.(*sql.DB).Exec(`
             INSERT INTO meeting_minutes (
                 id, meeting_id, content, status, taken_by, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `, minutesID, meetingID, req.Content, req.Status, userID)
         if err != nil {
             c.JSON(http.StatusInternalServerError, gin.H{
@@ -2055,11 +1988,11 @@ func UpdateMeetingMinutes(c *gin.Context) {
     // Update existing
     _, err = db.(*sql.DB).Exec(`
         UPDATE meeting_minutes
-        SET content = COALESCE(NULLIF(?, ''), content),
-            status = ?,
-            taken_by = ?,
+        SET content = COALESCE(NULLIF($1, ''), content),
+            status = $2,
+            taken_by = $3,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        WHERE id = $4
     `, req.Content, req.Status, userID, existingID)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{
@@ -2117,7 +2050,7 @@ func GetMeetingMinutes(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT id, meeting_id, content, status, taken_by, created_at, updated_at
 		FROM meeting_minutes
-		WHERE meeting_id = ?
+		WHERE meeting_id = $1
 	`, meetingID).Scan(&minutes.ID, &minutes.MeetingID, &minutes.Content, &minutes.Status,
 		&minutes.TakenBy, &minutes.CreatedAt, &minutes.UpdatedAt)
 	if err != nil {

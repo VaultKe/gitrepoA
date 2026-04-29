@@ -73,21 +73,21 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 		sqlQuery = `
 			SELECT id, first_name, last_name, email, phone, created_at
 			FROM users
-			WHERE id != ? AND (
-				LOWER(first_name) LIKE LOWER(?) OR
-				LOWER(last_name) LIKE LOWER(?) OR
-				LOWER(email) LIKE LOWER(?) OR
-				phone LIKE ?
+			WHERE id != $1 AND (
+				LOWER(first_name) LIKE LOWER($2) OR
+				LOWER(last_name) LIKE LOWER($3) OR
+				LOWER(email) LIKE LOWER($4) OR
+				phone LIKE $5
 			)
 			ORDER BY
 				CASE
-					WHEN LOWER(first_name) LIKE LOWER(?) THEN 1
-					WHEN LOWER(last_name) LIKE LOWER(?) THEN 2
-					WHEN LOWER(email) LIKE LOWER(?) THEN 3
+					WHEN LOWER(first_name) LIKE LOWER($6) THEN 1
+					WHEN LOWER(last_name) LIKE LOWER($7) THEN 2
+					WHEN LOWER(email) LIKE LOWER($8) THEN 3
 					ELSE 4
 				END,
 				first_name, last_name
-			LIMIT ? OFFSET ?
+			LIMIT $9 OFFSET $10
 		`
 		args = []interface{}{
 			userID, searchPattern, searchPattern, searchPattern, searchPattern,
@@ -99,19 +99,19 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 			SELECT id, first_name, last_name, email, phone, created_at
 			FROM users
 			WHERE
-				LOWER(first_name) LIKE LOWER(?) OR
-				LOWER(last_name) LIKE LOWER(?) OR
-				LOWER(email) LIKE LOWER(?) OR
-				phone LIKE ?
+				LOWER(first_name) LIKE LOWER($2) OR
+				LOWER(last_name) LIKE LOWER($3) OR
+				LOWER(email) LIKE LOWER($4) OR
+				phone LIKE $5
 			ORDER BY
 				CASE
-					WHEN LOWER(first_name) LIKE LOWER(?) THEN 1
-					WHEN LOWER(last_name) LIKE LOWER(?) THEN 2
-					WHEN LOWER(email) LIKE LOWER(?) THEN 3
+					WHEN LOWER(first_name) LIKE LOWER($6) THEN 1
+					WHEN LOWER(last_name) LIKE LOWER($7) THEN 2
+					WHEN LOWER(email) LIKE LOWER($8) THEN 3
 					ELSE 4
 				END,
 				first_name, last_name
-			LIMIT ? OFFSET ?
+			LIMIT $9 OFFSET $10
 		`
 		args = []interface{}{
 			searchPattern, searchPattern, searchPattern, searchPattern,
@@ -188,7 +188,7 @@ func (h *UserSearchHandlers) GetUserProfile(c *gin.Context) {
 	query := `
 		SELECT id, first_name, last_name, email, phone, created_at
 		FROM users
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var id, firstName, lastName, email, createdAt string
@@ -272,21 +272,21 @@ func (h *UserSearchHandlers) SearchUsersAdvanced(c *gin.Context) {
 
 	switch searchType {
 	case "name":
-		whereConditions = append(whereConditions, "(LOWER(first_name) LIKE LOWER(?) OR LOWER(last_name) LIKE LOWER(?))")
+		whereConditions = append(whereConditions, "(LOWER(first_name) LIKE LOWER($2) OR LOWER(last_name) LIKE LOWER($3))")
 		args = append(args, searchPattern, searchPattern)
 	case "email":
-		whereConditions = append(whereConditions, "LOWER(email) LIKE LOWER(?)")
+		whereConditions = append(whereConditions, "LOWER(email) LIKE LOWER($4)")
 		args = append(args, searchPattern)
 	case "phone":
-		whereConditions = append(whereConditions, "phone LIKE ?")
+		whereConditions = append(whereConditions, "phone LIKE $5")
 		args = append(args, searchPattern)
 	default: // "all"
-		whereConditions = append(whereConditions, "(LOWER(first_name) LIKE LOWER(?) OR LOWER(last_name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?) OR phone LIKE ?)")
+		whereConditions = append(whereConditions, "(LOWER(first_name) LIKE LOWER($6) OR LOWER(last_name) LIKE LOWER($7) OR LOWER(email) LIKE LOWER($8) OR phone LIKE $9)")
 		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 
 	if excludeCurrentUser == "true" {
-		whereConditions = append(whereConditions, "id != ?")
+		whereConditions = append(whereConditions, "id != $10")
 		args = append(args, userID)
 	}
 
@@ -295,7 +295,7 @@ func (h *UserSearchHandlers) SearchUsersAdvanced(c *gin.Context) {
 		FROM users
 		WHERE ` + strings.Join(whereConditions, " AND ") + `
 		ORDER BY first_name, last_name
-		LIMIT ? OFFSET ?
+		LIMIT $9 OFFSET $10
 	`
 
 	args = append(args, limit, offset)
@@ -360,7 +360,7 @@ func (h *UserSearchHandlers) CheckMarketplaceRoles(c *gin.Context) {
 	query := `
 		SELECT role, auto_detected, is_active, created_at
 		FROM marketplace_roles
-		WHERE user_id = ? AND is_active = TRUE
+		WHERE user_id = $1 AND is_active = TRUE
 	`
 
 	rows, err := h.db.Query(query, userID)
@@ -401,7 +401,7 @@ func (h *UserSearchHandlers) CheckMarketplaceRoles(c *gin.Context) {
 	// Auto-detect seller role based on products
 	if !roles["seller"] {
 		var productCount int
-		productQuery := `SELECT COUNT(*) FROM products WHERE seller_id = ?`
+		productQuery := `SELECT COUNT(*) FROM products WHERE seller_id = $1`
 		err := h.db.QueryRow(productQuery, userID).Scan(&productCount)
 		if err == nil && productCount > 0 {
 			roles["seller"] = true

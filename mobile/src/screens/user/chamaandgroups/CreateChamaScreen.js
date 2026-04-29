@@ -599,8 +599,8 @@ const CreateChamaScreen = ({ navigation }) => {
     try {
       setCheckingName(true);
 
-      // Check against all public chamas
-      const response = await ApiService.getChamas(100, 0);
+       // Check against all public chamas
+       const response = await ApiService.getChamas(20, 0);
 
       console.log('Chama name check response:', response); // Debug log
 

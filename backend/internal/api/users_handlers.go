@@ -56,15 +56,15 @@ func GetUsers(c *gin.Context) {
 			SELECT id, email, phone, first_name, last_name, avatar, role,
 				   county, town, business_type, rating, total_ratings, created_at
 			FROM users
-			WHERE id != ? AND status = 'active'
+			WHERE id != $1 AND status = 'active'
 			AND (
-				LOWER(first_name) LIKE LOWER(?) OR
-				LOWER(last_name) LIKE LOWER(?) OR
-				LOWER(email) LIKE LOWER(?) OR
-				phone LIKE ?
+				LOWER(first_name) LIKE LOWER($2) OR
+				LOWER(last_name) LIKE LOWER($3) OR
+				LOWER(email) LIKE LOWER($4) OR
+				phone LIKE $5
 			)
 			ORDER BY first_name, last_name
-			LIMIT ? OFFSET ?
+			LIMIT $6 OFFSET $7
 		`
 		searchPattern := "%" + searchQuery + "%"
 		args = []interface{}{userID, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset}
@@ -74,9 +74,9 @@ func GetUsers(c *gin.Context) {
 			SELECT id, email, phone, first_name, last_name, avatar, role,
 				   county, town, business_type, rating, total_ratings, created_at
 			FROM users
-			WHERE id != ? AND status = 'active'
+			WHERE id != $1 AND status = 'active'
 			ORDER BY first_name, last_name
-			LIMIT ? OFFSET ?
+			LIMIT $2 OFFSET $3
 		`
 		args = []interface{}{userID, limit, offset}
 	}
@@ -200,9 +200,9 @@ func GetAllUsersForAdmin(c *gin.Context) {
 			SELECT id, email, phone, first_name, last_name, avatar, role,
 				   county, town, business_type, rating, total_ratings, created_at, status
 			FROM users
-			WHERE (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?)
+			WHERE (first_name LIKE $2 OR last_name LIKE $3 OR email LIKE $4 OR phone LIKE $5)
 			ORDER BY first_name, last_name
-			LIMIT ? OFFSET ?
+			LIMIT $6 OFFSET $7
 		`
 		searchPattern := "%" + searchQuery + "%"
 		args = []interface{}{searchPattern, searchPattern, searchPattern, searchPattern, limit, offset}
@@ -213,7 +213,7 @@ func GetAllUsersForAdmin(c *gin.Context) {
 				   county, town, business_type, rating, total_ratings, created_at, status
 			FROM users
 			ORDER BY first_name, last_name
-			LIMIT ? OFFSET ?
+			LIMIT $1 OFFSET $2
 		`
 		args = []interface{}{limit, offset}
 	}
@@ -324,7 +324,7 @@ func GetProfile(c *gin.Context) {
 			   bio, occupation, date_of_birth, gender,
 			   created_at, updated_at
 		FROM users
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var user struct {
@@ -490,7 +490,7 @@ func GetUserByID(c *gin.Context) {
 			   bio, occupation, date_of_birth, gender,
 			   created_at, updated_at
 		FROM users
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var user struct {
@@ -674,39 +674,39 @@ func UpdateProfile(c *gin.Context) {
 	args := []interface{}{}
 
 	if request.FirstName != "" {
-		setParts = append(setParts, "first_name = ?")
+		setParts = append(setParts, "first_name = $1")
 		args = append(args, request.FirstName)
 	}
 	if request.LastName != "" {
-		setParts = append(setParts, "last_name = ?")
+		setParts = append(setParts, "last_name = $2")
 		args = append(args, request.LastName)
 	}
 	if request.Phone != "" {
-		setParts = append(setParts, "phone = ?")
+		setParts = append(setParts, "phone = $3")
 		args = append(args, request.Phone)
 	}
 	if request.County != "" {
-		setParts = append(setParts, "county = ?")
+		setParts = append(setParts, "county = $4")
 		args = append(args, request.County)
 	}
 	if request.Town != "" {
-		setParts = append(setParts, "town = ?")
+		setParts = append(setParts, "town = $5")
 		args = append(args, request.Town)
 	}
 	if request.Bio != "" {
-		setParts = append(setParts, "bio = ?")
+		setParts = append(setParts, "bio = $6")
 		args = append(args, request.Bio)
 	}
 	if request.Occupation != "" {
-		setParts = append(setParts, "occupation = ?")
+		setParts = append(setParts, "occupation = $7")
 		args = append(args, request.Occupation)
 	}
 	if request.DateOfBirth != "" {
-		setParts = append(setParts, "date_of_birth = ?")
+		setParts = append(setParts, "date_of_birth = $8")
 		args = append(args, request.DateOfBirth)
 	}
 	if request.Gender != "" {
-		setParts = append(setParts, "gender = ?")
+		setParts = append(setParts, "gender = $9")
 		args = append(args, request.Gender)
 	}
 	if request.ProfileImage != "" || request.Avatar != "" {
@@ -714,7 +714,7 @@ func UpdateProfile(c *gin.Context) {
 		if avatarValue == "" {
 			avatarValue = request.Avatar
 		}
-		setParts = append(setParts, "avatar = ?")
+		setParts = append(setParts, "avatar = $10")
 		args = append(args, avatarValue)
 	}
 
@@ -730,7 +730,7 @@ func UpdateProfile(c *gin.Context) {
 	setParts = append(setParts, "updated_at = CURRENT_TIMESTAMP")
 	args = append(args, userID)
 
-	query := "UPDATE users SET " + strings.Join(setParts, ", ") + " WHERE id = ?"
+	query := "UPDATE users SET " + strings.Join(setParts, ", ") + " WHERE id = $1"
 
 	result, err := db.(*sql.DB).Exec(query, args...)
 	if err != nil {
@@ -930,7 +930,7 @@ func AdminUpdateUserRole(c *gin.Context) {
 	}
 
 	// Update user role
-	query := `UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	query := `UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
 	result, err := db.(*sql.DB).Exec(query, request.Role, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1012,7 +1012,7 @@ func UpdateUserRole(c *gin.Context) {
 	}
 
 	// Update user role
-	query := `UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	query := `UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
 	result, err := db.(*sql.DB).Exec(query, request.Role, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1094,7 +1094,7 @@ func UpdateUserStatus(c *gin.Context) {
 	}
 
 	// Update user status
-	query := `UPDATE users SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	query := `UPDATE users SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
 	result, err := db.(*sql.DB).Exec(query, request.Status, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1174,7 +1174,7 @@ func DeleteUser(c *gin.Context) {
 
 	// Check if user exists
 	var existingUserID string
-	checkQuery := `SELECT id FROM users WHERE id = ?`
+	checkQuery := `SELECT id FROM users WHERE id = $1`
 	err := db.(*sql.DB).QueryRow(checkQuery, userID).Scan(&existingUserID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1193,7 +1193,7 @@ func DeleteUser(c *gin.Context) {
 
 	// For safety, we'll soft delete by setting status to 'deleted' instead of hard delete
 	// This preserves data integrity and allows for potential recovery
-	deleteQuery := `UPDATE users SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	deleteQuery := `UPDATE users SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = $1`
 	result, err := db.(*sql.DB).Exec(deleteQuery, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

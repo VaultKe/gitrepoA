@@ -132,10 +132,10 @@ func InitiateMpesaSTK(c *gin.Context) {
 		// Update additional failure details
 		_, updateErr = db.(*sql.DB).Exec(`
 			UPDATE transactions
-			SET reference = ?,
-			    description = CONCAT(description, ' - ', ?),
+			SET reference = $1,
+			    description = CONCAT(description, ' - ', $2),
 			    updated_at = CURRENT_TIMESTAMP
-			WHERE id = ?
+			WHERE id = $3
 		`, fmt.Sprintf("FAILED_STK_%d", time.Now().UnixNano()), failureReason, transactionID)
 
 		if updateErr != nil {
@@ -293,7 +293,7 @@ func GetMpesaTransactionStatus(c *gin.Context) {
 func createPendingMpesaTransaction(db *sql.DB, req *models.MpesaTransaction, userID string, reference string) (string, error) {
 	// Find user's personal wallet
 	var walletID string
-	walletQuery := "SELECT id FROM wallets WHERE owner_id = ? AND type = ?"
+	walletQuery := "SELECT id FROM wallets WHERE owner_id = $1 AND type = $2"
 	err := db.QueryRow(walletQuery, userID, models.WalletTypePersonal).Scan(&walletID)
 	if err != nil {
 		return "", fmt.Errorf("failed to find user wallet: %w", err)
@@ -307,7 +307,7 @@ func createPendingMpesaTransaction(db *sql.DB, req *models.MpesaTransaction, use
 		INSERT INTO transactions (
 			id, to_wallet_id, type, status, amount, currency, description,
 			reference, payment_method, initiated_by, approved_by, requires_approval, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`
 
 	_, err = db.Exec(insertQuery,

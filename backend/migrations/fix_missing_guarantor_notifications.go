@@ -81,7 +81,7 @@ func getNotificationSMSEnabled(notificationType string) int {
 	}
 }
 
-func main() {
+func mainw() {
 	// Open database connection
 	db, err := sql.Open("sqlite3", "./vaultke.db")
 	if err != nil {

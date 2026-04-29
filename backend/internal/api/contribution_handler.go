@@ -29,7 +29,6 @@ func GetContributions(c *gin.Context) {
 }
 
 func MakeContribution(c *gin.Context) {
-	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -48,7 +47,6 @@ func MakeContribution(c *gin.Context) {
 		MpesaReference string `json:"mpesaReference,omitempty"` // For M-Pesa payments
 		Status        string  `json:"status,omitempty"` // For pending M-Pesa payments
 		IsAnonymous   bool    `json:"isAnonymous,omitempty"` // For anonymous contributions in contribution groups
-		// Cash contribution specific fields
 		ContributorID string  `json:"contributorId,omitempty"` // For cash contributions - who actually contributed
 		CashType      string  `json:"cashType,omitempty"` // Always "cash" for cash contributions
 	}
@@ -61,9 +59,6 @@ func MakeContribution(c *gin.Context) {
 		return
 	}
 
-	// fmt.Printf("🔍 Making contribution: User ID: %v, Chama ID: %s, Amount: %.2f\n", userID, req.ChamaID, req.Amount)
-
-	// Enhanced validation
 	if req.Amount <= 0 || req.Amount > 10000000 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -103,9 +98,7 @@ func MakeContribution(c *gin.Context) {
 		})
 		return
 	}
-
-	// For merry-go-round contributions, validate the amount matches the expected amount
-	// and determine the current recipient
+	
 	var currentRecipientID string
 	var merryGoRoundID string
 	var currentRound int
@@ -114,7 +107,7 @@ func MakeContribution(c *gin.Context) {
 	    err := db.(*sql.DB).QueryRow(`
 	        SELECT mgr.id, mgr.amount_per_round, mgr.current_round
 	        FROM merry_go_rounds mgr
-	        WHERE mgr.chama_id = ? AND mgr.status = 'active'
+	        WHERE mgr.chama_id = $1 AND mgr.status = 'active'
 	        ORDER BY mgr.created_at DESC
 	        LIMIT 1
 	    `, req.ChamaID).Scan(&merryGoRoundID, &expectedAmount, &currentRound)
@@ -147,7 +140,7 @@ func MakeContribution(c *gin.Context) {
 		err = db.(*sql.DB).QueryRow(`
 			SELECT mgrp.user_id
 			FROM merry_go_round_participants mgrp
-			WHERE mgrp.merry_go_round_id = ? AND mgrp.position = ?
+			WHERE mgrp.merry_go_round_id = $1 AND mgrp.position = $2
 		`, merryGoRoundID, currentRound).Scan(&currentRecipientID)
 
 		if err != nil {
@@ -165,10 +158,10 @@ func MakeContribution(c *gin.Context) {
 				SELECT 1 FROM transactions t
 				WHERE t.type = 'contribution'
 					AND json_extract(t.metadata, '$.contributionType') = 'merry-go-round'
-					AND json_extract(t.metadata, '$.chamaId') = ?
-					AND json_extract(t.metadata, '$.merryGoRoundId') = ?
-					AND json_extract(t.metadata, '$.roundNumber') = ?
-					AND t.initiated_by = ?
+					AND json_extract(t.metadata, '$.chamaId') = $1
+					AND json_extract(t.metadata, '$.merryGoRoundId') = $2
+					AND json_extract(t.metadata, '$.roundNumber') = $3
+					AND t.initiated_by = $4
 					AND t.status = 'completed'
 			)
 		`, req.ChamaID, merryGoRoundID, currentRound, userID).Scan(&hasContributed)
@@ -205,8 +198,6 @@ func MakeContribution(c *gin.Context) {
 			})
 			return
 		}
-
-		fmt.Printf("✅ Merry-go-round contribution validated: Expected %.2f, Received %.2f, Current recipient: %s, Round: %d\n", expectedAmount, req.Amount, currentRecipientID, currentRound)
 	}
 
 	// Set default payment method if not provided
@@ -245,7 +236,7 @@ func MakeContribution(c *gin.Context) {
 		var userRole string
 		err := db.(*sql.DB).QueryRow(`
 			SELECT role FROM chama_members
-			WHERE chama_id = ? AND user_id = ?
+			WHERE chama_id = $1 AND user_id = $2
 		`, req.ChamaID, userID).Scan(&userRole)
 		if err != nil {
 			c.JSON(http.StatusForbidden, gin.H{
@@ -280,7 +271,7 @@ func MakeContribution(c *gin.Context) {
 		// Verify that the contributor is a member of the chama
 		var contributorExists bool
 		err = db.(*sql.DB).QueryRow(`
-			SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = ? AND user_id = ?)
+			SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2)
 		`, req.ChamaID, req.ContributorID).Scan(&contributorExists)
 		if err != nil || !contributorExists {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -309,7 +300,7 @@ func MakeContribution(c *gin.Context) {
 		err = tx.QueryRow(`
 			SELECT COALESCE(balance, 0)
 			FROM wallets
-			WHERE owner_id = ? AND type = 'personal'
+			WHERE owner_id = $1 AND type = 'personal'
 		`, userID).Scan(&personalBalance)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -317,7 +308,7 @@ func MakeContribution(c *gin.Context) {
 				fmt.Printf("⚠️ User %s doesn't have a personal wallet, creating one\n", userID)
 				_, err = tx.Exec(`
 					INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
-					VALUES (?, ?, 'personal', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+					VALUES ($1, $2, 'personal', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 				`, "wallet-"+userID.(string), userID)
 				if err != nil {
 					fmt.Printf("❌ Error creating wallet for user %s: %v\n", userID, err)
@@ -351,8 +342,8 @@ func MakeContribution(c *gin.Context) {
 		// Deduct from personal wallet
 		result, err := tx.Exec(`
 			UPDATE wallets
-			SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
-			WHERE owner_id = ? AND type = 'personal'
+			SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP
+			WHERE owner_id = $2 AND type = 'personal'
 		`, req.Amount, userID)
 		if err != nil {
 			fmt.Printf("❌ Error deducting from wallet for user %s: %v\n", userID, err)
@@ -371,20 +362,15 @@ func MakeContribution(c *gin.Context) {
 		// This is just creating a contribution record
 		fmt.Printf("Creating M-Pesa contribution record with reference: %s\n", req.MpesaReference)
 	} else if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
-		// For cash and cheque contributions, no wallet deduction needed
-		// The treasurer is recording a physical cash/cheque payment
-		fmt.Printf("Creating %s contribution record for contributor: %s\n", req.PaymentMethod, req.ContributorID)
 	}
 
 	// Add to chama wallet
-	fmt.Printf("💰 Adding %.2f to chama %s wallet\n", req.Amount, req.ChamaID)
 	result, err := tx.Exec(`
 		UPDATE wallets
-		SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-		WHERE owner_id = ? AND type = 'chama'
+		SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP
+		WHERE owner_id = $2 AND type = 'chama'
 	`, req.Amount, req.ChamaID)
 	if err != nil {
-		fmt.Printf("❌ Error updating chama wallet: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to update chama wallet: " + err.Error(),
@@ -395,22 +381,18 @@ func MakeContribution(c *gin.Context) {
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		// If chama wallet doesn't exist, create it
-		fmt.Printf("⚠️ Chama %s wallet doesn't exist, creating it with balance %.2f\n", req.ChamaID, req.Amount)
 		_, err = tx.Exec(`
 			INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
-			VALUES (?, ?, 'chama', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			VALUES ($1, $2, 'chama', $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`, "wallet-"+req.ChamaID, req.ChamaID, req.Amount)
 		if err != nil {
-			fmt.Printf("❌ Error creating chama wallet: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   "Failed to create chama wallet: " + err.Error(),
 			})
 			return
 		}
-		fmt.Printf("✅ Created chama wallet with balance %.2f\n", req.Amount)
 	} else {
-		fmt.Printf("✅ Updated chama wallet: %d rows affected\n", rowsAffected)
 	}
 
 	// Update chama's total_funds field to match wallet balance
@@ -419,9 +401,9 @@ func MakeContribution(c *gin.Context) {
 		SET total_funds = (
 			SELECT COALESCE(balance, 0)
 			FROM wallets
-			WHERE owner_id = ? AND type = 'chama'
+			WHERE owner_id = $1 AND type = 'chama'
 		), updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
+		WHERE id = $2
 	`, req.ChamaID, req.ChamaID)
 	if err != nil {
 		fmt.Printf("Warning: Failed to update chama total_funds: %v\n", err)
@@ -466,18 +448,10 @@ func MakeContribution(c *gin.Context) {
 	}
 
 	metadataJSON, _ := json.Marshal(metadata)
-
-	// Set transaction initiator based on payment method
-	// For cash and cheque contributions, use the contributor ID as the initiator
-	// For other methods, use the current user ID
 	transactionInitiator := userID
 	if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
 		transactionInitiator = req.ContributorID
 	}
-
-	// Set transaction recipient based on contribution type
-	// For merry-go-round contributions, recipient is the current recipient
-	// For other contributions, recipient is the chama
 	transactionRecipient := req.ChamaID
 	if req.Type == "merry-go-round" && currentRecipientID != "" {
 		transactionRecipient = currentRecipientID
@@ -494,7 +468,7 @@ func MakeContribution(c *gin.Context) {
 			INSERT INTO transactions (
 				id, type, amount, currency, description, status, payment_method,
 				reference, initiated_by, recipient_id, metadata, created_at, updated_at
-			) VALUES (?, 'contribution', ?, 'KES', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			) VALUES ($1, 'contribution', $2, 'KES', $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`
 		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, req.MpesaReference, transactionInitiator, transactionRecipient, string(metadataJSON)}
 	} else {
@@ -502,7 +476,7 @@ func MakeContribution(c *gin.Context) {
 			INSERT INTO transactions (
 				id, type, amount, currency, description, status, payment_method,
 				initiated_by, recipient_id, metadata, created_at, updated_at
-			) VALUES (?, 'contribution', ?, 'KES', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			) VALUES ($1, 'contribution', $2, 'KES', $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`
 		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, transactionInitiator, transactionRecipient, string(metadataJSON)}
 	}
@@ -536,9 +510,9 @@ func MakeContribution(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE chama_members
-			SET total_contributions = total_contributions + ?,
+			SET total_contributions = total_contributions + $1,
 			    last_contribution = CURRENT_TIMESTAMP
-			WHERE chama_id = ? AND user_id = ?
+			WHERE chama_id = $2 AND user_id = $3
 		`, req.Amount, req.ChamaID, contributorUserID)
 		if err != nil {
 			fmt.Printf("❌ Error updating member contributions: %v\n", err)
@@ -555,8 +529,8 @@ func MakeContribution(c *gin.Context) {
 	// Log final wallet balances before committing
 	if req.PaymentMethod == "wallet" {
 		var finalUserBalance, finalChamaBalance float64
-		tx.QueryRow("SELECT COALESCE(balance, 0) FROM wallets WHERE owner_id = ? AND type = 'personal'", userID).Scan(&finalUserBalance)
-		tx.QueryRow("SELECT COALESCE(balance, 0) FROM wallets WHERE owner_id = ? AND type = 'chama'", req.ChamaID).Scan(&finalChamaBalance)
+		tx.QueryRow("SELECT COALESCE(balance, 0) FROM wallets WHERE owner_id = $1 AND type = 'personal'", userID).Scan(&finalUserBalance)
+		tx.QueryRow("SELECT COALESCE(balance, 0) FROM wallets WHERE owner_id = $2 AND type = 'chama'", req.ChamaID).Scan(&finalChamaBalance)
 		fmt.Printf("📊 Final balances - User %s: %.2f, Chama %s: %.2f\n", userID, finalUserBalance, req.ChamaID, finalChamaBalance)
 	}
 
@@ -580,7 +554,7 @@ func MakeContribution(c *gin.Context) {
 		var merryGoRoundID string
 		err = db.(*sql.DB).QueryRow(`
 			SELECT id FROM merry_go_rounds
-			WHERE chama_id = ? AND status = 'active'
+			WHERE chama_id = $1 AND status = 'active'
 			ORDER BY created_at DESC LIMIT 1
 		`, req.ChamaID).Scan(&merryGoRoundID)
 
@@ -673,7 +647,7 @@ func GetChamaMembersForContributions(c *gin.Context) {
 	var userRole string
 	err := db.(*sql.DB).QueryRow(`
 		SELECT role FROM chama_members
-		WHERE chama_id = ? AND user_id = ?
+		WHERE chama_id = $1 AND user_id = $2
 	`, chamaID, userID).Scan(&userRole)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -704,7 +678,7 @@ func GetChamaMembersForContributions(c *gin.Context) {
 			cm.total_contributions
 		FROM chama_members cm
 		JOIN users u ON cm.user_id = u.id
-		WHERE cm.chama_id = ?
+		WHERE cm.chama_id = $1
 		ORDER BY u.first_name, u.last_name
 	`, chamaID)
 	if err != nil {
@@ -790,7 +764,7 @@ func GetMerryGoRoundContributionAmount(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 	    SELECT mgr.amount_per_round, mgr.name
 	    FROM merry_go_rounds mgr
-	    WHERE mgr.chama_id = ? AND mgr.status = 'active'
+	    WHERE mgr.chama_id = $1 AND mgr.status = 'active'
 	    ORDER BY mgr.created_at DESC
 	    LIMIT 1
 	`, chamaID).Scan(&expectedAmount, &mgrName)

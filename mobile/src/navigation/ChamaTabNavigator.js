@@ -23,7 +23,7 @@ import CreateMerryGoRound from '../screens/chama/merry-go-round/CreateMerryGoRou
 import InviteMembers from '../screens/chama/chamamember/InviteMembers';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
-import SharesDividendsScreen from '../screens/chama/sharesanddividend/SharesDividendsScreen';
+
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
 import AccountManagementScreen from '../screens/chama/accountmanagement/AccountManagementScreen';
 import LoanManagementScreen from '../screens/chama/loans/LoanManagementScreen';
@@ -337,15 +337,7 @@ function ChamaTabNavigator({ route }) {
         }}
         initialParams={{ chamaId, chamaName, chama }}
       />
-      <Tab.Screen
-        name="SharesDividendsScreen"
-        component={SharesDividendsScreen}
-        options={{
-          title: 'Shares & Dividends',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-        initialParams={{ chamaId, chamaName, chama }}
-      />
+
       <Tab.Screen
         name="PollsVotingScreen"
         component={PollsVotingScreen}

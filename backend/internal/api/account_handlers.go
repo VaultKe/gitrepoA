@@ -51,8 +51,8 @@ func (h *AccountHandlers) GetEligibleWelfareMembers(c *gin.Context) {
 		FROM users u
 		JOIN chama_members cm ON u.id = cm.user_id
 		LEFT JOIN transactions t ON u.id = t.initiated_by AND t.type = 'contribution'
-		LEFT JOIN welfare_funds wf ON u.id = wf.beneficiary_id AND wf.chama_id = ?
-		WHERE cm.chama_id = ? AND cm.is_active = TRUE
+		LEFT JOIN welfare_funds wf ON u.id = wf.beneficiary_id AND wf.chama_id = $1
+		WHERE cm.chama_id = $2 AND cm.is_active = TRUE
 		GROUP BY u.id, u.first_name, u.last_name, u.phone
 		ORDER BY total_contributions DESC
 	`
@@ -149,10 +149,10 @@ func (h *AccountHandlers) GetTransparencyFeed(c *gin.Context) {
 			   t.status
 		FROM transactions t
 		JOIN users u ON t.initiated_by = u.id
-		JOIN chama_members cm ON u.id = cm.user_id AND cm.chama_id = ?
+		JOIN chama_members cm ON u.id = cm.user_id AND cm.chama_id = $1
 		WHERE cm.is_active = true
 		ORDER BY t.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := h.db.Query(query, chamaID, limit, offset)
@@ -221,7 +221,7 @@ func (h *AccountHandlers) GetAccountNotifications(c *gin.Context) {
 	query := `
 		SELECT id, type, title, message, created_at, is_read
 		FROM notifications
-		WHERE user_id = ?
+		WHERE user_id = $1
 		AND type IN ('security', 'account', 'financial')
 		ORDER BY created_at DESC
 		LIMIT 20

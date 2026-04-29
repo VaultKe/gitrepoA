@@ -85,7 +85,7 @@ func (s *PollsService) CreatePoll(chamaID, createdBy string, req *models.CreateP
 			id, chama_id, title, description, poll_type, created_by, start_date, end_date,
 			status, is_anonymous, requires_majority, majority_percentage, total_eligible_voters,
 			total_votes_cast, metadata, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`
 
 	_, err = s.db.Exec(
@@ -122,9 +122,9 @@ func (s *PollsService) GetChamaPolls(chamaID string, limit, offset int) ([]model
 			   u.first_name, u.last_name
 		FROM polls p
 		JOIN users u ON p.created_by = u.id
-		WHERE p.chama_id = ?
+		WHERE p.chama_id = $1
 		ORDER BY p.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := s.db.Query(query, chamaID, limit, offset)
@@ -201,7 +201,7 @@ func (s *PollsService) CastVote(pollID, voterID string, req *models.CastVoteRequ
 
 	voteQuery := `
 		INSERT INTO votes (id, poll_id, option_id, voter_hash, vote_timestamp, is_valid)
-		VALUES (?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
 	_, err = s.db.Exec(voteQuery, voteID, pollID, req.OptionID, voterHash, now, true)
@@ -342,7 +342,7 @@ func (s *PollsService) CreateRoleEscalationPoll(chamaID, requestedBy string, req
 		INSERT INTO Election / Voting_requests (
 			id, chama_id, candidate_id, current_role, requested_role, requested_by,
 			poll_id, status, justification, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
 	_, err = s.db.Exec(
@@ -367,7 +367,7 @@ func (s *PollsService) getPollByID(pollID string) (*models.Poll, error) {
 		SELECT id, chama_id, title, description, poll_type, created_by, start_date, end_date,
 			   status, is_anonymous, requires_majority, majority_percentage, total_eligible_voters,
 			   total_votes_cast, result, result_declared_at, metadata, created_at, updated_at
-		FROM polls WHERE id = ?
+		FROM polls WHERE id = $1
 	`
 
 	var poll models.Poll
@@ -395,7 +395,7 @@ func (s *PollsService) createPollOption(pollID string, req *models.PollOptionReq
 
 	query := `
 		INSERT INTO poll_options (id, poll_id, option_text, option_order, vote_count, metadata, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
 	_, err := s.db.Exec(query, optionID, pollID, req.OptionText, order, 0, req.Metadata, now)
@@ -406,7 +406,7 @@ func (s *PollsService) getPollOptions(pollID string) ([]models.PollOption, error
 	query := `
 		SELECT id, poll_id, option_text, option_order, vote_count, metadata, created_at
 		FROM poll_options
-		WHERE poll_id = ?
+		WHERE poll_id = $1
 		ORDER BY option_order ASC
 	`
 
@@ -433,7 +433,7 @@ func (s *PollsService) getPollOptions(pollID string) ([]models.PollOption, error
 }
 
 func (s *PollsService) getTotalEligibleVoters(chamaID string) (int, error) {
-	query := `SELECT COUNT(*) FROM chama_members WHERE chama_id = ? AND is_active = TRUE`
+	query := `SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND is_active = TRUE`
 	var count int
 	err := s.db.QueryRow(query, chamaID).Scan(&count)
 	return count, err
@@ -443,7 +443,7 @@ func (s *PollsService) canCreatePolls(userID, chamaID string) bool {
 	// Check if user is a chama member (any member can create general polls)
 	query := `
 		SELECT 1 FROM chama_members
-		WHERE user_id = ? AND chama_id = ? AND is_active = TRUE
+		WHERE user_id = $1 AND chama_id = $2 AND is_active = TRUE
 	`
 	var exists int
 	err := s.db.QueryRow(query, userID, chamaID).Scan(&exists)
@@ -453,7 +453,7 @@ func (s *PollsService) canCreatePolls(userID, chamaID string) bool {
 func (s *PollsService) isEligibleToVote(userID, chamaID string) bool {
 	query := `
 		SELECT 1 FROM chama_members
-		WHERE user_id = ? AND chama_id = ? AND is_active = TRUE
+		WHERE user_id = $1 AND chama_id = $2 AND is_active = TRUE
 	`
 	var exists int
 	err := s.db.QueryRow(query, userID, chamaID).Scan(&exists)
@@ -461,27 +461,27 @@ func (s *PollsService) isEligibleToVote(userID, chamaID string) bool {
 }
 
 func (s *PollsService) hasUserVoted(pollID, voterHash string) bool {
-	query := `SELECT 1 FROM votes WHERE poll_id = ? AND voter_hash = ? AND is_valid = TRUE`
+	query := `SELECT 1 FROM votes WHERE poll_id = $1 AND voter_hash = $2 AND is_valid = TRUE`
 	var exists int
 	err := s.db.QueryRow(query, pollID, voterHash).Scan(&exists)
 	return err == nil
 }
 
 func (s *PollsService) isValidOption(pollID, optionID string) bool {
-	query := `SELECT 1 FROM poll_options WHERE poll_id = ? AND id = ?`
+	query := `SELECT 1 FROM poll_options WHERE poll_id = $1 AND id = $2`
 	var exists int
 	err := s.db.QueryRow(query, pollID, optionID).Scan(&exists)
 	return err == nil
 }
 
 func (s *PollsService) incrementOptionVoteCount(optionID string) error {
-	query := `UPDATE poll_options SET vote_count = vote_count + 1 WHERE id = ?`
+	query := `UPDATE poll_options SET vote_count = vote_count + 1 WHERE id = $1`
 	_, err := s.db.Exec(query, optionID)
 	return err
 }
 
 func (s *PollsService) incrementPollVoteCount(pollID string) error {
-	query := `UPDATE polls SET total_votes_cast = total_votes_cast + 1, updated_at = ? WHERE id = ?`
+	query := `UPDATE polls SET total_votes_cast = total_votes_cast + 1, updated_at = $1 WHERE id = $2`
 	_, err := s.db.Exec(query, time.Now(), pollID)
 	return err
 }
@@ -490,15 +490,15 @@ func (s *PollsService) declarePollResult(pollID string, result models.PollResult
 	now := time.Now()
 	query := `
 		UPDATE polls
-		SET result = ?, result_declared_at = ?, status = ?, updated_at = ?
-		WHERE id = ?
+		SET result = $1, result_declared_at = $2, status = $3, updated_at = $4
+		WHERE id = $5
 	`
 	_, err := s.db.Exec(query, result, now, models.PollStatusCompleted, now, pollID)
 	return err
 }
 
 func (s *PollsService) getUserName(userID string) (string, error) {
-	query := `SELECT first_name, last_name FROM users WHERE id = ?`
+	query := `SELECT first_name, last_name FROM users WHERE id = $1`
 	var firstName, lastName string
 	err := s.db.QueryRow(query, userID).Scan(&firstName, &lastName)
 	if err != nil {
@@ -508,7 +508,7 @@ func (s *PollsService) getUserName(userID string) (string, error) {
 }
 
 func (s *PollsService) getMemberRole(userID, chamaID string) (string, error) {
-	query := `SELECT role FROM chama_members WHERE user_id = ? AND chama_id = ? AND is_active = TRUE`
+	query := `SELECT role FROM chama_members WHERE user_id = $1 AND chama_id = $2 AND is_active = TRUE`
 	var role string
 	err := s.db.QueryRow(query, userID, chamaID).Scan(&role)
 	return role, err
@@ -520,7 +520,7 @@ func (s *PollsService) ProcessRoleEscalationResult(pollID string, result models.
 	query := `
 		SELECT id, chama_id, candidate_id, current_role, requested_role, requested_by
 		FROM Election / Voting_requests
-		WHERE poll_id = ?
+		WHERE poll_id = $1
 	`
 
 	var req models.RoleEscalationRequest
@@ -544,8 +544,8 @@ func (s *PollsService) ProcessRoleEscalationResult(pollID string, result models.
 		// Update escalation request status
 		updateQuery := `
 			UPDATE Election / Voting_requests
-			SET status = 'approved', updated_at = ?
-			WHERE id = ?
+			SET status = 'approved', updated_at = $1
+			WHERE id = $2
 		`
 		_, err = s.db.Exec(updateQuery, now, req.ID)
 		if err != nil {
@@ -558,8 +558,8 @@ func (s *PollsService) ProcessRoleEscalationResult(pollID string, result models.
 		// Role change rejected
 		updateQuery := `
 			UPDATE Election / Voting_requests
-			SET status = 'rejected', updated_at = ?
-			WHERE id = ?
+			SET status = 'rejected', updated_at = $1
+			WHERE id = $2
 		`
 		_, err = s.db.Exec(updateQuery, now, req.ID)
 		if err != nil {
@@ -586,8 +586,8 @@ func (s *PollsService) executeRoleChange(req *models.RoleEscalationRequest) erro
 	if req.RequestedRole != "member" {
 		demoteQuery := `
 			UPDATE chama_members
-			SET role = 'member', updated_at = ?
-			WHERE chama_id = ? AND role = ? AND user_id != ? AND is_active = TRUE
+			SET role = 'member', updated_at = $1
+			WHERE chama_id = $2 AND role = $3 AND user_id != $4 AND is_active = TRUE
 		`
 		_, err = tx.Exec(demoteQuery, now, req.ChamaID, req.RequestedRole, req.CandidateID)
 		if err != nil {
@@ -598,8 +598,8 @@ func (s *PollsService) executeRoleChange(req *models.RoleEscalationRequest) erro
 	// Update the candidate's role
 	promoteQuery := `
 		UPDATE chama_members
-		SET role = ?, updated_at = ?
-		WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+		SET role = $1, updated_at = $2
+		WHERE chama_id = $3 AND user_id = $4 AND is_active = TRUE
 	`
 	_, err = tx.Exec(promoteQuery, req.RequestedRole, now, req.ChamaID, req.CandidateID)
 	if err != nil {
@@ -610,7 +610,7 @@ func (s *PollsService) executeRoleChange(req *models.RoleEscalationRequest) erro
 	logQuery := `
 		INSERT INTO role_change_logs (
 			id, chama_id, user_id, old_role, new_role, changed_by, change_reason, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	logID := uuid.New().String()
 	_, err = tx.Exec(logQuery, logID, req.ChamaID, req.CandidateID,
@@ -629,7 +629,7 @@ func (s *PollsService) GetChamaMembers(chamaID string) ([]models.ChamaMemberInfo
 		SELECT cm.user_id, cm.role, u.first_name, u.last_name, u.email, u.phone
 		FROM chama_members cm
 		JOIN users u ON cm.user_id = u.id
-		WHERE cm.chama_id = ? AND cm.is_active = TRUE
+		WHERE cm.chama_id = $1 AND cm.is_active = TRUE
 		ORDER BY u.first_name, u.last_name
 	`
 

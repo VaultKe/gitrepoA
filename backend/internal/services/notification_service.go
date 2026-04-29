@@ -109,7 +109,7 @@ func (s *NotificationService) CreateNotification(userID string, notifType Notifi
 	query := `
 		INSERT INTO notifications (
 			id, user_id, type, title, message, data, is_read, is_push, is_email, is_sms, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
 	_, err := s.db.Exec(query,
@@ -144,14 +144,13 @@ func (s *NotificationService) GetUserNotifications(userID string, limit, offset 
 	query := `
 		SELECT id, user_id, type, title, message, data, is_read, is_push, is_email, is_sms, created_at, read_at
 		FROM notifications
-		WHERE user_id = ?
+		WHERE user_id = $1
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := s.db.Query(query, userID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get notifications: %w", err)
 	}
 	defer rows.Close()
 
@@ -176,7 +175,7 @@ func (s *NotificationService) GetUserNotifications(userID string, limit, offset 
 // MarkAsRead marks a notification as read
 func (s *NotificationService) MarkAsRead(userID, notificationID string) error {
 	now := time.Now()
-	query := "UPDATE notifications SET is_read = true, read_at = ? WHERE id = ? AND user_id = ?"
+	query := "UPDATE notifications SET is_read = true, read_at = $1 WHERE id = $2 AND user_id = $3"
 	
 	result, err := s.db.Exec(query, now, notificationID, userID)
 	if err != nil {
@@ -198,7 +197,7 @@ func (s *NotificationService) MarkAsRead(userID, notificationID string) error {
 // MarkAllAsRead marks all notifications as read for a user
 func (s *NotificationService) MarkAllAsRead(userID string) error {
 	now := time.Now()
-	query := "UPDATE notifications SET is_read = true, read_at = ? WHERE user_id = ? AND is_read = false"
+	query := "UPDATE notifications SET is_read = true, read_at = $1 WHERE user_id = $2 AND is_read = false"
 	
 	_, err := s.db.Exec(query, now, userID)
 	if err != nil {
@@ -210,7 +209,7 @@ func (s *NotificationService) MarkAllAsRead(userID string) error {
 
 // GetUnreadCount gets the count of unread notifications for a user
 func (s *NotificationService) GetUnreadCount(userID string) (int, error) {
-	query := "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = false"
+	query := "SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false"
 	
 	var count int
 	err := s.db.QueryRow(query, userID).Scan(&count)
@@ -223,7 +222,7 @@ func (s *NotificationService) GetUnreadCount(userID string) (int, error) {
 
 // DeleteNotification deletes a notification
 func (s *NotificationService) DeleteNotification(userID, notificationID string) error {
-	query := "DELETE FROM notifications WHERE id = ? AND user_id = ?"
+	query := "DELETE FROM notifications WHERE id = $1 AND user_id = $2"
 	
 	result, err := s.db.Exec(query, notificationID, userID)
 	if err != nil {
@@ -246,7 +245,7 @@ func (s *NotificationService) DeleteNotification(userID, notificationID string) 
 func (s *NotificationService) sendPushNotification(userID, title, message string, data map[string]interface{}) {
 	// Get user's FCM token
 	var fcmToken string
-	query := "SELECT fcm_token FROM users WHERE id = ? AND fcm_token IS NOT NULL"
+	query := "SELECT fcm_token FROM users WHERE id = $1 AND fcm_token IS NOT NULL"
 	err := s.db.QueryRow(query, userID).Scan(&fcmToken)
 	if err != nil {
 		// User doesn't have FCM token, skip push notification
@@ -300,7 +299,7 @@ func (s *NotificationService) sendPushNotification(userID, title, message string
 func (s *NotificationService) sendEmailNotification(userID, title, message string) {
 	// Get user's email
 	var email string
-	query := "SELECT email FROM users WHERE id = ?"
+	query := "SELECT email FROM users WHERE id = $1"
 	err := s.db.QueryRow(query, userID).Scan(&email)
 	if err != nil {
 		fmt.Printf("Failed to get user email: %v\n", err)
@@ -316,7 +315,7 @@ func (s *NotificationService) sendEmailNotification(userID, title, message strin
 func (s *NotificationService) sendSMSNotification(userID, message string) {
 	// Get user's phone
 	var phone string
-	query := "SELECT phone FROM users WHERE id = ?"
+	query := "SELECT phone FROM users WHERE id = $1"
 	err := s.db.QueryRow(query, userID).Scan(&phone)
 	if err != nil {
 		fmt.Printf("Failed to get user phone: %v\n", err)

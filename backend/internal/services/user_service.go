@@ -115,7 +115,7 @@ func (s *UserService) CreateUser(registration *models.UserRegistration) (*models
 			id, email, phone, first_name, last_name, password_hash, role, status,
 			is_email_verified, is_phone_verified, language, theme, gender, rating, total_ratings,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`
 
 	_, err = s.db.Exec(query,
@@ -186,7 +186,7 @@ func (s *UserService) GetUserByID(userID string) (*models.User, error) {
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, bio, occupation,
 			   date_of_birth, gender, rating, total_ratings, created_at, updated_at
-		FROM users WHERE id = ?
+		FROM users WHERE id = $1
 	`
 
 	user := &models.User{}
@@ -231,7 +231,7 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, bio, occupation,
 			   date_of_birth, gender, rating, total_ratings, created_at, updated_at
-		FROM users WHERE (email = ? OR LOWER(TRIM(email)) = ?) OR phone = ?
+		FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3
 	`
 
 	user := &models.User{}
@@ -256,87 +256,81 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 
 // UpdateUser updates user information
 func (s *UserService) UpdateUser(userID string, update *models.UserProfileUpdate) (*models.User, error) {
-	// Get current user
-	user, err := s.GetUserByID(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build dynamic update query
 	setParts := []string{}
 	args := []interface{}{}
 
 	if update.FirstName != nil {
-		setParts = append(setParts, "first_name = ?")
+		setParts = append(setParts, fmt.Sprintf("first_name = $%d", len(args)+1))
 		args = append(args, *update.FirstName)
 	}
 	if update.LastName != nil {
-		setParts = append(setParts, "last_name = ?")
+		setParts = append(setParts, fmt.Sprintf("last_name = $%d", len(args)+1))
 		args = append(args, *update.LastName)
 	}
 	if update.Phone != nil {
-		setParts = append(setParts, "phone = ?")
+		setParts = append(setParts, fmt.Sprintf("phone = $%d", len(args)+1))
 		args = append(args, *update.Phone)
 	}
 	if update.Avatar != nil {
-		setParts = append(setParts, "avatar = ?")
+		setParts = append(setParts, fmt.Sprintf("avatar = $%d", len(args)+1))
 		args = append(args, *update.Avatar)
 	}
 	if update.Language != nil {
-		setParts = append(setParts, "language = ?")
+		setParts = append(setParts, fmt.Sprintf("language = $%d", len(args)+1))
 		args = append(args, *update.Language)
 	}
 	if update.Theme != nil {
-		setParts = append(setParts, "theme = ?")
+		setParts = append(setParts, fmt.Sprintf("theme = $%d", len(args)+1))
 		args = append(args, *update.Theme)
 	}
 	if update.County != nil {
-		setParts = append(setParts, "county = ?")
+		setParts = append(setParts, fmt.Sprintf("county = $%d", len(args)+1))
 		args = append(args, *update.County)
 	}
 	if update.Town != nil {
-		setParts = append(setParts, "town = ?")
+		setParts = append(setParts, fmt.Sprintf("town = $%d", len(args)+1))
 		args = append(args, *update.Town)
 	}
 	if update.Latitude != nil {
-		setParts = append(setParts, "latitude = ?")
+		setParts = append(setParts, fmt.Sprintf("latitude = $%d", len(args)+1))
 		args = append(args, *update.Latitude)
 	}
 	if update.Longitude != nil {
-		setParts = append(setParts, "longitude = ?")
+		setParts = append(setParts, fmt.Sprintf("longitude = $%d", len(args)+1))
 		args = append(args, *update.Longitude)
 	}
 	if update.BusinessType != nil {
-		setParts = append(setParts, "business_type = ?")
+		setParts = append(setParts, fmt.Sprintf("business_type = $%d", len(args)+1))
 		args = append(args, *update.BusinessType)
 	}
 	if update.BusinessDescription != nil {
-		setParts = append(setParts, "business_description = ?")
+		setParts = append(setParts, fmt.Sprintf("business_description = $%d", len(args)+1))
 		args = append(args, *update.BusinessDescription)
 	}
 	if update.Bio != nil {
-		setParts = append(setParts, "bio = ?")
+		setParts = append(setParts, fmt.Sprintf("bio = $%d", len(args)+1))
 		args = append(args, *update.Bio)
 	}
 	if update.Occupation != nil {
-		setParts = append(setParts, "occupation = ?")
+		setParts = append(setParts, fmt.Sprintf("occupation = $%d", len(args)+1))
 		args = append(args, *update.Occupation)
 	}
 	if update.DateOfBirth != nil {
-		setParts = append(setParts, "date_of_birth = ?")
+		setParts = append(setParts, fmt.Sprintf("date_of_birth = $%d", len(args)+1))
 		args = append(args, update.DateOfBirth.Time)
 	}
 	if update.Gender != nil {
-		setParts = append(setParts, "gender = ?")
+		setParts = append(setParts, fmt.Sprintf("gender = $%d", len(args)+1))
 		args = append(args, *update.Gender)
 	}
 
 	if len(setParts) == 0 {
-		return user, nil // No updates
+		// No fields to update, return current user
+		return s.GetUserByID(userID)
 	}
 
 	// Add updated_at
-	setParts = append(setParts, "updated_at = ?")
+	setParts = append(setParts, fmt.Sprintf("updated_at = $%d", len(args)+1))
 	args = append(args, time.Now())
 	args = append(args, userID)
 
@@ -344,9 +338,9 @@ func (s *UserService) UpdateUser(userID string, update *models.UserProfileUpdate
 	for i := 1; i < len(setParts); i++ {
 		query += ", " + setParts[i]
 	}
-	query += " WHERE id = ?"
+	query += fmt.Sprintf(" WHERE id = $%d", len(args))
 
-	_, err = s.db.Exec(query, args...)
+	_, err := s.db.Exec(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
@@ -366,7 +360,7 @@ func (s *UserService) UserExists(email, phone string) (bool, error) {
 
 	// Since we now store all emails in lowercase, we can do direct comparison
 	// But we also check with LOWER() for existing data that might not be normalized
-	query := "SELECT COUNT(*) FROM users WHERE (email = ? OR LOWER(TRIM(email)) = ?) OR phone = ?"
+	query := "SELECT COUNT(*) FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3"
 	var count int
 	err := s.db.QueryRow(query, normalizedEmail, normalizedEmail, formattedPhone).Scan(&count)
 	if err != nil {
@@ -379,7 +373,7 @@ func (s *UserService) UserExists(email, phone string) (bool, error) {
 
 // VerifyEmail marks user's email as verified
 func (s *UserService) VerifyEmail(userID string) error {
-	query := "UPDATE users SET is_email_verified = true, updated_at = ? WHERE id = ?"
+	query := "UPDATE users SET is_email_verified = true, updated_at = $1 WHERE id = $2"
 	_, err := s.db.Exec(query, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to verify email: %w", err)
@@ -389,7 +383,7 @@ func (s *UserService) VerifyEmail(userID string) error {
 
 // VerifyPhone marks user's phone as verified
 func (s *UserService) VerifyPhone(userID string) error {
-	query := "UPDATE users SET is_phone_verified = true, updated_at = ? WHERE id = ?"
+	query := "UPDATE users SET is_phone_verified = true, updated_at = $1 WHERE id = $2"
 	_, err := s.db.Exec(query, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to verify phone: %w", err)
@@ -399,7 +393,7 @@ func (s *UserService) VerifyPhone(userID string) error {
 
 // UpdateUserStatus updates user status
 func (s *UserService) UpdateUserStatus(userID string, status models.UserStatus) error {
-	query := "UPDATE users SET status = ?, updated_at = ? WHERE id = ?"
+	query := "UPDATE users SET status = $1, updated_at = $2 WHERE id = $3"
 	_, err := s.db.Exec(query, status, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to update user status: %w", err)
@@ -415,10 +409,10 @@ func (s *UserService) GetUsersByLocation(county, town string, limit, offset int)
 		   latitude, longitude, business_type, business_description, bio, occupation,
 		   date_of_birth, gender, rating, total_ratings, created_at, updated_at
 	FROM users
-	WHERE county = ? AND town = ? AND status = ?
+	WHERE county = $1 AND town = $2 AND status = $3
 	ORDER BY created_at DESC
-	LIMIT ? OFFSET ?
-`
+	LIMIT $4 OFFSET $5
+	`
 
 	rows, err := s.db.Query(query, county, town, models.UserStatusActive, limit, offset)
 	if err != nil {
@@ -513,7 +507,7 @@ func (s *UserService) getUserWalletStatistics(userID string) (map[string]interfa
 	err := s.db.QueryRow(`
 		SELECT COALESCE(balance, 0)
 		FROM wallets
-		WHERE owner_id = ? AND type = 'personal'
+		WHERE owner_id = $1 AND type = 'personal'
 	`, userID).Scan(&personalBalance)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -527,7 +521,7 @@ func (s *UserService) getUserWalletStatistics(userID string) (map[string]interfa
 			COUNT(*) as total_transactions,
 			COALESCE(SUM(amount), 0) as total_volume
 		FROM transactions
-		WHERE initiated_by = ?
+		WHERE initiated_by = $1
 	`, userID).Scan(&totalTransactions, &totalVolume)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -546,28 +540,28 @@ func (s *UserService) getUserChamaStatistics(userID string) (map[string]interfac
 
 	// Get total chamas joined
 	var totalChamas, activeChamas int
-	err := s.db.QueryRow(`
-		SELECT
-			COUNT(*) as total_chamas,
-			COUNT(CASE WHEN is_active = true THEN 1 END) as active_chamas
-		FROM chama_members
-		WHERE user_id = ?
-	`, userID).Scan(&totalChamas, &activeChamas)
+		err := s.db.QueryRow(`
+			SELECT
+				COUNT(*) as total_chamas,
+				COUNT(CASE WHEN is_active = true THEN 1 END) as active_chamas
+			FROM chama_members
+			WHERE user_id = $1
+		`, userID).Scan(&totalChamas, &activeChamas)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
 	// Get user roles distribution
 	var chairpersonCount, secretaryCount, treasurerCount, memberCount int
-	err = s.db.QueryRow(`
-		SELECT
-			COUNT(CASE WHEN role = 'chairperson' THEN 1 END) as chairperson_count,
-			COUNT(CASE WHEN role = 'secretary' THEN 1 END) as secretary_count,
-			COUNT(CASE WHEN role = 'treasurer' THEN 1 END) as treasurer_count,
-			COUNT(CASE WHEN role = 'member' THEN 1 END) as member_count
-		FROM chama_members
-		WHERE user_id = ? AND is_active = true
-	`, userID).Scan(&chairpersonCount, &secretaryCount, &treasurerCount, &memberCount)
+		err = s.db.QueryRow(`
+			SELECT
+				COUNT(CASE WHEN role = 'chairperson' THEN 1 END) as chairperson_count,
+				COUNT(CASE WHEN role = 'secretary' THEN 1 END) as secretary_count,
+				COUNT(CASE WHEN role = 'treasurer' THEN 1 END) as treasurer_count,
+				COUNT(CASE WHEN role = 'member' THEN 1 END) as member_count
+			FROM chama_members
+			WHERE user_id = $1 AND is_active = true
+		`, userID).Scan(&chairpersonCount, &secretaryCount, &treasurerCount, &memberCount)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -593,7 +587,7 @@ func (s *UserService) getUserContributionStatistics(userID string) (map[string]i
 			COALESCE(SUM(amount), 0) as total_amount,
 			COALESCE(AVG(amount), 0) as average_contribution
 		FROM transactions
-		WHERE initiated_by = ? AND type = 'contribution' AND status = 'completed'
+		WHERE initiated_by = $1 AND type = 'contribution' AND status = 'completed'
 	`, userID).Scan(&totalContributions, &totalContributionAmount, &averageContribution)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -606,7 +600,7 @@ func (s *UserService) getUserContributionStatistics(userID string) (map[string]i
 			COUNT(*) as count,
 			COALESCE(SUM(amount), 0) as total
 		FROM transactions
-		WHERE initiated_by = ? AND type = 'contribution' AND status = 'completed'
+		WHERE initiated_by = $1 AND type = 'contribution' AND status = 'completed'
 		AND created_at >= datetime('now', '-6 months')
 		GROUP BY strftime('%Y-%m', created_at)
 		ORDER BY month DESC
@@ -654,7 +648,7 @@ func (s *UserService) getUserMeetingStatistics(userID string) (map[string]interf
 			COUNT(DISTINCT CASE WHEN m.status IN ('ongoing', 'active', 'started', 'live') THEN m.id END) as ongoing_meetings
 		FROM meetings m
 		INNER JOIN chama_members cm ON m.chama_id = cm.chama_id
-		WHERE cm.user_id = ? AND cm.is_active = true
+		WHERE cm.user_id = $1 AND cm.is_active = true
 	`, userID).Scan(&upcomingMeetings, &ongoingMeetings)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err

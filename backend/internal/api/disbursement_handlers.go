@@ -63,9 +63,9 @@ func (h *DisbursementHandlers) GetDisbursementBatches(c *gin.Context) {
 		FROM disbursement_batches db
 		LEFT JOIN users u1 ON db.initiated_by = u1.id
 		LEFT JOIN users u2 ON db.approved_by = u2.id
-		WHERE db.chama_id = ?
+		WHERE db.chama_id = $1
 		ORDER BY db.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := h.db.Query(query, chamaID, limit, offset)
@@ -173,9 +173,9 @@ func (h *DisbursementHandlers) GetTransparencyLog(c *gin.Context) {
 			   ftl.created_at, u.first_name || ' ' || u.last_name as performed_by_name
 		FROM financial_transparency_log ftl
 		LEFT JOIN users u ON ftl.performed_by = u.id
-		WHERE ftl.chama_id = ?
+		WHERE ftl.chama_id = $1
 		ORDER BY ftl.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := h.db.Query(query, chamaID, limit, offset)
@@ -253,7 +253,7 @@ func (h *DisbursementHandlers) ProcessDisbursementBatch(c *gin.Context) {
 	}
 
 	// For now, just mark as processed
-	query := `UPDATE disbursement_batches SET status = 'completed', processed_date = CURRENT_TIMESTAMP WHERE id = ? AND chama_id = ?`
+	query := `UPDATE disbursement_batches SET status = 'completed', processed_date = CURRENT_TIMESTAMP WHERE id = $1 AND chama_id = $2`
 	_, err := h.db.Exec(query, batchID, chamaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -284,7 +284,7 @@ func (h *DisbursementHandlers) ApproveDisbursementBatch(c *gin.Context) {
 	}
 
 	// Update batch status to approved
-	query := `UPDATE disbursement_batches SET status = 'approved', approved_by = ? WHERE id = ? AND chama_id = ?`
+	query := `UPDATE disbursement_batches SET status = 'approved', approved_by = $1 WHERE id = $2 AND chama_id = $3`
 	_, err := h.db.Exec(query, userID, batchID, chamaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

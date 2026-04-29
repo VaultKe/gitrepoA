@@ -234,7 +234,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		// Try finding by checkout request ID in reference field
 		findQuery := `
 			SELECT id FROM transactions
-			WHERE reference = ? AND status = ? AND payment_method = ?
+			WHERE reference = $1 AND status = $2 AND payment_method = $3
 		`
 		findErr = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID)
 
@@ -242,7 +242,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 			// Also try finding by checkout request ID in checkout_request_id field if it exists
 			findQuery2 := `
 				SELECT id FROM transactions
-				WHERE checkout_request_id = ? AND status = ? AND payment_method = ?
+				WHERE checkout_request_id = $1 AND status = $2 AND payment_method = $3
 			`
 			findErr = tx.QueryRow(findQuery2, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID)
 		}
@@ -292,21 +292,18 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		var findErr error
 
 		// Try finding by checkout request ID in reference field
-		findErr = tx.QueryRow("SELECT id FROM transactions WHERE reference = ? AND payment_method = ?",
+		findErr = tx.QueryRow("SELECT id FROM transactions WHERE reference = $1 AND payment_method = $2",
 			callback.CheckoutRequestID, models.PaymentMethodMpesa).Scan(&transactionID)
 
 		if findErr == sql.ErrNoRows {
 			// Also try finding by checkout request ID in checkout_request_id field
-			findErr = tx.QueryRow("SELECT id FROM transactions WHERE checkout_request_id = ? AND payment_method = ?",
+			findErr = tx.QueryRow("SELECT id FROM transactions WHERE checkout_request_id = $1 AND payment_method = $2",
 				callback.CheckoutRequestID, models.PaymentMethodMpesa).Scan(&transactionID)
 		}
 
 		if findErr != nil {
-			log.Printf("⚠️ No transaction found for failed payment CheckoutRequestID: %s", callback.CheckoutRequestID)
 			return fmt.Errorf("failed to find transaction for failed payment: %w", findErr)
 		}
-
-		log.Printf("📝 Marking transaction %s as failed", transactionID)
 
 		// Commit transaction first to release the lock
 		if err = tx.Commit(); err != nil {
@@ -318,8 +315,6 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		if err != nil {
 			return fmt.Errorf("failed to update failed transaction status: %w", err)
 		}
-
-		log.Printf("✅ Successfully marked transaction %s as failed", transactionID)
 		return nil
 	}
 }
@@ -328,7 +323,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 func (s *MpesaService) createMpesaTransaction(tx *sql.Tx, callback *models.MpesaCallback, amount float64, receiptNumber, phoneNumber string) (string, error) {
 	// Find user by phone number
 	var userID string
-	userQuery := "SELECT id FROM users WHERE phone = ?"
+	userQuery := "SELECT id FROM users WHERE phone = $1"
 	err := tx.QueryRow(userQuery, phoneNumber).Scan(&userID)
 	if err != nil {
 		return "", fmt.Errorf("failed to find user by phone: %w", err)
@@ -336,7 +331,7 @@ func (s *MpesaService) createMpesaTransaction(tx *sql.Tx, callback *models.Mpesa
 
 	// Get user's personal wallet
 	var walletID string
-	walletQuery := "SELECT id FROM wallets WHERE owner_id = ? AND type = ?"
+	walletQuery := "SELECT id FROM wallets WHERE owner_id = $1 AND type = $2"
 	err = tx.QueryRow(walletQuery, userID, models.WalletTypePersonal).Scan(&walletID)
 	if err != nil {
 		return "", fmt.Errorf("failed to find user wallet: %w", err)
@@ -361,7 +356,7 @@ func (s *MpesaService) createMpesaTransaction(tx *sql.Tx, callback *models.Mpesa
 			id, to_wallet_id, type, status, amount, currency, description,
 			reference, payment_method, metadata, fees, initiated_by,
 			requires_approval, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 
 	_, err = tx.Exec(insertQuery,
@@ -378,7 +373,7 @@ func (s *MpesaService) createMpesaTransaction(tx *sql.Tx, callback *models.Mpesa
 
 // updateTransactionStatus updates transaction status
 func (s *MpesaService) updateTransactionStatus(transactionID string, status models.TransactionStatus) error {
-	updateQuery := "UPDATE transactions SET status = ?, updated_at = ? WHERE id = ?"
+	updateQuery := "UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3"
 	result, err := s.db.Exec(updateQuery, status, utils.NowEAT(), transactionID)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction status: %w", err)
@@ -414,8 +409,8 @@ func (s *MpesaService) updateMpesaTransaction(tx *sql.Tx, transactionID, receipt
 
 	updateQuery := `
 		UPDATE transactions
-		SET status = ?, metadata = ?, updated_at = ?
-		WHERE id = ?
+		SET status = $1, metadata = $2, updated_at = $3
+		WHERE id = $4
 	`
 
 	result, err := tx.Exec(updateQuery, models.TransactionStatusCompleted, string(metadataJSON), time.Now(), transactionID)

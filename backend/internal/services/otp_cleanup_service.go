@@ -57,7 +57,7 @@ func (s *OTPCleanupService) CleanupExpiredTokens() {
 	// Clean up expired email verification tokens
 	emailResult, err := s.db.Exec(`
 		DELETE FROM email_verification_tokens 
-		WHERE expires_at < ? OR used = TRUE
+		WHERE expires_at < $1 OR used = TRUE
 	`, now)
 	
 	if err != nil {
@@ -72,7 +72,7 @@ func (s *OTPCleanupService) CleanupExpiredTokens() {
 	// Clean up expired password reset tokens
 	passwordResult, err := s.db.Exec(`
 		DELETE FROM password_reset_tokens 
-		WHERE expires_at < ? OR used = TRUE
+		WHERE expires_at < $1 OR used = TRUE
 	`, now)
 	
 	if err != nil {
@@ -100,7 +100,7 @@ func (s *OTPCleanupService) GetTokenStats() (map[string]interface{}, error) {
 	}
 	
 	err = s.db.QueryRow(`
-		SELECT COUNT(*) FROM email_verification_tokens WHERE expires_at < ?
+		SELECT COUNT(*) FROM email_verification_tokens WHERE expires_at < $1
 	`, time.Now()).Scan(&emailExpired)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get email token expired count: %w", err)
@@ -124,7 +124,7 @@ func (s *OTPCleanupService) GetTokenStats() (map[string]interface{}, error) {
 	}
 	
 	err = s.db.QueryRow(`
-		SELECT COUNT(*) FROM password_reset_tokens WHERE expires_at < ?
+		SELECT COUNT(*) FROM password_reset_tokens WHERE expires_at < $1
 	`, time.Now()).Scan(&passwordExpired)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get password token expired count: %w", err)
@@ -157,18 +157,16 @@ func (s *OTPCleanupService) GetTokenStats() (map[string]interface{}, error) {
 // ForceCleanupUserTokens removes all tokens for a specific user
 func (s *OTPCleanupService) ForceCleanupUserTokens(userID string) error {
 	// Clean up email verification tokens
-	_, err := s.db.Exec(`DELETE FROM email_verification_tokens WHERE user_id = ?`, userID)
+	_, err := s.db.Exec(`DELETE FROM email_verification_tokens WHERE user_id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("failed to cleanup user email tokens: %w", err)
 	}
 	
 	// Clean up password reset tokens
-	_, err = s.db.Exec(`DELETE FROM password_reset_tokens WHERE user_id = ?`, userID)
+	_, err = s.db.Exec(`DELETE FROM password_reset_tokens WHERE user_id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("failed to cleanup user password tokens: %w", err)
 	}
-	
-	log.Printf("🧹 Force cleaned up all tokens for user: %s", userID)
 	return nil
 }
 
@@ -178,7 +176,7 @@ func (s *OTPCleanupService) ValidateTokenNotExpired(tableName, token string) (bo
 	var used bool
 	
 	query := fmt.Sprintf(`
-		SELECT expires_at, used FROM %s WHERE token = ?
+		SELECT expires_at, used FROM %s WHERE token = $1
 	`, tableName)
 	
 	err := s.db.QueryRow(query, token).Scan(&expiresAt, &used)
@@ -208,7 +206,7 @@ func (s *OTPCleanupService) GetUserActiveTokens(userID string) (map[string]inter
 	emailRows, err := s.db.Query(`
 		SELECT token, expires_at, created_at, trial_count 
 		FROM email_verification_tokens 
-		WHERE user_id = ? AND expires_at > ? AND used = FALSE
+		WHERE user_id = $1 AND expires_at > $2 AND used = FALSE
 	`, userID, time.Now())
 	
 	if err != nil {
@@ -240,7 +238,7 @@ func (s *OTPCleanupService) GetUserActiveTokens(userID string) (map[string]inter
 	passwordRows, err := s.db.Query(`
 		SELECT token, expires_at, created_at, trial_count 
 		FROM password_reset_tokens 
-		WHERE user_id = ? AND expires_at > ? AND used = FALSE
+		WHERE user_id = $1 AND expires_at > $2 AND used = FALSE
 	`, userID, time.Now())
 	
 	if err != nil {

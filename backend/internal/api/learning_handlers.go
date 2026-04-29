@@ -230,7 +230,7 @@ func GetLearningCategory(c *gin.Context) {
 	query := `
 		SELECT id, name, description, icon, color, sort_order, is_active, created_at, updated_at
 		FROM learning_categories
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var category LearningCategory
@@ -470,7 +470,7 @@ func getUserCourseProgress(db *sql.DB, userID, courseID string) *UserCourseProgr
 		SELECT id, user_id, course_id, status, progress_percentage, current_lesson_id,
 			   started_at, completed_at, last_accessed_at, time_spent_minutes
 		FROM user_course_progress 
-		WHERE user_id = ? AND course_id = ?
+		WHERE user_id = $1 AND course_id = $2
 	`
 
 	var progress UserCourseProgress
@@ -526,7 +526,7 @@ func GetLearningCourse(c *gin.Context) {
 		FROM learning_courses lc
 		LEFT JOIN learning_categories cat ON lc.category_id = cat.id
 		LEFT JOIN users u ON lc.created_by = u.id
-		WHERE lc.id = ?
+		WHERE lc.id = $1
 	`
 
 	var course LearningCourse
@@ -673,7 +673,7 @@ func StartCourse(c *gin.Context) {
 
 	// Check if course exists
 	var courseExists bool
-	err := db.(*sql.DB).QueryRow("SELECT EXISTS(SELECT 1 FROM learning_courses WHERE id = ? AND status = 'published')", courseID).Scan(&courseExists)
+	err := db.(*sql.DB).QueryRow("SELECT EXISTS(SELECT 1 FROM learning_courses WHERE id = $1 AND status = 'published')", courseID).Scan(&courseExists)
 	if err != nil || !courseExists {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -684,7 +684,7 @@ func StartCourse(c *gin.Context) {
 
 	// Check if user already has progress for this course
 	var existingProgressID string
-	err = db.(*sql.DB).QueryRow("SELECT id FROM user_course_progress WHERE user_id = ? AND course_id = ?", userID, courseID).Scan(&existingProgressID)
+	err = db.(*sql.DB).QueryRow("SELECT id FROM user_course_progress WHERE user_id = $1 AND course_id = $2", userID, courseID).Scan(&existingProgressID)
 
 	if err == sql.ErrNoRows {
 		// Create new progress record
@@ -694,7 +694,7 @@ func StartCourse(c *gin.Context) {
 		query := `
 			INSERT INTO user_course_progress
 			(id, user_id, course_id, status, progress_percentage, started_at, last_accessed_at, created_at, updated_at)
-			VALUES (?, ?, ?, 'in_progress', 0, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, 'in_progress', 0, $4, $5, $6, $7)
 		`
 
 		_, err = db.(*sql.DB).Exec(query, progressID, userID, courseID, now, now, now, now)
@@ -710,8 +710,8 @@ func StartCourse(c *gin.Context) {
 		now := time.Now()
 		query := `
 			UPDATE user_course_progress
-			SET status = 'in_progress', last_accessed_at = ?, updated_at = ?
-			WHERE user_id = ? AND course_id = ?
+			SET status = 'in_progress', last_accessed_at = $4, updated_at = $5
+			WHERE user_id = $1 AND course_id = $2
 		`
 
 		_, err = db.(*sql.DB).Exec(query, now, now, userID, courseID)
@@ -739,11 +739,11 @@ func StartCourse(c *gin.Context) {
 // Helper function to update course view count
 func updateCourseViewCount(db *sql.DB, courseID, userID string) {
 	// Update view count
-	db.Exec("UPDATE learning_courses SET view_count = view_count + 1 WHERE id = ?", courseID)
+	db.Exec("UPDATE learning_courses SET view_count = view_count + 1 WHERE id = $1", courseID)
 
 	// Update user's last accessed time if they have progress
 	now := time.Now()
-	db.Exec("UPDATE user_course_progress SET last_accessed_at = ?, updated_at = ? WHERE user_id = ? AND course_id = ?",
+	db.Exec("UPDATE user_course_progress SET last_accessed_at = $1, updated_at = $2 WHERE user_id = $3 AND course_id = $4",
 		now, now, userID, courseID)
 }
 
@@ -802,7 +802,7 @@ func SubmitQuizResults(c *gin.Context) {
 
 	// Check if progress record exists
 	var existingID string
-	checkQuery := `SELECT id FROM user_course_progress WHERE user_id = ? AND course_id = ?`
+	checkQuery := `SELECT id FROM user_course_progress WHERE user_id = $1 AND course_id = $2`
 	err := db.(*sql.DB).QueryRow(checkQuery, userID, courseID).Scan(&existingID)
 
 	if err == sql.ErrNoRows {
@@ -811,7 +811,7 @@ func SubmitQuizResults(c *gin.Context) {
 		progressQuery := `
 			INSERT INTO user_course_progress
 			(id, user_id, course_id, status, progress_percentage, completed_at, last_accessed_at, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		`
 		_, err = db.(*sql.DB).Exec(progressQuery,
 			progressID, userID, courseID, status, progressPercentage, completedAt, now, now, now)
@@ -819,8 +819,8 @@ func SubmitQuizResults(c *gin.Context) {
 		// Update existing progress record
 		progressQuery := `
 			UPDATE user_course_progress
-			SET status = ?, progress_percentage = ?, completed_at = ?, last_accessed_at = ?, updated_at = ?
-			WHERE user_id = ? AND course_id = ?
+			SET status = $1, progress_percentage = $2, completed_at = $3, last_accessed_at = $4, updated_at = $5
+			WHERE user_id = $6 AND course_id = $7
 		`
 		_, err = db.(*sql.DB).Exec(progressQuery,
 			status, progressPercentage, completedAt, now, now, userID, courseID)
@@ -840,7 +840,7 @@ func SubmitQuizResults(c *gin.Context) {
 	resultsQuery := `
 		INSERT INTO quiz_results
 		(user_id, course_id, score, correct_answers, total_questions, passed, time_taken, detailed_results, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err = db.(*sql.DB).Exec(resultsQuery,

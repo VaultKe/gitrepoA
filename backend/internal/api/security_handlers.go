@@ -63,7 +63,7 @@ func ChangePassword(c *gin.Context) {
 
 	// Get current password hash from database
 	var currentPasswordHash string
-	err := db.(*sql.DB).QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&currentPasswordHash)
+	err := db.(*sql.DB).QueryRow("SELECT password_hash FROM users WHERE id = $1", userID).Scan(&currentPasswordHash)
 	if err != nil {
 		fmt.Printf("Failed to get user password: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -97,8 +97,8 @@ func ChangePassword(c *gin.Context) {
 	// Update password in database
 	updateQuery := `
 		UPDATE users
-		SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
+		SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
 	`
 
 	_, err = db.(*sql.DB).Exec(updateQuery, string(newPasswordHash), userID)
@@ -150,7 +150,7 @@ func GetLoginHistory(c *gin.Context) {
 	// Create login_sessions table if it doesn't exist
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS login_sessions (
-			id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id TEXT NOT NULL,
 			device_type TEXT,
 			device_name TEXT,
@@ -178,9 +178,9 @@ func GetLoginHistory(c *gin.Context) {
 			browser, ip_address, location, login_time, last_activity, 
 			status, is_current
 		FROM login_sessions 
-		WHERE user_id = ? 
+		WHERE user_id = $1 
 		ORDER BY login_time DESC 
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := db.(*sql.DB).Query(query, userID, limit, offset)
@@ -266,7 +266,7 @@ func GetLoginHistory(c *gin.Context) {
 		insertQuery := `
 			INSERT OR REPLACE INTO login_sessions
 			(id, user_id, device_type, device_name, operating_system, browser, ip_address, location, is_current)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
 		`
 		_, err := db.(*sql.DB).Exec(insertQuery,
 			currentSession.ID, currentSession.UserID, currentSession.DeviceType,
@@ -315,7 +315,7 @@ func LogoutAllDevices(c *gin.Context) {
 	updateQuery := `
 		UPDATE login_sessions 
 		SET status = 'revoked', last_activity = CURRENT_TIMESTAMP 
-		WHERE user_id = ? AND is_current = FALSE
+		WHERE user_id = $1 AND is_current = FALSE
 	`
 
 	result, err := db.(*sql.DB).Exec(updateQuery, userID)
@@ -371,7 +371,7 @@ func LogoutSpecificDevice(c *gin.Context) {
 	updateQuery := `
 		UPDATE login_sessions
 		SET status = 'revoked', last_activity = CURRENT_TIMESTAMP
-		WHERE id = ? AND user_id = ? AND is_current = FALSE
+		WHERE id = $1 AND user_id = $2 AND is_current = FALSE
 	`
 
 	result, err := db.(*sql.DB).Exec(updateQuery, sessionID, userID)
@@ -406,7 +406,7 @@ func RecordLoginSession(db *sql.DB, userID, deviceType, deviceName, os, browser,
 	// Ensure the table exists first
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS login_sessions (
-			id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id TEXT NOT NULL,
 			device_type TEXT,
 			device_name TEXT,
@@ -429,7 +429,7 @@ func RecordLoginSession(db *sql.DB, userID, deviceType, deviceName, os, browser,
 	}
 
 	// Mark all previous sessions as not current
-	_, err = db.Exec("UPDATE login_sessions SET is_current = FALSE WHERE user_id = ?", userID)
+	_, err = db.Exec("UPDATE login_sessions SET is_current = FALSE WHERE user_id = $1", userID)
 	if err != nil {
 		fmt.Printf("Failed to update previous sessions: %v\n", err)
 	}
@@ -438,7 +438,7 @@ func RecordLoginSession(db *sql.DB, userID, deviceType, deviceName, os, browser,
 	insertQuery := `
 		INSERT INTO login_sessions
 		(user_id, device_type, device_name, operating_system, browser, ip_address, location, is_current)
-		VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
 	`
 
 	fmt.Printf("Recording login session for user %s: device=%s, name=%s, os=%s, browser=%s, ip=%s, location=%s\n",

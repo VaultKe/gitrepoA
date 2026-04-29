@@ -155,7 +155,7 @@ func (s *ChatService) CreatePrivateChat(user1ID, user2ID string) (*ChatRoom, err
 	// Insert chat room
 	roomQuery := `
 		INSERT INTO chat_rooms (id, name, type, chama_id, created_by, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	// For private chats, name and chama_id should be NULL
 	var nameValue, chamaIDValue interface{}
@@ -190,7 +190,7 @@ func (s *ChatService) CreatePrivateChat(user1ID, user2ID string) (*ChatRoom, err
 
 		memberQuery := `
 			INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active, is_muted)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 		`
 		_, err = tx.Exec(memberQuery, member.ID, member.RoomID, member.UserID, member.Role, member.JoinedAt, member.IsActive, member.IsMuted)
 		if err != nil {
@@ -219,7 +219,7 @@ func (s *ChatService) CreateSupportChat(adminID, userID string, context map[stri
 			query := `
 				SELECT cr.id FROM chat_rooms cr
 				WHERE cr.type = 'support'
-				AND cr.context LIKE '%"supportRequestId":"' || ? || '"%'
+				AND cr.context LIKE '%"supportRequestId":"' || $1 || '"%'
 				AND cr.is_active = true
 				LIMIT 1
 			`
@@ -264,7 +264,7 @@ func (s *ChatService) CreateSupportChat(adminID, userID string, context map[stri
 	// Insert chat room with context
 	roomQuery := `
 		INSERT INTO chat_rooms (id, name, type, chama_id, created_by, is_active, created_at, updated_at, context)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err = tx.Exec(roomQuery, room.ID, nil, room.Type, nil, room.CreatedBy, room.IsActive, room.CreatedAt, room.UpdatedAt, contextJSON)
@@ -291,7 +291,7 @@ func (s *ChatService) CreateSupportChat(adminID, userID string, context map[stri
 
 		memberQuery := `
 			INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active, is_muted)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 		`
 		_, err = tx.Exec(memberQuery, member.ID, member.RoomID, member.UserID, member.Role, member.JoinedAt, member.IsActive, member.IsMuted)
 		if err != nil {
@@ -318,7 +318,7 @@ func (s *ChatService) CreateChamaChat(chamaID, createdBy string) (*ChatRoom, err
 
 	// Get chama details
 	var chamaName string
-	chamaQuery := "SELECT name FROM chamas WHERE id = ?"
+	chamaQuery := "SELECT name FROM chamas WHERE id = $1"
 	err = s.db.QueryRow(chamaQuery, chamaID).Scan(&chamaName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chama: %w", err)
@@ -345,7 +345,7 @@ func (s *ChatService) CreateChamaChat(chamaID, createdBy string) (*ChatRoom, err
 	// Insert chat room
 	roomQuery := `
 		INSERT INTO chat_rooms (id, name, type, chama_id, created_by, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	// For chama chats, both name and chama_id should have values
 	var nameValue, chamaIDValue interface{}
@@ -366,7 +366,7 @@ func (s *ChatService) CreateChamaChat(chamaID, createdBy string) (*ChatRoom, err
 	}
 
 	// Add all chama members to the chat
-	membersQuery := "SELECT user_id FROM chama_members WHERE chama_id = ? AND is_active = true"
+	membersQuery := "SELECT user_id FROM chama_members WHERE chama_id = $1 AND is_active = true"
 	rows, err := tx.Query(membersQuery, chamaID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chama members: %w", err)
@@ -391,7 +391,7 @@ func (s *ChatService) CreateChamaChat(chamaID, createdBy string) (*ChatRoom, err
 
 		memberQuery := `
 			INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active, is_muted)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 		`
 		_, err = tx.Exec(memberQuery, member.ID, member.RoomID, member.UserID, member.Role, member.JoinedAt, member.IsActive, member.IsMuted)
 		if err != nil {
@@ -488,7 +488,7 @@ func (s *ChatService) SendMessage(roomID, senderID string, messageType MessageTy
 	messageQuery := `
 		INSERT INTO chat_messages (
 			id, room_id, sender_id, message, type, content, metadata, encryption_metadata, file_url, is_edited, is_deleted, reply_to_id, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	_, err = tx.Exec(messageQuery,
 		message.ID, message.RoomID, message.SenderID, storedMessage, message.Type, message.Content,
@@ -511,8 +511,8 @@ func (s *ChatService) SendMessage(roomID, senderID string, messageType MessageTy
 
 	updateRoomQuery := `
 		UPDATE chat_rooms
-		SET last_message = ?, last_message_at = ?, updated_at = ?
-		WHERE id = ?
+		SET last_message = $1, last_message_at = $2, updated_at = $3
+		WHERE id = $4
 	`
 	_, err = tx.Exec(updateRoomQuery, lastMessageContent, message.CreatedAt, message.UpdatedAt, roomID)
 	if err != nil {
@@ -525,7 +525,7 @@ func (s *ChatService) SendMessage(roomID, senderID string, messageType MessageTy
 	}
 
 	// Populate sender information
-	senderQuery := "SELECT first_name, last_name, avatar FROM users WHERE id = ?"
+	senderQuery := "SELECT first_name, last_name, avatar FROM users WHERE id = $1"
 	sender := &models.User{ID: senderID}
 	err = s.db.QueryRow(senderQuery, senderID).Scan(&sender.FirstName, &sender.LastName, &sender.Avatar)
 	if err != nil {
@@ -561,9 +561,9 @@ func (s *ChatService) GetRoomMessages(roomID, userID string, limit, offset int) 
 			   u.first_name, u.last_name, u.avatar
 		FROM chat_messages m
 		INNER JOIN users u ON m.sender_id = u.id
-		WHERE m.room_id = ? AND m.is_deleted = false
+		WHERE m.room_id = $1 AND m.is_deleted = false
 		ORDER BY m.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := s.db.Query(query, roomID, limit, offset)
@@ -676,7 +676,7 @@ func (s *ChatService) GetUserChatRooms(userID string) ([]*ChatRoomWithParticipan
 			WHERE is_deleted = false
 			GROUP BY room_id
 		) message_counts ON r.id = message_counts.room_id
-		WHERE m.user_id = ? AND m.is_active = true AND r.is_active = true
+		WHERE m.user_id = $1 AND m.is_active = true AND r.is_active = true
 		ORDER BY r.last_message_at DESC, r.created_at DESC
 		LIMIT 50
 	`
@@ -740,7 +740,7 @@ func (s *ChatService) GetUserChatRooms(userID string) ([]*ChatRoomWithParticipan
 				SELECT u.id, u.first_name, u.last_name, u.avatar
 				FROM users u
 				INNER JOIN chat_room_members m ON u.id = m.user_id
-				WHERE m.room_id = ? AND m.user_id != ? AND m.is_active = true
+				WHERE m.room_id = $1 AND m.user_id != $2 AND m.is_active = true
 				LIMIT 1
 			`
 			var otherUser models.User
@@ -757,8 +757,6 @@ func (s *ChatService) GetUserChatRooms(userID string) ([]*ChatRoomWithParticipan
 
 		rooms = append(rooms, extendedRoom)
 	}
-
-	fmt.Printf("✅ GetUserChatRooms completed: found %d rooms for user %s\n", len(rooms), userID)
 	return rooms, nil
 }
 
@@ -767,7 +765,7 @@ func (s *ChatService) IsUserMemberOfRoom(roomID, userID string) (bool, error) {
 	query := `
 		SELECT COUNT(*)
 		FROM chat_room_members
-		WHERE room_id = ? AND user_id = ? AND is_active = true
+		WHERE room_id = $1 AND user_id = $2 AND is_active = true
 	`
 
 	var count int
@@ -783,14 +781,12 @@ func (s *ChatService) IsUserMemberOfRoom(roomID, userID string) (bool, error) {
 func (s *ChatService) AddUserToRoom(roomID, userID string) error {
 	// First check if the room exists
 	var roomExists bool
-	checkRoomQuery := `SELECT EXISTS(SELECT 1 FROM chat_rooms WHERE id = ? AND is_active = true)`
+	checkRoomQuery := `SELECT EXISTS(SELECT 1 FROM chat_rooms WHERE id = $1 AND is_active = true)`
 	err := s.db.QueryRow(checkRoomQuery, roomID).Scan(&roomExists)
 	if err != nil {
-		return fmt.Errorf("failed to check if room exists: %w", err)
 	}
 
 	if !roomExists {
-		return fmt.Errorf("chat room does not exist or is not active")
 	}
 
 	// Check if user is already a member
@@ -807,15 +803,13 @@ func (s *ChatService) AddUserToRoom(roomID, userID string) error {
 	memberID := uuid.New().String()
 	insertQuery := `
 		INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active)
-		VALUES (?, ?, ?, 'member', datetime('now'), true)
+		VALUES ($1, $2, $3, 'member', datetime('now'), true)
 	`
 
 	_, err = s.db.Exec(insertQuery, memberID, roomID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to add user to room: %w", err)
 	}
-
-	fmt.Printf("✅ Added user %s to room %s\n", userID, roomID)
 	return nil
 }
 
@@ -825,7 +819,7 @@ func (s *ChatService) getLastMessageForRoom(roomID, userID string) (*ChatMessage
 		SELECT m.id, m.room_id, m.sender_id, m.type, m.content, m.metadata, m.file_url,
 			   m.is_edited, m.is_deleted, m.reply_to_id, m.created_at, m.updated_at
 		FROM chat_messages m
-		WHERE m.room_id = ? AND m.is_deleted = false
+		WHERE m.room_id = $1 AND m.is_deleted = false
 		ORDER BY m.created_at DESC
 		LIMIT 1
 	`
@@ -930,7 +924,7 @@ func (s *ChatService) getRoomParticipants(roomID string) ([]*models.User, error)
 		SELECT u.id, u.first_name, u.last_name, u.email, u.avatar, u.phone
 		FROM users u
 		INNER JOIN chat_room_members m ON u.id = m.user_id
-		WHERE m.room_id = ? AND m.is_active = true
+		WHERE m.room_id = $1 AND m.is_active = true
 		ORDER BY u.first_name, u.last_name
 	`
 
@@ -959,7 +953,7 @@ func (s *ChatService) getRoomParticipants(roomID string) ([]*models.User, error)
 // getRoomMessageCount gets the total message count for a room
 func (s *ChatService) getRoomMessageCount(roomID string) (int, error) {
 	var count int
-	query := `SELECT COUNT(*) FROM chat_messages WHERE room_id = ? AND is_deleted = false`
+	query := `SELECT COUNT(*) FROM chat_messages WHERE room_id = $1 AND is_deleted = false`
 	err := s.db.QueryRow(query, roomID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get message count: %w", err)
@@ -973,9 +967,9 @@ func (s *ChatService) getRoomUnreadCount(roomID, userID string) (int, error) {
 	query := `
 		SELECT COUNT(*)
 		FROM chat_messages m
-		LEFT JOIN chat_room_members rm ON rm.room_id = m.room_id AND rm.user_id = ?
-		WHERE m.room_id = ? AND m.is_deleted = false
-		AND m.sender_id != ?
+		LEFT JOIN chat_room_members rm ON rm.room_id = m.room_id AND rm.user_id = $1
+		WHERE m.room_id = $2 AND m.is_deleted = false
+		AND m.sender_id != $3
 		AND (rm.last_read_at IS NULL OR m.created_at > rm.last_read_at)
 	`
 	err := s.db.QueryRow(query, userID, roomID, userID).Scan(&count)
@@ -990,8 +984,8 @@ func (s *ChatService) MarkMessagesAsRead(roomID, userID string) error {
 	now := time.Now()
 	query := `
 		UPDATE chat_room_members
-		SET last_read_at = ?
-		WHERE room_id = ? AND user_id = ?
+		SET last_read_at = $1
+		WHERE room_id = $2 AND user_id = $3
 	`
 
 	_, err := s.db.Exec(query, now, roomID, userID)
@@ -1009,10 +1003,10 @@ func (s *ChatService) getPrivateChatRoom(user1ID, user2ID string) (*ChatRoom, er
 		SELECT r.id, r.name, r.type, r.chama_id, r.created_by, r.is_active,
 			   r.last_message, r.last_message_at, r.created_at, r.updated_at
 		FROM chat_rooms r
-		WHERE r.type = ? AND r.id IN (
+		WHERE r.type = $1 AND r.id IN (
 			SELECT m1.room_id FROM chat_room_members m1
 			INNER JOIN chat_room_members m2 ON m1.room_id = m2.room_id
-			WHERE m1.user_id = ? AND m2.user_id = ? AND m1.is_active = true AND m2.is_active = true
+			WHERE m1.user_id = $2 AND m2.user_id = $3 AND m1.is_active = true AND m2.is_active = true
 		)
 	`
 
@@ -1034,7 +1028,7 @@ func (s *ChatService) GetChatRoomByID(roomID string) (*ChatRoom, error) {
 		SELECT id, name, type, chama_id, created_by, is_active,
 			   last_message, last_message_at, created_at, updated_at
 		FROM chat_rooms
-		WHERE id = ? AND is_active = true
+		WHERE id = $1 AND is_active = true
 	`
 
 	room := &ChatRoom{}
@@ -1051,7 +1045,7 @@ func (s *ChatService) GetChatRoomByID(roomID string) (*ChatRoom, error) {
 }
 
 func (s *ChatService) isRoomMember(roomID, userID string) (bool, error) {
-	query := "SELECT COUNT(*) FROM chat_room_members WHERE room_id = ? AND user_id = ? AND is_active = true"
+	query := "SELECT COUNT(*) FROM chat_room_members WHERE room_id = $1 AND user_id = $2 AND is_active = true"
 	var count int
 	err := s.db.QueryRow(query, roomID, userID).Scan(&count)
 	if err != nil {
@@ -1137,7 +1131,7 @@ func (s *ChatService) getChamaChatRoom(chamaID string) (*ChatRoom, error) {
 		SELECT r.id, r.name, r.type, r.chama_id, r.created_by, r.is_active,
 			   r.last_message, r.last_message_at, r.created_at, r.updated_at
 		FROM chat_rooms r
-		WHERE r.type = ? AND r.chama_id = ? AND r.is_active = true
+		WHERE r.type = $1 AND r.chama_id = $2 AND r.is_active = true
 	`
 
 	room := &ChatRoom{}
@@ -1184,7 +1178,7 @@ func (s *ChatService) AddUserToChamaChat(chamaID, userID string) error {
 
 	memberQuery := `
 		INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active, is_muted)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 	_, err = s.db.Exec(memberQuery, member.ID, member.RoomID, member.UserID, member.Role, member.JoinedAt, member.IsActive, member.IsMuted)
 	if err != nil {
@@ -1210,7 +1204,7 @@ func (s *ChatService) GetRoomMembers(roomID, userID string) ([]*ChatRoomMember, 
 			   u.first_name, u.last_name, u.email, u.avatar
 		FROM chat_room_members m
 		INNER JOIN users u ON m.user_id = u.id
-		WHERE m.room_id = ? AND m.is_active = true
+		WHERE m.room_id = $1 AND m.is_active = true
 		ORDER BY m.joined_at ASC
 	`
 
@@ -1257,7 +1251,7 @@ func (s *ChatService) DeleteChatRoom(roomID, userID string) error {
 	query := `
 		UPDATE chat_room_members
 		SET is_active = false
-		WHERE room_id = ? AND user_id = ?
+		WHERE room_id = $1 AND user_id = $2
 	`
 
 	_, err = s.db.Exec(query, roomID, userID)
@@ -1285,8 +1279,8 @@ func (s *ChatService) ClearChatRoom(roomID, userID string) error {
 	now := time.Now()
 	query := `
 		UPDATE chat_room_members
-		SET last_read_at = ?
-		WHERE room_id = ? AND user_id = ?
+		SET last_read_at = $1
+		WHERE room_id = $2 AND user_id = $3
 	`
 
 	_, err = s.db.Exec(query, now, roomID, userID)

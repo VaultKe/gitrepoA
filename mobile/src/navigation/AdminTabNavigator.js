@@ -46,7 +46,6 @@ import ReminderScreen from '../screens/user/reminders/ReminderScreen';
 import NotificationToneScreen from '../screens/user/settings/NotificationToneScreen';
 
 // Demo Screens
-import LogoShowcaseScreen from '../screens/demo/LogoShowcaseScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -494,16 +493,7 @@ function AdminTabNavigator({ route }) {
         initialParams={routeParams}
       />
 
-      {/* Demo Screens */}
-      <Tab.Screen
-        name="LogoShowcase"
-        component={LogoShowcaseScreen}
-        options={{
-          title: 'VaultKe Logo Showcase',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-        initialParams={routeParams}
-      />
+
     </Tab.Navigator>
   );
 }

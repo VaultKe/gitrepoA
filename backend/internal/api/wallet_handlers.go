@@ -99,21 +99,13 @@ func GetWalletBalance(c *gin.Context) {
 	// The transaction-based calculation needs to be fixed to include contribution transactions
 	calculatedBalance := wallet.Balance
 
-	fmt.Printf("💰 Using stored wallet balance: %.2f for wallet %s\n", calculatedBalance, wallet.ID)
-
-	fmt.Printf("💰 Wallet balance calculation for %s: stored=%.2f, calculated=%.2f\n", wallet.ID, wallet.Balance, calculatedBalance)
-
 	// Update stored balance if different
 	if calculatedBalance != wallet.Balance {
-		fmt.Printf("🔄 Updating wallet balance from %.2f to %.2f\n", wallet.Balance, calculatedBalance)
-		_, err = db.(*sql.DB).Exec("UPDATE wallets SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", calculatedBalance, wallet.ID)
+		_, err = db.(*sql.DB).Exec("UPDATE wallets SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", calculatedBalance, wallet.ID)
 		if err != nil {
-			fmt.Printf("❌ Failed to update wallet balance: %v\n", err)
 		} else {
-			fmt.Printf("✅ Wallet balance updated successfully\n")
 		}
 	} else {
-		fmt.Printf("✅ Wallet balance is already correct: %.2f\n", calculatedBalance)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -361,7 +353,7 @@ func TransferMoney(c *gin.Context) {
 
 	if req.RecipientType == "phone" {
 		// Find user by phone number
-		err := db.(*sql.DB).QueryRow("SELECT id FROM users WHERE phone = ?", req.RecipientID).Scan(&recipientUserID)
+		err := db.(*sql.DB).QueryRow("SELECT id FROM users WHERE phone = $1", req.RecipientID).Scan(&recipientUserID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"success": false,
@@ -371,7 +363,7 @@ func TransferMoney(c *gin.Context) {
 		}
 	} else if req.RecipientType == "email" {
 		// Find user by email
-		err := db.(*sql.DB).QueryRow("SELECT id FROM users WHERE email = ?", req.RecipientID).Scan(&recipientUserID)
+		err := db.(*sql.DB).QueryRow("SELECT id FROM users WHERE email = $1", req.RecipientID).Scan(&recipientUserID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"success": false,
@@ -446,7 +438,7 @@ func TransferMoney(c *gin.Context) {
 
 	// Get recipient details for response
 	var recipientName, recipientPhone string
-	db.(*sql.DB).QueryRow("SELECT COALESCE(first_name, '') || ' ' || COALESCE(last_name, ''), phone FROM users WHERE id = ?", recipientUserID).Scan(&recipientName, &recipientPhone)
+	db.(*sql.DB).QueryRow("SELECT COALESCE(first_name, '') || ' ' || COALESCE(last_name, ''), phone FROM users WHERE id = $1", recipientUserID).Scan(&recipientName, &recipientPhone)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -513,7 +505,7 @@ func DepositMoney(c *gin.Context) {
 		}
 
 		var userPhone string
-		err := db.(*sql.DB).QueryRow("SELECT phone FROM users WHERE id = ?", userID).Scan(&userPhone)
+		err := db.(*sql.DB).QueryRow("SELECT phone FROM users WHERE id = $1", userID).Scan(&userPhone)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -590,8 +582,8 @@ func DepositMoney(c *gin.Context) {
 				// Update the pending transaction to completed
 				_, err = db.(*sql.DB).Exec(`
 					UPDATE transactions
-					SET status = 'completed', reference = ?, updated_at = CURRENT_TIMESTAMP
-					WHERE id = ?
+					SET status = 'completed', reference = $1, updated_at = CURRENT_TIMESTAMP
+					WHERE id = $2
 				`, mockTransactionID, transactionID)
 				if err != nil {
 					log.Printf("Failed to update mock transaction: %v", err)
@@ -600,8 +592,8 @@ func DepositMoney(c *gin.Context) {
 				// Update wallet balance
 				_, err = db.(*sql.DB).Exec(`
 					UPDATE wallets
-					SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-					WHERE id = ?
+					SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP
+					WHERE id = $2
 				`, req.Amount, "wallet-personal-"+userID.(string))
 				if err != nil {
 					log.Printf("Failed to update wallet balance: %v", err)
@@ -635,10 +627,10 @@ func DepositMoney(c *gin.Context) {
 			// Update additional failure details
 			_, updateErr = db.(*sql.DB).Exec(`
 				UPDATE transactions
-				SET reference = ?,
-				    description = CONCAT(description, ' - ', ?),
+				SET reference = $1,
+				    description = CONCAT(description, ' - ', $2),
 				    updated_at = CURRENT_TIMESTAMP
-				WHERE id = ?
+				WHERE id = $3
 			`, fmt.Sprintf("FAILED_%d", time.Now().UnixNano()), failureReason, transactionID)
 
 			if updateErr != nil {
@@ -732,14 +724,14 @@ func DepositMoney(c *gin.Context) {
 	// Add to personal wallet
 	_, err = tx.Exec(`
 		UPDATE wallets
-		SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-		WHERE owner_id = ? AND type = 'personal'
+		SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP
+		WHERE owner_id = $2 AND type = 'personal'
 	`, req.Amount, userID)
 	if err != nil {
 		// If personal wallet doesn't exist, create it
 		_, err = tx.Exec(`
 			INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
-			VALUES (?, ?, 'personal', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			VALUES ($1, $2, 'personal', $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`, "wallet-personal-"+userID.(string), userID, req.Amount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -767,7 +759,7 @@ func DepositMoney(c *gin.Context) {
 			id, to_wallet_id, type, amount, currency, description,
 			reference, payment_method, status, initiated_by,
 			created_at, updated_at
-		) VALUES (?, ?, 'deposit', ?, 'KES', ?, ?, ?, 'completed', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, 'deposit', $3, 'KES', $4, $5, $6, 'completed', $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`, transactionID, "wallet-personal-"+userID.(string), req.Amount, description, req.Reference, paymentMethod, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

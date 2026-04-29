@@ -17,15 +17,13 @@ import (
 // checkAndAdvanceMerryGoRound is a utility function that can be called directly
 // to check and advance a merry-go-round without requiring a Gin context
 func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID string) error {
-	fmt.Printf("🔄 Checking if merry-go-round %s should advance...\n", merryGoRoundID)
-
 	// Get current round information
 	var currentRound, totalParticipants int
 	var status string
 	err := db.QueryRow(`
 		SELECT current_round, total_participants, status
 		FROM merry_go_rounds
-		WHERE id = ? AND chama_id = ?
+		WHERE id = $1 AND chama_id = $2
 	`, merryGoRoundID, chamaID).Scan(&currentRound, &totalParticipants, &status)
 	if err != nil {
 		return fmt.Errorf("failed to get merry-go-round information: %v", err)
@@ -43,17 +41,14 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 		FROM transactions t
 		WHERE t.type = 'contribution'
 			AND json_extract(t.metadata, '$.contributionType') = 'merry-go-round'
-			AND json_extract(t.metadata, '$.merryGoRoundId') = ?
-			AND json_extract(t.metadata, '$.roundNumber') = ?
-			AND json_extract(t.metadata, '$.chamaId') = ?
+			AND json_extract(t.metadata, '$.merryGoRoundId') = $1
+			AND json_extract(t.metadata, '$.roundNumber') = $2
+			AND json_extract(t.metadata, '$.chamaId') = $3
 			AND t.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
 
 	if err != nil {
-		return fmt.Errorf("failed to count contributions: %v", err)
 	}
-
-	fmt.Printf("🔍 Round %d: %d/%d contributions completed\n", currentRound, contributionCount, totalParticipants-1)
 
 	// Check if all non-recipient participants have contributed (100% completion)
 	if contributionCount >= (totalParticipants - 1) {
@@ -66,14 +61,12 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 			_, err = db.Exec(`
 				UPDATE merry_go_rounds
 				SET status = 'completed', updated_at = CURRENT_TIMESTAMP
-				WHERE id = ?
+				WHERE id = $1
 			`, merryGoRoundID)
 
 			if err != nil {
 				return fmt.Errorf("failed to complete merry-go-round: %v", err)
 			}
-
-			fmt.Printf("✅ Merry-go-round %s completed! All rounds finished.\n", merryGoRoundID)
 			return nil
 		}
 
@@ -81,10 +74,9 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 		var frequency string
 		var startDate time.Time
 		err = db.QueryRow(`
-			SELECT frequency, start_date FROM merry_go_rounds WHERE id = ?
+			SELECT frequency, start_date FROM merry_go_rounds WHERE id = $1
 		`, merryGoRoundID).Scan(&frequency, &startDate)
 		if err != nil {
-			return fmt.Errorf("failed to get merry-go-round schedule: %v", err)
 		}
 
 		var nextPayoutDate time.Time
@@ -97,20 +89,14 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 		// Advance to next round
 		_, err = db.Exec(`
 			UPDATE merry_go_rounds
-			SET current_round = ?, next_payout_date = ?, updated_at = CURRENT_TIMESTAMP
-			WHERE id = ?
+			SET current_round = $1, next_payout_date = $2, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $3
 		`, nextRound, nextPayoutDate, merryGoRoundID)
 
 		if err != nil {
-			return fmt.Errorf("failed to advance to next round: %v", err)
 		}
-
-		fmt.Printf("✅ Advanced merry-go-round %s to round %d\n", merryGoRoundID, nextRound)
 		return nil
 	}
-
-	// Round not yet complete
-	fmt.Printf("⏳ Round %d in progress: %d/%d contributions completed\n", currentRound, contributionCount, totalParticipants)
 	return nil
 }
 
@@ -150,7 +136,7 @@ func GetMerryGoRounds(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, chamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -178,7 +164,7 @@ func GetMerryGoRounds(c *gin.Context) {
 			u.first_name, u.last_name, u.email
 		FROM merry_go_rounds mgr
 		JOIN users u ON mgr.created_by = u.id
-		WHERE mgr.chama_id = ?
+		WHERE mgr.chama_id = $1
 		ORDER BY mgr.created_at DESC
 	`, chamaID)
 	if err != nil {
@@ -237,9 +223,9 @@ func GetMerryGoRounds(c *gin.Context) {
 				FROM transactions t
 				WHERE t.type = 'contribution'
 					AND json_extract(t.metadata, '$.contributionType') = 'merry-go-round'
-					AND json_extract(t.metadata, '$.merryGoRoundId') = ?
-					AND json_extract(t.metadata, '$.roundNumber') = ?
-					AND json_extract(t.metadata, '$.chamaId') = ?
+					AND json_extract(t.metadata, '$.merryGoRoundId') = $1
+					AND json_extract(t.metadata, '$.roundNumber') = $2
+					AND json_extract(t.metadata, '$.chamaId') = $3
 					AND t.status = 'completed'
 			`, mgr.ID, mgr.CurrentRound, mgr.ChamaID).Scan(&contributionCount)
 
@@ -248,20 +234,16 @@ func GetMerryGoRounds(c *gin.Context) {
 				err = db.(*sql.DB).QueryRow(`
 					SELECT COUNT(*)
 					FROM merry_go_round_participants
-					WHERE merry_go_round_id = ?
+					WHERE merry_go_round_id = $1
 				`, mgr.ID).Scan(&totalParticipants)
 
 				if err == nil {
-					// Round is complete if all non-recipient participants have contributed
 					roundComplete = contributionCount >= (totalParticipants - 1)
-					fmt.Printf("🎯 Round completion check for %s: %d/%d contributions needed, complete: %v\n", mgr.ID, contributionCount, totalParticipants-1, roundComplete)
 				} else {
-					fmt.Printf("❌ Error counting participants for %s: %v\n", mgr.ID, err)
 					roundComplete = false
 					totalParticipants = 0
 				}
 			} else {
-				fmt.Printf("❌ Error checking round completion for %s: %v\n", mgr.ID, err)
 				roundComplete = false
 				contributionCount = 0
 				totalParticipants = 0
@@ -279,7 +261,7 @@ func GetMerryGoRounds(c *gin.Context) {
 				u.first_name, u.last_name, u.email
 			FROM merry_go_round_participants mgrp
 			JOIN users u ON mgrp.user_id = u.id
-			WHERE mgrp.merry_go_round_id = ?
+			WHERE mgrp.merry_go_round_id = $1
 			ORDER BY mgrp.position ASC
 		`, mgr.ID)
 
@@ -488,7 +470,7 @@ func CreateMerryGoRound(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, req.ChamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -524,7 +506,7 @@ func CreateMerryGoRound(c *gin.Context) {
 			id, chama_id, name, description, amount_per_round, frequency,
 			total_participants, current_round, status, start_date, next_payout_date,
 			created_by, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, 1, 'active', $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`, mgrID, req.ChamaID, req.Name, req.Description, req.AmountPerRound, req.Frequency, req.TotalParticipants, startDate, nextPayoutDate, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -536,25 +518,20 @@ func CreateMerryGoRound(c *gin.Context) {
 
 	// Insert participants into merry_go_round_participants table
 	if len(req.Participants) > 0 {
-		fmt.Printf("🔄 Inserting %d participants into merry_go_round_participants table\n", len(req.Participants))
-
 		for i, participant := range req.Participants {
 			participantID := fmt.Sprintf("mgrp-%d-%d", time.Now().UnixNano(), i)
 
-			fmt.Printf("📝 Adding participant: ID=%s, UserID=%s, Position=%d\n", participantID, participant.UserID, participant.Position)
 
 			_, err = db.(*sql.DB).Exec(`
 				INSERT INTO merry_go_round_participants (
 					id, merry_go_round_id, user_id, position, has_received, received_at,
 					total_contributed, joined_at
-				) VALUES (?, ?, ?, ?, FALSE, NULL, 0, CURRENT_TIMESTAMP)
+				) VALUES ($1, $2, $3, $4, FALSE, NULL, 0, CURRENT_TIMESTAMP)
 			`, participantID, mgrID, participant.UserID, participant.Position)
 
 			if err != nil {
-				fmt.Printf("❌ Failed to add participant %s (UserID: %s): %v\n", participantID, participant.UserID, err)
 				// Continue with other participants instead of failing completely
 			} else {
-				fmt.Printf("✅ Successfully added participant %s\n", participantID)
 			}
 		}
 		
@@ -563,14 +540,12 @@ func CreateMerryGoRound(c *gin.Context) {
 		var participantCount int
 		err = db.(*sql.DB).QueryRow(`
 			SELECT COUNT(*) FROM merry_go_round_participants
-			WHERE merry_go_round_id = ?
+			WHERE merry_go_round_id = $1
 		`, mgrID).Scan(&participantCount)
 
 		if err == nil {
-			fmt.Printf("🔍 Verification: %d participants found in database for merry-go-round %s\n", participantCount, mgrID)
 		}
 	} else {
-		fmt.Printf("⚠️ No participants provided in request\n")
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -665,11 +640,10 @@ func CheckUserContributionStatus(c *gin.Context) {
 
 	if roundID != "" {
 		// Use the specific merry-go-round
-		fmt.Printf("🎯 Using specific merry-go-round: %s\n", roundID)
 		err := db.(*sql.DB).QueryRow(`
 			SELECT id, current_round, amount_per_round, status
 			FROM merry_go_rounds
-			WHERE id = ? AND chama_id = ?
+			WHERE id = $1 AND chama_id = $2
 		`, roundID, chamaID).Scan(&merryGoRoundID, &currentRound, &amountPerRound, &status)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -691,7 +665,7 @@ func CheckUserContributionStatus(c *gin.Context) {
 		err := db.(*sql.DB).QueryRow(`
 			SELECT id, current_round, amount_per_round, status
 			FROM merry_go_rounds
-			WHERE chama_id = ? AND status = 'active'
+			WHERE chama_id = $1 AND status = 'active'
 			ORDER BY created_at DESC
 			LIMIT 1
 		`, chamaID).Scan(&merryGoRoundID, &currentRound, &amountPerRound, &status)
@@ -726,17 +700,16 @@ func CheckUserContributionStatus(c *gin.Context) {
 			SELECT 1 FROM transactions t
 			WHERE t.type = 'contribution'
 				AND json_extract(t.metadata, '$.contributionType') = 'merry-go-round'
-				AND json_extract(t.metadata, '$.merryGoRoundId') = ?
-				AND json_extract(t.metadata, '$.roundNumber') = ?
-				AND json_extract(t.metadata, '$.chamaId') = ?
-				AND t.initiated_by = ?
+				AND json_extract(t.metadata, '$.merryGoRoundId') = $1
+				AND json_extract(t.metadata, '$.roundNumber') = $2
+				AND json_extract(t.metadata, '$.chamaId') = $3
+				AND t.initiated_by = $4
 				AND t.status = 'completed'
 		)
 	`, merryGoRoundID, currentRound, chamaID, userID).Scan(&hasContributed)
 
 	if err != nil {
 		if err == context.DeadlineExceeded {
-			fmt.Printf("⚠️ Contribution status query timed out for user %s\n", userID)
 			c.JSON(http.StatusRequestTimeout, gin.H{
 				"success": false,
 				"error":   "Request timed out. Please try again.",
@@ -757,11 +730,10 @@ func CheckUserContributionStatus(c *gin.Context) {
 		SELECT mgrp.user_id, COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, 'Member')
 		FROM merry_go_round_participants mgrp
 		JOIN users u ON mgrp.user_id = u.id
-		WHERE mgrp.merry_go_round_id = ? AND mgrp.position = ?
+		WHERE mgrp.merry_go_round_id = $1 AND mgrp.position = $2
 	`, merryGoRoundID, currentRound).Scan(&currentRecipientID, &recipientName)
 
 	if err != nil {
-		fmt.Printf("⚠️ Failed to get recipient info: %v\n", err)
 		recipientName = "Unknown"
 	}
 
@@ -772,14 +744,13 @@ func CheckUserContributionStatus(c *gin.Context) {
 		FROM transactions t
 		WHERE t.type = 'contribution'
 			AND json_extract(t.metadata, '$.contributionType') = 'merry-go-round'
-			AND json_extract(t.metadata, '$.merryGoRoundId') = ?
-			AND json_extract(t.metadata, '$.roundNumber') = ?
-			AND json_extract(t.metadata, '$.chamaId') = ?
+			AND json_extract(t.metadata, '$.merryGoRoundId') = $1
+			AND json_extract(t.metadata, '$.roundNumber') = $2
+			AND json_extract(t.metadata, '$.chamaId') = $3
 			AND t.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&totalContributions)
 
 	if err != nil {
-		fmt.Printf("⚠️ Failed to count contributions: %v\n", err)
 		totalContributions = 0
 	}
 
@@ -788,11 +759,10 @@ func CheckUserContributionStatus(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT COUNT(*)
 		FROM merry_go_round_participants
-		WHERE merry_go_round_id = ?
+		WHERE merry_go_round_id = $1
 	`, merryGoRoundID).Scan(&totalParticipants)
 
 	if err != nil {
-		fmt.Printf("⚠️ Failed to count participants: %v\n", err)
 		totalParticipants = 0
 	}
 
@@ -801,12 +771,10 @@ func CheckUserContributionStatus(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM merry_go_round_participants
-			WHERE merry_go_round_id = ? AND user_id = ?
+			WHERE merry_go_round_id = $1 AND user_id = $2
 		)
 	`, merryGoRoundID, userID).Scan(&isParticipant)
-
 	if err != nil {
-		fmt.Printf("⚠️ Failed to check if user is participant: %v\n", err)
 		isParticipant = false
 	}
 
@@ -884,7 +852,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, chamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -909,7 +877,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT current_round, total_participants, status
 		FROM merry_go_rounds
-		WHERE id = ? AND chama_id = ?
+		WHERE id = $1 AND chama_id = $2
 	`, merryGoRoundID, chamaID).Scan(&currentRound, &totalParticipants, &status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -943,7 +911,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT current_round, status
 		FROM merry_go_rounds
-		WHERE id = ? AND chama_id = ?
+		WHERE id = $1 AND chama_id = $2
 	`, merryGoRoundID, chamaID).Scan(&updatedCurrentRound, &updatedStatus)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -961,9 +929,9 @@ func CheckAndAdvanceRound(c *gin.Context) {
 		FROM transactions t
 		WHERE t.type = 'contribution'
 			AND json_extract(t.metadata, '$.contributionType') = 'merry-go-round'
-			AND json_extract(t.metadata, '$.merryGoRoundId') = ?
-			AND json_extract(t.metadata, '$.roundNumber') = ?
-			AND json_extract(t.metadata, '$.chamaId') = ?
+			AND json_extract(t.metadata, '$.merryGoRoundId') = $1
+			AND json_extract(t.metadata, '$.roundNumber') = $2
+			AND json_extract(t.metadata, '$.chamaId') = $3
 			AND t.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
 
@@ -991,7 +959,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 		// Round was advanced
 		var nextPayoutDate time.Time
 		err = db.(*sql.DB).QueryRow(`
-			SELECT next_payout_date FROM merry_go_rounds WHERE id = ?
+			SELECT next_payout_date FROM merry_go_rounds WHERE id = $1
 		`, merryGoRoundID).Scan(&nextPayoutDate)
 
 		c.JSON(http.StatusOK, gin.H{
@@ -1059,7 +1027,7 @@ func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT id, name, description, amount_per_round, frequency, next_payout_date, chama_id
 		FROM merry_go_rounds
-		WHERE id = ?
+		WHERE id = $1
 	`, merryGoRoundID).Scan(&mgr.ID, &mgr.Name, &mgr.Description, &mgr.AmountPerRound, &mgr.Frequency, &mgr.NextPayoutDate, &mgr.ChamaID)
 
 	if err != nil {
@@ -1079,7 +1047,7 @@ func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 
 	// Get chama name for better labeling
 	var chamaName string
-	err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = ?", mgr.ChamaID).Scan(&chamaName)
+	err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = $1", mgr.ChamaID).Scan(&chamaName)
 	if err != nil {
 		chamaName = "Chama"
 	}
@@ -1151,7 +1119,7 @@ func CreateMerryGoRoundCalendarEvent(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT id, name, description, amount_per_round, frequency, next_payout_date, chama_id
 		FROM merry_go_rounds
-		WHERE id = ?
+		WHERE id = $1
 	`, merryGoRoundID).Scan(&mgr.ID, &mgr.Name, &mgr.Description, &mgr.AmountPerRound, &mgr.Frequency, &mgr.NextPayoutDate, &mgr.ChamaID)
 
 	if err != nil {
@@ -1165,7 +1133,7 @@ func CreateMerryGoRoundCalendarEvent(c *gin.Context) {
 
 	// Get chama name
 	var chamaName string
-	err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = ?", mgr.ChamaID).Scan(&chamaName)
+	err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = $1", mgr.ChamaID).Scan(&chamaName)
 	if err != nil {
 		chamaName = "Chama"
 	}

@@ -19,9 +19,9 @@ func createNotificationTx(tx *sql.Tx, notificationID, userID, notificationType, 
 			user_id, type, title, message, data, is_read, created_at, updated_at,
 			priority, category, reference_type, status, scheduled_for,
 			is_push, is_email, is_sms
-		) VALUES (?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-			?, ?, ?, 'pending', CURRENT_TIMESTAMP,
-			?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+			$6, $7, $8, 'pending', CURRENT_TIMESTAMP,
+			$9, $10, $11)
 	`, userID, notificationType, title, message, data,
 		getNotificationPriority(notificationType),
 		getNotificationCategory(notificationType),
@@ -41,9 +41,9 @@ func createNotification(db *sql.DB, notificationID, userID, notificationType, ti
 			user_id, type, title, message, data, is_read, created_at, updated_at,
 			priority, category, reference_type, status, scheduled_for,
 			is_push, is_email, is_sms
-		) VALUES (?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-			?, ?, ?, 'pending', CURRENT_TIMESTAMP,
-			?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+			$6, $7, $8, 'pending', CURRENT_TIMESTAMP,
+			$9, $10, $11)
 	`, userID, notificationType, title, message, data,
 		getNotificationPriority(notificationType),
 		getNotificationCategory(notificationType),
@@ -149,7 +149,7 @@ func GetLoanApplications(c *gin.Context) {
 
 	// Check loans for this specific chama
 	var chamaLoans int
-	err = db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM loans WHERE chama_id = ?", chamaID).Scan(&chamaLoans)
+	err = db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM loans WHERE chama_id = $1", chamaID).Scan(&chamaLoans)
 	if err != nil {
 		// fmt.Printf("❌ Failed to count loans for chama: %v\n", err)
 	} else {
@@ -179,7 +179,7 @@ func GetLoanApplications(c *gin.Context) {
 			u.first_name, u.last_name, u.email
 		FROM loans l
 		JOIN users u ON l.borrower_id = u.id
-		WHERE l.chama_id = ?
+		WHERE l.chama_id = $1
 		ORDER BY l.created_at DESC
 	`, chamaID)
 	if err != nil {
@@ -251,7 +251,7 @@ func GetLoanApplications(c *gin.Context) {
 	}
 
 	duration := time.Since(startTime)
-	fmt.Printf("⏱️  GetLoanApplications completed in %v for chamaId: %s\n", duration, chamaID)
+	fmt.Printf("GetLoanApplications completed in %v for chamaId: %s\n", duration, chamaID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -351,7 +351,7 @@ func CreateLoanApplication(c *gin.Context) {
 			duration, purpose, status, total_amount, remaining_amount,
 			required_guarantors, approved_guarantors, due_date,
 			created_at, updated_at
-		) VALUES (?, ?, ?, 'regular', ?, ?, ?, ?, 'pending', ?, ?, ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, 'regular', $4, $5, $6, $7, 'pending', $8, $9, $10, 0, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`, loanID, userID, req.ChamaID, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, totalAmount, len(req.Guarantors), dueDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -369,7 +369,7 @@ func CreateLoanApplication(c *gin.Context) {
 		_, err = tx.Exec(`
 			INSERT INTO guarantors (
 				id, loan_id, user_id, amount, status, created_at
-			) VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+			) VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP)
 		`, guarantorRecordID, loanID, guarantorID, guarantorAmount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -511,7 +511,7 @@ func RespondToGuarantorRequest(c *gin.Context) {
 
 	// DEBUG: Check if guarantor record exists at all
 	var count int
-	err := db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM guarantors WHERE id = ?", guarantorID).Scan(&count)
+	err := db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM guarantors WHERE id = $1", guarantorID).Scan(&count)
 	if err != nil {
 		fmt.Printf("❌ Error checking guarantor existence: %v\n", err)
 	} else {
@@ -520,7 +520,7 @@ func RespondToGuarantorRequest(c *gin.Context) {
 
 	// DEBUG: Check guarantor record details
 	var dbGuarantorID, dbUserID, dbLoanID, dbStatus string
-	err = db.(*sql.DB).QueryRow("SELECT id, user_id, loan_id, status FROM guarantors WHERE id = ?", guarantorID).Scan(&dbGuarantorID, &dbUserID, &dbLoanID, &dbStatus)
+	err = db.(*sql.DB).QueryRow("SELECT id, user_id, loan_id, status FROM guarantors WHERE id = $1", guarantorID).Scan(&dbGuarantorID, &dbUserID, &dbLoanID, &dbStatus)
 	if err != nil {
 		fmt.Printf("❌ Error getting guarantor details: %v\n", err)
 	} else {
@@ -535,7 +535,7 @@ func RespondToGuarantorRequest(c *gin.Context) {
 		SELECT l.borrower_id as requester_id, g.status, g.loan_id
 		FROM guarantors g
 		JOIN loans l ON g.loan_id = l.id
-		WHERE g.id = ? AND g.user_id = ?
+		WHERE g.id = $1 AND g.user_id = $2
 	`, guarantorID, userID).Scan(&requesterID, &currentStatus, &actualLoanID)
 
 	if err != nil {
@@ -586,8 +586,8 @@ func RespondToGuarantorRequest(c *gin.Context) {
 
 	_, err = db.(*sql.DB).Exec(`
 		UPDATE guarantors
-		SET status = ?, message = ?, responded_at = CURRENT_TIMESTAMP
-		WHERE id = ?
+		SET status = $1, message = $2, responded_at = CURRENT_TIMESTAMP
+		WHERE id = $3
 	`, newStatus, req.Reason, guarantorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -657,7 +657,7 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 			SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted,
 			SUM(CASE WHEN status = 'declined' THEN 1 ELSE 0 END) as declined
 		FROM guarantors
-		WHERE loan_id = ?
+		WHERE loan_id = $1
 	`, loanID).Scan(&totalGuarantors, &acceptedGuarantors, &declinedGuarantors)
 	if err != nil {
 		fmt.Printf("Error checking guarantor status for loan %s: %v\n", loanID, err)
@@ -684,8 +684,8 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 	// Update loan status
 	_, err = db.Exec(`
 		UPDATE loans
-		SET status = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
+		SET status = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
 	`, newStatus, loanID)
 	if err != nil {
 		fmt.Printf("Error updating loan status for loan %s: %v\n", loanID, err)
@@ -694,7 +694,7 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 
 	// Get loan requester for notification
 	var requesterID string
-	err = db.QueryRow(`SELECT borrower_id FROM loans WHERE id = ?`, loanID).Scan(&requesterID)
+	err = db.QueryRow(`SELECT borrower_id FROM loans WHERE id = $1`, loanID).Scan(&requesterID)
 	if err != nil {
 		fmt.Printf("Error getting loan requester for loan %s: %v\n", loanID, err)
 		return
@@ -752,7 +752,7 @@ func ApproveLoan(c *gin.Context) {
 	// Check if loan exists and get current status
 	var currentStatus, chamaID string
 	err := db.(*sql.DB).QueryRow(`
-		SELECT status, chama_id FROM loans WHERE id = ?
+		SELECT status, chama_id FROM loans WHERE id = $1
 	`, loanID).Scan(&currentStatus, &chamaID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -772,7 +772,7 @@ func ApproveLoan(c *gin.Context) {
 	// Check if user is authorized (chama chairperson or treasurer)
 	var userRole string
 	err = db.(*sql.DB).QueryRow(`
-		SELECT role FROM chama_members WHERE chama_id = ? AND user_id = ?
+		SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2
 	`, chamaID, userID).Scan(&userRole)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -802,8 +802,8 @@ func ApproveLoan(c *gin.Context) {
 	// Update loan status to approved
 	_, err = db.(*sql.DB).Exec(`
 		UPDATE loans
-		SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
+		SET status = 'approved', approved_by = $1, approved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
 	`, userID, loanID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -817,7 +817,7 @@ func ApproveLoan(c *gin.Context) {
 	var borrowerID string
 	var amount float64
 	err = db.(*sql.DB).QueryRow(`
-		SELECT borrower_id, amount FROM loans WHERE id = ?
+		SELECT borrower_id, amount FROM loans WHERE id = $1
 	`, loanID).Scan(&borrowerID, &amount)
 	if err != nil {
 		fmt.Printf("Failed to get loan details for notification: %v\n", err)
@@ -889,7 +889,7 @@ func RejectLoan(c *gin.Context) {
 	// Check if loan exists and get current status
 	var currentStatus, chamaID string
 	err := db.(*sql.DB).QueryRow(`
-		SELECT status, chama_id FROM loans WHERE id = ?
+		SELECT status, chama_id FROM loans WHERE id = $1
 	`, loanID).Scan(&currentStatus, &chamaID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -909,7 +909,7 @@ func RejectLoan(c *gin.Context) {
 	// Check if user is authorized (chama chairperson or treasurer)
 	var userRole string
 	err = db.(*sql.DB).QueryRow(`
-		SELECT role FROM chama_members WHERE chama_id = ? AND user_id = ?
+		SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2
 	`, chamaID, userID).Scan(&userRole)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -939,8 +939,8 @@ func RejectLoan(c *gin.Context) {
 	// Update loan status to rejected
 	_, err = db.(*sql.DB).Exec(`
 		UPDATE loans
-		SET status = 'rejected', rejected_by = ?, rejected_reason = ?, rejected_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
+		SET status = 'rejected', rejected_by = $1, rejected_reason = $2, rejected_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $3
 	`, userID, req.Reason, loanID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -954,7 +954,7 @@ func RejectLoan(c *gin.Context) {
 	var borrowerID string
 	var amount float64
 	err = db.(*sql.DB).QueryRow(`
-		SELECT borrower_id, amount FROM loans WHERE id = ?
+		SELECT borrower_id, amount FROM loans WHERE id = $1
 	`, loanID).Scan(&borrowerID, &amount)
 	if err != nil {
 		fmt.Printf("Failed to get loan details for notification: %v\n", err)
@@ -1026,7 +1026,7 @@ func GetGuarantorRequests(c *gin.Context) {
 		JOIN loans l ON g.loan_id = l.id
 		JOIN users u ON l.borrower_id = u.id
 		JOIN chamas c ON l.chama_id = c.id
-		WHERE g.user_id = ?
+		WHERE g.user_id = $1
 		ORDER BY g.created_at DESC
 	`, userID)
 	if err != nil {

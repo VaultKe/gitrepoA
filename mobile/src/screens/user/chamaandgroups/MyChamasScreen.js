@@ -273,16 +273,25 @@ const MyChamasScreen = ({ navigation, route }) => {
 
     // Apply search filter
     if (searchQuery) {
-      filtered = filtered.filter(chama =>
-        chama.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        chama.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        chama.county.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        chama.town.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const searchLower = searchQuery.toLowerCase();
+      filtered = filtered.filter(chama => {
+        const name = (chama.name || '').toLowerCase();
+        const description = (chama.description || '').toLowerCase();
+        const county = (chama.county || '').toLowerCase();
+        const town = (chama.town || '').toLowerCase();
+        return name.includes(searchLower) ||
+               description.includes(searchLower) ||
+               county.includes(searchLower) ||
+               town.includes(searchLower);
+      });
     }
 
-    // Default sorting by recent
-    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  // Default sorting by recent (with null safety)
+  filtered.sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+    return dateB - dateA;
+  });
 
     setFilteredChamas(filtered);
   };
@@ -308,73 +317,78 @@ const MyChamasScreen = ({ navigation, route }) => {
 
 
 
-  const renderTableRow = ({ item, index }) => {
-    const isContributionGroup = item.category === 'contribution';
+   const renderTableRow = ({ item, index }) => {
+     // Handle null/undefined item
+     if (!item) {
+       return null;
+     }
+     
+     const isContributionGroup = item.category === 'contribution';
 
-    const typeConfig = isContributionGroup ? {
-      color: colors.success,
-      icon: 'heart',
-      label: 'Contribution',
-    } : {
-      color: colors.primary,
-      icon: 'people',
-      label: 'Chama',
-    };
+     const typeConfig = isContributionGroup ? {
+       color: colors.success,
+       icon: 'heart',
+       label: 'Contribution',
+     } : {
+       color: colors.primary,
+       icon: 'people',
+       label: 'Chama',
+     };
 
-    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
+     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
-    return (
-      <View style={[themedStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
-        <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
-          <View style={themedStyles.nameContainer}>
-            <View style={[themedStyles.typeIcon, { backgroundColor: typeConfig.color + '20' }]}>
-              <Ionicons name={typeConfig.icon} size={16} color={typeConfig.color} />
-            </View>
-            <View>
-              <Text style={[themedStyles.tableCellText, themedStyles.nameText]} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <Text style={[themedStyles.tableCellText, themedStyles.subText]}>
-                {item.type}
-              </Text>
-            </View>
-          </View>
-        </View>
+     return (
+       <View style={[themedStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
+         <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
+           <View style={themedStyles.nameContainer}>
+             <View style={[themedStyles.typeIcon, { backgroundColor: typeConfig.color + '20' }]}>
+               <Ionicons name={typeConfig.icon} size={16} color={typeConfig.color} />
+             </View>
+             <View>
+               <Text style={[themedStyles.tableCellText, themedStyles.nameText]} numberOfLines={1}>
+                 {item.name || 'Unnamed Chama'}
+               </Text>
+               <Text style={[themedStyles.tableCellText, themedStyles.subText]}>
+                 {item.type || 'Unknown Type'}
+               </Text>
+             </View>
+           </View>
+         </View>
 
-        <View style={[themedStyles.tableCell, themedStyles.categoryCell]}>
-          <View style={[themedStyles.typeBadge, { backgroundColor: typeConfig.color + '15' }]}>
-            <Ionicons name={typeConfig.icon} size={12} color={typeConfig.color} />
-            <Text style={[themedStyles.typeBadgeText, { color: typeConfig.color }]}>
-              {typeConfig.label}
-            </Text>
-          </View>
-        </View>
+         <View style={[themedStyles.tableCell, themedStyles.categoryCell]}>
+           <View style={[themedStyles.typeBadge, { backgroundColor: typeConfig.color + '15' }]}>
+             <Ionicons name={typeConfig.icon} size={12} color={typeConfig.color} />
+             <Text style={[themedStyles.typeBadgeText, { color: typeConfig.color }]}>
+               {typeConfig.label}
+             </Text>
+           </View>
+         </View>
 
-        <View style={[themedStyles.tableCell, themedStyles.membersCell]}>
-          <Text style={themedStyles.tableCellText}>
-            {item.currentMembers || 0}/{item.maxMembers || 50}
-          </Text>
-        </View>
+         <View style={[themedStyles.tableCell, themedStyles.membersCell]}>
+           <Text style={themedStyles.tableCellText}>
+             {(item.currentMembers || 0)}/{(item.maxMembers || 50)}
+           </Text>
+         </View>
 
-        <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
-          <View style={themedStyles.actionButtons}>
-            <TouchableOpacity
-              style={[themedStyles.actionButton, { backgroundColor: colors.primary }]}
-              onPress={() => navigation.navigate('ChamaDetails', { chamaId: item.id })}
-            >
-              <Ionicons name="eye" size={10} color={colors.white} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[themedStyles.actionButton, { backgroundColor: colors.secondary }]}
-              onPress={() => switchToChamaDashboard(item)}
-            >
-              <Ionicons name="grid" size={10} color={colors.white} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  };
+         <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
+           <View style={themedStyles.actionButtons}>
+             <TouchableOpacity
+               style={[themedStyles.actionButton, { backgroundColor: colors.primary }]}
+               onPress={() => navigation.navigate('ChamaDetails', { chamaId: item.id || '' })}
+             >
+               <Ionicons name="eye" size={10} color={colors.white} />
+             </TouchableOpacity>
+             <TouchableOpacity
+               style={[themedStyles.actionButton, { backgroundColor: colors.secondary }]}
+               onPress={() => switchToChamaDashboard(item)}
+             >
+               <Ionicons name="grid" size={10} color={colors.white} />
+             </TouchableOpacity>
+           </View>
+         </View>
+       </View>
+     );
+   };
 
 
 

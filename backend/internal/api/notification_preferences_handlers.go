@@ -26,7 +26,7 @@ func getUserIDFromContext(c *gin.Context) (string, error) {
 
 	// Verify user exists in database
 	var count int
-	err := db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", userID).Scan(&count)
+	err := db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM users WHERE id = $1", userID).Scan(&count)
 	if err != nil {
 		return "", fmt.Errorf("database error: %w", err)
 	}

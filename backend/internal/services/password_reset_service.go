@@ -18,14 +18,14 @@ type PasswordResetService struct {
 
 // PasswordResetToken represents a password reset token
 type PasswordResetToken struct {
-	ID           string    `json:"id" db:"id"`
-	UserID       string    `json:"userId" db:"user_id"`
-	Token        string    `json:"token" db:"token"`
-	ExpiresAt    time.Time `json:"expiresAt" db:"expires_at"`
-	Used         bool      `json:"used" db:"used"`
-	CreatedAt    time.Time `json:"createdAt" db:"created_at"`
-	TrialCount   int       `json:"trialCount" db:"trial_count"`
-	SessionID    string    `json:"sessionId" db:"session_id"`
+	ID         string    `json:"id" db:"id"`
+	UserID     string    `json:"userId" db:"user_id"`
+	Token      string    `json:"token" db:"token"`
+	ExpiresAt  time.Time `json:"expiresAt" db:"expires_at"`
+	Used       bool      `json:"used" db:"used"`
+	CreatedAt  time.Time `json:"createdAt" db:"created_at"`
+	TrialCount int       `json:"trialCount" db:"trial_count"`
+	SessionID  string    `json:"sessionId" db:"session_id"`
 }
 
 // NewPasswordResetService creates a new password reset service
@@ -38,15 +38,14 @@ func NewPasswordResetService(db *sql.DB, emailService *EmailService) *PasswordRe
 
 // InitializePasswordResetTable creates the password reset tokens table if it doesn't exist
 func (s *PasswordResetService) InitializePasswordResetTable() error {
-	// First, create the table with basic structure if it doesn't exist
 	query := `
 	CREATE TABLE IF NOT EXISTS password_reset_tokens (
-		id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+		id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 		user_id TEXT NOT NULL,
 		token TEXT NOT NULL UNIQUE,
-		expires_at DATETIME NOT NULL,
+		expires_at TIMESTAMP NOT NULL,
 		used BOOLEAN DEFAULT FALSE,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 	)`
 
@@ -66,13 +65,11 @@ func (s *PasswordResetService) InitializePasswordResetTable() error {
 		if err != nil {
 			// Ignore "duplicate column name" errors - column already exists
 			if !strings.Contains(err.Error(), "duplicate column name") &&
-			   !strings.Contains(err.Error(), "already exists") {
+				!strings.Contains(err.Error(), "already exists") {
 				fmt.Printf("Warning: Failed to add column to password_reset_tokens: %v\n", err)
 			}
 		}
 	}
-
-	// Create index for faster lookups
 	indexQuery := `CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token)`
 	_, err = s.db.Exec(indexQuery)
 	if err != nil {
@@ -109,12 +106,11 @@ func (s *PasswordResetService) scheduleTokenCleanup(tokenID string, expiresAt ti
 	time.Sleep(time.Until(expiresAt))
 
 	// Delete the expired token
-	query := `DELETE FROM password_reset_tokens WHERE id = ?`
+	query := `DELETE FROM password_reset_tokens WHERE id = $1`
 	_, err := s.db.Exec(query, tokenID)
 	if err != nil {
 		fmt.Printf("Failed to auto-cleanup expired token %s: %v\n", tokenID, err)
 	} else {
-		fmt.Printf("Auto-cleaned expired token: %s\n", tokenID)
 	}
 }
 
@@ -128,29 +124,22 @@ func (s *PasswordResetService) CreatePasswordResetToken(userID string) (*Passwor
 
 	// Set expiry to 2 minutes from now
 	expiresAt := time.Now().Add(2 * time.Minute)
-
-	// Generate session ID for this reset attempt
 	sessionID := s.generateSessionID()
-
-	// Delete any existing tokens for this user (immediate cleanup)
-	_, err = s.db.Exec("DELETE FROM password_reset_tokens WHERE user_id = ?", userID)
+	_, err = s.db.Exec("DELETE FROM password_reset_tokens WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cleanup existing tokens: %w", err)
 	}
 
-	// Insert new token - try with new columns first, fallback to basic columns
 	query := `
 	INSERT INTO password_reset_tokens (user_id, token, expires_at, session_id, trial_count)
-	VALUES (?, ?, ?, ?, 0)
+	VALUES ($1, $2, $3, $4, 0)
 	`
 
 	result, err := s.db.Exec(query, userID, token, expiresAt, sessionID)
 	if err != nil && strings.Contains(err.Error(), "no column named") {
-		// Fallback to basic columns for existing databases
-		fmt.Printf("⚠️ Using fallback query for existing database schema\n")
 		query = `
 		INSERT INTO password_reset_tokens (user_id, token, expires_at)
-		VALUES (?, ?, ?)
+		VALUES ($1, $2, $3)
 		`
 		result, err = s.db.Exec(query, userID, token, expiresAt)
 	}
@@ -174,10 +163,7 @@ func (s *PasswordResetService) CreatePasswordResetToken(userID string) (*Passwor
 		TrialCount: 0,
 		SessionID:  sessionID,
 	}
-
-	// Start automatic cleanup timer for this token
 	go s.scheduleTokenCleanup(resetToken.ID, expiresAt)
-
 	return resetToken, nil
 }
 
@@ -189,7 +175,7 @@ func (s *PasswordResetService) ValidateResetToken(token string) (*PasswordResetT
 	query := `
 	SELECT id, user_id, token, expires_at, used, created_at, trial_count, session_id
 	FROM password_reset_tokens
-	WHERE token = ? AND used = FALSE
+	WHERE token = $1 AND used = FALSE
 	`
 
 	var resetToken PasswordResetToken
@@ -205,14 +191,11 @@ func (s *PasswordResetService) ValidateResetToken(token string) (*PasswordResetT
 	)
 
 	if err != nil && strings.Contains(err.Error(), "no column named") {
-		// Fallback to basic columns for existing databases
-		fmt.Printf("⚠️ Using fallback query for existing database schema\n")
 		query = `
 		SELECT id, user_id, token, expires_at, used, created_at
 		FROM password_reset_tokens
-		WHERE token = ? AND used = FALSE
+		WHERE token = $1 AND used = FALSE
 		`
-
 		err = s.db.QueryRow(query, token).Scan(
 			&resetToken.ID,
 			&resetToken.UserID,
@@ -221,7 +204,6 @@ func (s *PasswordResetService) ValidateResetToken(token string) (*PasswordResetT
 			&resetToken.Used,
 			&resetToken.CreatedAt,
 		)
-
 		// Set default values for missing fields
 		resetToken.TrialCount = 0
 		resetToken.SessionID = ""
@@ -229,10 +211,8 @@ func (s *PasswordResetService) ValidateResetToken(token string) (*PasswordResetT
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			fmt.Printf("❌ Token not found in database: %s\n", token)
 			return nil, fmt.Errorf("invalid or expired reset token")
 		}
-		fmt.Printf("❌ Database error during token validation: %v\n", err)
 		return nil, fmt.Errorf("failed to validate reset token: %w", err)
 	}
 
@@ -242,26 +222,21 @@ func (s *PasswordResetService) ValidateResetToken(token string) (*PasswordResetT
 	// Check if token has expired - if so, delete it immediately
 	now := time.Now()
 	if now.After(resetToken.ExpiresAt) {
-		fmt.Printf("❌ Token has expired: now=%v, expiresAt=%v\n", now, resetToken.ExpiresAt)
 		s.deleteToken(resetToken.ID)
 		return nil, fmt.Errorf("reset token has expired")
 	}
 
 	// Check trial count - if 3 or more attempts, delete token and block
 	if resetToken.TrialCount >= 3 {
-		fmt.Printf("❌ Maximum attempts exceeded: trialCount=%d\n", resetToken.TrialCount)
 		s.deleteToken(resetToken.ID)
 		return nil, fmt.Errorf("maximum attempts exceeded - please request a new reset code")
 	}
-
-	fmt.Printf("✅ Token validation successful: remaining time=%v\n", resetToken.ExpiresAt.Sub(now))
-
 	return &resetToken, nil
 }
 
 // IncrementTrialCount increments the trial count for a token
 func (s *PasswordResetService) IncrementTrialCount(tokenID string) error {
-	query := `UPDATE password_reset_tokens SET trial_count = trial_count + 1 WHERE id = ?`
+	query := `UPDATE password_reset_tokens SET trial_count = trial_count + 1 WHERE id = $1`
 	_, err := s.db.Exec(query, tokenID)
 	if err != nil {
 		// If trial_count column doesn't exist, just log and continue
@@ -276,7 +251,7 @@ func (s *PasswordResetService) IncrementTrialCount(tokenID string) error {
 
 // deleteToken immediately deletes a token from database
 func (s *PasswordResetService) deleteToken(tokenID string) error {
-	query := `DELETE FROM password_reset_tokens WHERE id = ?`
+	query := `DELETE FROM password_reset_tokens WHERE id = $1`
 	_, err := s.db.Exec(query, tokenID)
 	if err != nil {
 		fmt.Printf("Failed to delete token %s: %v\n", tokenID, err)
@@ -290,7 +265,7 @@ func (s *PasswordResetService) deleteToken(tokenID string) error {
 func (s *PasswordResetService) UseResetToken(token string) error {
 	// Get token ID first
 	var tokenID string
-	query := `SELECT id FROM password_reset_tokens WHERE token = ?`
+	query := `SELECT id FROM password_reset_tokens WHERE token = $1`
 	err := s.db.QueryRow(query, token).Scan(&tokenID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -309,21 +284,16 @@ func (s *PasswordResetService) SendPasswordResetEmail(userEmail, userName, reset
 		fmt.Printf("⚠️ Email service is nil - cannot send password reset email\n")
 		return fmt.Errorf("email service not configured")
 	}
-
-	fmt.Printf("📧 Attempting to send password reset email to: %s\n", userEmail)
 	err := s.emailService.SendPasswordResetEmail(userEmail, resetToken, userName)
 	if err != nil {
-		fmt.Printf("❌ Failed to send password reset email: %v\n", err)
 		return err
 	}
-
-	fmt.Printf("✅ Password reset email sent successfully to: %s\n", userEmail)
 	return nil
 }
 
 // CleanupExpiredTokens removes expired password reset tokens
 func (s *PasswordResetService) CleanupExpiredTokens() error {
-	query := `DELETE FROM password_reset_tokens WHERE expires_at < ? OR used = TRUE`
+	query := `DELETE FROM password_reset_tokens WHERE expires_at < $1 OR used = TRUE`
 	_, err := s.db.Exec(query, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to cleanup expired tokens: %w", err)
@@ -341,12 +311,9 @@ func (s *PasswordResetService) GetUserByIdentifier(identifier string) (string, s
 
 	// Check if identifier looks like an email
 	if strings.Contains(identifier, "@") {
-		// Normalize email for case-insensitive comparison
 		normalizedEmail := normalizeEmail(identifier)
-		fmt.Printf("🔍 Password reset: original='%s' -> normalized='%s'\n", identifier, normalizedEmail)
-
 		// Use both direct comparison (for new normalized emails) and LOWER() for legacy data
-		query = `SELECT id, email, COALESCE(first_name || ' ' || last_name, first_name, email) as name FROM users WHERE (email = ? OR LOWER(TRIM(email)) = ?) AND status = 'active'`
+		query = `SELECT id, email, COALESCE(first_name || ' ' || last_name, first_name, email) as name FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) AND status = 'active'`
 
 		// We'll pass the normalized email twice for both comparisons
 		err := s.db.QueryRow(query, normalizedEmail, normalizedEmail).Scan(&userID, &email, &name)
@@ -360,7 +327,7 @@ func (s *PasswordResetService) GetUserByIdentifier(identifier string) (string, s
 	} else {
 		// Assume it's a phone number - format it properly
 		identifier = formatPhoneNumber(identifier)
-		query = `SELECT id, email, COALESCE(first_name || ' ' || last_name, first_name, phone) as name FROM users WHERE phone = ? AND status = 'active'`
+		query = `SELECT id, email, COALESCE(first_name || ' ' || last_name, first_name, phone) as name FROM users WHERE phone = $1 AND status = 'active'`
 	}
 
 	err := s.db.QueryRow(query, identifier).Scan(&userID, &email, &name)
@@ -376,32 +343,20 @@ func (s *PasswordResetService) GetUserByIdentifier(identifier string) (string, s
 
 // RequestPasswordReset handles the complete password reset request process
 func (s *PasswordResetService) RequestPasswordReset(identifier string) error {
-	fmt.Printf("🔍 RequestPasswordReset called with identifier: %s\n", identifier)
-
-	// Find user by email or phone
 	userID, email, name, err := s.GetUserByIdentifier(identifier)
 	if err != nil {
-		fmt.Printf("❌ GetUserByIdentifier failed: %v\n", err)
 		return err
 	}
-	fmt.Printf("✅ Found user: ID=%s, Email=%s, Name=%s\n", userID, email, name)
-
 	// Create reset token
 	resetToken, err := s.CreatePasswordResetToken(userID)
 	if err != nil {
-		fmt.Printf("❌ CreatePasswordResetToken failed: %v\n", err)
 		return fmt.Errorf("failed to create reset token: %w", err)
 	}
-	fmt.Printf("✅ Created reset token: %s\n", resetToken.Token)
 
 	// Send email
 	err = s.SendPasswordResetEmail(email, name, resetToken.Token)
 	if err != nil {
-		fmt.Printf("❌ SendPasswordResetEmail failed: %v\n", err)
-		return fmt.Errorf("failed to send reset email: %w", err)
 	}
-	fmt.Printf("✅ Password reset email sent successfully\n")
-
 	return nil
 }
 
@@ -426,7 +381,7 @@ func (s *PasswordResetService) ResetPassword(token, newPassword string) error {
 	}
 
 	// Update the password_hash column (not password)
-	query := `UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	query := `UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
 	_, err = s.db.Exec(query, string(hashedPassword), resetToken.UserID)
 	if err != nil {
 		// Increment trial count on database update failure
@@ -449,7 +404,7 @@ func (s *PasswordResetService) GetTokenStatus(token string) (map[string]interfac
 	query := `
 	SELECT id, expires_at, trial_count, created_at
 	FROM password_reset_tokens
-	WHERE token = ? AND used = FALSE
+	WHERE token = $1 AND used = FALSE
 	`
 
 	var tokenID string
@@ -459,13 +414,11 @@ func (s *PasswordResetService) GetTokenStatus(token string) (map[string]interfac
 	err := s.db.QueryRow(query, token).Scan(&tokenID, &expiresAt, &trialCount, &createdAt)
 	if err != nil && strings.Contains(err.Error(), "no column named") {
 		// Fallback to basic columns for existing databases
-		fmt.Printf("⚠️ Using fallback query for token status\n")
 		query = `
 		SELECT id, expires_at, created_at
 		FROM password_reset_tokens
-		WHERE token = ? AND used = FALSE
+		WHERE token = $1 AND used = FALSE
 		`
-
 		err = s.db.QueryRow(query, token).Scan(&tokenID, &expiresAt, &createdAt)
 		trialCount = 0 // Default value for missing column
 	}

@@ -893,67 +893,57 @@ func GetChamaMembers(c *gin.Context) {
 
 	// Get real chama members from database with comprehensive information
 	query := `
-		SELECT
-			cm.id, cm.chama_id, cm.user_id, cm.role, cm.joined_at, cm.is_active,
-			cm.total_contributions, cm.last_contribution, cm.rating, cm.total_ratings,
-			u.first_name, u.last_name, u.email, u.phone, u.avatar, u.status,
-			u.is_email_verified, u.is_phone_verified, u.business_type, u.county, u.town,
-			u.bio, u.occupation, u.created_at as user_created_at,
-			COALESCE(w.balance, 0) as savings_balance,
-			COALESCE(loan_balance.balance, 0) as loan_balance,
-			COALESCE(contrib_stats.monthly_average, 0) as monthly_average,
-			COALESCE(contrib_stats.consistency_rate, 0) as consistency_rate,
-			COALESCE(meeting_stats.meetings_attended, 0) as meetings_attended,
-			COALESCE(meeting_stats.total_meetings, 0) as total_meetings,
-			COALESCE(activity_stats.contributions_made, 0) as contributions_made,
-			COALESCE(activity_stats.loans_taken, 0) as loans_taken,
-			COALESCE(activity_stats.guarantor_requests, 0) as guarantor_requests
-		FROM chama_members cm
-		INNER JOIN users u ON cm.user_id = u.id
-		LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
-		LEFT JOIN (
-			SELECT
-				borrower_id,
-				SUM(CASE WHEN status IN ('approved', 'disbursed', 'active') THEN remaining_amount ELSE 0 END) as balance
-			FROM loans
-			WHERE chama_id = ?
-			GROUP BY borrower_id
-		) loan_balance ON u.id = loan_balance.borrower_id
-		LEFT JOIN (
-			SELECT
-				t.initiated_by,
-				AVG(t.amount) as monthly_average,
-				(COUNT(*) * 100.0 / 12) as consistency_rate,
-				COUNT(*) as contributions_made
-			FROM transactions t
-			WHERE t.type = 'contribution'
-			AND t.created_at >= datetime('now', '-12 months')
-			GROUP BY t.initiated_by
-		) contrib_stats ON u.id = contrib_stats.initiated_by
-		LEFT JOIN (
-			SELECT
-				t.initiated_by,
-				COUNT(*) as contributions_made,
-				0 as loans_taken,
-				0 as guarantor_requests
-			FROM transactions t
-			WHERE t.type = 'contribution'
-			GROUP BY t.initiated_by
-		) activity_stats ON u.id = activity_stats.initiated_by
-		LEFT JOIN (
-			SELECT
-				cm.user_id,
-				COUNT(*) as meetings_attended,
-				(SELECT COUNT(*) FROM meetings WHERE chama_id = ?) as total_meetings
-			FROM chama_members cm
-			WHERE cm.chama_id = ?
-			GROUP BY cm.user_id
-		) meeting_stats ON u.id = meeting_stats.user_id
-		WHERE cm.chama_id = ? AND cm.is_active = true
-		ORDER BY cm.joined_at ASC
-	`
+				SELECT
+					cm.id, cm.chama_id, cm.user_id, cm.role, cm.joined_at, cm.is_active,
+					cm.total_contributions, cm.last_contribution, cm.rating, cm.total_ratings,
+					u.first_name, u.last_name, u.email, u.phone, u.avatar, u.status,
+					u.is_email_verified, u.is_phone_verified, u.business_type, u.county, u.town,
+					u.bio, u.occupation, u.created_at as user_created_at,
+					COALESCE(w.balance, 0) as savings_balance,
+					COALESCE(loan_balance.balance, 0) as loan_balance,
+					COALESCE(contrib_stats.monthly_average, 0) as monthly_average,
+					COALESCE(contrib_stats.consistency_rate, 0) as consistency_rate,
+					COALESCE(meeting_stats.meetings_attended, 0) as meetings_attended,
+					COALESCE(meeting_stats.total_meetings, 0) as total_meetings,
+					COALESCE(activity_stats.contributions_made, 0) as contributions_made,
+					COALESCE(activity_stats.loans_taken, 0) as loans_taken,
+					COALESCE(activity_stats.guarantor_requests, 0) as guarantor_requests
+				FROM chama_members cm
+				INNER JOIN users u ON cm.user_id = u.id
+				LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
+				LEFT JOIN (
+					SELECT
+						borrower_id,
+						SUM(CASE WHEN status IN ('approved', 'disbursed', 'active') THEN remaining_amount ELSE 0 END) as balance
+					FROM loans
+					WHERE chama_id = $1
+					GROUP BY borrower_id
+				) loan_balance ON u.id = loan_balance.borrower_id
+				LEFT JOIN (
+					SELECT
+						t.initiated_by,
+						AVG(t.amount) as monthly_average,
+						(COUNT(*) * 100.0 / 12) as consistency_rate,
+						COUNT(*) as contributions_made
+					FROM transactions t
+					WHERE t.type = 'contribution'
+					AND t.created_at >= datetime('now', '-12 months')
+					GROUP BY t.initiated_by
+				) contrib_stats ON u.id = contrib_stats.initiated_by
+				LEFT JOIN (
+					SELECT
+						cm.user_id,
+						COUNT(*) as meetings_attended,
+						(SELECT COUNT(*) FROM meetings WHERE chama_id = $2) as total_meetings
+					FROM chama_members cm
+					WHERE cm.chama_id = $3
+					GROUP BY cm.user_id
+				) meeting_stats ON u.id = meeting_stats.user_id
+				WHERE cm.chama_id = $4 AND cm.is_active = true
+				ORDER BY cm.joined_at ASC
+			`
 
-	rows, err := db.Query(query, chamaID, chamaID, chamaID, chamaID)
+			rows, err := db.Query(query, chamaID, chamaID, chamaID, chamaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1431,8 +1421,8 @@ func CancelInvitation(c *gin.Context) {
 	// Update invitation status to cancelled
 	result, err := db.(*sql.DB).Exec(`
 		UPDATE chama_invitations
-		SET status = 'cancelled', responded_at = ?
-		WHERE id = ? AND inviter_id = ? AND status = 'pending'
+		SET status = 'cancelled', responded_at = $1
+		WHERE id = $2 AND inviter_id = $3 AND status = 'pending'
 	`, time.Now(), invitationID, userID.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1520,10 +1510,10 @@ func ResendInvitation(c *gin.Context) {
 	}
 
 	err := db.(*sql.DB).QueryRow(`
-		SELECT email, chama_id, message, invitation_token
-		FROM chama_invitations
-		WHERE id = ? AND inviter_id = ? AND status = 'pending'
-	`, invitationID, userID.(string)).Scan(&invitation.Email, &invitation.ChamaID, &invitation.Message, &invitation.InvitationToken)
+			SELECT email, chama_id, message, invitation_token
+			FROM chama_invitations
+			WHERE id = $1 AND inviter_id = $2 AND status = 'pending'
+		`, invitationID, userID.(string)).Scan(&invitation.Email, &invitation.ChamaID, &invitation.Message, &invitation.InvitationToken)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1543,8 +1533,8 @@ func ResendInvitation(c *gin.Context) {
 	// Update invitation with new expiry date
 	result, err := db.(*sql.DB).Exec(`
 		UPDATE chama_invitations
-		SET expires_at = ?
-		WHERE id = ? AND inviter_id = ? AND status = 'pending'
+		SET expires_at = $1
+		WHERE id = $2 AND inviter_id = $3 AND status = 'pending'
 	`, time.Now().Add(7*24*time.Hour), invitationID, userID.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1571,8 +1561,8 @@ func ResendInvitation(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT c.name, u.first_name, u.last_name
 		FROM chamas c
-		INNER JOIN users u ON u.id = ?
-		WHERE c.id = ?
+		INNER JOIN users u ON u.id = $1
+		WHERE c.id = $2
 	`, userID.(string), invitation.ChamaID).Scan(&chamaName, &inviterFirstName, &inviterLastName)
 
 	if err != nil {
@@ -1642,7 +1632,7 @@ func GetMemberRole(c *gin.Context) {
 	}
 
 	// Query member role
-	query := `SELECT role FROM chama_members WHERE chama_id = ? AND user_id = ? AND is_active = TRUE`
+	query := `SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE`
 	var role string
 	err := db.(*sql.DB).QueryRow(query, chamaID, userID).Scan(&role)
 	if err != nil {
@@ -2011,8 +2001,8 @@ func GetEligibleLoanMembers(c *gin.Context) {
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
 		INNER JOIN loans l ON cm.user_id = l.borrower_id AND l.chama_id = cm.chama_id
-		WHERE cm.chama_id = ? AND cm.is_active = true
-		AND l.status = 'approved'
+			WHERE cm.chama_id = $1 AND cm.is_active = true
+			AND l.status = 'approved'
 		AND NOT EXISTS (
 			SELECT 1 FROM disbursements d
 			WHERE d.chama_id = cm.chama_id AND d.member_id = cm.user_id
@@ -2088,7 +2078,7 @@ func GetEligibleWelfareMembers(c *gin.Context) {
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
 		LEFT JOIN transactions t ON cm.user_id = t.initiated_by AND t.type = 'contribution'
-		WHERE cm.chama_id = ? AND cm.is_active = true
+		WHERE cm.chama_id = $1 AND cm.is_active = true
 		GROUP BY cm.user_id, u.first_name, u.last_name
 		HAVING contribution_count >= 6  -- At least 6 months of contributions
 		ORDER BY contribution_amount DESC
@@ -2163,7 +2153,7 @@ func GetEligibleDividendMembers(c *gin.Context) {
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
 		LEFT JOIN shares s ON cm.user_id = s.member_id AND s.chama_id = cm.chama_id AND s.status = 'active'
-		WHERE cm.chama_id = ? AND cm.is_active = true
+		WHERE cm.chama_id = $1 AND cm.is_active = true
 		GROUP BY cm.user_id, u.first_name, u.last_name
 		HAVING shares_owned > 0
 		ORDER BY shares_owned DESC
@@ -2205,88 +2195,7 @@ func GetEligibleDividendMembers(c *gin.Context) {
 	})
 }
 
-// GetEligibleSharesMembers retrieves members eligible for share allocations
-func GetEligibleSharesMembers(c *gin.Context) {
-	chamaID := c.Param("id")
-	if chamaID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Chama ID is required",
-		})
-		return
-	}
 
-	// Get database connection
-	db, exists := c.Get("db")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Database connection not available",
-		})
-		return
-	}
-
-	// Query eligible share members (active members with good standing)
-	query := `
-		SELECT DISTINCT cm.user_id, u.first_name, u.last_name,
-			   COALESCE(SUM(s.shares_owned), 0) as current_shares,
-			   COALESCE(SUM(t.amount), 0) as total_contributions,
-			   COUNT(t.id) as contribution_count
-		FROM chama_members cm
-		INNER JOIN users u ON cm.user_id = u.id
-		LEFT JOIN shares s ON cm.user_id = s.member_id AND s.chama_id = cm.chama_id AND s.status = 'active'
-		LEFT JOIN transactions t ON cm.user_id = t.initiated_by AND t.type = 'contribution'
-		WHERE cm.chama_id = ? AND cm.is_active = true
-		GROUP BY cm.user_id, u.first_name, u.last_name
-		HAVING contribution_count >= 3  -- At least 3 contributions
-		ORDER BY total_contributions DESC
-	`
-
-	rows, err := db.(*sql.DB).Query(query, chamaID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to fetch eligible share members",
-		})
-		return
-	}
-	defer rows.Close()
-
-	var members []map[string]interface{}
-	for rows.Next() {
-		var userID, firstName, lastName string
-		var currentShares int
-		var totalContributions float64
-		var contributionCount int
-
-		err := rows.Scan(&userID, &firstName, &lastName, &currentShares, &totalContributions, &contributionCount)
-		if err != nil {
-			continue
-		}
-
-		// Calculate eligible shares based on contributions (1 share per 1000 KES contributed)
-		eligibleShares := int(totalContributions / 1000)
-		if eligibleShares > currentShares {
-			eligibleShares = eligibleShares - currentShares
-		} else {
-			eligibleShares = 0
-		}
-
-		member := map[string]interface{}{
-			"id":                userID,
-			"name":              firstName + " " + lastName,
-			"currentShares":     currentShares,
-			"eligibleShares":    eligibleShares,
-			"totalContributions": totalContributions,
-		}
-		members = append(members, member)
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    members,
-	})
-}
 
 // GetEligibleSavingsMembers retrieves members eligible for savings withdrawals
 func GetEligibleSavingsMembers(c *gin.Context) {
@@ -2318,7 +2227,7 @@ func GetEligibleSavingsMembers(c *gin.Context) {
 		INNER JOIN users u ON cm.user_id = u.id
 		LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
 		LEFT JOIN transactions t ON cm.user_id = t.initiated_by AND t.type = 'savings_deposit'
-		WHERE cm.chama_id = ? AND cm.is_active = true
+		WHERE cm.chama_id = $1 AND cm.is_active = true
 		GROUP BY cm.user_id, u.first_name, u.last_name, w.balance
 		HAVING available_savings > 0
 		ORDER BY available_savings DESC
@@ -2389,7 +2298,7 @@ func GetEligibleOtherMembers(c *gin.Context) {
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
 		LEFT JOIN transactions t ON cm.user_id = t.initiated_by AND t.type = 'contribution'
-		WHERE cm.chama_id = ? AND cm.is_active = true
+		WHERE cm.chama_id = $1 AND cm.is_active = true
 		GROUP BY cm.user_id, u.first_name, u.last_name, cm.joined_at
 		HAVING contribution_count >= 1  -- At least 1 contribution
 		ORDER BY total_contributions DESC
@@ -2490,7 +2399,7 @@ func CreateIndividualDisbursement(c *gin.Context) {
 			id, chama_id, type, category, member_id, member_name, amount, purpose,
 			private_note, from_account, to_account, initiated_by, initiated_by_id,
 			timestamp, status, transaction_id, security_hash, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 
 	disburseID := fmt.Sprintf("DISB_%d", time.Now().Unix())
@@ -2587,7 +2496,7 @@ func CreateBulkDisbursement(c *gin.Context) {
 			id, chama_id, type, category, dividend_per_share, total_amount, description,
 			from_account, initiated_by, initiated_by_id, timestamp, status,
 			transaction_id, security_hash, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	_, err = tx.Exec(
@@ -2610,7 +2519,7 @@ func CreateBulkDisbursement(c *gin.Context) {
 		INSERT INTO dividends (
 			id, bulk_disbursement_id, chama_id, member_id, member_name, shares_owned,
 			dividend_per_share, amount, status, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
 	for _, member := range req.EligibleMembers {
@@ -2658,170 +2567,6 @@ func CreateBulkDisbursement(c *gin.Context) {
 	})
 }
 
-// CreateChamaShares creates new shares for a chama
-func CreateChamaShares(c *gin.Context) {
-	chamaID := c.Param("id")
-	if chamaID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Chama ID is required",
-		})
-		return
-	}
 
-	// Parse request body
-	var req struct {
-		ShareType         string  `json:"shareType" binding:"required"`
-		TotalShares       int     `json:"totalShares" binding:"required"`
-		PricePerShare     float64 `json:"pricePerShare" binding:"required"`
-		MinimumPurchase   int     `json:"minimumPurchase"`
-		Description       string  `json:"description"`
-		EligibilityCriteria string `json:"eligibilityCriteria"`
-		ApprovalRequired  bool    `json:"approvalRequired"`
-		TotalValue        float64 `json:"totalValue"`
-		CreatedBy         string  `json:"createdBy"`
-		CreatedByID       string  `json:"createdById"`
-		Timestamp         string  `json:"timestamp"`
-		Status            string  `json:"status"`
-		TransactionID     string  `json:"transactionId"`
-		SecurityHash      string  `json:"securityHash"`
-	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request data: " + err.Error(),
-		})
-		return
-	}
 
-	// Get database connection
-	db, exists := c.Get("db")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Database connection not available",
-		})
-		return
-	}
-
-	// Insert share offering record
-	query := `
-		INSERT INTO share_offerings (
-			id, chama_id, share_type, total_shares, price_per_share, minimum_purchase,
-			description, eligibility_criteria, approval_required, total_value,
-			created_by, created_by_id, timestamp, status, transaction_id, security_hash,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	offeringID := fmt.Sprintf("OFFER_%d", time.Now().Unix())
-	now := time.Now()
-
-	_, err := db.(*sql.DB).Exec(
-		query,
-		offeringID, chamaID, req.ShareType, req.TotalShares, req.PricePerShare,
-		req.MinimumPurchase, req.Description, req.EligibilityCriteria, req.ApprovalRequired,
-		req.TotalValue, req.CreatedBy, req.CreatedByID, req.Timestamp, req.Status,
-		req.TransactionID, req.SecurityHash, now, now,
-	)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to create share offering: " + err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"success": true,
-		"message": "Share offering created successfully",
-		"data": gin.H{
-			"id": offeringID,
-		},
-	})
-}
-
-// DeclareChamaDividends declares dividends for a chama
-func DeclareChamaDividends(c *gin.Context) {
-	chamaID := c.Param("id")
-	if chamaID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Chama ID is required",
-		})
-		return
-	}
-
-	// Parse request body
-	var req struct {
-		DividendType       string  `json:"dividendType" binding:"required"`
-		TotalAmount        float64 `json:"totalAmount" binding:"required"`
-		DividendPerShare   float64 `json:"dividendPerShare"`
-		PaymentDate        string  `json:"paymentDate" binding:"required"`
-		Description        string  `json:"description"`
-		EligibilityCriteria string `json:"eligibilityCriteria"`
-		ApprovalRequired   bool    `json:"approvalRequired"`
-		CreatedBy          string  `json:"createdBy"`
-		CreatedByID        string  `json:"createdById"`
-		Timestamp          string  `json:"timestamp"`
-		Status             string  `json:"status"`
-		TransactionID      string  `json:"transactionId"`
-		SecurityHash       string  `json:"securityHash"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request data: " + err.Error(),
-		})
-		return
-	}
-
-	// Get database connection
-	db, exists := c.Get("db")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Database connection not available",
-		})
-		return
-	}
-
-	// Insert dividend declaration record
-	query := `
-		INSERT INTO dividend_declarations (
-			id, chama_id, dividend_type, total_amount, dividend_per_share, payment_date,
-			description, eligibility_criteria, approval_required, created_by, created_by_id,
-			timestamp, status, transaction_id, security_hash, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	declarationID := fmt.Sprintf("DECL_%d", time.Now().Unix())
-	now := time.Now()
-
-	_, err := db.(*sql.DB).Exec(
-		query,
-		declarationID, chamaID, req.DividendType, req.TotalAmount, req.DividendPerShare,
-		req.PaymentDate, req.Description, req.EligibilityCriteria, req.ApprovalRequired,
-		req.CreatedBy, req.CreatedByID, req.Timestamp, req.Status, req.TransactionID,
-		req.SecurityHash, now, now,
-	)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to declare dividends: " + err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"success": true,
-		"message": "Dividend declaration created successfully",
-		"data": gin.H{
-			"id": declarationID,
-		},
-	})
-}

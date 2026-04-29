@@ -46,7 +46,7 @@ func (m *OTPValidationMiddleware) ValidateEmailVerificationToken() gin.HandlerFu
 		err := m.db.QueryRow(`
 			SELECT user_id, expires_at, used, trial_count 
 			FROM email_verification_tokens 
-			WHERE token = ?
+			WHERE token = $1
 		`, req.Token).Scan(&userID, &expiresAt, &used, &trialCount)
 
 		if err != nil {
@@ -78,7 +78,7 @@ func (m *OTPValidationMiddleware) ValidateEmailVerificationToken() gin.HandlerFu
 		// Check if token has expired
 		if time.Now().After(expiresAt) {
 			// Clean up expired token
-			m.db.Exec("DELETE FROM email_verification_tokens WHERE token = ?", req.Token)
+			m.db.Exec("DELETE FROM email_verification_tokens WHERE token = $1", req.Token)
 			
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -91,7 +91,7 @@ func (m *OTPValidationMiddleware) ValidateEmailVerificationToken() gin.HandlerFu
 		// Check trial count
 		if trialCount >= 3 {
 			// Clean up token with too many attempts
-			m.db.Exec("DELETE FROM email_verification_tokens WHERE token = ?", req.Token)
+			m.db.Exec("DELETE FROM email_verification_tokens WHERE token = $1", req.Token)
 			
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -137,7 +137,7 @@ func (m *OTPValidationMiddleware) ValidatePasswordResetToken() gin.HandlerFunc {
 		err := m.db.QueryRow(`
 			SELECT user_id, expires_at, used, trial_count 
 			FROM password_reset_tokens 
-			WHERE token = ?
+			WHERE token = $1
 		`, req.Token).Scan(&userID, &expiresAt, &used, &trialCount)
 
 		if err != nil {
@@ -169,7 +169,7 @@ func (m *OTPValidationMiddleware) ValidatePasswordResetToken() gin.HandlerFunc {
 		// Check if token has expired
 		if time.Now().After(expiresAt) {
 			// Clean up expired token
-			m.db.Exec("DELETE FROM password_reset_tokens WHERE token = ?", req.Token)
+			m.db.Exec("DELETE FROM password_reset_tokens WHERE token = $1", req.Token)
 			
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -182,7 +182,7 @@ func (m *OTPValidationMiddleware) ValidatePasswordResetToken() gin.HandlerFunc {
 		// Check trial count
 		if trialCount >= 3 {
 			// Clean up token with too many attempts
-			m.db.Exec("DELETE FROM password_reset_tokens WHERE token = ?", req.Token)
+			m.db.Exec("DELETE FROM password_reset_tokens WHERE token = $1", req.Token)
 			
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -208,7 +208,7 @@ func (m *OTPValidationMiddleware) IncrementTrialCount(tableName, token string) e
 	query := fmt.Sprintf(`
 		UPDATE %s 
 		SET trial_count = trial_count + 1 
-		WHERE token = ?
+		WHERE token = $1
 	`, tableName)
 	
 	_, err := m.db.Exec(query, token)
@@ -225,7 +225,7 @@ func (m *OTPValidationMiddleware) GetTokenStatus(tableName, token string) (map[s
 	query := fmt.Sprintf(`
 		SELECT user_id, expires_at, created_at, used, trial_count 
 		FROM %s 
-		WHERE token = ?
+		WHERE token = $1
 	`, tableName)
 
 	err := m.db.QueryRow(query, token).Scan(&userID, &expiresAt, &createdAt, &used, &trialCount)
@@ -283,7 +283,7 @@ func (m *OTPValidationMiddleware) GetTokenStatus(tableName, token string) (map[s
 func (m *OTPValidationMiddleware) CleanupExpiredTokens(tableName string) (int64, error) {
 	query := fmt.Sprintf(`
 		DELETE FROM %s 
-		WHERE expires_at < ? OR used = TRUE
+		WHERE expires_at < $1 OR used = TRUE
 	`, tableName)
 	
 	result, err := m.db.Exec(query, time.Now())

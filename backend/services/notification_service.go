@@ -60,7 +60,7 @@ func (ns *NotificationService) CreateNotification(req models.CreateNotificationR
 		INSERT INTO notifications 
 		(user_id, title, message, type, priority, category, reference_type, reference_id, 
 		 scheduled_for, data, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $11, 'pending', $12, $13)
 	`
 
 	now := time.Now()

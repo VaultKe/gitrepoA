@@ -55,7 +55,7 @@ func CreateLearningCategory(c *gin.Context) {
 	query := `
 		INSERT INTO learning_categories 
 		(id, name, description, icon, color, sort_order, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, true, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8)
 	`
 
 	_, err := db.(*sql.DB).Exec(query, categoryID, req.Name, req.Description,
@@ -119,27 +119,27 @@ func UpdateLearningCategory(c *gin.Context) {
 	args := []interface{}{}
 
 	if req.Name != "" {
-		updates = append(updates, "name = ?")
+		updates = append(updates, "name = $1")
 		args = append(args, req.Name)
 	}
 	if req.Description != "" {
-		updates = append(updates, "description = ?")
+		updates = append(updates, "description = $2")
 		args = append(args, req.Description)
 	}
 	if req.Icon != "" {
-		updates = append(updates, "icon = ?")
+		updates = append(updates, "icon = $3")
 		args = append(args, req.Icon)
 	}
 	if req.Color != "" {
-		updates = append(updates, "color = ?")
+		updates = append(updates, "color = $4")
 		args = append(args, req.Color)
 	}
 	if req.SortOrder > 0 {
-		updates = append(updates, "sort_order = ?")
+		updates = append(updates, "sort_order = $5")
 		args = append(args, req.SortOrder)
 	}
 	if req.IsActive != nil {
-		updates = append(updates, "is_active = ?")
+		updates = append(updates, "is_active = $6")
 		args = append(args, *req.IsActive)
 	}
 
@@ -151,7 +151,7 @@ func UpdateLearningCategory(c *gin.Context) {
 		return
 	}
 
-	updates = append(updates, "updated_at = ?")
+	updates = append(updates, "updated_at = $7")
 	args = append(args, time.Now())
 	args = append(args, categoryID)
 
@@ -160,7 +160,7 @@ func UpdateLearningCategory(c *gin.Context) {
 	for i := 1; i < len(updates); i++ {
 		query += ", " + updates[i]
 	}
-	query += " WHERE id = ?"
+	query += " WHERE id = $1"
 
 	result, err := db.(*sql.DB).Exec(query, args...)
 	if err != nil {
@@ -283,7 +283,7 @@ func CreateLearningCourse(c *gin.Context) {
 
 	// Check if category exists
 	var categoryExists bool
-	err := db.(*sql.DB).QueryRow("SELECT EXISTS(SELECT 1 FROM learning_categories WHERE id = ? AND is_active = true)", req.CategoryID).Scan(&categoryExists)
+	err := db.(*sql.DB).QueryRow("SELECT EXISTS(SELECT 1 FROM learning_categories WHERE id = $1 AND is_active = true)", req.CategoryID).Scan(&categoryExists)
 	if err != nil || !categoryExists {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -388,7 +388,7 @@ func CreateLearningCourse(c *gin.Context) {
 			 duration_minutes, estimated_read_time, tags, prerequisites, learning_objectives,
 			 status, is_featured, video_url, quiz_questions, article_content, course_structure,
 			 created_by, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		`
 		args = []interface{}{
 			courseID, req.Title, req.Description, req.CategoryID,
@@ -405,7 +405,7 @@ func CreateLearningCourse(c *gin.Context) {
 			(id, title, description, category_id, level, type, content, thumbnail_url,
 			 duration_minutes, estimated_read_time, tags, prerequisites, learning_objectives,
 			 status, is_featured, created_by, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		`
 		args = []interface{}{
 			courseID, req.Title, req.Description, req.CategoryID,
@@ -484,17 +484,17 @@ func UpdateLearningCourse(c *gin.Context) {
 	args := []interface{}{}
 
 	if req.Title != "" {
-		updates = append(updates, "title = ?")
+		updates = append(updates, "title = $1")
 		args = append(args, req.Title)
 	}
 	if req.Description != "" {
-		updates = append(updates, "description = ?")
+		updates = append(updates, "description = $1")
 		args = append(args, req.Description)
 	}
 	if req.CategoryID != "" {
 		// Verify category exists
 		var categoryExists bool
-		err := db.(*sql.DB).QueryRow("SELECT EXISTS(SELECT 1 FROM learning_categories WHERE id = ? AND is_active = true)", req.CategoryID).Scan(&categoryExists)
+		err := db.(*sql.DB).QueryRow("SELECT EXISTS(SELECT 1 FROM learning_categories WHERE id = $1 AND is_active = true)", req.CategoryID).Scan(&categoryExists)
 		if err != nil || !categoryExists {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -502,7 +502,7 @@ func UpdateLearningCourse(c *gin.Context) {
 			})
 			return
 		}
-		updates = append(updates, "category_id = ?")
+		updates = append(updates, "category_id = $1")
 		args = append(args, req.CategoryID)
 	}
 	if req.Level != "" {
@@ -513,7 +513,7 @@ func UpdateLearningCourse(c *gin.Context) {
 			})
 			return
 		}
-		updates = append(updates, "level = ?")
+		updates = append(updates, "level = $1")
 		args = append(args, req.Level)
 	}
 	if req.Type != "" {
@@ -524,38 +524,38 @@ func UpdateLearningCourse(c *gin.Context) {
 			})
 			return
 		}
-		updates = append(updates, "type = ?")
+		updates = append(updates, "type = $1")
 		args = append(args, req.Type)
 	}
 	if req.Content != "" {
-		updates = append(updates, "content = ?")
+		updates = append(updates, "content = $1")
 		args = append(args, req.Content)
 	}
 	if req.ThumbnailURL != "" {
-		updates = append(updates, "thumbnail_url = ?")
+		updates = append(updates, "thumbnail_url = $1")
 		args = append(args, req.ThumbnailURL)
 	}
 	if req.DurationMinutes > 0 {
-		updates = append(updates, "duration_minutes = ?")
+		updates = append(updates, "duration_minutes = $1")
 		args = append(args, req.DurationMinutes)
 	}
 	if req.EstimatedReadTime != "" {
-		updates = append(updates, "estimated_read_time = ?")
+		updates = append(updates, "estimated_read_time = $1")
 		args = append(args, req.EstimatedReadTime)
 	}
 	if req.Tags != nil {
 		tagsJSON, _ := json.Marshal(req.Tags)
-		updates = append(updates, "tags = ?")
+		updates = append(updates, "tags = $1")
 		args = append(args, string(tagsJSON))
 	}
 	if req.Prerequisites != nil {
 		prerequisitesJSON, _ := json.Marshal(req.Prerequisites)
-		updates = append(updates, "prerequisites = ?")
+		updates = append(updates, "prerequisites = $1")
 		args = append(args, string(prerequisitesJSON))
 	}
 	if req.LearningObjectives != nil {
 		objectivesJSON, _ := json.Marshal(req.LearningObjectives)
-		updates = append(updates, "learning_objectives = ?")
+		updates = append(updates, "learning_objectives = $1")
 		args = append(args, string(objectivesJSON))
 	}
 	if req.Status != "" {
@@ -566,11 +566,11 @@ func UpdateLearningCourse(c *gin.Context) {
 			})
 			return
 		}
-		updates = append(updates, "status = ?")
+		updates = append(updates, "status = $1")
 		args = append(args, req.Status)
 	}
 	if req.IsFeatured != nil {
-		updates = append(updates, "is_featured = ?")
+		updates = append(updates, "is_featured = $1")
 		args = append(args, *req.IsFeatured)
 	}
 
@@ -582,7 +582,7 @@ func UpdateLearningCourse(c *gin.Context) {
 		return
 	}
 
-	updates = append(updates, "updated_at = ?")
+	updates = append(updates, "updated_at = $1")
 	args = append(args, time.Now())
 	args = append(args, courseID)
 
@@ -591,7 +591,7 @@ func UpdateLearningCourse(c *gin.Context) {
 	for i := 1; i < len(updates); i++ {
 		query += ", " + updates[i]
 	}
-	query += " WHERE id = ?"
+	query += " WHERE id = $1"
 
 	result, err := db.(*sql.DB).Exec(query, args...)
 	if err != nil {
@@ -640,7 +640,7 @@ func DeleteLearningCourse(c *gin.Context) {
 	}
 
 	// Delete the course (this will cascade delete lessons, progress, etc.)
-	result, err := db.(*sql.DB).Exec("DELETE FROM learning_courses WHERE id = ?", courseID)
+	result, err := db.(*sql.DB).Exec("DELETE FROM learning_courses WHERE id = $1", courseID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -688,7 +688,7 @@ func DeleteLearningCategory(c *gin.Context) {
 
 	// Check if category has courses
 	var courseCount int
-	err := db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM learning_courses WHERE category_id = ?", categoryID).Scan(&courseCount)
+	err := db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM learning_courses WHERE category_id = $1", categoryID).Scan(&courseCount)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -706,7 +706,7 @@ func DeleteLearningCategory(c *gin.Context) {
 	}
 
 	// Delete the category
-	result, err := db.(*sql.DB).Exec("DELETE FROM learning_categories WHERE id = ?", categoryID)
+	result, err := db.(*sql.DB).Exec("DELETE FROM learning_categories WHERE id = $1", categoryID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

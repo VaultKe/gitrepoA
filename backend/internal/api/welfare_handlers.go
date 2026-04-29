@@ -46,7 +46,7 @@ func GetWelfareRequests(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, chamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -88,9 +88,9 @@ func GetWelfareRequests(c *gin.Context) {
 		LEFT JOIN votes v ON v.chama_id = wr.chama_id AND v.title = 'Welfare Request: ' || wr.id AND v.type = 'welfare'
 		LEFT JOIN vote_options yes_votes ON yes_votes.vote_id = v.id AND yes_votes.option_text = 'yes'
 		LEFT JOIN vote_options no_votes ON no_votes.vote_id = v.id AND no_votes.option_text = 'no'
-		LEFT JOIN user_votes uv ON uv.vote_id = v.id AND uv.user_id = ?
+		LEFT JOIN user_votes uv ON uv.vote_id = v.id AND uv.user_id = $1
 		LEFT JOIN vote_options user_vote ON user_vote.id = uv.option_id
-		WHERE wr.chama_id = ?
+		WHERE wr.chama_id = $2
 		ORDER BY wr.created_at DESC
 	`, currentUserID, chamaID)
 	if err != nil {
@@ -209,7 +209,7 @@ func GetWelfareRequests(c *gin.Context) {
 		err = db.(*sql.DB).QueryRow(`
 			SELECT COALESCE(SUM(amount), 0), COUNT(*)
 			FROM welfare_contributions
-			WHERE welfare_fund_id = ?
+			WHERE welfare_fund_id = $1
 		`, welfareRequestFundID).Scan(&totalContributions, &contributionCount)
 		if err != nil {
 			// Log error but continue with zero values
@@ -301,7 +301,7 @@ func CreateWelfareRequest(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, req.ChamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -335,7 +335,7 @@ func CreateWelfareRequest(c *gin.Context) {
 			id, chama_id, requester_id, beneficiary_id, title, description, amount,
 			category, urgency, status, votes_for, votes_against,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`, welfareID, req.ChamaID, userID, beneficiaryID, req.Title, req.Description, req.Amount, req.Category, req.Urgency)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -452,7 +452,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT id, chama_id, requester_id, status, votes_for, votes_against
 		FROM welfare_requests
-		WHERE id = ?
+		WHERE id = $1
 	`, welfareID).Scan(&welfareRequest.ID, &welfareRequest.ChamaID, &welfareRequest.RequesterID, &welfareRequest.Status, &welfareRequest.VotesFor, &welfareRequest.VotesAgainst)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -482,7 +482,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	var voteID string
 	err = db.(*sql.DB).QueryRow(`
 		SELECT id FROM votes
-		WHERE chama_id = ? AND title = ? AND type = 'welfare'
+		WHERE chama_id = $1 AND title = $2 AND type = 'welfare'
 	`, welfareRequest.ChamaID, "Welfare Request: "+welfareID).Scan(&voteID)
 
 	// If no vote exists, create one
@@ -490,7 +490,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 		voteID = fmt.Sprintf("vote-%d", time.Now().UnixNano())
 		_, err = db.(*sql.DB).Exec(`
 			INSERT INTO votes (id, chama_id, title, description, type, status, ends_at, created_by, created_at)
-			VALUES (?, ?, ?, ?, 'welfare', 'active', datetime('now', '+7 days'), ?, CURRENT_TIMESTAMP)
+			VALUES ($1, $2, $3, $4, 'welfare', 'active', datetime('now', '+7 days'), $5, CURRENT_TIMESTAMP)
 		`, voteID, welfareRequest.ChamaID, "Welfare Request: "+welfareID, "Vote on welfare request", userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -506,8 +506,8 @@ func VoteOnWelfareRequest(c *gin.Context) {
 
 		_, err = db.(*sql.DB).Exec(`
 			INSERT INTO vote_options (id, vote_id, option_text, vote_count) VALUES
-			(?, ?, 'yes', 0),
-			(?, ?, 'no', 0)
+			($1, $2, 'yes', 0),
+			($3, $4, 'no', 0)
 		`, yesOptionID, voteID, noOptionID, voteID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -528,7 +528,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	var optionID string
 	err = db.(*sql.DB).QueryRow(`
 		SELECT id FROM vote_options
-		WHERE vote_id = ? AND option_text = ?
+		WHERE vote_id = $1 AND option_text = $2
 	`, voteID, req.Vote).Scan(&optionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -542,7 +542,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	var existingUserVote string
 	err = db.(*sql.DB).QueryRow(`
 		SELECT id FROM user_votes
-		WHERE vote_id = ? AND user_id = ?
+		WHERE vote_id = $1 AND user_id = $2
 	`, voteID, userID).Scan(&existingUserVote)
 
 	if existingUserVote != "" {
@@ -557,7 +557,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	userVoteID := fmt.Sprintf("uv-%d", time.Now().UnixNano())
 	_, err = db.(*sql.DB).Exec(`
 		INSERT INTO user_votes (id, vote_id, user_id, option_id, created_at)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
 	`, userVoteID, voteID, userID, optionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -571,7 +571,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	_, err = db.(*sql.DB).Exec(`
 		UPDATE vote_options
 		SET vote_count = vote_count + 1
-		WHERE id = ?
+		WHERE id = $1
 	`, optionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -588,7 +588,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 			COALESCE(SUM(CASE WHEN option_text = 'yes' THEN vote_count ELSE 0 END), 0) as yes_votes,
 			COALESCE(SUM(CASE WHEN option_text = 'no' THEN vote_count ELSE 0 END), 0) as no_votes
 		FROM vote_options
-		WHERE vote_id = ?
+		WHERE vote_id = $1
 	`, voteID).Scan(&yesVotes, &noVotes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -601,8 +601,8 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	// Update vote counts in welfare_requests table for consistency
 	_, err = db.(*sql.DB).Exec(`
 		UPDATE welfare_requests
-		SET votes_for = ?, votes_against = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
+		SET votes_for = $1, votes_against = $2, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $3
 	`, yesVotes, noVotes, welfareID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -616,7 +616,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 	var totalMembers int
 	err = db.(*sql.DB).QueryRow(`
 		SELECT COUNT(*) FROM chama_members
-		WHERE chama_id = ? AND is_active = TRUE
+		WHERE chama_id = $1 AND is_active = TRUE
 	`, welfareRequest.ChamaID).Scan(&totalMembers)
 	if err != nil {
 		// Log error but don't fail the response
@@ -642,8 +642,8 @@ func VoteOnWelfareRequest(c *gin.Context) {
 			// Update welfare request status
 			_, err = db.(*sql.DB).Exec(`
 				UPDATE welfare_requests
-				SET status = ?, updated_at = CURRENT_TIMESTAMP
-				WHERE id = ?
+				SET status = $1, updated_at = CURRENT_TIMESTAMP
+				WHERE id = $2
 			`, newStatus, welfareID)
 			if err != nil {
 				fmt.Printf("Failed to update welfare request status: %v\n", err)
@@ -653,7 +653,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 			_, err = db.(*sql.DB).Exec(`
 				UPDATE votes
 				SET status = 'completed', ends_at = CURRENT_TIMESTAMP
-				WHERE id = ?
+				WHERE id = $1
 			`, voteID)
 			if err != nil {
 				fmt.Printf("Failed to close vote: %v\n", err)
@@ -665,7 +665,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 				INSERT INTO notifications (
 					id, user_id, type, title, message, data,
 					is_read, created_at, updated_at
-				) VALUES (?, ?, 'welfare_vote_result', ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				) VALUES ($1, $2, 'welfare_vote_result', $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			`, notificationID, welfareRequest.RequesterID,
 				"Welfare Vote Complete",
 				statusMessage,
@@ -751,7 +751,7 @@ func ContributeToWelfare(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM chama_members
-			WHERE chama_id = ? AND user_id = ? AND is_active = TRUE
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
 	`, req.ChamaID, userID).Scan(&membershipExists)
 	if err != nil {
@@ -783,7 +783,7 @@ func ContributeToWelfare(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT id, chama_id, status, amount, title, COALESCE(beneficiary_id, requester_id) as beneficiary_id
 		FROM welfare_requests
-		WHERE id = ? AND chama_id = ?
+		WHERE id = $1 AND chama_id = $2
 	`, req.WelfareRequestID, req.ChamaID).Scan(
 		&welfareRequest.ID, &welfareRequest.ChamaID, &welfareRequest.Status, &welfareRequest.Amount,
 		&welfareRequest.Title, &welfareRequest.BeneficiaryID)
@@ -820,7 +820,7 @@ func ContributeToWelfare(c *gin.Context) {
 	// Check if welfare fund exists for this request
 	var existingFundID string
 	err = db.(*sql.DB).QueryRow(`
-		SELECT id FROM welfare_funds WHERE id = ?
+		SELECT id FROM welfare_funds WHERE id = $1
 	`, welfareRequestFundID).Scan(&existingFundID)
 
 	// Create welfare fund if it doesn't exist
@@ -828,7 +828,7 @@ func ContributeToWelfare(c *gin.Context) {
 		_, err = db.(*sql.DB).Exec(`
 			INSERT INTO welfare_funds (
 				id, chama_id, name, description, purpose, status, beneficiary_id, created_by, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`, welfareRequestFundID, welfareRequest.ChamaID,
 			"Fund for: "+welfareRequest.Title,
 			"Welfare fund for welfare request: "+req.WelfareRequestID,
@@ -855,7 +855,7 @@ func ContributeToWelfare(c *gin.Context) {
 	_, err = db.(*sql.DB).Exec(`
 		INSERT INTO welfare_contributions (
 			id, welfare_fund_id, user_id, amount, payment_method, contributed_at
-		) VALUES (?, ?, ?, ?, 'mobile_money', CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, 'mobile_money', CURRENT_TIMESTAMP)
 	`, contributionID, welfareRequestFundID, userID, req.Amount)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -870,7 +870,7 @@ func ContributeToWelfare(c *gin.Context) {
 	err = db.(*sql.DB).QueryRow(`
 		SELECT COALESCE(SUM(amount), 0)
 		FROM welfare_contributions
-		WHERE welfare_fund_id = ?
+		WHERE welfare_fund_id = $1
 	`, welfareRequestFundID).Scan(&totalContributions)
 	if err != nil {
 		// Log error but don't fail the response
@@ -884,7 +884,7 @@ func ContributeToWelfare(c *gin.Context) {
 		INSERT INTO notifications (
 			id, user_id, type, title, message, data,
 			is_read, created_at, updated_at
-		) VALUES (?, ?, 'welfare_contribution', ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, 'welfare_contribution', $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`, notificationID, welfareRequest.BeneficiaryID,
 		"New Welfare Contribution",
 		fmt.Sprintf("You received a contribution of KES %.2f for your welfare request", req.Amount),
@@ -951,7 +951,7 @@ func GetWelfareContributions(c *gin.Context) {
 			u.first_name, u.last_name, u.email
 		FROM welfare_contributions wc
 		JOIN users u ON wc.user_id = u.id
-		WHERE wc.welfare_fund_id = ?
+		WHERE wc.welfare_fund_id = $1
 		ORDER BY wc.contributed_at DESC
 	`, welfareRequestFundID)
 	if err != nil {
@@ -1024,7 +1024,7 @@ func CheckAndCloseCompletedWelfareVotes(chamaID string, db *sql.DB) {
 		SELECT wr.id, wr.chama_id, wr.requester_id, wr.status, v.id as vote_id
 		FROM welfare_requests wr
 		LEFT JOIN votes v ON v.chama_id = wr.chama_id AND v.title = 'Welfare Request: ' || wr.id AND v.type = 'welfare'
-		WHERE wr.chama_id = ? AND wr.status = 'pending' AND v.status = 'active'
+		WHERE wr.chama_id = $1 AND wr.status = 'pending' AND v.status = 'active'
 	`, chamaID)
 	if err != nil {
 		fmt.Printf("Failed to get pending welfare requests: %v\n", err)
@@ -1036,7 +1036,7 @@ func CheckAndCloseCompletedWelfareVotes(chamaID string, db *sql.DB) {
 	var totalMembers int
 	err = db.QueryRow(`
 		SELECT COUNT(*) FROM chama_members
-		WHERE chama_id = ? AND is_active = TRUE
+		WHERE chama_id = $1 AND is_active = TRUE
 	`, chamaID).Scan(&totalMembers)
 	if err != nil {
 		fmt.Printf("Failed to get total chama members: %v\n", err)
@@ -1057,7 +1057,7 @@ func CheckAndCloseCompletedWelfareVotes(chamaID string, db *sql.DB) {
 				COALESCE(SUM(CASE WHEN option_text = 'yes' THEN vote_count ELSE 0 END), 0) as yes_votes,
 				COALESCE(SUM(CASE WHEN option_text = 'no' THEN vote_count ELSE 0 END), 0) as no_votes
 			FROM vote_options
-			WHERE vote_id = ?
+			WHERE vote_id = $1
 		`, voteID).Scan(&yesVotes, &noVotes)
 		if err != nil {
 			continue
@@ -1082,8 +1082,8 @@ func CheckAndCloseCompletedWelfareVotes(chamaID string, db *sql.DB) {
 			// Update welfare request status
 			_, err = db.Exec(`
 				UPDATE welfare_requests
-				SET status = ?, votes_for = ?, votes_against = ?, updated_at = CURRENT_TIMESTAMP
-				WHERE id = ?
+				SET status = $1, votes_for = $2, votes_against = $3, updated_at = CURRENT_TIMESTAMP
+				WHERE id = $4
 			`, newStatus, yesVotes, noVotes, welfareID)
 			if err != nil {
 				fmt.Printf("Failed to update welfare request status for %s: %v\n", welfareID, err)
@@ -1094,7 +1094,7 @@ func CheckAndCloseCompletedWelfareVotes(chamaID string, db *sql.DB) {
 			_, err = db.Exec(`
 				UPDATE votes
 				SET status = 'completed', ends_at = CURRENT_TIMESTAMP
-				WHERE id = ?
+				WHERE id = $1
 			`, voteID)
 			if err != nil {
 				fmt.Printf("Failed to close vote %s: %v\n", voteID, err)
@@ -1106,7 +1106,7 @@ func CheckAndCloseCompletedWelfareVotes(chamaID string, db *sql.DB) {
 				INSERT INTO notifications (
 					id, user_id, type, title, message, data,
 					is_read, created_at, updated_at
-				) VALUES (?, ?, 'welfare_vote_result', ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				) VALUES ($1, $2, 'welfare_vote_result', $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			`, notificationID, requesterID,
 				"Welfare Vote Complete",
 				statusMessage,

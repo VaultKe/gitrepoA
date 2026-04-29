@@ -59,7 +59,6 @@ import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryS
 
 
 // Demo Screens
-import LogoShowcaseScreen from '../screens/demo/LogoShowcaseScreen';
 
 import { useApp } from '../context/AppContext';
 import { getThemeColors } from '../utils/theme';
@@ -464,15 +463,7 @@ function UserTabNavigator() {
         }}
       />
 
-      {/* Demo Screens */}
-      <Tab.Screen
-        name="LogoShowcase"
-        component={LogoShowcaseScreen}
-        options={{
-          title: 'VaultKe Logo Showcase',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
+
     </Tab.Navigator>
   );
 }

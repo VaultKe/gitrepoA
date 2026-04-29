@@ -110,7 +110,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 			max_members, current_members, total_funds, is_public, requires_approval, rules,
 			meeting_frequency, meeting_day_of_week, meeting_day_of_month, meeting_time,
 			created_by, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
 	`
 
 	var meetingFreq, meetingTime *string
@@ -153,7 +153,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		INSERT INTO chama_members (
 			id, chama_id, user_id, role, joined_at, is_active,
 			total_contributions, rating, total_ratings
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err = tx.Exec(memberQuery,
@@ -187,7 +187,7 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 			   max_members, current_members, total_funds, is_public, requires_approval,
 			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
 			   meeting_time, permissions, created_by, created_at, updated_at
-		FROM chamas WHERE id = ?
+		FROM chamas WHERE id = $1
 	`
 
 	chama := &models.Chama{}
@@ -253,12 +253,12 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
 			   meeting_time, created_by, created_at, updated_at
 		FROM chamas
-		WHERE is_public = true AND status = 'active'
+		WHERE is_public = $1 AND status = 'active'
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := s.db.Query(query, limit, offset)
+	rows, err := s.db.Query(query, true, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chamas: %w", err)
 	}
@@ -314,7 +314,7 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 			   meeting_time, created_by, created_at, updated_at
 		FROM chamas
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $1 OFFSET $2
 	`
 
 	rows, err := s.db.Query(query, limit, offset)
@@ -373,12 +373,12 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			   c.meeting_time, c.created_by, c.created_at, c.updated_at
 		FROM chamas c
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
-		WHERE cm.user_id = ? AND cm.is_active = true
+		WHERE cm.user_id = $1 AND cm.is_active = $2
 		ORDER BY c.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $3 OFFSET $4
 	`
 
-	rows, err := s.db.Query(query, userID, limit, offset)
+	rows, err := s.db.Query(query, userID, true, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user chamas: %w", err)
 	}
@@ -470,7 +470,7 @@ func (s *ChamaService) JoinChama(chamaID, userID string) error {
 		INSERT INTO chama_members (
 			id, chama_id, user_id, role, joined_at, is_active,
 			total_contributions, rating, total_ratings
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err = tx.Exec(memberQuery,
@@ -483,7 +483,7 @@ func (s *ChamaService) JoinChama(chamaID, userID string) error {
 
 	// Update chama member count
 	_, err = tx.Exec(
-		"UPDATE chamas SET current_members = current_members + 1, updated_at = ? WHERE id = ?",
+		"UPDATE chamas SET current_members = current_members + 1, updated_at = $1 WHERE id = $2",
 		time.Now(), chamaID,
 	)
 	if err != nil {
@@ -529,8 +529,8 @@ func (s *ChamaService) LeaveChama(chamaID, userID string) error {
 
 	// Deactivate member
 	_, err = tx.Exec(
-		"UPDATE chama_members SET is_active = false WHERE chama_id = ? AND user_id = ?",
-		chamaID, userID,
+		"UPDATE chama_members SET is_active = $1 WHERE chama_id = $2 AND user_id = $3",
+		false, chamaID, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to deactivate member: %w", err)
@@ -538,7 +538,7 @@ func (s *ChamaService) LeaveChama(chamaID, userID string) error {
 
 	// Update chama member count
 	_, err = tx.Exec(
-		"UPDATE chamas SET current_members = current_members - 1, updated_at = ? WHERE id = ?",
+		"UPDATE chamas SET current_members = current_members - 1, updated_at = $1 WHERE id = $2",
 		time.Now(), chamaID,
 	)
 	if err != nil {
@@ -561,11 +561,11 @@ func (s *ChamaService) GetChamaMembers(chamaID string) ([]*models.ChamaMember, e
 			   u.first_name, u.last_name, u.email, u.phone, u.avatar
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
-		WHERE cm.chama_id = ? AND cm.is_active = true
+		WHERE cm.chama_id = $1 AND cm.is_active = $2
 		ORDER BY cm.joined_at ASC
 	`
 
-	rows, err := s.db.Query(query, chamaID)
+	rows, err := s.db.Query(query, chamaID, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chama members: %w", err)
 	}
@@ -600,7 +600,7 @@ func (s *ChamaService) GetChamaMember(chamaID, userID string) (*models.ChamaMemb
 		SELECT id, chama_id, user_id, role, joined_at, is_active,
 			   total_contributions, last_contribution, rating, total_ratings
 		FROM chama_members
-		WHERE chama_id = ? AND user_id = ?
+		WHERE chama_id = $1 AND user_id = $2
 	`
 
 	member := &models.ChamaMember{}
@@ -621,9 +621,9 @@ func (s *ChamaService) GetChamaMember(chamaID, userID string) (*models.ChamaMemb
 
 // IsUserMember checks if a user is a member of a chama
 func (s *ChamaService) IsUserMember(chamaID, userID string) (bool, error) {
-	query := "SELECT COUNT(*) FROM chama_members WHERE chama_id = ? AND user_id = ? AND is_active = true"
+	query := "SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = $3"
 	var count int
-	err := s.db.QueryRow(query, chamaID, userID).Scan(&count)
+	err := s.db.QueryRow(query, chamaID, userID, true).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check membership: %w", err)
 	}
@@ -642,7 +642,7 @@ func (s *ChamaService) UpdateMemberRole(chamaID, userID string, newRole models.C
 	}
 
 	// Update role
-	query := "UPDATE chama_members SET role = ? WHERE chama_id = ? AND user_id = ?"
+	query := "UPDATE chama_members SET role = $1 WHERE chama_id = $2 AND user_id = $3"
 	_, err = s.db.Exec(query, newRole, chamaID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update member role: %w", err)
@@ -654,7 +654,7 @@ func (s *ChamaService) UpdateMemberRole(chamaID, userID string, newRole models.C
 // UpdateMemberRoleSimple updates a member's role in a chama (for API compatibility)
 func (s *ChamaService) UpdateMemberRoleSimple(chamaID, userID, newRole string) error {
 	// Update role directly with string
-	query := "UPDATE chama_members SET role = ?, updated_at = ? WHERE chama_id = ? AND user_id = ?"
+	query := "UPDATE chama_members SET role = $1, updated_at = $2 WHERE chama_id = $3 AND user_id = $4"
 	_, err := s.db.Exec(query, newRole, time.Now(), chamaID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update member role: %w", err)
@@ -679,7 +679,7 @@ func (s *ChamaService) UpdateMemberStatus(chamaID, userID, status string) error 
 
 	// Update status by setting is_active based on status
 	isActive := status == "active"
-	query := "UPDATE chama_members SET is_active = ?, updated_at = ? WHERE chama_id = ? AND user_id = ?"
+	query := "UPDATE chama_members SET is_active = $1, updated_at = $1$2 WHERE chama_id = $1$3 AND user_id = $2$4"
 	_, err := s.db.Exec(query, isActive, time.Now(), chamaID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update member status: %w", err)
@@ -769,7 +769,7 @@ func (s *ChamaService) getMemberStatistics(chamaID string) (map[string]interface
 	roleQuery := `
 		SELECT role, COUNT(*) as count
 		FROM chama_members
-		WHERE chama_id = ?
+		WHERE chama_id = $1
 		GROUP BY role
 	`
 	rows, err := s.db.Query(roleQuery, chamaID)
@@ -794,7 +794,7 @@ func (s *ChamaService) getMemberStatistics(chamaID string) (map[string]interface
 	activeMembersQuery := `
 		SELECT COUNT(*) as active_count
 		FROM chama_members
-		WHERE chama_id = ? AND (is_active = true OR is_active IS NULL)
+		WHERE chama_id = $1 AND (is_active = $1true OR is_active IS NULL)
 	`
 	var activeMembers int
 	err = s.db.QueryRow(activeMembersQuery, chamaID).Scan(&activeMembers)
@@ -810,7 +810,7 @@ func (s *ChamaService) getMemberStatistics(chamaID string) (map[string]interface
 	joinTrendQuery := `
 		SELECT DATE(joined_at) as join_date, COUNT(*) as count
 		FROM chama_members
-		WHERE chama_id = ? AND joined_at >= DATE('now', '-6 months')
+		WHERE chama_id = $1 AND joined_at >= DATE('now', '-6 months')
 		GROUP BY DATE(joined_at)
 		ORDER BY join_date
 	`
@@ -849,7 +849,7 @@ func (s *ChamaService) getFinancialStatistics(chamaID string) (map[string]interf
 			COUNT(*) as total_transactions,
 			COALESCE(AVG(amount), 0) as average_contribution
 		FROM transactions
-		WHERE recipient_id = ? AND type = 'contribution' AND status = 'completed'
+		WHERE recipient_id = $1 AND type = 'contribution' AND status = 'completed'
 	`
 	var totalContributions, averageContribution float64
 	var totalTransactions int
@@ -869,7 +869,7 @@ func (s *ChamaService) getFinancialStatistics(chamaID string) (map[string]interf
 			COALESCE(SUM(amount), 0) as total,
 			COUNT(*) as count
 		FROM transactions
-		WHERE recipient_id = ? AND type = 'contribution' AND status = 'completed'
+		WHERE recipient_id = $1 AND type = 'contribution' AND status = 'completed'
 		AND created_at >= DATE('now', '-12 months')
 		GROUP BY strftime('%Y-%m', created_at)
 		ORDER BY month
@@ -909,7 +909,7 @@ func (s *ChamaService) getActivityStatistics(chamaID string) (map[string]interfa
 
 	// First, let's check if there are any meetings at all for this chama
 	var debugCount int
-	debugQuery := "SELECT COUNT(*) FROM meetings WHERE chama_id = ?"
+	debugQuery := "SELECT COUNT(*) FROM meetings WHERE chama_id = $1"
 	debugErr := s.db.QueryRow(debugQuery, chamaID).Scan(&debugCount)
 	if debugErr != nil {
 		fmt.Printf("❌ Error in debug query: %v\n", debugErr)
@@ -923,7 +923,7 @@ func (s *ChamaService) getActivityStatistics(chamaID string) (map[string]interfa
 			datetime('now') as current_utc,
 			datetime('now', '+3 hours') as current_eat,
 			CASE WHEN scheduled_at > datetime('now', '+3 hours') THEN 'UPCOMING' ELSE 'PAST' END as time_status
-			FROM meetings WHERE chama_id = ? LIMIT 3`
+			FROM meetings WHERE chama_id = $1 LIMIT 3`
 		rows, detailErr := s.db.Query(detailQuery, chamaID)
 		if detailErr == nil {
 			defer rows.Close()
@@ -948,7 +948,7 @@ func (s *ChamaService) getActivityStatistics(chamaID string) (map[string]interfa
 			COUNT(CASE WHEN status IN ('ongoing', 'active', 'started', 'live') THEN 1 END) as ongoing_meetings,
 			COUNT(CASE WHEN status NOT IN ('completed', 'cancelled', 'ended') THEN 1 END) as active_meetings_alt
 		FROM meetings
-		WHERE chama_id = ?
+		WHERE chama_id = $1
 	`
 	var totalMeetings, completedMeetings, upcomingMeetings, ongoingMeetings, activeMeetingsAlt int
 	err := s.db.QueryRow(meetingQuery, chamaID).Scan(&totalMeetings, &completedMeetings, &upcomingMeetings, &ongoingMeetings, &activeMeetingsAlt)
@@ -977,7 +977,7 @@ func (s *ChamaService) getActivityStatistics(chamaID string) (map[string]interfa
 			COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_loans,
 			COALESCE(SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END), 0) as total_loan_amount
 		FROM loans
-		WHERE chama_id = ?
+		WHERE chama_id = $1
 	`
 	var totalLoans, approvedLoans, pendingLoans int
 	var totalLoanAmount float64
@@ -1006,7 +1006,7 @@ func (s *ChamaService) getChamaWalletBalance(chamaID string) (float64, error) {
 	query := `
 		SELECT COALESCE(balance, 0) as balance
 		FROM wallets
-		WHERE owner_id = ? AND type = 'chama'
+		WHERE owner_id = $1 AND type = 'chama'
 	`
 	var balance float64
 	err = s.db.QueryRow(query, chamaID).Scan(&balance)
@@ -1021,7 +1021,7 @@ func (s *ChamaService) ensureChamaWallet(chamaID string) error {
 	// Check if wallet exists
 	var exists bool
 	checkQuery := `
-		SELECT EXISTS(SELECT 1 FROM wallets WHERE owner_id = ? AND type = 'chama')
+		SELECT EXISTS(SELECT 1 FROM wallets WHERE owner_id = $1 AND type = 'chama')
 	`
 	err := s.db.QueryRow(checkQuery, chamaID).Scan(&exists)
 	if err != nil {
@@ -1033,12 +1033,11 @@ func (s *ChamaService) ensureChamaWallet(chamaID string) error {
 		walletID := fmt.Sprintf("wallet-%s", chamaID)
 		_, err = s.db.Exec(`
 			INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
-			VALUES (?, ?, 'chama', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			VALUES ($1, $2, 'chama', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`, walletID, chamaID)
 		if err != nil {
 			return fmt.Errorf("failed to create chama wallet: %w", err)
 		}
-		fmt.Printf("✅ Created chama wallet for chama ID: %s\n", chamaID)
 	}
 
 	return nil
@@ -1053,7 +1052,7 @@ func (s *ChamaService) getUserChamaStatistics(chamaID, userID string) (map[strin
 	roleQuery := `
 		SELECT role
 		FROM chama_members
-		WHERE chama_id = ? AND user_id = ?
+		WHERE chama_id = $1 AND user_id = $2
 	`
 	err := s.db.QueryRow(roleQuery, chamaID, userID).Scan(&role)
 	if err != nil {
@@ -1072,7 +1071,7 @@ func (s *ChamaService) getUserChamaStatistics(chamaID, userID string) (map[strin
 			COALESCE(SUM(CASE WHEN type = 'loan' THEN amount ELSE 0 END), 0) as total_loans,
 			COALESCE(SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END), 0) as total_withdrawals
 		FROM transactions
-		WHERE initiated_by = ? AND recipient_id = ?
+		WHERE initiated_by = $2 AND recipient_id = $1
 	`
 	var totalTransactions int
 	var totalContributions, totalLoans, totalWithdrawals float64
@@ -1086,7 +1085,7 @@ func (s *ChamaService) getUserChamaStatistics(chamaID, userID string) (map[strin
 	contributionCountQuery := `
 		SELECT COUNT(*)
 		FROM transactions
-		WHERE initiated_by = ? AND recipient_id = ? AND type = 'contribution' AND status = 'completed'
+		WHERE initiated_by = $1 AND recipient_id = $2 AND type = 'contribution' AND status = 'completed'
 	`
 	var contributionCount int
 	err = s.db.QueryRow(contributionCountQuery, userID, chamaID).Scan(&contributionCount)
@@ -1115,9 +1114,9 @@ func (s *ChamaService) GetChamaTransactions(chamaID string, limit, offset int) (
 			u.first_name, u.last_name, u.email, u.phone
 		FROM transactions t
 		LEFT JOIN users u ON t.initiated_by = u.id
-		WHERE t.recipient_id = ?
+		WHERE t.recipient_id = $1
 		ORDER BY t.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $1 OFFSET $2
 	`
 
 	rows, err := s.db.Query(query, chamaID, limit, offset)
@@ -1212,7 +1211,7 @@ func (s *ChamaService) AddMemberToChama(chamaID, userID, role string) error {
 	}
 
 	// Check if user is already a member
-	checkQuery := `SELECT COUNT(*) FROM chama_members WHERE chama_id = ? AND user_id = ? AND is_active = true`
+	checkQuery := `SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = $1true`
 	var count int
 	err := s.db.QueryRow(checkQuery, chamaID, userID).Scan(&count)
 	if err != nil {
@@ -1240,7 +1239,7 @@ func (s *ChamaService) AddMemberToChama(chamaID, userID, role string) error {
 		INSERT INTO chama_members (
 			id, chama_id, user_id, role, joined_at, is_active,
 			total_contributions, rating, total_ratings
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err = s.db.Exec(memberQuery,
@@ -1256,7 +1255,7 @@ func (s *ChamaService) AddMemberToChama(chamaID, userID, role string) error {
 
 // UpdateChamaMemberCount updates the current member count for a chama
 func (s *ChamaService) UpdateChamaMemberCount(chamaID string, memberCount int) error {
-	query := `UPDATE chamas SET current_members = ?, updated_at = ? WHERE id = ?`
+	query := `UPDATE chamas SET current_members = $1, updated_at = $1$2 WHERE id = $1$3`
 
 	_, err := s.db.Exec(query, memberCount, time.Now(), chamaID)
 	if err != nil {
@@ -1271,7 +1270,7 @@ func (s *ChamaService) GetUserRoleInChama(chamaID, userID string) (string, error
 	query := `
 		SELECT role
 		FROM chama_members
-		WHERE chama_id = ? AND user_id = ? AND is_active = true
+		WHERE chama_id = $1 AND user_id = $2 AND is_active = $1true
 	`
 
 	var role string
@@ -1315,37 +1314,37 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 	}); ok {
 
 		if updateMap.Name != nil {
-			setParts = append(setParts, "name = ?")
+			setParts = append(setParts, "name = $1")
 			args = append(args, *updateMap.Name)
 		}
 
 		if updateMap.Description != nil {
-			setParts = append(setParts, "description = ?")
+			setParts = append(setParts, "description = $1")
 			args = append(args, *updateMap.Description)
 		}
 
 		if updateMap.IsPublic != nil {
-			setParts = append(setParts, "is_public = ?")
+			setParts = append(setParts, "is_public = $1")
 			args = append(args, *updateMap.IsPublic)
 		}
 
 		if updateMap.RequiresApproval != nil {
-			setParts = append(setParts, "requires_approval = ?")
+			setParts = append(setParts, "requires_approval = $1")
 			args = append(args, *updateMap.RequiresApproval)
 		}
 
 		if updateMap.MaxMembers != nil {
-			setParts = append(setParts, "max_members = ?")
+			setParts = append(setParts, "max_members = $1")
 			args = append(args, *updateMap.MaxMembers)
 		}
 
 		if updateMap.ContributionAmount != nil {
-			setParts = append(setParts, "contribution_amount = ?")
+			setParts = append(setParts, "contribution_amount = $1")
 			args = append(args, *updateMap.ContributionAmount)
 		}
 
 		if updateMap.ContributionFrequency != nil {
-			setParts = append(setParts, "contribution_frequency = ?")
+			setParts = append(setParts, "contribution_frequency = $1")
 			args = append(args, *updateMap.ContributionFrequency)
 		}
 
@@ -1354,7 +1353,7 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 			if err != nil {
 				return fmt.Errorf("failed to marshal rules: %w", err)
 			}
-			setParts = append(setParts, "rules = ?")
+			setParts = append(setParts, "rules = $1")
 			args = append(args, string(rulesJSON))
 		}
 
@@ -1363,7 +1362,7 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 			if err != nil {
 				return fmt.Errorf("failed to marshal permissions: %w", err)
 			}
-			setParts = append(setParts, "permissions = ?")
+			setParts = append(setParts, "permissions = $1")
 			args = append(args, string(permissionsJSON))
 		}
 	}
@@ -1373,14 +1372,14 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 	}
 
 	// Add updated_at timestamp
-	setParts = append(setParts, "updated_at = ?")
+	setParts = append(setParts, "updated_at = $1")
 	args = append(args, time.Now())
 
 	// Add chama ID for WHERE clause
 	args = append(args, chamaID)
 
 	// Build and execute update query
-	query := fmt.Sprintf("UPDATE chamas SET %s WHERE id = ?", strings.Join(setParts, ", "))
+	query := fmt.Sprintf("UPDATE chamas SET %s WHERE id = $1", strings.Join(setParts, ", "))
 
 	_, err = tx.Exec(query, args...)
 	if err != nil {
@@ -1406,7 +1405,7 @@ func (s *ChamaService) RemoveUserFromChama(chamaID, userID string) error {
 
 	// Check if user is a member
 	var memberExists bool
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = ? AND user_id = ? AND is_active = true)", chamaID, userID).Scan(&memberExists)
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = $1true)", chamaID, userID).Scan(&memberExists)
 	if err != nil {
 		return fmt.Errorf("failed to check membership: %w", err)
 	}
@@ -1416,13 +1415,13 @@ func (s *ChamaService) RemoveUserFromChama(chamaID, userID string) error {
 	}
 
 	// Mark member as inactive instead of deleting (for audit trail)
-	_, err = tx.Exec("UPDATE chama_members SET is_active = false, updated_at = ? WHERE chama_id = ? AND user_id = ?", time.Now(), chamaID, userID)
+	_, err = tx.Exec("UPDATE chama_members SET is_active = $1false, updated_at = $1 WHERE chama_id = $1$2 AND user_id = $2$3", chamaID, userID, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to remove user from chama: %w", err)
 	}
 
 	// Update chama member count
-	_, err = tx.Exec("UPDATE chamas SET current_members = current_members - 1, updated_at = ? WHERE id = ?", time.Now(), chamaID)
+	_, err = tx.Exec("UPDATE chamas SET current_members = current_members - 1, updated_at = $1 WHERE id = $1$2", chamaID, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to update member count: %w", err)
 	}
@@ -1446,7 +1445,7 @@ func (s *ChamaService) DeleteChama(chamaID string) error {
 
 	// Check if chama exists
 	var chamaExists bool
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chamas WHERE id = ?)", chamaID).Scan(&chamaExists)
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chamas WHERE id = $1)", chamaID).Scan(&chamaExists)
 	if err != nil {
 		return fmt.Errorf("failed to check chama existence: %w", err)
 	}
@@ -1458,61 +1457,61 @@ func (s *ChamaService) DeleteChama(chamaID string) error {
 	// Delete related data in correct order (respecting foreign key constraints)
 
 	// Delete meeting attendance
-	_, err = tx.Exec("DELETE FROM meeting_attendance WHERE meeting_id IN (SELECT id FROM meetings WHERE chama_id = ?)", chamaID)
+	_, err = tx.Exec("DELETE FROM meeting_attendance WHERE meeting_id IN (SELECT id FROM meetings WHERE chama_id = $1)", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete meeting attendance: %w", err)
 	}
 
 	// Delete meeting documents
-	_, err = tx.Exec("DELETE FROM meeting_documents WHERE meeting_id IN (SELECT id FROM meetings WHERE chama_id = ?)", chamaID)
+	_, err = tx.Exec("DELETE FROM meeting_documents WHERE meeting_id IN (SELECT id FROM meetings WHERE chama_id = $1)", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete meeting documents: %w", err)
 	}
 
 	// Delete meetings
-	_, err = tx.Exec("DELETE FROM meetings WHERE chama_id = ?", chamaID)
+	_, err = tx.Exec("DELETE FROM meetings WHERE chama_id = $1", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete meetings: %w", err)
 	}
 
 	// Delete welfare contributions
-	_, err = tx.Exec("DELETE FROM welfare_contributions WHERE chama_id = ?", chamaID)
+	_, err = tx.Exec("DELETE FROM welfare_contributions WHERE chama_id = $1", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete welfare contributions: %w", err)
 	}
 
 	// Delete welfare requests
-	_, err = tx.Exec("DELETE FROM welfare_requests WHERE chama_id = ?", chamaID)
+	_, err = tx.Exec("DELETE FROM welfare_requests WHERE chama_id = $1", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete welfare requests: %w", err)
 	}
 
 	// Delete loan guarantors
-	_, err = tx.Exec("DELETE FROM loan_guarantors WHERE loan_id IN (SELECT id FROM loans WHERE chama_id = ?)", chamaID)
+	_, err = tx.Exec("DELETE FROM loan_guarantors WHERE loan_id IN (SELECT id FROM loans WHERE chama_id = $1)", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete loan guarantors: %w", err)
 	}
 
 	// Delete loans
-	_, err = tx.Exec("DELETE FROM loans WHERE chama_id = ?", chamaID)
+	_, err = tx.Exec("DELETE FROM loans WHERE chama_id = $1", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete loans: %w", err)
 	}
 
 	// Delete contributions
-	_, err = tx.Exec("DELETE FROM contributions WHERE chama_id = ?", chamaID)
+	_, err = tx.Exec("DELETE FROM contributions WHERE chama_id = $1", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete contributions: %w", err)
 	}
 
 	// Delete chama members
-	_, err = tx.Exec("DELETE FROM chama_members WHERE chama_id = ?", chamaID)
+	_, err = tx.Exec("DELETE FROM chama_members WHERE chama_id = $1", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete chama members: %w", err)
 	}
 
 	// Finally, delete the chama itself
-	_, err = tx.Exec("DELETE FROM chamas WHERE id = ?", chamaID)
+	_, err = tx.Exec("DELETE FROM chamas WHERE id = $1", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete chama: %w", err)
 	}
@@ -1544,11 +1543,11 @@ func (s *ChamaService) SendInvitation(chamaID, inviterID, email, phoneNumber, me
 
 	// Check if user with email already exists and is already a member
 	var existingUserID string
-	err = tx.QueryRow("SELECT id FROM users WHERE email = ?", email).Scan(&existingUserID)
+	err = tx.QueryRow("SELECT id FROM users WHERE email = $1", email).Scan(&existingUserID)
 	if err == nil {
 		// User exists, check if already a member
 		var memberExists bool
-		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = ? AND user_id = ? AND is_active = true)", chamaID, existingUserID).Scan(&memberExists)
+		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = $1true)", chamaID, existingUserID).Scan(&memberExists)
 		if err != nil {
 			return "", fmt.Errorf("failed to check existing membership: %w", err)
 		}
@@ -1559,7 +1558,7 @@ func (s *ChamaService) SendInvitation(chamaID, inviterID, email, phoneNumber, me
 
 	// Check if there's already a pending invitation for this email and chama
 	var pendingInvitation bool
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_invitations WHERE chama_id = ? AND email = ? AND status = 'pending')", chamaID, email).Scan(&pendingInvitation)
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_invitations WHERE chama_id = $1 AND email = $1$2 AND status = 'pending')", chamaID, email).Scan(&pendingInvitation)
 	if err != nil {
 		return "", fmt.Errorf("failed to check pending invitations: %w", err)
 	}
@@ -1576,7 +1575,7 @@ func (s *ChamaService) SendInvitation(chamaID, inviterID, email, phoneNumber, me
 			id, chama_id, inviter_id, email, phone_number, message,
 			role, role_name, role_description,
 			invitation_token, status, created_at, expires_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
 	`, invitationID, chamaID, inviterID, email, phoneNumber, message,
 		role, roleName, roleDescription,
 		invitationToken, time.Now(), time.Now().Add(7*24*time.Hour)) // Expires in 7 days
@@ -1594,7 +1593,7 @@ func (s *ChamaService) SendInvitation(chamaID, inviterID, email, phoneNumber, me
 	err = s.db.QueryRow(`
 		SELECT c.name, u.first_name, u.last_name
 		FROM chamas c, users u
-		WHERE c.id = ? AND u.id = ?
+		WHERE c.id = $1 AND u.id = $2
 	`, chamaID, inviterID).Scan(&chamaName, &inviterFirstName, &inviterLastName)
 	if err != nil {
 		fmt.Printf("Warning: Could not get chama/inviter details for email: %v\n", err)
@@ -1602,19 +1601,11 @@ func (s *ChamaService) SendInvitation(chamaID, inviterID, email, phoneNumber, me
 		return invitationID, nil
 	}
 
-	// Send email invitation
-	fmt.Printf("🔍 Checking email invitation conditions:\n")
-	fmt.Printf("  - Email service initialized: %t\n", s.emailService != nil)
-	fmt.Printf("  - Email provided: '%s' (empty: %t)\n", email, email == "")
-	fmt.Printf("  - Chama name: '%s'\n", chamaName)
-	fmt.Printf("  - Inviter: '%s %s'\n", inviterFirstName, inviterLastName)
-
 	if s.emailService != nil && email != "" {
 		fmt.Printf("📧 Attempting to send chama invitation email...\n")
 		inviterFullName := fmt.Sprintf("%s %s", inviterFirstName, inviterLastName)
 		err = s.emailService.SendChamaInvitationEmail(email, chamaName, inviterFullName, message, invitationToken)
 		if err != nil {
-			fmt.Printf("❌ Failed to send invitation email: %v\n", err)
 			// Don't fail the invitation if email fails
 		} else {
 			fmt.Printf("✅ Invitation email sent successfully to: %s\n", email)
@@ -1651,7 +1642,7 @@ func (s *ChamaService) RespondToInvitation(invitationID, userID, response string
 	err = tx.QueryRow(`
 		SELECT chama_id, email, status, expires_at
 		FROM chama_invitations
-		WHERE id = ?
+		WHERE id = $1
 	`, invitationID).Scan(&invitation.ChamaID, &invitation.Email, &invitation.Status, &invitation.ExpiresAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1671,7 +1662,7 @@ func (s *ChamaService) RespondToInvitation(invitationID, userID, response string
 
 	// Verify that the user's email matches the invitation
 	var userEmail string
-	err = tx.QueryRow("SELECT email FROM users WHERE id = ?", userID).Scan(&userEmail)
+	err = tx.QueryRow("SELECT email FROM users WHERE id = $1", userID).Scan(&userEmail)
 	if err != nil {
 		return fmt.Errorf("failed to get user email: %w", err)
 	}
@@ -1683,8 +1674,8 @@ func (s *ChamaService) RespondToInvitation(invitationID, userID, response string
 	// Update invitation status
 	_, err = tx.Exec(`
 		UPDATE chama_invitations
-		SET status = ?, responded_at = ?, responded_by = ?
-		WHERE id = ?
+		SET status = $1, responded_at = $2, responded_by = $3
+		WHERE id = $4
 	`, response+"ed", time.Now(), userID, invitationID) // "accepted" or "rejected"
 	if err != nil {
 		return fmt.Errorf("failed to update invitation: %w", err)
@@ -1694,7 +1685,7 @@ func (s *ChamaService) RespondToInvitation(invitationID, userID, response string
 	if response == "accept" {
 		// Check if user is already a member (double-check)
 		var memberExists bool
-		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = ? AND user_id = ? AND is_active = true)", invitation.ChamaID, userID).Scan(&memberExists)
+		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = $3)", invitation.ChamaID, userID, true).Scan(&memberExists)
 		if err != nil {
 			return fmt.Errorf("failed to check membership: %w", err)
 		}
@@ -1706,14 +1697,14 @@ func (s *ChamaService) RespondToInvitation(invitationID, userID, response string
 				INSERT INTO chama_members (
 					id, chama_id, user_id, role, joined_at, is_active,
 					total_contributions, rating, total_ratings
-				) VALUES (?, ?, ?, 'member', ?, true, 0, 0, 0)
+				) VALUES ($1, $2, $3, 'member', $4, true, 0, 0, 0)
 			`, memberID, invitation.ChamaID, userID, time.Now())
 			if err != nil {
 				return fmt.Errorf("failed to add user to chama: %w", err)
 			}
 
 			// Update chama member count
-			_, err = tx.Exec("UPDATE chamas SET current_members = current_members + 1, updated_at = ? WHERE id = ?", time.Now(), invitation.ChamaID)
+			_, err = tx.Exec("UPDATE chamas SET current_members = current_members + 1, updated_at = $1 WHERE id = $2", time.Now(), invitation.ChamaID)
 			if err != nil {
 				return fmt.Errorf("failed to update member count: %w", err)
 			}
@@ -1732,7 +1723,7 @@ func (s *ChamaService) RespondToInvitation(invitationID, userID, response string
 func (s *ChamaService) GetUserInvitations(userID string) ([]map[string]interface{}, error) {
 	// Get user's email
 	var userEmail string
-	err := s.db.QueryRow("SELECT email FROM users WHERE id = ?", userID).Scan(&userEmail)
+	err := s.db.QueryRow("SELECT email FROM users WHERE id = $1", userID).Scan(&userEmail)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user email: %w", err)
 	}
@@ -1748,7 +1739,7 @@ func (s *ChamaService) GetUserInvitations(userID string) ([]map[string]interface
 		FROM chama_invitations ci
 		INNER JOIN chamas c ON ci.chama_id = c.id
 		INNER JOIN users u ON ci.inviter_id = u.id
-		WHERE ci.email = ? AND ci.status = 'pending' AND ci.expires_at > ?
+		WHERE ci.email = $1 AND ci.status = 'pending' AND ci.expires_at > $2
 		ORDER BY ci.created_at DESC
 	`
 
@@ -1817,7 +1808,7 @@ func (s *ChamaService) GetChamaSentInvitations(chamaID string) ([]map[string]int
 			u.first_name as inviter_first_name, u.last_name as inviter_last_name
 		FROM chama_invitations ci
 		INNER JOIN users u ON ci.inviter_id = u.id
-		WHERE ci.chama_id = ?
+		WHERE ci.chama_id = $1
 		ORDER BY ci.created_at DESC
 	`
 

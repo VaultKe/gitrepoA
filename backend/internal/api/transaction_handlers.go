@@ -82,7 +82,7 @@ func GetUserTransactions(c *gin.Context) {
 		if tx.InitiatedBy != "" {
 			userQuery := `
 				SELECT id, first_name, last_name, email, phone
-				FROM users WHERE id = ?
+				FROM users WHERE id = $1
 			`
 			var userID, firstName, lastName, email, phone string
 			err := db.(*sql.DB).QueryRow(userQuery, tx.InitiatedBy).Scan(&userID, &firstName, &lastName, &email, &phone)
@@ -153,7 +153,7 @@ func GetUserTransactions(c *gin.Context) {
 
 // updateTransactionStatus updates transaction status
 func updateTransactionStatus(db *sql.DB, transactionID string, status models.TransactionStatus) error {
-	updateQuery := "UPDATE transactions SET status = ?, updated_at = ? WHERE id = ?"
+	updateQuery := "UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3"
 	result, err := db.Exec(updateQuery, status, utils.NowEAT(), transactionID)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction status: %w", err)
@@ -174,36 +174,27 @@ func updateTransactionStatus(db *sql.DB, transactionID string, status models.Tra
 
 // updateTransactionCheckoutRequestID updates transaction with checkout request ID
 func updateTransactionCheckoutRequestID(db *sql.DB, transactionID string, checkoutRequestID string) {
-	log.Printf("📝 Updating transaction %s checkout_request_id to: %s", transactionID, checkoutRequestID)
-	updateQuery := "UPDATE transactions SET checkout_request_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+	updateQuery := "UPDATE transactions SET checkout_request_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2"
 	result, err := db.Exec(updateQuery, checkoutRequestID, transactionID)
 	if err != nil {
-		log.Printf("❌ Failed to update transaction checkout request ID: %v", err)
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err == nil && rowsAffected > 0 {
-		log.Printf("✅ Successfully updated transaction %s checkout_request_id", transactionID)
 	} else {
-		log.Printf("⚠️ No rows affected when updating transaction %s checkout_request_id", transactionID)
 	}
 }
 
 // updateTransactionReference updates transaction reference
 func updateTransactionReference(db *sql.DB, transactionID, reference string) {
-	log.Printf("📝 Updating transaction %s reference to: %s", transactionID, reference)
-	updateQuery := "UPDATE transactions SET reference = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+	updateQuery := "UPDATE transactions SET reference = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2"
 	result, err := db.Exec(updateQuery, reference, transactionID)
 	if err != nil {
-		log.Printf("❌ Failed to update transaction reference: %v", err)
 		return
 	}
-
 	rowsAffected, err := result.RowsAffected()
 	if err == nil && rowsAffected > 0 {
-		log.Printf("✅ Successfully updated transaction %s reference", transactionID)
 	} else {
-		log.Printf("⚠️ No rows affected when updating transaction %s reference", transactionID)
 	}
 }

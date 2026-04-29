@@ -94,7 +94,7 @@ func Load() *Config {
 	return &Config{
 		Environment:   getEnv("ENVIRONMENT", "development"),
 		Port:          getEnv("PORT", "8080"),
-		DatabaseURL:   getEnv("DATABASE_URL", "vaultke.db"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgres://postgres:password@localhost/vaultke?sslmode=disable"),
 		JWTSecret:     getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
 		JWTExpiration: getEnvAsInt("JWT_EXPIRATION", 24*60*60), // 24 hours in seconds
 
@@ -265,7 +265,7 @@ func (c *Config) SetDefaults() {
 		c.JWTSecret = "your-super-secret-jwt-key-change-in-production"
 	}
 	if c.DatabaseURL == "" {
-		c.DatabaseURL = "vaultke.db"
+		c.DatabaseURL = "postgres://postgres:password@localhost/vaultke?sslmode=disable"
 	}
 	if c.Environment == "" {
 		c.Environment = "development"

@@ -786,7 +786,7 @@ func (h *AuthHandlers) SendEmailVerification(c *gin.Context) {
 
 	// Get user details
 	var userEmail, userName string
-	query := `SELECT email, COALESCE(first_name || ' ' || last_name, first_name, email) as name FROM users WHERE id = ?`
+	query := `SELECT email, COALESCE(first_name || ' ' || last_name, first_name, email) as name FROM users WHERE id = $1`
 	err := database.QueryRow(query, req.UserID).Scan(&userEmail, &userName)
 	if err != nil {
 		c.JSON(http.StatusNotFound, AuthResponse{

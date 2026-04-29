@@ -50,14 +50,14 @@ type BackupInfo struct {
 
 // UserBackupData represents the structure of user backup data
 type UserBackupData struct {
-	UserID      string                 `json:"user_id"`
-	BackupDate  time.Time              `json:"backup_date"`
-	Profile     map[string]interface{} `json:"profile"`
-	Chamas      []map[string]interface{} `json:"chamas"`
+	UserID       string                   `json:"user_id"`
+	BackupDate   time.Time                `json:"backup_date"`
+	Profile      map[string]interface{}   `json:"profile"`
+	Chamas       []map[string]interface{} `json:"chamas"`
 	Transactions []map[string]interface{} `json:"transactions"`
-	Meetings    []map[string]interface{} `json:"meetings"`
-	Documents   []map[string]interface{} `json:"documents"`
-	Settings    map[string]interface{} `json:"settings"`
+	Meetings     []map[string]interface{} `json:"meetings"`
+	Documents    []map[string]interface{} `json:"documents"`
+	Settings     map[string]interface{}   `json:"settings"`
 }
 
 // NewGoogleDriveService creates a new Google Drive service
@@ -103,7 +103,7 @@ func (gds *GoogleDriveService) StoreUserTokens(userID, accessToken, refreshToken
 	// Store tokens using SQLite UPSERT syntax
 	query := `
 		INSERT INTO google_drive_tokens (user_id, access_token, refresh_token, expires_at, updated_at)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
 		access_token = excluded.access_token,
 		refresh_token = excluded.refresh_token,
@@ -127,7 +127,7 @@ func (gds *GoogleDriveService) GetUserTokens(userID string) (*oauth2.Token, erro
 	query := `
 		SELECT access_token, refresh_token, expires_at
 		FROM google_drive_tokens
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	err := gds.db.QueryRow(query, userID).Scan(&encryptedAccessToken, &encryptedRefreshToken, &expiresAtStr)
@@ -169,7 +169,7 @@ func (gds *GoogleDriveService) DisconnectUser(userID string) error {
 	token, err := gds.GetUserTokens(userID)
 	if err != nil {
 		// If no tokens found, just remove any database entries
-		_, deleteErr := gds.db.Exec("DELETE FROM google_drive_tokens WHERE user_id = ?", userID)
+		_, deleteErr := gds.db.Exec("DELETE FROM google_drive_tokens WHERE user_id = $1", userID)
 		return deleteErr
 	}
 
@@ -184,7 +184,7 @@ func (gds *GoogleDriveService) DisconnectUser(userID string) error {
 	}
 
 	// Remove tokens from database
-	_, err = gds.db.Exec("DELETE FROM google_drive_tokens WHERE user_id = ?", userID)
+	_, err = gds.db.Exec("DELETE FROM google_drive_tokens WHERE user_id = $1", userID)
 	if err != nil {
 		return fmt.Errorf("failed to remove tokens from database: %v", err)
 	}
@@ -206,7 +206,6 @@ func (gds *GoogleDriveService) IsUserConnected(userID string) (bool, error) {
 	// Check if Google Drive credentials are configured
 	clientID := os.Getenv("GOOGLE_DRIVE_CLIENT_ID")
 	if clientID == "" {
-		fmt.Printf("❌ Google Drive credentials not configured on server\n")
 		return false, fmt.Errorf("Google Drive credentials not configured on server. Please set GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET environment variables")
 	}
 
@@ -214,17 +213,12 @@ func (gds *GoogleDriveService) IsUserConnected(userID string) (bool, error) {
 	query := `
 		SELECT COUNT(*)
 		FROM google_drive_tokens
-		WHERE user_id = ? AND expires_at > datetime('now')
+		WHERE user_id = $1 AND expires_at > datetime('now')
 	`
-
-	fmt.Printf("🔍 IsUserConnected: Executing query for user %s\n", userID)
 	err = gds.db.QueryRow(query, userID).Scan(&count)
 	if err != nil {
-		fmt.Printf("❌ IsUserConnected: Query failed: %v\n", err)
 		return false, fmt.Errorf("failed to check connection status: %v", err)
 	}
-
-	fmt.Printf("🔍 IsUserConnected: Found %d token records for user %s\n", count, userID)
 
 	// If user has tokens, they are considered connected
 	if count > 0 {
@@ -248,8 +242,8 @@ func (gds *GoogleDriveService) ensureTablesExist() error {
 			user_id TEXT PRIMARY KEY,
 			access_token TEXT NOT NULL,
 			refresh_token TEXT NOT NULL,
-			expires_at DATETIME NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)
 	`
@@ -311,8 +305,6 @@ func (gds *GoogleDriveService) CreateUserBackup(userID string) (*BackupResult, e
 		fmt.Printf("⚠️ WARNING: Using mock tokens for testing. This will NOT create actual files in Google Drive.\n")
 		fmt.Printf("   Use real OAuth tokens for production backups.\n")
 	}
-
-
 
 	// Create OAuth2 config with proper credentials
 	clientID := os.Getenv("GOOGLE_DRIVE_CLIENT_ID")
@@ -533,7 +525,7 @@ func (gds *GoogleDriveService) getUserProfile(userID string) (map[string]interfa
 	query := `
 		SELECT id, first_name, last_name, email, phone, role, created_at, updated_at
 		FROM users
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var id string
@@ -571,7 +563,7 @@ func (gds *GoogleDriveService) getUserChamas(userID string) ([]map[string]interf
 		SELECT c.id, c.name, c.description, cm.role, cm.joined_at
 		FROM chamas c
 		JOIN chama_members cm ON c.id = cm.chama_id
-		WHERE cm.user_id = ?
+		WHERE cm.user_id = $1
 	`
 
 	rows, err := gds.db.Query(query, userID)
@@ -613,7 +605,7 @@ func (gds *GoogleDriveService) getUserTransactions(userID string) ([]map[string]
 	query := `
 		SELECT id, from_wallet_id, to_wallet_id, amount, type, description, status, created_at
 		FROM transactions
-		WHERE initiated_by = ?
+		WHERE initiated_by = $1
 		ORDER BY created_at DESC
 		LIMIT 1000
 	`
@@ -666,7 +658,7 @@ func (gds *GoogleDriveService) getUserMeetings(userID string) ([]map[string]inte
 		SELECT m.id, m.chama_id, m.title, m.description, m.scheduled_at, m.status
 		FROM meetings m
 		JOIN chama_members cm ON m.chama_id = cm.chama_id
-		WHERE cm.user_id = ?
+		WHERE cm.user_id = $1
 		ORDER BY m.scheduled_at DESC
 		LIMIT 500
 	`
@@ -722,7 +714,7 @@ func (gds *GoogleDriveService) getUserSettings(userID string) (map[string]interf
 		       transaction_notifications, marketing_notifications, vibration_enabled,
 		       volume_level, notification_sound_id
 		FROM user_notification_preferences
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	settings := make(map[string]interface{})
@@ -794,7 +786,7 @@ func (gds *GoogleDriveService) recordBackup(userID, fileName string, fileSize in
 	// Insert backup record
 	query := `
 		INSERT INTO google_drive_backups (user_id, file_name, file_size)
-		VALUES (?, ?, ?)
+		VALUES ($1, $2, $3)
 	`
 	_, err := gds.db.Exec(query, userID, fileName, fileSize)
 	if err != nil {
@@ -841,7 +833,7 @@ func (gds *GoogleDriveService) GetUserBackupInfo(userID string) (*BackupInfo, er
 	query := `
 		SELECT COUNT(*), COALESCE(MAX(backup_date), '1970-01-01'), COALESCE(SUM(file_size), 0)
 		FROM google_drive_backups
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	var lastBackupStr string
@@ -871,8 +863,8 @@ func parseTimeString(timeStr string) (time.Time, error) {
 
 	// Try multiple formats that SQLite might use
 	formats := []string{
-		time.RFC3339Nano,           // 2025-07-25T05:57:13.742311077+03:00
-		time.RFC3339,               // 2025-07-25T05:57:13+03:00
+		time.RFC3339Nano,                      // 2025-07-25T05:57:13.742311077+03:00
+		time.RFC3339,                          // 2025-07-25T05:57:13+03:00
 		"2006-01-02 15:04:05.999999999-07:00", // SQLite with timezone
 		"2006-01-02 15:04:05.999999999",       // SQLite with nanoseconds
 		"2006-01-02 15:04:05",                 // Standard format
@@ -887,4 +879,3 @@ func parseTimeString(timeStr string) (time.Time, error) {
 
 	return time.Time{}, fmt.Errorf("unable to parse time string: %s", timeStr)
 }
-

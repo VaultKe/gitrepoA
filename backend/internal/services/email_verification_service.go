@@ -9,14 +9,14 @@ import (
 
 // EmailVerificationToken represents an email verification token
 type EmailVerificationToken struct {
-	ID           string    `json:"id" db:"id"`
-	UserID       string    `json:"userId" db:"user_id"`
-	Token        string    `json:"token" db:"token"`
-	ExpiresAt    time.Time `json:"expiresAt" db:"expires_at"`
-	Used         bool      `json:"used" db:"used"`
-	CreatedAt    time.Time `json:"createdAt" db:"created_at"`
-	TrialCount   int       `json:"trialCount" db:"trial_count"`
-	SessionID    string    `json:"sessionId" db:"session_id"`
+	ID         string    `json:"id" db:"id"`
+	UserID     string    `json:"userId" db:"user_id"`
+	Token      string    `json:"token" db:"token"`
+	ExpiresAt  time.Time `json:"expiresAt" db:"expires_at"`
+	Used       bool      `json:"used" db:"used"`
+	CreatedAt  time.Time `json:"createdAt" db:"created_at"`
+	TrialCount int       `json:"trialCount" db:"trial_count"`
+	SessionID  string    `json:"sessionId" db:"session_id"`
 }
 
 // EmailVerificationService handles email verification operations
@@ -37,12 +37,12 @@ func NewEmailVerificationService(db *sql.DB, emailService *EmailService) *EmailV
 func (s *EmailVerificationService) InitializeEmailVerificationTable() error {
 	query := `
 	CREATE TABLE IF NOT EXISTS email_verification_tokens (
-		id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+		id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 		user_id TEXT NOT NULL,
 		token TEXT NOT NULL UNIQUE,
-		expires_at DATETIME NOT NULL,
+		expires_at TIMESTAMP NOT NULL,
 		used BOOLEAN DEFAULT FALSE,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		trial_count INTEGER DEFAULT 0,
 		session_id TEXT NOT NULL,
 		FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -78,7 +78,7 @@ func (s *EmailVerificationService) CreateEmailVerificationToken(userID string) (
 	sessionID := s.generateSessionID()
 
 	// Delete any existing tokens for this user (immediate cleanup)
-	_, err = s.db.Exec("DELETE FROM email_verification_tokens WHERE user_id = ?", userID)
+	_, err = s.db.Exec("DELETE FROM email_verification_tokens WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cleanup existing tokens: %w", err)
 	}
@@ -86,7 +86,7 @@ func (s *EmailVerificationService) CreateEmailVerificationToken(userID string) (
 	// Insert new token
 	query := `
 	INSERT INTO email_verification_tokens (user_id, token, expires_at, session_id, trial_count)
-	VALUES (?, ?, ?, ?, 0)
+	VALUES ($1, $2, $3, $4, 0)
 	`
 
 	result, err := s.db.Exec(query, userID, token, expiresAt, sessionID)
@@ -142,9 +142,9 @@ func (s *EmailVerificationService) generateSessionID() string {
 func (s *EmailVerificationService) scheduleTokenCleanup(tokenID string, expiresAt time.Time) {
 	// Wait until expiry time
 	time.Sleep(time.Until(expiresAt))
-	
+
 	// Delete the expired token
-	query := `DELETE FROM email_verification_tokens WHERE id = ?`
+	query := `DELETE FROM email_verification_tokens WHERE id = $1`
 	_, err := s.db.Exec(query, tokenID)
 	if err != nil {
 		fmt.Printf("Failed to auto-cleanup expired verification token %s: %v\n", tokenID, err)
@@ -158,7 +158,7 @@ func (s *EmailVerificationService) ValidateVerificationToken(token string) (*Ema
 	query := `
 	SELECT id, user_id, token, expires_at, used, created_at, trial_count, session_id
 	FROM email_verification_tokens
-	WHERE token = ? AND used = FALSE
+	WHERE token = $1 AND used = FALSE
 	`
 
 	var verificationToken EmailVerificationToken
@@ -197,7 +197,7 @@ func (s *EmailVerificationService) ValidateVerificationToken(token string) (*Ema
 
 // IncrementTrialCount increments the trial count for a token
 func (s *EmailVerificationService) IncrementTrialCount(tokenID string) error {
-	query := `UPDATE email_verification_tokens SET trial_count = trial_count + 1 WHERE id = ?`
+	query := `UPDATE email_verification_tokens SET trial_count = trial_count + 1 WHERE id = $1`
 	_, err := s.db.Exec(query, tokenID)
 	if err != nil {
 		return fmt.Errorf("failed to increment trial count: %w", err)
@@ -207,7 +207,7 @@ func (s *EmailVerificationService) IncrementTrialCount(tokenID string) error {
 
 // deleteToken immediately deletes a token from database
 func (s *EmailVerificationService) deleteToken(tokenID string) error {
-	query := `DELETE FROM email_verification_tokens WHERE id = ?`
+	query := `DELETE FROM email_verification_tokens WHERE id = $1`
 	_, err := s.db.Exec(query, tokenID)
 	if err != nil {
 		fmt.Printf("Failed to delete verification token %s: %v\n", tokenID, err)
@@ -221,7 +221,7 @@ func (s *EmailVerificationService) deleteToken(tokenID string) error {
 func (s *EmailVerificationService) UseVerificationToken(token string) error {
 	// Get token ID first
 	var tokenID string
-	query := `SELECT id FROM email_verification_tokens WHERE token = ?`
+	query := `SELECT id FROM email_verification_tokens WHERE token = $1`
 	err := s.db.QueryRow(query, token).Scan(&tokenID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -265,7 +265,7 @@ func (s *EmailVerificationService) VerifyEmail(token string) (string, error) {
 	}
 
 	// Mark user's email as verified
-	query := `UPDATE users SET is_email_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	query := `UPDATE users SET is_email_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1`
 	_, err = s.db.Exec(query, verificationToken.UserID)
 	if err != nil {
 		// Increment trial count on database update failure
@@ -287,7 +287,7 @@ func (s *EmailVerificationService) GetTokenStatus(token string) (map[string]inte
 	query := `
 	SELECT id, expires_at, trial_count, created_at
 	FROM email_verification_tokens
-	WHERE token = ? AND used = FALSE
+	WHERE token = $1 AND used = FALSE
 	`
 
 	var tokenID string
@@ -306,7 +306,7 @@ func (s *EmailVerificationService) GetTokenStatus(token string) (map[string]inte
 	}
 
 	now := time.Now()
-	
+
 	// Check if expired
 	if now.After(expiresAt) {
 		// Delete expired token
@@ -329,7 +329,7 @@ func (s *EmailVerificationService) GetTokenStatus(token string) (map[string]inte
 
 	// Calculate remaining time
 	remainingSeconds := int(expiresAt.Sub(now).Seconds())
-	
+
 	return map[string]interface{}{
 		"valid":            true,
 		"remainingSeconds": remainingSeconds,

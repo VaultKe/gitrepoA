@@ -44,7 +44,7 @@ func (s *WalletService) CreateWalletWithTx(tx *sql.Tx, ownerID string, walletTyp
 
 	query := `
 		INSERT INTO wallets (id, type, owner_id, balance, currency, is_active, is_locked, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	var err error
@@ -74,7 +74,7 @@ func (s *WalletService) GetWalletByID(walletID string) (*models.Wallet, error) {
 	query := `
 		SELECT id, type, owner_id, balance, currency, is_active, is_locked,
 			   daily_limit, monthly_limit, created_at, updated_at
-		FROM wallets WHERE id = ?
+		FROM wallets WHERE id = $1
 	`
 
 	wallet := &models.Wallet{}
@@ -98,7 +98,7 @@ func (s *WalletService) GetWalletsByOwner(ownerID string) ([]*models.Wallet, err
 	query := `
 		SELECT id, type, owner_id, balance, currency, is_active, is_locked,
 			   daily_limit, monthly_limit, created_at, updated_at
-		FROM wallets WHERE owner_id = ? ORDER BY created_at ASC
+		FROM wallets WHERE owner_id = $1 ORDER BY created_at ASC
 	`
 
 	rows, err := s.db.Query(query, ownerID)
@@ -129,7 +129,7 @@ func (s *WalletService) GetWalletByOwnerAndType(ownerID string, walletType model
 	query := `
 		SELECT id, type, owner_id, balance, currency, is_active, is_locked,
 			   daily_limit, monthly_limit, created_at, updated_at
-		FROM wallets WHERE owner_id = ? AND type = ?
+		FROM wallets WHERE owner_id = $1 AND type = $2
 	`
 
 	wallet := &models.Wallet{}
@@ -150,7 +150,7 @@ func (s *WalletService) GetWalletByOwnerAndType(ownerID string, walletType model
 
 // UpdateWalletBalance updates wallet balance
 func (s *WalletService) UpdateWalletBalance(walletID string, newBalance float64) error {
-	query := "UPDATE wallets SET balance = ?, updated_at = ? WHERE id = ?"
+	query := "UPDATE wallets SET balance = $1, updated_at = $2 WHERE id = $3"
 	_, err := s.db.Exec(query, newBalance, time.Now(), walletID)
 	if err != nil {
 		return fmt.Errorf("failed to update wallet balance: %w", err)
@@ -160,7 +160,7 @@ func (s *WalletService) UpdateWalletBalance(walletID string, newBalance float64)
 
 // LockWallet locks a wallet
 func (s *WalletService) LockWallet(walletID string) error {
-	query := "UPDATE wallets SET is_locked = true, updated_at = ? WHERE id = ?"
+	query := "UPDATE wallets SET is_locked = true, updated_at = $1 WHERE id = $2"
 	_, err := s.db.Exec(query, time.Now(), walletID)
 	if err != nil {
 		return fmt.Errorf("failed to lock wallet: %w", err)
@@ -170,7 +170,7 @@ func (s *WalletService) LockWallet(walletID string) error {
 
 // UnlockWallet unlocks a wallet
 func (s *WalletService) UnlockWallet(walletID string) error {
-	query := "UPDATE wallets SET is_locked = false, updated_at = ? WHERE id = ?"
+	query := "UPDATE wallets SET is_locked = false, updated_at = $1 WHERE id = $2"
 	_, err := s.db.Exec(query, time.Now(), walletID)
 	if err != nil {
 		return fmt.Errorf("failed to unlock wallet: %w", err)
@@ -216,7 +216,7 @@ func (s *WalletService) CreateTransaction(transaction *models.TransactionCreatio
 			id, from_wallet_id, to_wallet_id, type, status, amount, currency,
 			description, reference, payment_method, metadata, fees, initiated_by,
 			requires_approval, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	_, err = s.db.Exec(query,
@@ -287,7 +287,7 @@ func (s *WalletService) GetTransactionByID(transactionID string) (*models.Transa
 		SELECT id, from_wallet_id, to_wallet_id, type, status, amount, currency,
 			   description, reference, payment_method, metadata, fees, initiated_by,
 			   approved_by, requires_approval, approval_deadline, created_at, updated_at
-		FROM transactions WHERE id = ?
+		FROM transactions WHERE id = $1
 	`
 
 	transaction := &models.Transaction{}
@@ -326,9 +326,9 @@ func (s *WalletService) GetWalletTransactions(walletID string, limit, offset int
 			   description, reference, payment_method, metadata, fees, initiated_by,
 			   approved_by, requires_approval, approval_deadline, created_at, updated_at
 		FROM transactions
-		WHERE from_wallet_id = ? OR to_wallet_id = ?
+		WHERE from_wallet_id = $1 OR to_wallet_id = $2
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $3 OFFSET $4
 	`
 
 	rows, err := s.db.Query(query, walletID, walletID, limit, offset)
@@ -370,7 +370,7 @@ func (s *WalletService) GetWalletTransactions(walletID string, limit, offset int
 
 // updateTransactionStatus updates transaction status within a database transaction
 func (s *WalletService) updateTransactionStatus(tx *sql.Tx, transactionID string, status models.TransactionStatus) error {
-	updateQuery := "UPDATE transactions SET status = ?, updated_at = ? WHERE id = ?"
+	updateQuery := "UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3"
 	result, err := tx.Exec(updateQuery, status, utils.NowEAT(), transactionID)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction status: %w", err)
@@ -424,14 +424,14 @@ func (s *WalletService) processDeposit(tx *sql.Tx, transaction *models.Transacti
 
 	// Get current balance
 	var currentBalance float64
-	err := tx.QueryRow("SELECT balance FROM wallets WHERE id = ?", *transaction.ToWalletID).Scan(&currentBalance)
+	err := tx.QueryRow("SELECT balance FROM wallets WHERE id = $1", *transaction.ToWalletID).Scan(&currentBalance)
 	if err != nil {
 		return fmt.Errorf("failed to get wallet balance: %w", err)
 	}
 
 	// Update balance
 	newBalance := currentBalance + transaction.Amount
-	_, err = tx.Exec("UPDATE wallets SET balance = ?, updated_at = ? WHERE id = ?",
+	_, err = tx.Exec("UPDATE wallets SET balance = $1, updated_at = $2 WHERE id = $3",
 		newBalance, time.Now(), *transaction.ToWalletID)
 	if err != nil {
 		return fmt.Errorf("failed to update wallet balance: %w", err)
@@ -447,7 +447,7 @@ func (s *WalletService) processWithdrawal(tx *sql.Tx, transaction *models.Transa
 
 	// Get current balance
 	var currentBalance float64
-	err := tx.QueryRow("SELECT balance FROM wallets WHERE id = ?", *transaction.FromWalletID).Scan(&currentBalance)
+	err := tx.QueryRow("SELECT balance FROM wallets WHERE id = $1", *transaction.FromWalletID).Scan(&currentBalance)
 	if err != nil {
 		return fmt.Errorf("failed to get wallet balance: %w", err)
 	}
@@ -460,7 +460,7 @@ func (s *WalletService) processWithdrawal(tx *sql.Tx, transaction *models.Transa
 
 	// Update balance
 	newBalance := currentBalance - totalAmount
-	_, err = tx.Exec("UPDATE wallets SET balance = ?, updated_at = ? WHERE id = ?",
+	_, err = tx.Exec("UPDATE wallets SET balance = $1, updated_at = $2 WHERE id = $3",
 		newBalance, time.Now(), *transaction.FromWalletID)
 	if err != nil {
 		return fmt.Errorf("failed to update wallet balance: %w", err)

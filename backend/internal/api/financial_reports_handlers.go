@@ -74,9 +74,9 @@ func (h *FinancialReportsHandlers) GetFinancialReports(c *gin.Context) {
 			   u.first_name || ' ' || u.last_name as generated_by_name
 		FROM financial_reports fr
 		LEFT JOIN users u ON fr.generated_by = u.id
-		WHERE fr.chama_id = ?
+		WHERE fr.chama_id = $1
 		ORDER BY fr.created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := h.db.Query(query, chamaID, limit, offset)
@@ -196,7 +196,7 @@ func (h *FinancialReportsHandlers) GenerateFinancialReport(c *gin.Context) {
 			id, chama_id, report_type, title, description,
 			report_period_start, report_period_end, generated_by,
 			status, is_public, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'generating', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'generating', $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`
 
 	_, err := h.db.Exec(query, reportID, chamaID, req.ReportType, req.Title,
@@ -227,12 +227,12 @@ func (h *FinancialReportsHandlers) GenerateFinancialReport(c *gin.Context) {
 		case <-ctx.Done():
 			log.Printf("Report generation cancelled for report %s: %v", reportID, ctx.Err())
 			// Update status to failed
-			updateQuery := `UPDATE financial_reports SET status = 'failed' WHERE id = ?`
+			updateQuery := `UPDATE financial_reports SET status = 'failed' WHERE id = $1`
 			h.db.Exec(updateQuery, reportID)
 			return
 		default:
 			time.Sleep(2 * time.Second)
-			updateQuery := `UPDATE financial_reports SET status = 'ready', file_size = 2048000 WHERE id = ?`
+			updateQuery := `UPDATE financial_reports SET status = 'ready', file_size = 2048000 WHERE id = $1`
 			h.db.Exec(updateQuery, reportID)
 		}
 	}()
@@ -265,7 +265,7 @@ func (h *FinancialReportsHandlers) DownloadFinancialReport(c *gin.Context) {
 
 	// Check if report exists and is ready
 	var status string
-	query := `SELECT status FROM financial_reports WHERE id = ? AND chama_id = ?`
+	query := `SELECT status FROM financial_reports WHERE id = $1 AND chama_id = $2`
 	err := h.db.QueryRow(query, reportID, chamaID).Scan(&status)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -291,7 +291,7 @@ func (h *FinancialReportsHandlers) DownloadFinancialReport(c *gin.Context) {
 	}
 
 	// Increment download count
-	updateQuery := `UPDATE financial_reports SET download_count = download_count + 1 WHERE id = ?`
+	updateQuery := `UPDATE financial_reports SET download_count = download_count + 1 WHERE id = $1`
 	h.db.Exec(updateQuery, reportID)
 
 	c.JSON(http.StatusOK, gin.H{

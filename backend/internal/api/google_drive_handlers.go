@@ -300,7 +300,7 @@ func GetGoogleDriveStatus(c *gin.Context) {
 	// If not connected, check if there are any tokens at all for this user
 	if !connected {
 		var count int
-		query := "SELECT COUNT(*) FROM google_drive_tokens WHERE user_id = ?"
+		query := "SELECT COUNT(*) FROM google_drive_tokens WHERE user_id = $1"
 		err := db.(*sql.DB).QueryRow(query, userID).Scan(&count)
 		if err == nil {
 			debugInfo["total_tokens"] = count
@@ -309,7 +309,7 @@ func GetGoogleDriveStatus(c *gin.Context) {
 
 		// Check for expired tokens
 		var expiredCount int
-		expiredQuery := "SELECT COUNT(*) FROM google_drive_tokens WHERE user_id = ? AND expires_at <= datetime('now')"
+		expiredQuery := "SELECT COUNT(*) FROM google_drive_tokens WHERE user_id = $1 AND expires_at <= datetime('now')"
 		err = db.(*sql.DB).QueryRow(expiredQuery, userID).Scan(&expiredCount)
 		if err == nil {
 			debugInfo["expired_tokens"] = expiredCount
@@ -594,7 +594,7 @@ func GetBackupSettings(c *gin.Context) {
 	err := db.(*sql.DB).QueryRow(`
 		SELECT auto_backup, daily_backup, weekly_backup, cloud_backup, encrypt_backups, retention_days
 		FROM backup_settings
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`, userID).Scan(
 		&settings.AutoBackup,
 		&settings.DailyBackup,
@@ -696,7 +696,7 @@ func UpdateBackupSettings(c *gin.Context) {
 	_, err = db.(*sql.DB).Exec(`
 		INSERT OR REPLACE INTO backup_settings
 		(user_id, auto_backup, daily_backup, weekly_backup, cloud_backup, encrypt_backups, retention_days, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, userID, settings.AutoBackup, settings.DailyBackup, settings.WeeklyBackup,
 	   settings.CloudBackup, settings.EncryptBackups, settings.RetentionDays, time.Now())
 
@@ -763,7 +763,7 @@ func StartBackup(c *gin.Context) {
 	_, err := db.(*sql.DB).Exec(`
 		INSERT INTO backup_history
 		(id, type, status, size, duration, timestamp, location, user_id)
-		VALUES (?, ?, 'running', '0 MB', '0 minutes', ?, 'Local Storage', ?)
+		VALUES ($1, $2, 'running', '0 MB', '0 minutes', $3, 'Local Storage', $4)
 	`, backupID, request.Type, time.Now(), userID)
 
 	if err != nil {
@@ -793,7 +793,7 @@ func StartBackup(c *gin.Context) {
 			db.(*sql.DB).Exec(`
 				UPDATE backup_history
 				SET status = 'failed', error = 'timeout'
-				WHERE id = ?
+				WHERE id = $1
 			`, backupID)
 			return
 		default:
@@ -809,8 +809,8 @@ func StartBackup(c *gin.Context) {
 
 			db.(*sql.DB).Exec(`
 				UPDATE backup_history
-				SET status = 'completed', size = ?, duration = ?
-				WHERE id = ?
+				SET status = 'completed', size = $1, duration = $2
+				WHERE id = $3
 			`, size, duration, backupID)
 		}
 	}()

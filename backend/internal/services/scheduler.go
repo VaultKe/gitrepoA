@@ -79,8 +79,8 @@ func (s *SchedulerService) checkMeetingAutoUnlock() {
 		SELECT id, title, scheduled_at, meeting_type
 		FROM meetings 
 		WHERE status = 'scheduled' 
-		AND scheduled_at <= ? 
-		AND scheduled_at > ?
+		AND scheduled_at <= $1 
+		AND scheduled_at > $2
 	`
 	
 	rows, err := s.db.Query(query, unlockTime, now)
@@ -106,7 +106,7 @@ func (s *SchedulerService) checkMeetingAutoUnlock() {
 		updateQuery := `
 			UPDATE meetings 
 			SET status = 'ready', updated_at = CURRENT_TIMESTAMP
-			WHERE id = ? AND status = 'scheduled'
+			WHERE id = $1 AND status = 'scheduled'
 		`
 		
 		result, err := s.db.Exec(updateQuery, meetingID)
@@ -146,7 +146,7 @@ func (s *SchedulerService) checkMeetingAutoEnd() {
 		FROM meetings 
 		WHERE status = 'active' 
 		AND started_at IS NOT NULL
-		AND datetime(started_at, '+' || (duration + 30) || ' minutes') <= ?
+		AND datetime(started_at, '+' || (duration + 30) || ' minutes') <= $1
 	`
 	
 	rows, err := s.db.Query(query, now)
@@ -193,7 +193,7 @@ func (s *SchedulerService) checkMeetingAutoEnd() {
 func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, message string) {
 	// Get chama ID for the meeting
 	var chamaID string
-	err := s.db.QueryRow("SELECT chama_id FROM meetings WHERE id = ?", meetingID).Scan(&chamaID)
+	err := s.db.QueryRow("SELECT chama_id FROM meetings WHERE id = $1", meetingID).Scan(&chamaID)
 	if err != nil {
 		log.Printf("Error getting chama ID for meeting %s: %v", meetingID, err)
 		return
@@ -204,7 +204,7 @@ func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, mes
 		SELECT cm.user_id, u.first_name, u.last_name 
 		FROM chama_members cm
 		JOIN users u ON cm.user_id = u.id
-		WHERE cm.chama_id = ? AND cm.is_active = TRUE
+		WHERE cm.chama_id = $1 AND cm.is_active = TRUE
 	`
 	
 	rows, err := s.db.Query(query, chamaID)
@@ -229,7 +229,7 @@ func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, mes
 		insertQuery := `
 			INSERT INTO notifications (
 				id, user_id, title, message, type, data, created_at
-			) VALUES (?, ?, ?, ?, 'meeting', ?, CURRENT_TIMESTAMP)
+			) VALUES ($1, $2, $3, $4, 'meeting', $5, CURRENT_TIMESTAMP)
 		`
 		
 		notificationData := map[string]interface{}{
