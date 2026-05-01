@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"net/http"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -281,6 +281,16 @@ func main() {
 
 	// Initialize E2EE service
 	e2eeService := services.NewMilitaryGradeE2EEService(db)
+
+	// Initialize Test Data Generator (dev/test only)
+	var testDataGenerator *services.TestDataGenerator
+	if cfg.Environment != "production" || os.Getenv("ENABLE_TEST_DATA_GENERATOR") == "true" {
+		testDataGenerator = services.NewTestDataGenerator(db)
+		if os.Getenv("AUTO_START_TEST_DATA") == "true" {
+			testDataGenerator.Start(5 * time.Minute)
+			log.Println("✅ Test data generator auto-started")
+		}
+	}
 
 	// Database middleware to inject db into context
 	dbMiddleware := func(c *gin.Context) {
@@ -771,6 +781,28 @@ func main() {
 				loans.POST("/:id/guarantor-response", api.RespondToGuarantorRequest)
 				loans.GET("/guarantor-requests", api.GetGuarantorRequests)
 				loans.POST("/guarantors/:guarantorId/respond", api.RespondToGuarantorRequest)
+			}
+			if testDataGenerator != nil {
+				// Test data generation routes (admin only, development)
+				testData := protected.Group("/test-data")
+				testData.Use(func(c *gin.Context) {
+					if os.Getenv("ENVIRONMENT") == "production" && os.Getenv("ENABLE_TEST_DATA_GENERATOR") != "true" {
+						c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "Test data endpoints disabled in production"})
+						c.Abort()
+						return
+					}
+					if testDataGenerator != nil {
+						c.Set("testDataGenerator", testDataGenerator)
+					}
+					c.Next()
+				})
+				{
+					testData.GET("/stats", api.GetTestDataStats)
+					testData.POST("/generate", api.GenerateTestData)
+					testData.POST("/start", api.StartTestDataGenerator)
+					testData.POST("/stop", api.StopTestDataGenerator)
+					testData.POST("/reset", api.ResetTestDataStats)
+				}
 			}
 		}
 	}

@@ -41,7 +41,7 @@ func seedUser(db *sql.DB, email, password, phone, firstName, lastName string) er
 	return nil
 }
 
-func main1() {
+func main11() {
 	// Skip if running as part of main app
 	if len(os.Args) < 2 || os.Args[1] != "seed" {
 		return
