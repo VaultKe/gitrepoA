@@ -227,7 +227,6 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 		chama.Permissions = map[string]interface{}{
 			"allowMerryGoRound": true,
 			"allowWelfare":      true,
-			"allowMarketplace":  true,
 		}
 	}
 

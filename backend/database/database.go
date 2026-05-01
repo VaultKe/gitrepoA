@@ -1179,7 +1179,7 @@ func addMissingChamaPermissionsColumn(db *sql.DB) error {
 	if !columnExists {
 		log.Println("Adding permissions column to chamas table")
 		addColumnQuery := `
-			ALTER TABLE chamas ADD COLUMN permissions TEXT DEFAULT '{"allowMerryGoRound": true, "allowWelfare": true, "allowMarketplace": true}'
+			ALTER TABLE chamas ADD COLUMN permissions TEXT DEFAULT '{"allowMerryGoRound": true, "allowWelfare": true}'
 		`
 		_, err = db.Exec(addColumnQuery)
 		if err != nil {
