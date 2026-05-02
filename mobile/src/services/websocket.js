@@ -33,11 +33,7 @@ class WebSocketService {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return false;
 
-      // Use centralized API configuration
-      if (!API_BASE_URL) {
-        console.error('API_BASE_URL is not configured');
-        return false;
-      }
+      if (!API_BASE_URL) return false;
       const wsUrl = `${WS_URL}/api/v1/ws?token=${encodeURIComponent(token)}`;
       this.ws = new WebSocket(wsUrl);
 
