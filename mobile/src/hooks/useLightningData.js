@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import lightningDataService from '../services/lightningDataService';
+import cacheDataService from '../services/cacheDataService';
 import optimisticUpdateService from '../services/optimisticUpdateService';
 import smartPrefetchService from '../services/smartPrefetchService';
 
@@ -30,7 +30,7 @@ export const useLightningData = (dataType, options = {}) => {
       setLoading(true);
       setError(null);
 
-      const result = await lightningDataService.getData(dataType, {
+      const result = await cacheDataService.getData(dataType, {
         ...options,
         ...customOptions,
         forceRefresh,
@@ -82,11 +82,11 @@ export const useLightningData = (dataType, options = {}) => {
         }
       };
 
-      lightningDataService.addDataChangeListener(dataType, handleDataChange);
+      cacheDataService.addDataChangeListener(dataType, handleDataChange);
 
       // Cleanup listener on unmount
       return () => {
-        lightningDataService.removeDataChangeListener(dataType, handleDataChange);
+        cacheDataService.removeDataChangeListener(dataType, handleDataChange);
       };
     }
   }, [loadData, dataType]);
@@ -152,10 +152,10 @@ export const useLightningData = (dataType, options = {}) => {
       });
     };
 
-    lightningDataService.registerRealtimeHandler(dataType, handleRealtimeUpdate);
+    cacheDataService.registerRealtimeHandler(dataType, handleRealtimeUpdate);
 
     return () => {
-      lightningDataService.registerRealtimeHandler(dataType, null);
+      cacheDataService.registerRealtimeHandler(dataType, null);
     };
   }, [dataType]);
 
@@ -332,7 +332,7 @@ export const usePerformanceMonitoring = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const lightningMetrics = lightningDataService.getPerformanceMetrics();
+      const lightningMetrics = cacheDataService.getPerformanceMetrics();
       const prefetchStats = smartPrefetchService.getStats();
       
       setMetrics({
@@ -350,7 +350,7 @@ export const usePerformanceMonitoring = () => {
   }, []);
 
   const clearCaches = useCallback(() => {
-    lightningDataService.clearAllCaches();
+    cacheDataService.clearAllCaches();
     smartPrefetchService.clearPatterns();
   }, []);
 
@@ -375,7 +375,7 @@ export const useMultiData = (dataTypes, options = {}) => {
     
     const promises = dataTypes.map(async (dataType) => {
       try {
-        const result = await lightningDataService.getData(dataType, options[dataType] || {});
+        const result = await cacheDataService.getData(dataType, options[dataType] || {});
         return { dataType, result };
       } catch (error) {
         return { dataType, error };

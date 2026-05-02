@@ -14,11 +14,12 @@ import (
 
 // WebSocketMessage represents a message sent over WebSocket
 type WebSocketMessage struct {
-	Type    string      `json:"type"`
-	RoomID  string      `json:"roomId,omitempty"`
-	UserID  string      `json:"userId,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
-	Message string      `json:"message,omitempty"`
+	Type      string      `json:"type"`
+	RoomID    string      `json:"roomId,omitempty"`
+	UserID    string      `json:"userId,omitempty"`
+	RequestID string      `json:"requestId,omitempty"` // For request-response correlation
+	Data      interface{} `json:"data,omitempty"`
+	Message   string      `json:"message,omitempty"`
 }
 
 // Client represents a WebSocket client
@@ -314,26 +315,39 @@ func (c *Client) readPump() {
 			break
 		}
 
-		// Handle different message types
-		switch message.Type {
-		case "join_room":
-			if message.RoomID != "" {
-				c.Hub.JoinRoom(c, message.RoomID)
-			}
-		case "leave_room":
-			if message.RoomID != "" {
-				c.Hub.LeaveRoom(c, message.RoomID)
-			}
-		case "send_message":
-			// Handle message sending - process and save to database
-			c.handleSendMessage(c.WebSocketService, message)
-		case "ping":
-			// Send pong response
-			select {
-			case c.Send <- WebSocketMessage{Type: "pong"}:
-			default:
-				return
-			}
+	// Handle different message types
+	switch message.Type {
+	case "join_room":
+		if message.RoomID != "" {
+			c.Hub.JoinRoom(c, message.RoomID)
+		}
+	case "leave_room":
+		if message.RoomID != "" {
+			c.Hub.LeaveRoom(c, message.RoomID)
+		}
+	case "send_message":
+		// Handle message sending - process and save to database
+		c.handleSendMessage(c.WebSocketService, message)
+	case "ping":
+		// Send pong response
+		select {
+		case c.Send <- WebSocketMessage{Type: "pong"}:
+		default:
+			return
+		}
+	// Chat-specific requests (request-response pattern)
+	case "get_rooms":
+		c.handleGetRooms(c.WebSocketService, message)
+	case "get_room":
+		c.handleGetRoom(c.WebSocketService, message)
+	case "create_room":
+		c.handleCreateRoom(c.WebSocketService, message)
+	case "get_messages":
+		c.handleGetMessages(c.WebSocketService, message)
+	case "mark_read":
+		c.handleMarkRead(c.WebSocketService, message)
+	case "typing_start", "typing_stop":
+		c.handleTyping(c.WebSocketService, message)
 		}
 	}
 }
@@ -373,21 +387,19 @@ func (c *Client) handleSendMessage(wsService *WebSocketService, message WebSocke
 		return
 	}
 
-	recipientID, ok := messageData["recipientId"].(string)
-	if !ok || recipientID == "" {
-		log.Printf("Missing or invalid recipientId in send_message")
-		return
-	}
-
 	senderID, ok := messageData["senderId"].(string)
 	if !ok || senderID == "" {
-		log.Printf("Missing or invalid senderId in send_message")
-		return
+		// Use authenticated user ID from WebSocket client
+		senderID = c.UserID
+		if senderID == "" {
+			log.Printf("Missing senderId and no authenticated user")
+			return
+		}
 	}
 
 	messageType, ok := messageData["type"].(string)
 	if !ok {
-		messageType = "military_encrypted_text" // Default to encrypted text
+		messageType = string(MessageTypeText) // Default to plain text
 	}
 
 	content, ok := messageData["content"].(string)
@@ -404,6 +416,12 @@ func (c *Client) handleSendMessage(wsService *WebSocketService, message WebSocke
 		}
 	}
 
+	// Extract client message ID for acknowledgment
+	clientMessageID := ""
+	if val, ok := messageData["clientMessageId"].(string); ok {
+		clientMessageID = val
+	}
+
 	// Create message payload for database using chat service SendMessage method
 	messageObj, err := wsService.chatService.SendMessage(
 		roomID,
@@ -415,6 +433,7 @@ func (c *Client) handleSendMessage(wsService *WebSocketService, message WebSocke
 	)
 	if err != nil {
 		log.Printf("Failed to save message to database: %v", err)
+		// Optionally send error back to client
 		return
 	}
 
@@ -422,18 +441,19 @@ func (c *Client) handleSendMessage(wsService *WebSocketService, message WebSocke
 
 	// Convert to map for WebSocket broadcast
 	savedMessage := map[string]interface{}{
-		"id":         messageObj.ID,
-		"roomId":     messageObj.RoomID,
-		"senderId":   messageObj.SenderID,
-		"type":       messageObj.Type,
-		"content":    messageObj.Content,
-		"metadata":   messageObj.Metadata,
-		"fileUrl":    messageObj.FileURL,
-		"isEdited":   messageObj.IsEdited,
-		"isDeleted":  messageObj.IsDeleted,
-		"replyToId":  messageObj.ReplyToID,
-		"createdAt":  messageObj.CreatedAt,
-		"updatedAt":  messageObj.UpdatedAt,
+		"id":              messageObj.ID,
+		"roomId":          messageObj.RoomID,
+		"senderId":        messageObj.SenderID,
+		"type":            messageObj.Type,
+		"content":         messageObj.Content,
+		"metadata":        messageObj.Metadata,
+		"fileUrl":         messageObj.FileURL,
+		"isEdited":        messageObj.IsEdited,
+		"isDeleted":       messageObj.IsDeleted,
+		"replyToId":       messageObj.ReplyToID,
+		"createdAt":       messageObj.CreatedAt,
+		"updatedAt":       messageObj.UpdatedAt,
+		"clientMessageId": clientMessageID, // Echo back for client correlation
 		"sender": map[string]interface{}{
 			"id":        messageObj.Sender.ID,
 			"firstName": messageObj.Sender.FirstName,
@@ -442,7 +462,7 @@ func (c *Client) handleSendMessage(wsService *WebSocketService, message WebSocke
 		},
 	}
 
-	// Broadcast the message to all clients in the room
+	// Broadcast the message to all clients in the room (including sender for confirmation)
 	broadcastMessage := WebSocketMessage{
 		Type:   "new_message",
 		RoomID: roomID,
@@ -457,4 +477,278 @@ func (c *Client) handleSendMessage(wsService *WebSocketService, message WebSocke
 func generateClientID() string {
 	// Simple client ID generation - in production, use UUID
 	return "client_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+}
+
+// handleGetRooms returns chat rooms for the authenticated user
+func (c *Client) handleGetRooms(wsService *WebSocketService, message WebSocketMessage) {
+	userID := c.UserID
+	requestId := message.RequestID
+
+	// Parse optional parameters
+	data, _ := message.Data.(map[string]interface{})
+	_, _ = data["forceRefresh"]
+
+	// Get rooms from chat service
+	rooms, err := wsService.chatService.GetUserChatRooms(userID)
+	if err != nil {
+		c.sendResponse(requestId, "rooms_list", map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.sendResponse(requestId, "rooms_list", map[string]interface{}{
+		"success": true,
+		"data":    rooms,
+	})
+}
+
+// handleGetRoom returns a specific chat room
+func (c *Client) handleGetRoom(wsService *WebSocketService, message WebSocketMessage) {
+	userID := c.UserID
+	requestId := message.RequestID
+
+	data, _ := message.Data.(map[string]interface{})
+	roomID, ok := data["roomId"].(string)
+	if !ok || roomID == "" {
+		c.sendResponse(requestId, "room_detail", map[string]interface{}{
+			"success": false,
+			"error":   "roomId is required",
+		})
+		return
+	}
+
+	_, _ = data["forceRefresh"]
+
+	// Check membership
+	isMember, err := wsService.chatService.IsUserMemberOfRoom(roomID, userID)
+	if err != nil || !isMember {
+		c.sendResponse(requestId, "room_detail", map[string]interface{}{
+			"success": false,
+			"error":   "access denied",
+		})
+		return
+	}
+
+	room, err := wsService.chatService.GetChatRoomByID(roomID)
+	if err != nil {
+		c.sendResponse(requestId, "room_detail", map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.sendResponse(requestId, "room_detail", map[string]interface{}{
+		"success": true,
+		"data":    room,
+	})
+}
+
+// handleCreateRoom creates a new chat room
+func (c *Client) handleCreateRoom(wsService *WebSocketService, message WebSocketMessage) {
+	userID := c.UserID
+	requestId := message.RequestID
+
+	data, _ := message.Data.(map[string]interface{})
+	roomType, _ := data["type"].(string)
+
+	switch roomType {
+	case "private":
+		recipientID, ok := data["recipientId"].(string)
+		if !ok || recipientID == "" {
+			c.sendResponse(requestId, "room_created", map[string]interface{}{
+				"success": false,
+				"error":   "recipientId required for private chat",
+			})
+			return
+		}
+		room, err := wsService.chatService.CreatePrivateChat(userID, recipientID)
+		if err != nil {
+			c.sendResponse(requestId, "room_created", map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		c.sendResponse(requestId, "room_created", map[string]interface{}{
+			"success": true,
+			"data":    room,
+		})
+
+	case "support":
+		supportUserID := ""
+		if val, ok := data["recipientId"].(string); ok && val != "" {
+			supportUserID = val
+		} else if val, ok := data["userIds"].([]string); ok && len(val) > 0 {
+			supportUserID = val[0]
+		} else if val, ok := data["context"].(map[string]interface{}); ok {
+			if uid, ok := val["userId"].(string); ok {
+				supportUserID = uid
+			}
+		}
+		if supportUserID == "" {
+			c.sendResponse(requestId, "room_created", map[string]interface{}{
+				"success": false,
+				"error":   "userId required for support chat",
+			})
+			return
+		}
+		ctx := make(map[string]interface{})
+		if val, ok := data["context"].(map[string]interface{}); ok {
+			ctx = val
+		}
+		room, err := wsService.chatService.CreateSupportChat(userID, supportUserID, ctx)
+		if err != nil {
+			c.sendResponse(requestId, "room_created", map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		c.sendResponse(requestId, "room_created", map[string]interface{}{
+			"success": true,
+			"data":    room,
+		})
+
+	case "chama":
+		chamaID, ok := data["chamaId"].(string)
+		if !ok || chamaID == "" {
+			c.sendResponse(requestId, "room_created", map[string]interface{}{
+				"success": false,
+				"error":   "chamaId required for chama chat",
+			})
+			return
+		}
+		room, err := wsService.chatService.CreateChamaChat(chamaID, userID)
+		if err != nil {
+			c.sendResponse(requestId, "room_created", map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		c.sendResponse(requestId, "room_created", map[string]interface{}{
+			"success": true,
+			"data":    room,
+		})
+
+	default:
+		c.sendResponse(requestId, "room_created", map[string]interface{}{
+			"success": false,
+			"error":   "invalid chat room type",
+		})
+	}
+}
+
+// handleGetMessages returns messages for a room
+func (c *Client) handleGetMessages(wsService *WebSocketService, message WebSocketMessage) {
+	userID := c.UserID
+	requestId := message.RequestID
+
+	data, _ := message.Data.(map[string]interface{})
+	roomID, ok := data["roomId"].(string)
+	if !ok || roomID == "" {
+		c.sendResponse(requestId, "messages_list", map[string]interface{}{
+			"success": false,
+			"error":   "roomId is required",
+		})
+		return
+	}
+
+	// Check membership
+	isMember, err := wsService.chatService.IsUserMemberOfRoom(roomID, userID)
+	if err != nil || !isMember {
+		c.sendResponse(requestId, "messages_list", map[string]interface{}{
+			"success": false,
+			"error":   "access denied",
+		})
+		return
+	}
+
+	// Parse pagination
+	limit := 50
+	offset := 0
+	if val, ok := data["limit"]; ok {
+		if f, ok := val.(float64); ok && f > 0 && f <= 100 {
+			limit = int(f)
+		} else if s, ok := val.(string); ok {
+			if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 && parsed <= 100 {
+				limit = parsed
+			}
+		}
+	}
+	if val, ok := data["offset"]; ok {
+		if f, ok := val.(float64); ok && f >= 0 {
+			offset = int(f)
+		} else if s, ok := val.(string); ok {
+			if parsed, err := strconv.Atoi(s); err == nil && parsed >= 0 {
+				offset = parsed
+			}
+		}
+	}
+
+	messages, err := wsService.chatService.GetRoomMessages(roomID, userID, limit, offset)
+	if err != nil {
+		c.sendResponse(requestId, "messages_list", map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.sendResponse(requestId, "messages_list", map[string]interface{}{
+		"success": true,
+		"data":    messages,
+	})
+}
+
+// handleMarkRead marks messages as read
+func (c *Client) handleMarkRead(wsService *WebSocketService, message WebSocketMessage) {
+	userID := c.UserID
+	data, _ := message.Data.(map[string]interface{})
+	roomID, _ := data["roomId"].(string)
+	messageID, _ := data["messageId"].(string)
+
+	if roomID != "" && messageID != "" {
+		// Update read status in DB
+		_ = wsService.chatService.MarkMessagesAsRead(roomID, userID)
+	}
+}
+
+// handleTyping handles typing indicators
+func (c *Client) handleTyping(wsService *WebSocketService, message WebSocketMessage) {
+	userID := c.UserID
+	data, _ := message.Data.(map[string]interface{})
+	roomID, _ := data["roomId"].(string)
+	isTyping, _ := data["isTyping"].(bool)
+
+	if roomID != "" {
+		// Broadcast typing status to room
+		typingMsg := WebSocketMessage{
+			Type:   "chat_typing",
+			RoomID: roomID,
+			UserID: userID,
+			Data: map[string]interface{}{
+				"userId":  userID,
+				"isTyping": isTyping,
+			},
+		}
+		c.Hub.broadcast <- typingMsg
+	}
+}
+
+// sendResponse sends a response to the client with correlation to requestId
+func (c *Client) sendResponse(requestId, responseType string, data interface{}) {
+	response := WebSocketMessage{
+		Type:      responseType,
+		RequestID: requestId,
+		Data:      data,
+	}
+	select {
+	case c.Send <- response:
+	default:
+		// Client not reading, drop
+	}
 }

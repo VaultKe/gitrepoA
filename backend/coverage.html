@@ -23331,7 +23331,7 @@ func addMissingChamaPermissionsColumn(db *sql.DB) error <span class="cov8" title
         <span class="cov8" title="1">if !columnExists </span><span class="cov8" title="1">{
                 log.Println("Adding permissions column to chamas table")
                 addColumnQuery := `
-                        ALTER TABLE chamas ADD COLUMN permissions TEXT DEFAULT '{"allowMerryGoRound": true, "allowWelfare": true, "allowMarketplace": true}'
+                        ALTER TABLE chamas ADD COLUMN permissions TEXT DEFAULT '{"allowMerryGoRound": true, "allowWelfare": true}'
                 `
                 _, err = db.Exec(addColumnQuery)
                 if err != nil </span><span class="cov0" title="0">{
@@ -27522,7 +27522,6 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) <span
                 chama.Permissions = map[string]interface{}{
                         "allowMerryGoRound": true,
                         "allowWelfare":      true,
-                        "allowMarketplace":  true,
                 }
         }</span>
 

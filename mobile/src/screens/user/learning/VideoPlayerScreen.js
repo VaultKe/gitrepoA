@@ -18,6 +18,7 @@ import { Video } from 'expo-av';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
+import { API_BASE_URL } from '../../../config/environment';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -230,7 +231,11 @@ const VideoPlayerScreen = ({ navigation, route }) => {
     // Handle local uploaded videos (from our upload system)
     if (videoUrl.startsWith('/uploads/')) {
       // Convert relative URL to full URL
-      const fullUrl = `http://localhost:8080${videoUrl}`;
+      if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not configured');
+        return { uri: videoUrl };
+      }
+      const fullUrl = `${API_BASE_URL}${videoUrl}`;
       console.log('✅ Local video detected, using full URL:', fullUrl);
       return { uri: fullUrl };
     }

@@ -15,6 +15,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import ApiService from '../../../services/api';
+import { API_BASE_URL } from '../../../config/environment';
 
 const CourseNavigationScreen = ({ navigation, route }) => {
   const { theme } = useApp();
@@ -615,9 +616,9 @@ const CourseNavigationScreen = ({ navigation, route }) => {
             <View style={[styles.mediaCard, { backgroundColor: colors.surface }]}>
               <Image
                 source={{
-                  uri: subtopicContent.image_url.startsWith('/uploads/')
-                    ? `http://localhost:8080${subtopicContent.image_url}`
-                    : subtopicContent.image_url
+                 uri: subtopicContent.image_url.startsWith('/uploads/')
+                     ? `${API_BASE_URL}${subtopicContent.image_url}`
+                     : subtopicContent.image_url
                 }}
                 style={styles.subtopicImage}
                 resizeMode="cover"

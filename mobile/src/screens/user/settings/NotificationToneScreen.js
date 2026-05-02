@@ -16,6 +16,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import ApiService from '../../../services/api';
 import notificationService from '../../../services/notificationService';
+import { API_BASE_URL } from '../../../config/environment';
 
 const NotificationToneScreen = ({ navigation }) => {
   const { theme } = useApp();
@@ -104,12 +105,20 @@ const NotificationToneScreen = ({ navigation }) => {
       if (sound.file_path.startsWith('http://') || sound.file_path.startsWith('https://')) {
         // Already a full URL
         soundUri = sound.file_path;
-      } else if (sound.file_path.startsWith('/')) {
-        // Absolute path
-        soundUri = `http://localhost:8080${sound.file_path}`;
-      } else {
-        // Relative path
-        soundUri = `http://localhost:8080/${sound.file_path}`;
+       } else if (sound.file_path.startsWith('/')) {
+         // Absolute path
+         if (!API_BASE_URL) {
+           console.error('API_BASE_URL is not configured');
+           return;
+         }
+         soundUri = `${API_BASE_URL}${sound.file_path}`;
+       } else {
+         // Relative path
+         if (!API_BASE_URL) {
+           console.error('API_BASE_URL is not configured');
+           return;
+         }
+         soundUri = `${API_BASE_URL}/${sound.file_path}`;
       }
 
       // console.log('🎵 Loading sound from URI:', soundUri);

@@ -1,0 +1,53 @@
+import { makeRequest, makeRequestWithRetry } from './client';
+
+const getWalletBalance = async () => {
+  return await makeRequest('/wallets/balance');
+};
+
+const getTransactions = async (limit = 20, offset = 0) => {
+  return await makeRequest(`/wallets/transactions?limit=${limit}&offset=${offset}`);
+};
+
+const initiateDeposit = async (amount, paymentMethod = 'mpesa', description = '', reference = '') => {
+  return await makeRequest('/wallets/deposit', {
+    method: 'POST',
+    body: {
+      amount,
+      paymentMethod,
+      description: description || `Deposit via ${paymentMethod}`,
+      reference
+    },
+  });
+};
+
+const initiateWithdrawal = async (amount, withdrawMethod, phoneNumber = '', bankAccountNumber = '', bankCode = '', description = '') => {
+  const body = {
+    amount,
+    withdrawMethod,
+    description: description || `Withdrawal via ${withdrawMethod}`,
+  };
+
+  if (withdrawMethod === 'mpesa') {
+    body.phoneNumber = phoneNumber;
+  } else if (withdrawMethod === 'bank') {
+    body.bankAccountNumber = bankAccountNumber;
+    body.bankCode = bankCode;
+  }
+
+  return await makeRequest('/wallets/withdraw', {
+    method: 'POST',
+    body,
+  });
+};
+
+const getChamaWalletBalance = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/wallet/balance`);
+};
+
+export {
+  getWalletBalance,
+  getTransactions,
+  initiateDeposit,
+  initiateWithdrawal,
+  getChamaWalletBalance,
+};

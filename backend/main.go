@@ -121,12 +121,12 @@ func main() {
 			"http://localhost:8081",           // Metro / Expo
 			"https://localhost",           // Metro / Expo
 			"https://127.0.0.1:8081",
-			"http://localhost:8080", 
+			"http://localhost:8080",
+			"http://localhost:3000",       // Web development
+			"http://127.0.0.1:3000",       // Web development
 			"https://vault-better1.vercel.app",
 			"http://localhost:19006", // Expo web preview
 			"http://127.0.0.1:19006",
-			"http://localhost:3000",
-			"http://127.0.0.1:3000",
 		}
 
 		// Check if origin is allowed - be restrictive in production

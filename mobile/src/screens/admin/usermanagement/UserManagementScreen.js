@@ -16,7 +16,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors } from '../../../utils/theme';
 import ApiService from '../../../services/api';
 import { useLightningData } from '../../../hooks/useLightningData';
-import lightningDataService from '../../../services/lightningDataService';
+import lightningDataService from '../../../services/cacheDataService';
 
 
 export default function UserManagementScreen() {

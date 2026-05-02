@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import lightningDataService from './lightningDataService';
+import lightningDataService from './cacheDataService';
 
 /**
  * Smart Prefetch Service

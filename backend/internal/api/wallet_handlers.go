@@ -87,12 +87,25 @@ func GetWalletBalance(c *gin.Context) {
 	// Get user's personal wallet
 	wallet, err := walletService.GetWalletByOwnerAndType(userID.(string), models.WalletTypePersonal)
 	if err != nil {
-		log.Printf("Failed to get user wallet: %v", err)
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "Wallet not found",
-		})
-		return
+		// If wallet not found, create a new personal wallet with zero balance
+		if err.Error() == "wallet not found" {
+			wallet, err = walletService.CreateWallet(userID.(string), models.WalletTypePersonal)
+			if err != nil {
+				log.Printf("Failed to create wallet for user %s: %v", userID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"error":   "Failed to create wallet",
+				})
+				return
+			}
+		} else {
+			log.Printf("Failed to get user wallet: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to retrieve wallet",
+			})
+			return
+		}
 	}
 
 	// For now, just use the stored balance since it's being updated correctly by the contribution handler

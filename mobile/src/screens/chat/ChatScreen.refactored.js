@@ -23,7 +23,6 @@ const ChatScreen = () => {
   // State
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
@@ -62,7 +61,7 @@ const ChatScreen = () => {
 
   // Refresh rooms
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
+    setLoading(true);
     setError(null);
     try {
       const roomList = await chatService.getRooms(true);
@@ -71,7 +70,7 @@ const ChatScreen = () => {
       console.error('Refresh error:', err);
       setError('Failed to refresh chats');
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
   }, []);
 
@@ -91,7 +90,7 @@ const ChatScreen = () => {
   // Render room item
   const renderRoom = ({ item: room }) => {
     const unreadCount = chatService.getUnreadCount(room.id);
-    const lastMessage = room.lastMessage || {};
+    const lastMessageText = room.lastMessage || 'No messages yet';
 
     return (
       <TouchableOpacity
@@ -120,7 +119,7 @@ const ChatScreen = () => {
               style={[styles.lastMessage, { color: colors.textSecondary }]}
               numberOfLines={1}
             >
-              {lastMessage.content || 'No messages yet'}
+              {lastMessageText}
             </Text>
             {unreadCount > 0 && (
               <View style={[styles.badge, { backgroundColor: colors.primary }]}>
@@ -270,11 +269,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: borderRadius.md,
   },
-   errorText: {
-     marginLeft: spacing.sm,
-     flex: 1,
-     fontSize: typography.fontSize.sm,
-   },
+  errorText: {
+    marginLeft: spacing.sm,
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+  },
   roomItem: {
     flexDirection: 'row',
     padding: spacing.md,
@@ -298,46 +297,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xs,
   },
-   roomName: {
-     fontSize: typography.fontSize.lg,
-     fontWeight: '600',
-     flex: 1,
-   },
-   timestamp: {
-     fontSize: typography.fontSize.xs,
-   },
-   lastMessage: {
-     flex: 1,
-     fontSize: typography.fontSize.sm,
-   },
-   badgeText: {
-     color: 'white',
-     fontSize: typography.fontSize.xs,
-     fontWeight: '600',
-   },
-   emptyText: {
-     fontSize: typography.fontSize.xl,
-     fontWeight: '600',
-     marginTop: spacing.md,
-   },
-   emptySubtext: {
-     fontSize: typography.fontSize.md,
-     marginTop: spacing.xs,
-     textAlign: 'center',
-     paddingHorizontal: spacing.xl,
-   },
-   timestamp: {
-     fontSize: typography.fontSize.xs,
-   },
+  roomName: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: '600',
+    flex: 1,
+  },
+  timestamp: {
+    fontSize: typography.fontSize.xs,
+  },
   messageRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-   lastMessage: {
-     flex: 1,
-     fontSize: typography.fontSize.sm,
-   },
+  lastMessage: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+  },
   badge: {
     minWidth: 20,
     height: 20,
@@ -347,11 +323,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     marginLeft: spacing.sm,
   },
-   badgeText: {
-     color: 'white',
-     fontSize: typography.fontSize.xs,
-     fontWeight: '600',
-   },
+  badgeText: {
+    color: 'white',
+    fontSize: typography.fontSize.xs,
+    fontWeight: '600',
+  },
   fab: {
     position: 'absolute',
     bottom: spacing.lg,
@@ -370,17 +346,17 @@ const styles = StyleSheet.create({
   emptyContainer: {
     paddingTop: 100,
   },
-   emptyText: {
-     fontSize: typography.fontSize.xl,
-     fontWeight: '600',
-     marginTop: spacing.md,
-   },
-   emptySubtext: {
-     fontSize: typography.fontSize.md,
-     marginTop: spacing.xs,
-     textAlign: 'center',
-     paddingHorizontal: spacing.xl,
-   },
+  emptyText: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: '600',
+    marginTop: spacing.md,
+  },
+  emptySubtext: {
+    fontSize: typography.fontSize.md,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+  },
 });
 
 export default ChatScreen;

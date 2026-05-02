@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import DatabaseService from '../services/database';
 import SyncService from '../services/syncService';
 import ApiService from '../services/api';
 import webSocketService from '../services/websocket';
 import dataPreloadService from '../services/dataPreloadService';
-import lightningDataService from '../services/lightningDataService';
+import lightningDataService from '../services/cacheDataService';
 import smartPrefetchService from '../services/smartPrefetchService';
 
 // Initial state
@@ -232,14 +231,8 @@ export function AppProvider({ children }) {
         dispatch({ type: ActionTypes.SET_LOADING, payload: false });
       }, 1500); // Reduced from 10s to 1.5s
 
-      // Initialize database in background (non-blocking)
-      DatabaseService.initialize().then(() => {
-        console.warn('Database initialization failed, continuing without database');
-        // Continue without database - app will work in memory-only mode
-      }).catch((dbError) => {
-        console.warn('Database initialization failed, continuing without database:', dbError);
-        // Continue without database - app will work in memory-only mode
-      });
+       // Database service removed per requirement - app works without SQLite DB in frontend
+       console.log('Database service disabled - app running in memory-only mode');
 
       // Check for existing auth token (parallel for speed)
       const [authToken, userData, theme, language] = await Promise.all([
@@ -348,54 +341,14 @@ export function AppProvider({ children }) {
   };
 
   const loadLocalData = async () => {
-    try {
-      // Check if database is initialized
-      if (!DatabaseService.isInitialized) {
-        console.warn('Database not initialized, using empty data');
-        // Set empty arrays for all data
-        dispatch({ type: ActionTypes.SET_WALLETS, payload: [] });
-        dispatch({ type: ActionTypes.SET_CHAMAS, payload: [] });
-        dispatch({ type: ActionTypes.SET_TRANSACTIONS, payload: [] });
-        dispatch({ type: ActionTypes.SET_NOTIFICATIONS, payload: [] });
-        dispatch({ type: ActionTypes.SET_CHAT_ROOMS, payload: [] });
-        dispatch({ type: ActionTypes.SET_LOANS, payload: [] });
-        return;
-      }
-
-      // Load data from local database
-      const [
-        wallets,
-        chamas,
-        transactions,
-        notifications,
-        chatRooms,
-        loans,
-      ] = await Promise.all([
-        DatabaseService.findAll('wallets', 'owner_id = ?', [state.user?.id]).catch(() => []),
-        DatabaseService.findAll('chamas').catch(() => []),
-        DatabaseService.findAll('transactions', '', [], 'created_at DESC', 50).catch(() => []),
-        DatabaseService.findAll('notifications', 'user_id = ?', [state.user?.id], 'created_at DESC', 50).catch(() => []),
-        DatabaseService.findAll('chat_rooms').catch(() => []),
-        DatabaseService.findAll('loans', 'borrower_id = ?', [state.user?.id]).catch(() => []),
-      ]);
-
-      dispatch({ type: ActionTypes.SET_WALLETS, payload: wallets });
-      dispatch({ type: ActionTypes.SET_CHAMAS, payload: chamas });
-      dispatch({ type: ActionTypes.SET_TRANSACTIONS, payload: transactions });
-      dispatch({ type: ActionTypes.SET_NOTIFICATIONS, payload: notifications });
-      dispatch({ type: ActionTypes.SET_CHAT_ROOMS, payload: chatRooms });
-      dispatch({ type: ActionTypes.SET_LOANS, payload: loans });
-
-    } catch (error) {
-      console.error('Failed to load local data:', error);
-      // Set empty arrays as fallback
-      dispatch({ type: ActionTypes.SET_WALLETS, payload: [] });
-      dispatch({ type: ActionTypes.SET_CHAMAS, payload: [] });
-      dispatch({ type: ActionTypes.SET_TRANSACTIONS, payload: [] });
-      dispatch({ type: ActionTypes.SET_NOTIFICATIONS, payload: [] });
-      dispatch({ type: ActionTypes.SET_CHAT_ROOMS, payload: [] });
-      dispatch({ type: ActionTypes.SET_LOANS, payload: [] });
-    }
+    // With no SQLite, we rely entirely on backend server
+    // Data will be fetched fresh from API when needed
+    dispatch({ type: ActionTypes.SET_WALLETS, payload: [] });
+    dispatch({ type: ActionTypes.SET_CHAMAS, payload: [] });
+    dispatch({ type: ActionTypes.SET_TRANSACTIONS, payload: [] });
+    dispatch({ type: ActionTypes.SET_NOTIFICATIONS, payload: [] });
+    dispatch({ type: ActionTypes.SET_CHAT_ROOMS, payload: [] });
+    dispatch({ type: ActionTypes.SET_LOANS, payload: [] });
   };
 
   // Update context with preloaded data
@@ -866,55 +819,42 @@ export function AppProvider({ children }) {
       // Preserve avatar URLs but remove large base64 data
       let preservedAvatarUrl = null;
 
-      // Check if we have an avatar URL from API response
       if (filteredUserData.avatar && typeof filteredUserData.avatar === 'string') {
         if (filteredUserData.avatar.startsWith('http') || filteredUserData.avatar.startsWith('/uploads/') || filteredUserData.avatar.startsWith('/api/')) {
-          // Keep URL-based avatars
           preservedAvatarUrl = filteredUserData.avatar;
         } else if (filteredUserData.avatar.startsWith('data:') && filteredUserData.avatar.length > 50000) {
-          // For large base64 data, store a placeholder URL and cache the actual data separately
           preservedAvatarUrl = 'avatar://cached-base64-image';
-          // Store the actual base64 data in a separate cache for components to use
           try {
             await AsyncStorage.setItem('cached_avatar_data', filteredUserData.avatar);
           } catch (error) {
             console.warn('Failed to cache avatar data:', error);
             preservedAvatarUrl = null;
           }
-
           delete filteredUserData.avatar;
         } else {
-          // Keep small data URLs or other formats
           preservedAvatarUrl = filteredUserData.avatar;
         }
       }
 
-      // Remove large profile_image data
       if (filteredUserData.profile_image && typeof filteredUserData.profile_image === 'string' && filteredUserData.profile_image.length > 50000) {
         delete filteredUserData.profile_image;
       }
 
-      // Set the preserved avatar URL
       if (preservedAvatarUrl) {
         filteredUserData.avatar = preservedAvatarUrl;
       }
-      // Update user in context (with filtered data)
       dispatch({ type: ActionTypes.UPDATE_USER, payload: filteredUserData });
 
-      // Update stored user data (exclude large data like base64 images)
       const updatedUser = { ...state.user, ...filteredUserData };
 
-      // Double-check no large data in final object for storage
       const userDataForStorage = { ...updatedUser };
       if (userDataForStorage.profile_image && typeof userDataForStorage.profile_image === 'string' && userDataForStorage.profile_image.length > 50000) {
         delete userDataForStorage.profile_image;
       }
       if (userDataForStorage.avatar && typeof userDataForStorage.avatar === 'string' && userDataForStorage.avatar.length > 50000) {
-        // Keep existing avatar URL from state if current one is too large
         userDataForStorage.avatar = state.user?.avatar || null;
       }
 
-      // Ultra-minimal user data to prevent storage quota errors
       const compressedUserData = {
         id: userDataForStorage.id,
         firstName: userDataForStorage.firstName,
@@ -926,27 +866,20 @@ export function AppProvider({ children }) {
         status: userDataForStorage.status,
         isEmailVerified: userDataForStorage.isEmailVerified,
         isPhoneVerified: userDataForStorage.isPhoneVerified,
-        // Remove all other fields to prevent storage quota issues
       };
 
-      // Ensure data is under 1KB limit (ultra conservative)
       const compressedSize = JSON.stringify(compressedUserData).length;
       if (compressedSize > 1024) {
-        console.warn('⚠️ User data still too large (update) (', compressedSize, 'bytes), using ultra-minimal fallback');
-        // Ultra-minimal data - only absolutely essential fields
         const ultraMinimalUserData = {
           id: userDataForStorage.id,
           firstName: userDataForStorage.firstName,
           lastName: userDataForStorage.lastName,
           email: userDataForStorage.email,
           role: userDataForStorage.role,
-          // Remove avatar and all other fields to prevent storage quota issues
         };
 
-        // Final check - if even this is too large, use absolute minimum
         const ultraMinimalSize = JSON.stringify(ultraMinimalUserData).length;
         if (ultraMinimalSize > 512) {
-          console.warn('⚠️ Even ultra-minimal data too large (update) (', ultraMinimalSize, 'bytes), using absolute minimum');
           const absoluteMinimalData = {
             id: userDataForStorage.id,
             firstName: userDataForStorage.firstName,
@@ -962,15 +895,6 @@ export function AppProvider({ children }) {
         await AsyncStorage.setItem('userData', JSON.stringify(compressedUserData));
       }
 
-      // Try to update in database if available (use original userData with large data)
-      try {
-        if (DatabaseService.isInitialized && state.user?.id) {
-          await DatabaseService.update('users', state.user.id, userData);
-        }
-      } catch (dbError) {
-        console.warn('Failed to update user in database:', dbError);
-      }
-
       return { success: true };
     } catch (error) {
       console.error('Failed to update user:', error);
@@ -980,43 +904,30 @@ export function AppProvider({ children }) {
 
   const logout = async () => {
     try {
-      // Stop auto sync
       SyncService.stopAutoSync();
 
-      // Disconnect WebSocket
       try {
         webSocketService.disconnect();
       } catch (wsError) {
         console.warn('WebSocket disconnect failed during logout:', wsError);
       }
 
-      // Call logout API (don't wait for it to complete)
       try {
         await ApiService.logout();
       } catch (apiError) {
         console.warn('API logout failed, continuing with local logout:', apiError);
       }
 
-      // Clear AsyncStorage data
       await AsyncStorage.multiRemove([
         'authToken',
         'userData',
         'userRole'
       ]);
 
-      // Clear local database data
-      try {
-        await DatabaseService.clearAllData();
-      } catch (dbError) {
-        console.warn('Failed to clear database data:', dbError);
-      }
-
-      // Reset state
       dispatch({ type: ActionTypes.LOGOUT });
     } catch (error) {
       console.error('Logout error:', error);
 
-      // Even if there are errors, still try to clear auth data and reset state
       try {
         await AsyncStorage.multiRemove([
           'authToken',
@@ -1027,7 +938,6 @@ export function AppProvider({ children }) {
         console.error('Failed to clear AsyncStorage during logout:', storageError);
       }
 
-      // Always reset state
       dispatch({ type: ActionTypes.LOGOUT });
     }
   };
@@ -1041,22 +951,12 @@ export function AppProvider({ children }) {
 
       const response = await ApiService.getUserChamas(50, 0);
 
-      if (response.success) {
-        dispatch({ type: ActionTypes.SET_CHAMAS, payload: response.data || [] });
+       if (response.success) {
+         dispatch({ type: ActionTypes.SET_CHAMAS, payload: response.data || [] });
 
-        // Also update local database if available
-        try {
-          if (DatabaseService.isInitialized) {
-            // Clear existing chamas and insert new ones
-            await DatabaseService.deleteWhere('chamas', '1=1', []);
-            for (const chama of response.data || []) {
-              await DatabaseService.insert('chamas', chama);
-            }
-          }
-        } catch (dbError) {
-          console.warn('Failed to update chamas in local database:', dbError);
-        }
-      }
+         // Database service removed per requirement - app works without SQLite DB in frontend
+         // Local database updates disabled
+       }
     } catch (error) {
       console.error('Failed to load user chamas:', error);
     }

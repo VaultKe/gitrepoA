@@ -10,14 +10,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 import ApiService from './api';
+import { API_BASE_URL, GOOGLE_CLIENT_ID } from '../config/environment';
 
 // Complete the auth session (commented out until expo-auth-session is properly installed)
 // WebBrowser.maybeCompleteAuthSession();
 
 class GoogleDriveService {
   constructor() {
-    this.clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '700521271518-apj801tf38k25daiisnqt70f8m7j2o43.apps.googleusercontent.com';
-    this.baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://https://dqtl6f-ip-41-139-130-223.tunnelmole.net';
+    this.clientId = GOOGLE_CLIENT_ID;
+    this.baseUrl = API_BASE_URL;
   }
 
   /**

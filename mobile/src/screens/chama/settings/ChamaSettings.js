@@ -45,7 +45,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     requireApprovalForWithdrawals: true,
     allowMerryGoRound: true,
     allowWelfare: true,
-    allowMarketplace: true,
   });
 
   const [notifications, setNotifications] = useState({
@@ -531,15 +530,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               'Enable welfare and emergency support',
               permissions.allowWelfare,
               (value) => updateSettingRealTime('permissions', 'allowWelfare', value),
-              'switch',
-              !isChairperson
-            )}
-
-            {renderSettingItem(
-              'Marketplace',
-              'Enable member business marketplace',
-              permissions.allowMarketplace,
-              (value) => updateSettingRealTime('permissions', 'allowMarketplace', value),
               'switch',
               !isChairperson
             )}

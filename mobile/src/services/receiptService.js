@@ -2,7 +2,6 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { Alert, Platform } from 'react-native';
-import WhatsAppNotificationService from './WhatsAppNotificationService';
 
 class ReceiptService {
   constructor() {
@@ -258,54 +257,9 @@ class ReceiptService {
     return `Member ${(transactionUserId || transaction.id || '').slice(-4)}`;
   }
 
-  /**
-   * Send WhatsApp notification for transaction
-   */
-  async sendWhatsAppNotification(transaction, userInfo = {}, chamaInfo = {}) {
-    try {
-      // Only send for completed transactions
-      if (transaction.status !== 'completed' && transaction.status !== 'COMPLETED') {
-        console.log('⏭️ Skipping WhatsApp notification for non-completed transaction');
-        return;
-      }
-
-      // Extract chama ID
-      const chamaId = chamaInfo.chama_id || transaction.chama_id || userInfo.chamaId;
-
-      if (!chamaId) {
-        console.log('⚠️ No chama ID found, skipping WhatsApp notification');
-        return;
-      }
-
-      // Don't send notifications for personal wallet transactions
-      if (userInfo.isPersonalTransaction) {
-        console.log('⏭️ Skipping WhatsApp notification for personal transaction');
-        return;
-      }
-
-      console.log('📱 Attempting to send WhatsApp notification for transaction:', transaction.id);
-
-      const result = await WhatsAppNotificationService.notifyTransaction(
-        transaction,
-        chamaId,
-        userInfo
-      );
-
-      if (result.success) {
-        console.log('✅ WhatsApp notification sent successfully');
-      } else {
-        console.log('❌ WhatsApp notification failed:', result.error || result.reason);
-      }
-
-    } catch (error) {
-      console.error('❌ WhatsApp notification error:', error);
-      // Don't throw - notification failure shouldn't break receipt generation
-    }
-  }
-
-  /**
-   * Generate PDF-optimized HTML with inline styles for better PDF rendering
-   */
+/**
+    * Generate PDF-optimized HTML with inline styles for better PDF rendering
+    */
   generatePDFOptimizedReceiptHTML(transaction, userInfo = {}, chamaMembers = [], options = {}) {
     if (!transaction || !transaction.id) {
       throw new Error('Invalid transaction data provided');
@@ -1189,29 +1143,23 @@ class ReceiptService {
         height: 792,
       });
 
-      // For native platforms, move to documents directory
-      if (Platform.OS !== 'web' && FileSystem.documentDirectory) {
-        const newUri = `${FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.moveAsync({
-          from: uri,
-          to: newUri,
-        });
+// For native platforms, move to documents directory
+       if (Platform.OS !== 'web' && FileSystem.documentDirectory) {
+         const newUri = `${FileSystem.documentDirectory}${fileName}`;
+         await FileSystem.moveAsync({
+           from: uri,
+           to: newUri,
+         });
 
-        // Send WhatsApp notification after successful PDF generation
-        await this.sendWhatsAppNotification(transaction, userInfo, options);
+         return {
+           success: true,
+           uri: newUri,
+           fileName,
+           receiptId
+         };
+       }
 
-        return {
-          success: true,
-          uri: newUri,
-          fileName,
-          receiptId
-        };
-      }
-
-      // Send WhatsApp notification after successful PDF generation
-      await this.sendWhatsAppNotification(transaction, userInfo, options);
-
-      return {
+       return {
         success: true,
         uri,
         fileName,

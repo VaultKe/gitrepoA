@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
 } from 'react-native';
@@ -14,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import ApiService from '../../../services/api';
-import DatabaseService from '../../../services/database';
 import ReceiptService from '../../../services/receiptService';
 
 export default function TransactionHistoryScreen() {
@@ -30,73 +28,61 @@ export default function TransactionHistoryScreen() {
   const [showTransactionMenu, setShowTransactionMenu] = useState(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
 
-  // Load transactions from API and local database
-  const loadTransactions = useCallback(async () => {
-    try {
-      // Try to load from API first
-      let apiTransactions = [];
-      try {
-        const response = await ApiService.getTransactions(50, 0);
-        if (response.success && response.data) {
-          apiTransactions = response.data;
+   // Load transactions from API and local database
+   const loadTransactions = useCallback(async () => {
+     try {
+       // Try to load from API first
+       let apiTransactions = [];
+       try {
+         const response = await ApiService.getTransactions(50, 0);
+         if (response.success && response.data) {
+           apiTransactions = response.data;
+           
+           // Transform API data to match expected format
+           const formattedTransactions = apiTransactions.map(tx => ({
+             ...tx,
+             date: tx.createdAt || tx.created_at,
+             // Ensure amount is properly signed based on transaction type
+             amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+           }));
+           
+           setTransactions(formattedTransactions);
+           return; // Exit early if we got API data
+         }
+       } catch (error) {
+         console.warn('Failed to load transactions from API:', error);
+         // Continue with empty API data - will try local fallback
+       }
 
-          // Save to local database
-          try {
-            for (const transaction of apiTransactions) {
-              transaction.synced = true;
-              const existing = await DatabaseService.findById('transactions', transaction.id);
-              if (existing) {
-                await DatabaseService.update('transactions', transaction.id, transaction);
-              } else {
-                await DatabaseService.insert('transactions', transaction);
-              }
-            }
-          } catch (dbError) {
-            // Continue without local storage - API data is still available
-          }
-        }
-      } catch (error) {
-        // Use local data as fallback
-      }
+       // If no API data, try to load from local storage (AsyncStorage fallback)
+       try {
+         const localData = await AsyncStorage.getItem('cachedTransactions');
+         if (localData) {
+           const localTransactions = JSON.parse(localData);
+           
+           // Transform local data to match expected format
+           const formattedTransactions = localTransactions.map(tx => ({
+             ...tx,
+             date: tx.createdAt || tx.created_at,
+             // Ensure amount is properly signed based on transaction type
+             amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+           }));
+           
+           setTransactions(formattedTransactions);
+           return;
+         }
+       } catch (storageError) {
+         console.warn('Failed to load transactions from local storage:', storageError);
+       }
 
-      // Load from local database as fallback
-      let localTransactions = [];
-      try {
-        localTransactions = await DatabaseService.findAll(
-          'transactions',
-          '',
-          [],
-          'created_at DESC',
-          50
-        );
-      } catch (dbError) {
-        // Continue with empty array - will show empty state
-      }
-
-      // Use API data if available, otherwise use local data, or fallback to empty
-      let transactionsData = [];
-      if (apiTransactions.length > 0) {
-        transactionsData = apiTransactions;
-      } else if (localTransactions.length > 0) {
-        transactionsData = localTransactions;
-      } else {
-        // Show empty state - no transactions available
-      }
-
-      // Transform data to match expected format
-      const formattedTransactions = transactionsData.map(tx => ({
-        ...tx,
-        date: tx.createdAt || tx.created_at,
-        // Ensure amount is properly signed based on transaction type
-        amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
-      }));
-
-      setTransactions(formattedTransactions);
-
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load transaction history');
-    }
-  }, []);
+       // No data available from any source - show empty state
+       setTransactions([]);
+     } catch (error) {
+       console.error('Error in loadTransactions:', error);
+       Alert.alert('Error', 'Failed to load transaction history');
+       setTransactions([]);
+     }
+   }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

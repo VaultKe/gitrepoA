@@ -14,6 +14,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import ApiService from '../../../services/api';
+import { API_BASE_URL } from '../../../config/environment';
 
 const ArticleReaderScreen = ({ navigation, route }) => {
   const { theme } = useApp();
@@ -187,7 +188,7 @@ const ArticleReaderScreen = ({ navigation, route }) => {
         <Image
           source={{
             uri: articleContent.headline_image.startsWith('/uploads/')
-              ? `http://localhost:8080${articleContent.headline_image}`
+              ? `${API_BASE_URL}${articleContent.headline_image}`
               : articleContent.headline_image
           }}
           style={styles.headlineImage}
@@ -244,7 +245,7 @@ const ArticleReaderScreen = ({ navigation, route }) => {
           <Image
             source={{
               uri: section.image_url.startsWith('/uploads/')
-                ? `http://localhost:8080${section.image_url}`
+                ? `${API_BASE_URL}${section.image_url}`
                 : section.image_url
             }}
             style={styles.sectionImage}

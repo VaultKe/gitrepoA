@@ -421,13 +421,14 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     maxHeight: 100,
   },
-   sendButton: {
-     width: 40,
-     height: 40,
-     borderRadius: 20,
-     justifyContent: 'center',
-     alignItems: 'center',
-   },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default ChatRoomScreen;

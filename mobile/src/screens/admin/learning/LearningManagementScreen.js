@@ -19,7 +19,7 @@ import useSmartNavigation from '../../../hooks/useSmartNavigation';
 import BorderedButton from '../../../components/BorderedButton';
 import { ButtonRow, ButtonColumn } from '../../../components/ButtonGroup';
 import { useLightningData } from '../../../hooks/useLightningData';
-import lightningDataService from '../../../services/lightningDataService';
+import lightningDataService from '../../../services/cacheDataService';
 
 const LearningManagementScreen = ({ navigation, route, onRouteChange }) => {
   const { theme, user } = useApp();

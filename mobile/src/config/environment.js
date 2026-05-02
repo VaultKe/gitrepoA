@@ -1,126 +1,151 @@
-// Environment Configuration for VaultKe Mobile App
-// This file handles switching between development and production environments
+// Centralized Application Configuration
+// Single source of truth for all environment variables and settings
 
 import { Platform } from 'react-native';
-import { TUNNEL_CONFIG } from '../../tunnel-config.js';
 
-// Environment detection
+/**
+ * Get the current environment (development | production | staging)
+ */
 const getEnvironment = () => {
-  // Check for explicit environment variable
   if (process.env.NODE_ENV) {
     return process.env.NODE_ENV;
   }
-  
-  // Check for React Native environment
   if (__DEV__) {
     return 'development';
   }
-  
   return 'production';
 };
 
-// Configuration for different environments
-const environments = {
+/**
+ * Resolve API base URL from environment variables
+ */
+const resolveApiBaseUrl = () => {
+  // Priority 1: EXPO_PUBLIC_API_URL (Expo-managed public env var)
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, ''); // Remove trailing slashes
+  }
+
+  // Priority 2: REACT_APP_API_URL (fallback for non-Expo setups)
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL.replace(/\/+$/, '');
+  }
+
+  // No fallback - environment variable must be explicitly set
+  return null;
+};
+
+/**
+ * Resolve WebSocket URL from API base URL
+ */
+const resolveWebSocketUrl = (apiUrl) => {
+  if (!apiUrl) return null;
+  const protocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
+  return apiUrl.replace(/^https?/, protocol);
+};
+
+/**
+ * Environment-specific base configuration
+ */
+const environmentConfigs = {
   development: {
-    // Development API URLs
-    API_BASE_URL: (() => {
-      // Priority 1: Environment variable override
-      if (process.env.REACT_APP_API_URL) {
-        return process.env.REACT_APP_API_URL;
-      }
-      
-      // Priority 2: Check current hostname for web
-      if (typeof window !== 'undefined' && window.location) {
-        const hostname = window.location.hostname;
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-          return 'http://localhost:8080/api/v1';
-        }
-      }
-      
-      // Priority 3: Use tunnel URL from config
-      if (TUNNEL_CONFIG.BACKEND_TUNNEL_URL) {
-        return `${TUNNEL_CONFIG.BACKEND_TUNNEL_URL}/api/v1`;
-      }
-      
-      // Priority 4: Fallback to localhost
-      return 'http://localhost:8080/api/v1';
-    })(),
-    
-    // Development settings
-    REQUEST_TIMEOUT: 30000, // 30 seconds for development
+    // API endpoints
+    API_BASE_URL: resolveApiBaseUrl(),
+    WS_BASE_URL: () => resolveWebSocketUrl(resolveApiBaseUrl()),
+
+    // Timeouts and retries (more lenient for development)
+    REQUEST_TIMEOUT: 30000,
     RETRY_ATTEMPTS: 3,
+
+    // Feature flags
     ENABLE_LOGGING: true,
     ENABLE_DEBUG: true,
-    
-    // Development features
     ENABLE_DEV_TOOLS: true,
     MOCK_PAYMENTS: false,
     SKIP_AUTH: false,
   },
-  
+
+  staging: {
+    API_BASE_URL: resolveApiBaseUrl(),
+    WS_BASE_URL: () => resolveWebSocketUrl(resolveApiBaseUrl()),
+    REQUEST_TIMEOUT: 15000,
+    RETRY_ATTEMPTS: 3,
+    ENABLE_LOGGING: true,
+    ENABLE_DEBUG: true,
+    ENABLE_DEV_TOOLS: true,
+    MOCK_PAYMENTS: true,
+    SKIP_AUTH: false,
+  },
+
   production: {
-    // Production API URL
-    API_BASE_URL: process.env.REACT_APP_PRODUCTION_API_URL || 'https://api.vaultke.com/api/v1',
-    
-    // Production settings
-    REQUEST_TIMEOUT: 10000, // 10 seconds for production
+    API_BASE_URL: resolveApiBaseUrl(),
+    WS_BASE_URL: () => resolveWebSocketUrl(resolveApiBaseUrl()),
+    REQUEST_TIMEOUT: 10000,
     RETRY_ATTEMPTS: 2,
     ENABLE_LOGGING: false,
     ENABLE_DEBUG: false,
-    
-    // Production features
     ENABLE_DEV_TOOLS: false,
     MOCK_PAYMENTS: false,
     SKIP_AUTH: false,
   },
-  
-  staging: {
-    // Staging API URL
-    API_BASE_URL: process.env.REACT_APP_STAGING_API_URL || 'https://staging-api.vaultke.com/api/v1',
-    
-    // Staging settings
-    REQUEST_TIMEOUT: 15000, // 15 seconds for staging
-    RETRY_ATTEMPTS: 3,
-    ENABLE_LOGGING: true,
-    ENABLE_DEBUG: true,
-    
-    // Staging features
-    ENABLE_DEV_TOOLS: true,
-    MOCK_PAYMENTS: true,
-    SKIP_AUTH: false,
-  }
 };
 
-// Get current environment
-const currentEnvironment = getEnvironment();
+/**
+ * Additional service URLs from environment
+ */
+const serviceUrls = {
+  // No external service URLs currently configured
+};
 
-// Get configuration for current environment
-const config = environments[currentEnvironment] || environments.development;
+/**
+ * External service credentials from environment
+ */
+const credentials = {
+  GOOGLE_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
+};
 
-// Add environment info to config
-config.ENVIRONMENT = currentEnvironment;
-config.IS_DEVELOPMENT = currentEnvironment === 'development';
-config.IS_PRODUCTION = currentEnvironment === 'production';
-config.IS_STAGING = currentEnvironment === 'staging';
+/**
+ * Build final configuration object
+ */
+const buildConfig = () => {
+  const env = getEnvironment();
+  const baseConfig = environmentConfigs[env] || environmentConfigs.development;
 
-// Platform-specific adjustments
-if (Platform.OS === 'android') {
-  // Android-specific configurations
-  if (config.API_BASE_URL.includes('localhost')) {
-    // Replace localhost with 10.0.2.2 for Android emulator
-    config.API_BASE_URL = config.API_BASE_URL.replace('localhost', '10.0.2.2');
-  }
-}
+  return {
+    // Environment identification
+    ENVIRONMENT: env,
+    IS_DEVELOPMENT: env === 'development',
+    IS_STAGING: env === 'staging',
+    IS_PRODUCTION: env === 'production',
 
-// Log configuration in development
-if (config.ENABLE_LOGGING) {
-}
+    // API configuration
+    ...baseConfig,
+
+    // External services
+    ...serviceUrls,
+
+    // Credentials
+    ...credentials,
+
+    // Platform info
+    PLATFORM: Platform.OS,
+    IS_ANDROID: Platform.OS === 'android',
+    IS_IOS: Platform.OS === 'ios',
+
+    // Computed WebSocket URL
+    get WS_URL() {
+      return baseConfig.WS_BASE_URL();
+    },
+  };
+};
+
+const config = buildConfig();
 
 export default config;
 
-// Named exports for convenience
+// Named exports for convenient destructuring
 export const {
   API_BASE_URL,
+  WS_URL,
   REQUEST_TIMEOUT,
   RETRY_ATTEMPTS,
   ENABLE_LOGGING,
@@ -128,7 +153,11 @@ export const {
   ENVIRONMENT,
   IS_DEVELOPMENT,
   IS_PRODUCTION,
-  IS_STAGING
+  IS_STAGING,
+  GOOGLE_CLIENT_ID,
+  PLATFORM,
+  IS_ANDROID,
+  IS_IOS,
 } = config;
 
 // Helper functions
@@ -136,11 +165,11 @@ export const isDevelopment = () => config.IS_DEVELOPMENT;
 export const isProduction = () => config.IS_PRODUCTION;
 export const isStaging = () => config.IS_STAGING;
 
-// Environment switching helper
+// Environment switching (for testing purposes)
 export const switchEnvironment = (env) => {
-  if (environments[env]) {
-    return environments[env];
+  if (environmentConfigs[env]) {
+    return { ...config, ...environmentConfigs[env], ENVIRONMENT: env };
   }
-  console.warn(`⚠️ Unknown environment: ${env}, using development`);
-  return environments.development;
+  console.warn(`Unknown environment: ${env}, using development`);
+  return config;
 };

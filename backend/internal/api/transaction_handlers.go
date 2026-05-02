@@ -55,10 +55,23 @@ func GetUserTransactions(c *gin.Context) {
 	// Get user's personal wallet
 	wallet, err := walletService.GetWalletByOwnerAndType(userID.(string), models.WalletTypePersonal)
 	if err != nil {
+		// If wallet not found, return empty transaction list (user has no wallet yet)
+		if err.Error() == "wallet not found" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"data":    []interface{}{},
+				"meta": map[string]interface{}{
+					"limit":  limit,
+					"offset": offset,
+					"count":  0,
+				},
+			})
+			return
+		}
 		log.Printf("Failed to get user wallet: %v", err)
-		c.JSON(http.StatusNotFound, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Wallet not found",
+			"error":   "Failed to retrieve wallet",
 		})
 		return
 	}

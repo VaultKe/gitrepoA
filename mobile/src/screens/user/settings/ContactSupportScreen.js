@@ -43,7 +43,6 @@ const ContactSupportScreen = ({ navigation }) => {
   const contactMethods = [
     { id: 'email', label: 'Email', icon: 'mail', description: 'Response within 24 hours' },
     { id: 'phone', label: 'Phone Call', icon: 'call', description: 'Business hours only' },
-    { id: 'whatsapp', label: 'WhatsApp', icon: 'logo-whatsapp', description: 'Quick response' },
   ];
 
   const handleSubmitTicket = async () => {
@@ -112,25 +111,17 @@ const ContactSupportScreen = ({ navigation }) => {
           .catch(() => Alert.alert('Error', 'Unable to open email app'));
         break;
         
-      case 'phone':
-        const phoneNumber = '+254700000000';
-        Alert.alert(
-          'Call Support',
-          `Call ${phoneNumber}?\n\nBusiness Hours: Mon-Fri 8AM-6PM EAT`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Call', onPress: () => Linking.openURL(`tel:${phoneNumber}`) },
-          ]
-        );
-        break;
-        
-      case 'whatsapp':
-        const whatsappNumber = '254700000000';
-        const message = `Hello VaultKe Support!\n\nIssue: ${selectedIssue}\nDescription: ${description}\nUser ID: ${user?.id}`;
-        
-        Linking.openURL(`whatsapp://send?phone=${whatsappNumber}&text=${encodeURIComponent(message)}`)
-          .catch(() => Alert.alert('Error', 'WhatsApp is not installed'));
-        break;
+       case 'phone':
+         const phoneNumber = '+254700000000';
+         Alert.alert(
+           'Call Support',
+           `Call ${phoneNumber}?\n\nBusiness Hours: Mon-Fri 8AM-6PM EAT`,
+           [
+             { text: 'Cancel', style: 'cancel' },
+             { text: 'Call', onPress: () => Linking.openURL(`tel:${phoneNumber}`) },
+           ]
+         );
+         break;
     }
   };
 

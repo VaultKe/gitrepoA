@@ -1,10 +1,6 @@
-import lightningDataService from './lightningDataService';
+import cacheManagerService from './data/cacheManagerService';
 import ApiService from './api';
 
-/**
- * Optimistic Update Service
- * Provides instant UI updates with automatic rollback on failure
- */
 class OptimisticUpdateService {
   constructor() {
     this.pendingUpdates = new Map();
@@ -12,11 +8,8 @@ class OptimisticUpdateService {
     this.isProcessing = false;
   }
 
-  /**
-   * NOTIFICATION OPERATIONS - Instant feedback
-   */
   async markNotificationAsRead(notificationId) {
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       'notifications',
       {
         action: 'update',
@@ -27,7 +20,7 @@ class OptimisticUpdateService {
   }
 
   async deleteNotification(notificationId) {
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       'notifications',
       {
         action: 'remove',
@@ -38,7 +31,7 @@ class OptimisticUpdateService {
   }
 
   async markAllNotificationsAsRead() {
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       'notifications',
       {
         action: 'bulk_update',
@@ -48,9 +41,6 @@ class OptimisticUpdateService {
     );
   }
 
-  /**
-   * WALLET OPERATIONS - Instant balance updates
-   */
   async initiateDeposit(amount, paymentMethod, description) {
     const tempTransaction = {
       id: `temp_${Date.now()}`,
@@ -62,7 +52,7 @@ class OptimisticUpdateService {
       isOptimistic: true,
     };
 
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       'transactions',
       {
         action: 'add',
@@ -71,14 +61,13 @@ class OptimisticUpdateService {
       async () => {
         const result = await ApiService.initiateDeposit(amount, paymentMethod, description);
         if (result.success) {
-          // Update wallet balance optimistically
-          const currentWallet = await lightningDataService.getData('wallet');
+          const currentWallet = await cacheManagerService.getData('wallet');
           if (currentWallet.success) {
             const updatedWallet = {
               ...currentWallet.data,
               balance: currentWallet.data.balance + amount
             };
-            await lightningDataService.updateAllCaches('wallet', updatedWallet);
+            await cacheManagerService.clearCache('wallet');
           }
         }
         return result;
@@ -86,20 +75,14 @@ class OptimisticUpdateService {
     );
   }
 
-
-
-  /**
-   * CHAMA OPERATIONS - Instant membership updates
-   */
   async joinChama(chamaId) {
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       'chamas',
       {
         action: 'update',
         data: { 
           id: chamaId, 
           userMembership: 'pending',
-          memberCount: (await this.getCurrentMemberCount(chamaId)) + 1
         }
       },
       () => ApiService.joinChama(chamaId)
@@ -107,34 +90,27 @@ class OptimisticUpdateService {
   }
 
   async leaveChama(chamaId) {
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       'chamas',
       {
         action: 'update',
         data: { 
           id: chamaId, 
           userMembership: null,
-          memberCount: (await this.getCurrentMemberCount(chamaId)) - 1
         }
       },
       () => ApiService.leaveChama(chamaId)
     );
   }
 
-  /**
-   * PROFILE OPERATIONS - Instant profile updates
-   */
   async updateProfile(profileData) {
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       'profile',
       profileData,
       () => ApiService.updateProfile(profileData)
     );
   }
 
-  /**
-   * CHAT OPERATIONS - Instant message sending
-   */
   async sendMessage(roomId, messageData) {
     const tempMessage = {
       id: `temp_${Date.now()}`,
@@ -148,7 +124,7 @@ class OptimisticUpdateService {
       isOptimistic: true,
     };
 
-    return await lightningDataService.optimisticUpdate(
+    return await cacheManagerService.optimisticUpdate(
       `chat-messages-${roomId}`,
       {
         action: 'add',
@@ -158,12 +134,7 @@ class OptimisticUpdateService {
     );
   }
 
-  /**
-   * BATCH OPERATIONS - Multiple optimistic updates
-   */
   async batchUpdate(updates) {
-    console.log('⚡ Executing batch optimistic updates:', updates.length);
-    
     const results = await Promise.allSettled(
       updates.map(update => this.executeOptimisticUpdate(update))
     );
@@ -171,8 +142,6 @@ class OptimisticUpdateService {
     const successful = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.length - successful;
 
-    console.log(`✅ Batch update completed: ${successful} successful, ${failed} failed`);
-    
     return {
       success: failed === 0,
       results,
@@ -182,73 +151,9 @@ class OptimisticUpdateService {
 
   async executeOptimisticUpdate(update) {
     const { dataType, updateData, apiCall } = update;
-    return await lightningDataService.optimisticUpdate(dataType, updateData, apiCall);
+    return await cacheManagerService.optimisticUpdate(dataType, updateData, apiCall);
   }
 
-  /**
-   * HELPER METHODS
-   */
-  async getCurrentMemberCount(chamaId) {
-    try {
-      const chamasData = await lightningDataService.getData('chamas');
-      if (chamasData.success && Array.isArray(chamasData.data)) {
-        const chama = chamasData.data.find(c => c.id === chamaId);
-        return chama?.memberCount || 0;
-      }
-    } catch (error) {
-      console.warn('Failed to get current member count:', error);
-    }
-    return 0;
-  }
-
-  /**
-   * QUEUE MANAGEMENT - Handle offline scenarios
-   */
-  async queueUpdate(update) {
-    this.updateQueue.push({
-      ...update,
-      timestamp: Date.now(),
-      retries: 0,
-    });
-
-    if (!this.isProcessing) {
-      this.processQueue();
-    }
-  }
-
-  async processQueue() {
-    if (this.updateQueue.length === 0) return;
-
-    this.isProcessing = true;
-    console.log(`🔄 Processing update queue: ${this.updateQueue.length} items`);
-
-    while (this.updateQueue.length > 0) {
-      const update = this.updateQueue.shift();
-      
-      try {
-        await this.executeOptimisticUpdate(update);
-        console.log('✅ Queued update processed successfully');
-      } catch (error) {
-        console.error('❌ Queued update failed:', error);
-        
-        // Retry logic
-        if (update.retries < 3) {
-          update.retries++;
-          this.updateQueue.push(update);
-          console.log(`🔄 Retrying update (attempt ${update.retries + 1})`);
-        } else {
-          console.error('❌ Update failed after 3 retries, discarding');
-        }
-      }
-    }
-
-    this.isProcessing = false;
-    console.log('✅ Update queue processing completed');
-  }
-
-  /**
-   * STATUS AND METRICS
-   */
   getStatus() {
     return {
       pendingUpdates: this.pendingUpdates.size,
@@ -260,7 +165,30 @@ class OptimisticUpdateService {
   clearQueue() {
     this.updateQueue = [];
     this.pendingUpdates.clear();
-    console.log('🧹 Update queue cleared');
+  }
+
+  async addToCart(productId, quantity = 1) {
+    return await cacheManagerService.optimisticUpdate(
+      'cart',
+      { action: 'add', data: { productId, quantity } },
+      () => ApiService.addToCart(productId, quantity)
+    );
+  }
+
+  async removeFromCart(cartItemId) {
+    return await cacheManagerService.optimisticUpdate(
+      'cart',
+      { action: 'remove', id: cartItemId },
+      () => ApiService.removeFromCart(cartItemId)
+    );
+  }
+
+  async addToWishlist(productId) {
+    return await cacheManagerService.optimisticUpdate(
+      'wishlist',
+      { action: 'add', data: { productId } },
+      () => ApiService.addToWishlist(productId)
+    );
   }
 }
 
