@@ -97,10 +97,6 @@ func main() {
 
 	router.LoadHTMLGlob("templates/*")
 
-	// Middleware
-	// router.Use(gin.Logger()) // Commented out to reduce log noise
-	// router.Use(gin.Recovery())
-
 	// HSTS middleware for production
 	if os.Getenv("ENVIRONMENT") == "production" {
 		router.Use(func(c *gin.Context) {
@@ -173,7 +169,6 @@ func main() {
 		// Handle preflight OPTIONS requests
 		if c.Request.Method == "OPTIONS" {
 			log.Printf("🔒 CORS: Handling OPTIONS preflight for %s", path)
-			// Set CORS headers for OPTIONS requests
 			c.Header("Access-Control-Allow-Origin", allowedOrigin)
 			c.Header("Access-Control-Allow-Credentials", "false")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-CSRF-Token, X-File-Name, X-File-Size, X-Timezone, X-Language, X-Screen-Resolution, X-Device-Type, X-Device-Name, X-Browser-Name, X-OS-Name, X-Connection-Type")
@@ -186,7 +181,6 @@ func main() {
 
 		// For POST requests to /api/v1/chamas, ensure no redirects
 		if c.Request.Method == "POST" && strings.HasPrefix(path, "/api/v1/chamas") && !strings.HasSuffix(path, "/") {
-			// This should prevent any trailing slash redirects for chama creation
 			log.Printf("🔒 CORS: Ensuring no redirect for POST /api/v1/chamas")
 		}
 
@@ -204,7 +198,6 @@ func main() {
 
 	// IP debugging middleware for tunneled environments
 	router.Use(func(c *gin.Context) {
-		// Only log for non-OPTIONS requests to avoid spam
 		if c.Request.Method != "OPTIONS" {
 			log.Printf("🌐 REQUEST: %s %s - Proto:%s, Host:%s, RemoteAddr:%s", c.Request.Method, c.Request.URL.String(), c.Request.Proto, c.GetHeader("Host"), c.Request.RemoteAddr)
 		}
@@ -288,7 +281,6 @@ func main() {
 		testDataGenerator = services.NewTestDataGenerator(db)
 		if os.Getenv("AUTO_START_TEST_DATA") == "true" {
 			testDataGenerator.Start(5 * time.Minute)
-			log.Println("✅ Test data generator auto-started")
 		}
 	}
 
@@ -466,18 +458,16 @@ func main() {
 				chamas.GET("/:id", api.GetChama)
 				chamas.PUT("/:id", api.UpdateChama)
 				chamas.DELETE("/:id", api.DeleteChama)
-				chamas.GET("/:id/members", api.GetChamaMembers)
-				chamas.GET("/:id/members/:userId/role", api.GetMemberRole)
-				chamas.POST("/:id/join", api.JoinChama)
-				chamas.POST("/:id/leave", api.LeaveChama)
-				chamas.GET("/:id/transactions", api.GetChamaTransactions)
-				chamas.GET("/:id/statistics", api.GetChamaStatistics)
+			chamas.GET("/:id/members", api.GetChamaMembers)
+			chamas.GET("/:id/members/:memberId/role", api.GetMemberRole)
+			chamas.GET("/:id/members/:memberId/stats", api.GetChamaMemberStatistics)
+			chamas.GET("/:id/transactions", api.GetChamaTransactions)
+			chamas.GET("/:id/statistics", api.GetChamaStatistics)
 
 				// Invitation routes
 				chamas.POST("/:id/invite", api.SendChamaInvitation)
 				chamas.GET("/:id/invitations/sent", api.GetChamaSentInvitations)
 				chamas.GET("/invitations", api.GetUserInvitations)
-				// Match frontend URL pattern: /chamas/{chamaId}/invitations/{invitationId}/respond
 				chamas.POST("/:id/invitations/:invitationId/respond", api.RespondToInvitation)
 				chamas.POST("/:id/invitations/:invitationId/cancel", api.CancelInvitation)
 				chamas.POST("/:id/invitations/:invitationId/resend", api.ResendInvitation)
@@ -485,7 +475,6 @@ func main() {
 				// Disbursement and Creation routes
 				chamas.GET("/:id/eligible-loan-members", api.GetEligibleLoanMembers)
 				chamas.GET("/:id/eligible-welfare-members", api.GetEligibleWelfareMembers)
-
 				chamas.GET("/:id/eligible-savings-members", api.GetEligibleSavingsMembers)
 				chamas.GET("/:id/eligible-other-members", api.GetEligibleOtherMembers)
 				chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)

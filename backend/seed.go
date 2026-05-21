@@ -41,7 +41,7 @@ func seedUser(db *sql.DB, email, password, phone, firstName, lastName string) er
 	return nil
 }
 
-func main11() {
+func main1() {
 	// Skip if running as part of main app
 	if len(os.Args) < 2 || os.Args[1] != "seed" {
 		return
@@ -65,7 +65,7 @@ func main11() {
 	}
 
 	// Create the user
-	err = seedUser(db, "sam@gmail.com", "Password", "+254700000000", "Sam", "Admin")
+	err = seedUser(db, "sam1@gmail.com", "Password", "+254700000002", "Sam", "Admin")
 	if err != nil {
 		log.Fatalf("Failed to seed user: %v", err)
 	}

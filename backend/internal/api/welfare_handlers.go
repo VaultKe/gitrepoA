@@ -490,7 +490,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 		voteID = fmt.Sprintf("vote-%d", time.Now().UnixNano())
 		_, err = db.(*sql.DB).Exec(`
 			INSERT INTO votes (id, chama_id, title, description, type, status, ends_at, created_by, created_at)
-			VALUES ($1, $2, $3, $4, 'welfare', 'active', datetime('now', '+7 days'), $5, CURRENT_TIMESTAMP)
+			VALUES ($1, $2, $3, $4, 'welfare', 'active', NOW() + INTERVAL '7 days', $5, CURRENT_TIMESTAMP)
 		`, voteID, welfareRequest.ChamaID, "Welfare Request: "+welfareID, "Vote on welfare request", userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{

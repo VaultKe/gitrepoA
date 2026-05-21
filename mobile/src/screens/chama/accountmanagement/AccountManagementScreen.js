@@ -128,7 +128,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: borderRadius.lg,
-    backgroundColor: 'white',
   },
   statRow: {
     flexDirection: 'row',

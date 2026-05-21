@@ -142,15 +142,10 @@ const ViewMember = ({ route, navigation }) => {
 
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (isExpanded = false) => {
-    console.log('🔍 ViewMember memberData:', memberData);
-
-    // Access avatar from nested user object (correct structure)
     const user = memberData?.user || {};
     const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || memberData?.avatar_url || memberData?.avatar;
     const firstName = user?.first_name || memberData?.first_name;
     const lastName = user?.last_name || memberData?.last_name;
-
-    // console.log('🖼️ ViewMember avatar data:', { avatarUrl, firstName, lastName });
 
     const avatarStyle = isExpanded ? styles.expandedAvatar : styles.avatar;
     const placeholderStyle = isExpanded ? styles.expandedAvatarPlaceholder : styles.avatarPlaceholder;
@@ -359,6 +354,66 @@ const ViewMember = ({ route, navigation }) => {
           )}
         </View>
 
+        {/* Member Statistics */}
+        {memberStats && (
+          <View style={[styles.statsCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 16 }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12, fontSize: 18, fontWeight: '600' }]}>
+              Member Statistics
+            </Text>
+
+            <View style={{ paddingHorizontal: 12, paddingVertical: 16 }}>
+              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                <View style={{ flex: 1, marginHorizontal: 4 }}>
+                  <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                        <Ionicons name="wallet" size={20} color={colors.primary} />
+                      </View>
+                      <Text style={{ fontSize: 14, color: colors.textSecondary, flex: 1 }}>Total Contributions</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text }}>{formatCurrency(memberStats.total_contributions)}</Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1, marginHorizontal: 4 }}>
+                  <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.success + '15', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                        <Ionicons name="card" size={20} color={colors.success} />
+                      </View>
+                      <Text style={{ fontSize: 14, color: colors.textSecondary, flex: 1 }}>Loans Taken</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text }}>{memberStats.loans_count || 0}</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row' }}>
+                <View style={{ flex: 1, marginHorizontal: 4 }}>
+                  <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.warning + '15', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                        <Ionicons name="calendar" size={20} color={colors.warning} />
+                      </View>
+                      <Text style={{ fontSize: 14, color: colors.textSecondary, flex: 1 }}>Meetings Attended</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text }}>{memberStats.meetings_attended || 0}</Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1, marginHorizontal: 4 }}>
+                  <View style={{ padding: 12, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.info + '15', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                        <Ionicons name="star" size={20} color={colors.info} />
+                      </View>
+                      <Text style={{ fontSize: 14, color: colors.textSecondary, flex: 1 }}>Member Rating</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text }}>{memberStats.rating || 0}/5</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Member Details Table */}
         <View style={{ marginTop: 32 }}>
           <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12, fontSize: 16 }]}>
@@ -553,53 +608,6 @@ const ViewMember = ({ route, navigation }) => {
                 </TouchableOpacity>
               </View>
             )}
-          </View>
-        )}
-
-        {/* Member Statistics */}
-        {memberStats && (
-          <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Member Statistics
-            </Text>
-
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.primary }]}>
-                  {formatCurrency(memberStats.total_contributions)}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Total Contributions
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.success }]}>
-                  {memberStats.loans_count || 0}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Loans Taken
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.warning }]}>
-                  {memberStats.meetings_attended || 0}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Meetings Attended
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.text }]}>
-                  {memberStats.rating || 0}/5
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Member Rating
-                </Text>
-              </View>
-            </View>
           </View>
         )}
 

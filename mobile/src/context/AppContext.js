@@ -213,26 +213,14 @@ export function AppProvider({ children }) {
     try {
       dispatch({ type: ActionTypes.SET_LOADING, payload: true });
 
-      // Minimal, efficient app initialization
-      try {
-        const lightningDataService = (await import('../services/lightningDataService')).default;
-
-        // Light cleanup on app start (no aggressive operations)
-        lightningDataService.clearOldCacheData().catch(() => {
-          // Silent failure - not critical
-        });
-      } catch (error) {
-        console.warn('⚠️ App initialization failed:', error);
-      }
-
       // Set a much shorter timeout to prevent long loading screens
       const timeoutId = setTimeout(() => {
         console.warn('App initialization timeout, proceeding without database');
         dispatch({ type: ActionTypes.SET_LOADING, payload: false });
       }, 1500); // Reduced from 10s to 1.5s
 
-       // Database service removed per requirement - app works without SQLite DB in frontend
-       console.log('Database service disabled - app running in memory-only mode');
+      // Database service removed per requirement - app works without SQLite DB in frontend
+      console.log('Database service disabled - app running in memory-only mode');
 
       // Check for existing auth token (parallel for speed)
       const [authToken, userData, theme, language] = await Promise.all([

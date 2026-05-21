@@ -368,14 +368,6 @@ const CreateChamaScreen = ({ navigation }) => {
             errors.contribution_amount = 'Maximum contribution amount is KES 1,000,000';
           }
         } else if (chamaData.group_type === 'contribution') {
-          // Debug: This should NOT be validating for contributions
-          console.log('🚨 ERROR: contribution_amount being validated for contribution group!');
-          console.log('📊 Debug info:', {
-            group_type: chamaData.group_type,
-            field: field,
-            value: value,
-            contribution_amount: chamaData.contribution_amount
-          });
         }
         break;
 
@@ -601,9 +593,7 @@ const CreateChamaScreen = ({ navigation }) => {
 
        // Check against all public chamas
        const response = await ApiService.getChamas(20, 0);
-
-      console.log('Chama name check response:', response); // Debug log
-
+       
       // Handle different response structures
       let chamasData = [];
 
@@ -645,7 +635,6 @@ const CreateChamaScreen = ({ navigation }) => {
         setNameValidation({ isValid: true, message: 'Name is available!' });
       }
     } catch (error) {
-      console.error('Error checking chama name:', error);
       // Don't block user if check fails - allow them to proceed
       setNameValidation({ isValid: true, message: '' });
     } finally {
@@ -672,7 +661,6 @@ const CreateChamaScreen = ({ navigation }) => {
         setSearchResults(filteredResults);
       }
     } catch (error) {
-      console.error('User search failed:', error);
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
@@ -730,20 +718,14 @@ const CreateChamaScreen = ({ navigation }) => {
 
         // Conditional validation based on group type
         let financialErrors = {};
-        console.log(`🔍 Step 2 validation for group_type: ${chamaData.group_type}`);
 
         if (chamaData.group_type === 'chama') {
-          console.log('💰 Validating chama fields: contribution_amount');
           financialErrors = validateField('contribution_amount', chamaData.contribution_amount);
         } else if (chamaData.group_type === 'contribution') {
-          console.log('🎯 Validating contribution fields: target_amount, contribution_rules');
           const targetAmountErrors = validateField('target_amount', chamaData.target_amount);
           const contributionRulesErrors = validateField('contribution_rules', chamaData.contribution_rules);
           Object.assign(financialErrors, targetAmountErrors, contributionRulesErrors);
         }
-
-        console.log('📊 Step 2 financial errors:', financialErrors);
-
         Object.assign(errors, countyErrors, townErrors, membersErrors, financialErrors);
 
         isValid = Object.keys(errors).length === 0;
@@ -812,23 +794,6 @@ const CreateChamaScreen = ({ navigation }) => {
       allErrors.name = nameValidation.message;
     }
 
-    // Debug logging for contribution groups
-    if (chamaData.group_type === 'contribution') {
-      console.log('🔍 Contribution Group Validation Debug:');
-      console.log('📋 Fields validated:', fieldsToValidate);
-      console.log('❌ Validation errors:', allErrors);
-      console.log('📊 Current data:', {
-        group_type: chamaData.group_type,
-        name: chamaData.name,
-        description: chamaData.description,
-        type: chamaData.type,
-        target_amount: chamaData.target_amount,
-        county: chamaData.county,
-        town: chamaData.town,
-        max_members: chamaData.max_members
-      });
-    }
-
     setFormErrors(allErrors);
     setShowErrors(true);
 
@@ -836,22 +801,10 @@ const CreateChamaScreen = ({ navigation }) => {
   };
 
   const handleNext = () => {
-    console.log(`🔍 Validating Step ${currentStep} for group_type: ${chamaData.group_type}`);
-
     if (validateStep(currentStep, true)) {
-      console.log(`✅ Step ${currentStep} validation passed`);
       setCurrentStep(currentStep + 1);
       setShowErrors(false); // Hide errors when moving to next step
     } else {
-      console.log(`❌ Step ${currentStep} validation failed`);
-      console.log('📊 Current form errors:', formErrors);
-      console.log('📋 Current data:', {
-        group_type: chamaData.group_type,
-        contribution_amount: chamaData.contribution_amount,
-        target_amount: chamaData.target_amount
-      });
-
-      // Show toast with error summary
       Toast.show({
         type: 'error',
         text1: 'Form Validation Failed',

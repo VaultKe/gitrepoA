@@ -596,13 +596,13 @@ func (s *UserService) getUserContributionStatistics(userID string) (map[string]i
 	// Get monthly contribution trend (last 6 months)
 	monthlyQuery := `
 		SELECT
-			strftime('%Y-%m', created_at) as month,
+			TO_CHAR(created_at, 'YYYY-MM') as month,
 			COUNT(*) as count,
 			COALESCE(SUM(amount), 0) as total
 		FROM transactions
 		WHERE initiated_by = $1 AND type = 'contribution' AND status = 'completed'
-		AND created_at >= datetime('now', '-6 months')
-		GROUP BY strftime('%Y-%m', created_at)
+		AND created_at >= NOW() - INTERVAL '6 months'
+		GROUP BY TO_CHAR(created_at, 'YYYY-MM')
 		ORDER BY month DESC
 		LIMIT 6
 	`
@@ -644,7 +644,7 @@ func (s *UserService) getUserMeetingStatistics(userID string) (map[string]interf
 	var upcomingMeetings, ongoingMeetings int
 	err := s.db.QueryRow(`
 		SELECT
-			COUNT(DISTINCT CASE WHEN m.status IN ('scheduled', 'pending', 'ready') AND m.scheduled_at > datetime('now', '+3 hours') THEN m.id END) as upcoming_meetings,
+			COUNT(DISTINCT CASE WHEN m.status IN ('scheduled', 'pending', 'ready') AND m.scheduled_at > NOW() + INTERVAL '3 hours' THEN m.id END) as upcoming_meetings,
 			COUNT(DISTINCT CASE WHEN m.status IN ('ongoing', 'active', 'started', 'live') THEN m.id END) as ongoing_meetings
 		FROM meetings m
 		INNER JOIN chama_members cm ON m.chama_id = cm.chama_id
@@ -726,7 +726,7 @@ func (s *UserService) getAdminUserStatistics() (map[string]interface{}, error) {
 	err = s.db.QueryRow(`
 		SELECT COUNT(*)
 		FROM users
-		WHERE created_at >= datetime('now', '-30 days')
+		WHERE created_at >= NOW() - INTERVAL '30 days'
 	`).Scan(&newUsers)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -869,15 +869,15 @@ func (s *UserService) GetSystemAnalytics(period string) (map[string]interface{},
 	var dateFilter string
 	switch period {
 	case "24h":
-		dateFilter = "datetime('now', '-1 day')"
+		dateFilter = "NOW() - INTERVAL '1 day'"
 	case "7d":
-		dateFilter = "datetime('now', '-7 days')"
+		dateFilter = "NOW() - INTERVAL '7 days'"
 	case "30d":
-		dateFilter = "datetime('now', '-30 days')"
+		dateFilter = "NOW() - INTERVAL '30 days'"
 	case "90d":
-		dateFilter = "datetime('now', '-90 days')"
+		dateFilter = "NOW() - INTERVAL '90 days'"
 	default:
-		dateFilter = "datetime('now', '-7 days')"
+		dateFilter = "NOW() - INTERVAL '7 days'"
 	}
 
 	// Get user analytics
@@ -1077,7 +1077,7 @@ func (s *UserService) getSystemMetrics() (map[string]interface{}, error) {
 
 	// Calculate average response time (simulate based on transaction count)
 	var transactionCount int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM transactions WHERE created_at >= datetime('now', '-1 hour')").Scan(&transactionCount)
+	err := s.db.QueryRow("SELECT COUNT(*) FROM transactions WHERE created_at >= NOW() - INTERVAL '1 hour'").Scan(&transactionCount)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -1097,7 +1097,7 @@ func (s *UserService) getSystemMetrics() (map[string]interface{}, error) {
 			COUNT(CASE WHEN status = 'failed' THEN 1 END) as errors,
 			COUNT(*) as total
 		FROM transactions
-		WHERE created_at >= datetime('now', '-1 hour')
+		WHERE created_at >= NOW() - INTERVAL '1 hour'
 	`).Scan(&errorCount, &totalRequests)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -1157,20 +1157,20 @@ func (s *UserService) calculateUserGrowth(period string) (float64, error) {
 	var currentFilter, previousFilter string
 	switch period {
 	case "24h":
-		currentFilter = "datetime('now', '-1 day')"
-		previousFilter = "datetime('now', '-2 days')"
+		currentFilter = "NOW() - INTERVAL '1 day'"
+		previousFilter = "NOW() - INTERVAL '2 days'"
 	case "7d":
-		currentFilter = "datetime('now', '-7 days')"
-		previousFilter = "datetime('now', '-14 days')"
+		currentFilter = "NOW() - INTERVAL '7 days'"
+		previousFilter = "NOW() - INTERVAL '14 days'"
 	case "30d":
-		currentFilter = "datetime('now', '-30 days')"
-		previousFilter = "datetime('now', '-60 days')"
+		currentFilter = "NOW() - INTERVAL '30 days'"
+		previousFilter = "NOW() - INTERVAL '60 days'"
 	case "90d":
-		currentFilter = "datetime('now', '-90 days')"
-		previousFilter = "datetime('now', '-180 days')"
+		currentFilter = "NOW() - INTERVAL '90 days'"
+		previousFilter = "NOW() - INTERVAL '180 days'"
 	default:
-		currentFilter = "datetime('now', '-7 days')"
-		previousFilter = "datetime('now', '-14 days')"
+		currentFilter = "NOW() - INTERVAL '7 days'"
+		previousFilter = "NOW() - INTERVAL '14 days'"
 	}
 
 	// Get current period users
@@ -1207,20 +1207,20 @@ func (s *UserService) calculateChamaGrowth(period string) (float64, error) {
 	var currentFilter, previousFilter string
 	switch period {
 	case "24h":
-		currentFilter = "datetime('now', '-1 day')"
-		previousFilter = "datetime('now', '-2 days')"
+		currentFilter = "NOW() - INTERVAL '1 day'"
+		previousFilter = "NOW() - INTERVAL '2 days'"
 	case "7d":
-		currentFilter = "datetime('now', '-7 days')"
-		previousFilter = "datetime('now', '-14 days')"
+		currentFilter = "NOW() - INTERVAL '7 days'"
+		previousFilter = "NOW() - INTERVAL '14 days'"
 	case "30d":
-		currentFilter = "datetime('now', '-30 days')"
-		previousFilter = "datetime('now', '-60 days')"
+		currentFilter = "NOW() - INTERVAL '30 days'"
+		previousFilter = "NOW() - INTERVAL '60 days'"
 	case "90d":
-		currentFilter = "datetime('now', '-90 days')"
-		previousFilter = "datetime('now', '-180 days')"
+		currentFilter = "NOW() - INTERVAL '90 days'"
+		previousFilter = "NOW() - INTERVAL '180 days'"
 	default:
-		currentFilter = "datetime('now', '-7 days')"
-		previousFilter = "datetime('now', '-14 days')"
+		currentFilter = "NOW() - INTERVAL '7 days'"
+		previousFilter = "NOW() - INTERVAL '14 days'"
 	}
 
 	// Get current period chamas
@@ -1257,20 +1257,20 @@ func (s *UserService) calculateTransactionGrowth(period string) (float64, error)
 	var currentFilter, previousFilter string
 	switch period {
 	case "24h":
-		currentFilter = "datetime('now', '-1 day')"
-		previousFilter = "datetime('now', '-2 days')"
+		currentFilter = "NOW() - INTERVAL '1 day'"
+		previousFilter = "NOW() - INTERVAL '2 days'"
 	case "7d":
-		currentFilter = "datetime('now', '-7 days')"
-		previousFilter = "datetime('now', '-14 days')"
+		currentFilter = "NOW() - INTERVAL '7 days'"
+		previousFilter = "NOW() - INTERVAL '14 days'"
 	case "30d":
-		currentFilter = "datetime('now', '-30 days')"
-		previousFilter = "datetime('now', '-60 days')"
+		currentFilter = "NOW() - INTERVAL '30 days'"
+		previousFilter = "NOW() - INTERVAL '60 days'"
 	case "90d":
-		currentFilter = "datetime('now', '-90 days')"
-		previousFilter = "datetime('now', '-180 days')"
+		currentFilter = "NOW() - INTERVAL '90 days'"
+		previousFilter = "NOW() - INTERVAL '180 days'"
 	default:
-		currentFilter = "datetime('now', '-7 days')"
-		previousFilter = "datetime('now', '-14 days')"
+		currentFilter = "NOW() - INTERVAL '7 days'"
+		previousFilter = "NOW() - INTERVAL '14 days'"
 	}
 
 	// Get current period transactions

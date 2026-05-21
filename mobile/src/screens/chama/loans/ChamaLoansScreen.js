@@ -579,13 +579,6 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
           }
         </Text>
       </View>
-
-      <Button
-        title="Apply for Loan"
-        onPress={handleApplyForLoan}
-        style={styles.applyButton}
-        icon={<Ionicons name="add" size={20} color={colors.white} />}
-      />
     </View>
   );
 

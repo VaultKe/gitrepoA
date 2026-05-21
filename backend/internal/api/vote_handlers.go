@@ -312,7 +312,7 @@ func GetActiveVotes(c *gin.Context) {
 		FROM votes v
 		LEFT JOIN users u ON v.created_by = u.id
 		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = $1
-		WHERE v.chama_id = $2 AND v.status = 'active' AND v.ends_at > datetime('now')
+		WHERE v.chama_id = $2 AND v.status = 'active' AND v.ends_at > NOW()
 		ORDER BY v.created_at DESC
 	`, userID, chamaID)
 	if err != nil {
@@ -445,7 +445,7 @@ func GetVoteResults(c *gin.Context) {
 		FROM votes v
 		LEFT JOIN users u ON v.created_by = u.id
 		LEFT JOIN user_votes uv ON v.id = uv.vote_id AND uv.user_id = $1
-		WHERE v.chama_id = $2 AND (v.status = 'completed' OR v.ends_at <= datetime('now'))
+		WHERE v.chama_id = $2 AND (v.status = 'completed' OR v.ends_at <= NOW())
 		ORDER BY v.created_at DESC
 	`, userID, chamaID)
 	if err != nil {

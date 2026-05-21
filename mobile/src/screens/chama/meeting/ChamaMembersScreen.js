@@ -158,14 +158,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         const currentUser = membersData.find(m => m.user_id === user?.id);
         const detectedRole = currentUser?.role || 'member';
         setUserRole(detectedRole);
-
-        console.log('🔍 User role detection:', {
-          currentUserId: user?.id,
-          foundUser: !!currentUser,
-          detectedRole: detectedRole,
-          canManage: ['chairperson', 'secretary', 'treasurer'].includes(detectedRole),
-          allMemberRoles: membersData.map(m => ({ id: m.user_id, role: m.role }))
-        });
       }
       
     } catch (error) {
@@ -187,7 +179,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
       const response = await ApiService.getChamaSentInvitations(chamaId);
       if (response.success) {
         setSentInvitations(response.data || []);
-        console.log(`Loaded ${response.data?.length || 0} sent invitations for chama ${chamaId}`);
       }
     } catch (error) {
       console.error('Failed to load sent invitations:', error);
@@ -486,10 +477,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (item) => {
-    // Debug member data structure
-    // console.log('🔍 Member item data:', item);
-
-    // Access data from nested user object (correct structure)
     const user = item?.user || {};
     const firstName = user?.first_name || item?.firstName || item?.first_name;
     const lastName = user?.last_name || item?.lastName || item?.last_name;
@@ -499,9 +486,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     // Try multiple avatar sources from user object
     const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || item?.avatar || item?.avatarUrl;
 
-    // console.log('🖼️ Avatar data:', { firstName, lastName, memberId, email, avatarUrl });
-
-    // Try to use provided avatar URL first (if not failed before)
     if (avatarUrl && !failedAvatars.has(avatarUrl)) {
       let fullAvatarUrl;
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
@@ -515,8 +499,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           source={{ uri: fullAvatarUrl }}
           style={styles.memberAvatar}
           onError={(error) => {
-            console.log('Member avatar load error for:', fullAvatarUrl);
-            // Mark this URL as failed to avoid repeated attempts
             setFailedAvatars(prev => new Set([...prev, avatarUrl]));
           }}
         />
@@ -531,8 +513,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           source={{ uri: generatedAvatarUrl }}
           style={styles.memberAvatar}
           onError={(error) => {
-            // console.log('Generated avatar load error for:', email);
-            // Mark this email as failed to avoid repeated attempts
             setFailedAvatars(prev => new Set([...prev, email]));
           }}
         />

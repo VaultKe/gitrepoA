@@ -213,7 +213,7 @@ func (gds *GoogleDriveService) IsUserConnected(userID string) (bool, error) {
 	query := `
 		SELECT COUNT(*)
 		FROM google_drive_tokens
-		WHERE user_id = $1 AND expires_at > datetime('now')
+		WHERE user_id = $1 AND expires_at > NOW()
 	`
 	err = gds.db.QueryRow(query, userID).Scan(&count)
 	if err != nil {
@@ -244,7 +244,7 @@ func (gds *GoogleDriveService) ensureTablesExist() error {
 			refresh_token TEXT NOT NULL,
 			expires_at TIMESTAMP NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`
 	_, err := gds.db.Exec(createTokensTable)
@@ -255,11 +255,11 @@ func (gds *GoogleDriveService) ensureTablesExist() error {
 	// Create google_drive_backups table
 	createBackupsTable := `
 		CREATE TABLE IF NOT EXISTS google_drive_backups (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			id SERIAL PRIMARY KEY,
 			user_id TEXT NOT NULL,
 			file_name TEXT NOT NULL,
 			file_size INTEGER NOT NULL,
-			backup_date DATETIME DEFAULT CURRENT_TIMESTAMP
+			backup_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`
 	_, err = gds.db.Exec(createBackupsTable)

@@ -404,19 +404,6 @@ const MyChamasScreen = ({ navigation, route }) => {
           : "You haven't joined any chamas yet"
         }
       </Text>
-
-      <Button
-        title={searchQuery ? "Clear Search" : "Explore Chamas"}
-        onPress={() => {
-          if (searchQuery) {
-            setSearchQuery('');
-          } else {
-            navigation.navigate('ChamaList');
-          }
-        }}
-        style={styles.emptyButton}
-        icon={<Ionicons name={searchQuery ? "refresh" : "search"} size={20} color={colors.white} />}
-      />
     </View>
   );
 

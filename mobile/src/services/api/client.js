@@ -36,19 +36,23 @@ const makeRequest = async (endpoint, options = {}) => {
   clearTimeout(timeoutId);
 
   const contentType = response.headers.get('content-type');
-  if (!contentType || !contentType.includes('application/json')) {
-    const textResponse = await response.text();
-    try {
-      const jsonData = JSON.parse(textResponse);
-      if (jsonData.error) {
-        throw new Error(jsonData.error);
-      }
-    } catch (parseError) {
-      throw new Error(`Server returned non-JSON response: ${textResponse.substring(0, 200)}...`);
-    }
-  }
+  let data;
 
-  const data = await response.json();
+  try {
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const textResponse = await response.text();
+      // Try to parse as JSON anyway in case content-type is wrong
+      data = JSON.parse(textResponse);
+    }
+  } catch (parseError) {
+    // If not valid JSON, return error message
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.statusText}`);
+    }
+    throw new Error('Invalid response format from server');
+  }
 
   if (!response.ok) {
     if (response.status === 401) {

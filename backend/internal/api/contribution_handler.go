@@ -157,10 +157,10 @@ func MakeContribution(c *gin.Context) {
 			SELECT EXISTS(
 				SELECT 1 FROM transactions t
 				WHERE t.type = 'contribution'
-					AND json_extract(t.metadata, '$.contributionType') = 'merry-go-round'
-					AND json_extract(t.metadata, '$.chamaId') = $1
-					AND json_extract(t.metadata, '$.merryGoRoundId') = $2
-					AND json_extract(t.metadata, '$.roundNumber') = $3
+					AND t.metadata->>'contributionType' = 'merry-go-round'
+					AND t.metadata->>'chamaId' = $1
+					AND t.metadata->>'merryGoRoundId' = $2
+					AND t.metadata->>'roundNumber' = $3
 					AND t.initiated_by = $4
 					AND t.status = 'completed'
 			)

@@ -637,17 +637,6 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
               </Text>
             </TouchableOpacity>
           </Card>
-
-          <Button
-            title="Schedule Meeting"
-            onPress={() => {
-              console.log('🖱️ Schedule Meeting button pressed!');
-              handleSubmit();
-            }}
-            loading={loading}
-            style={styles.submitButton}
-            icon={<Ionicons name="calendar-outline" size={20} color={colors.white} />}
-          />
         </View>
       </ScrollView>
     </SafeAreaView>

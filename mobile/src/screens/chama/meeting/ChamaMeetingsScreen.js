@@ -1615,15 +1615,6 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
             : 'No meetings have been scheduled yet'
         }
       </Text>
-
-      {!isUserMeetingsView && (
-        <Button
-          title="Schedule Meeting"
-          onPress={handleScheduleMeeting}
-          style={styles.scheduleButton}
-          icon={<Ionicons name="add" size={20} color={colors.white} />}
-        />
-      )}
     </View>
   );
 
