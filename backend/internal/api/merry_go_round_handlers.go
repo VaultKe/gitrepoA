@@ -40,10 +40,10 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 		SELECT COUNT(DISTINCT t.initiated_by)
 		FROM transactions t
 		WHERE t.type = 'contribution'
-			AND t.metadata->>'contributionType' = 'merry-go-round'
-			AND t.metadata->>'merryGoRoundId' = $1
-			AND t.metadata->>'roundNumber' = $2
-			AND t.metadata->>'chamaId' = $3
+			AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+			AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+			AND (t.metadata::jsonb)->>'roundNumber' = $2
+			AND (t.metadata::jsonb)->>'chamaId' = $3
 			AND t.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
 
@@ -222,10 +222,10 @@ func GetMerryGoRounds(c *gin.Context) {
 				SELECT COUNT(DISTINCT t.initiated_by)
 				FROM transactions t
 				WHERE t.type = 'contribution'
-					AND t.metadata->>'contributionType' = 'merry-go-round'
-					AND t.metadata->>'merryGoRoundId' = $1
-					AND t.metadata->>'roundNumber' = $2
-					AND t.metadata->>'chamaId' = $3
+					AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+					AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+					AND (t.metadata::jsonb)->>'roundNumber' = $2
+					AND (t.metadata::jsonb)->>'chamaId' = $3
 					AND t.status = 'completed'
 			`, mgr.ID, mgr.CurrentRound, mgr.ChamaID).Scan(&contributionCount)
 
@@ -699,10 +699,10 @@ func CheckUserContributionStatus(c *gin.Context) {
 		SELECT EXISTS(
 			SELECT 1 FROM transactions t
 			WHERE t.type = 'contribution'
-				AND t.metadata->>'contributionType' = 'merry-go-round'
-				AND t.metadata->>'merryGoRoundId' = $1
-				AND t.metadata->>'roundNumber' = $2
-				AND t.metadata->>'chamaId' = $3
+				AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+				AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+				AND (t.metadata::jsonb)->>'roundNumber' = $2
+				AND (t.metadata::jsonb)->>'chamaId' = $3
 				AND t.initiated_by = $4
 				AND t.status = 'completed'
 		)
@@ -743,10 +743,10 @@ func CheckUserContributionStatus(c *gin.Context) {
 		SELECT COUNT(DISTINCT t.initiated_by)
 		FROM transactions t
 		WHERE t.type = 'contribution'
-			AND t.metadata->>'contributionType' = 'merry-go-round'
-			AND t.metadata->>'merryGoRoundId' = $1
-			AND t.metadata->>'roundNumber' = $2
-			AND t.metadata->>'chamaId' = $3
+			AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+			AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+			AND (t.metadata::jsonb)->>'roundNumber' = $2
+			AND (t.metadata::jsonb)->>'chamaId' = $3
 			AND t.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&totalContributions)
 
@@ -928,10 +928,10 @@ func CheckAndAdvanceRound(c *gin.Context) {
 		SELECT COUNT(DISTINCT t.initiated_by)
 		FROM transactions t
 		WHERE t.type = 'contribution'
-			AND t.metadata->>'contributionType' = 'merry-go-round'
-			AND t.metadata->>'merryGoRoundId' = $1
-			AND t.metadata->>'roundNumber' = $2
-			AND t.metadata->>'chamaId' = $3
+			AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+			AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+			AND (t.metadata::jsonb)->>'roundNumber' = $2
+			AND (t.metadata::jsonb)->>'chamaId' = $3
 			AND t.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
 

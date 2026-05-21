@@ -157,10 +157,10 @@ func MakeContribution(c *gin.Context) {
 			SELECT EXISTS(
 				SELECT 1 FROM transactions t
 				WHERE t.type = 'contribution'
-					AND t.metadata->>'contributionType' = 'merry-go-round'
-					AND t.metadata->>'chamaId' = $1
-					AND t.metadata->>'merryGoRoundId' = $2
-					AND t.metadata->>'roundNumber' = $3
+					AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+					AND (t.metadata::jsonb)->>'chamaId' = $1
+					AND (t.metadata::jsonb)->>'merryGoRoundId' = $2
+					AND (t.metadata::jsonb)->>'roundNumber' = $3
 					AND t.initiated_by = $4
 					AND t.status = 'completed'
 			)
@@ -467,18 +467,18 @@ func MakeContribution(c *gin.Context) {
 		insertQuery = `
 			INSERT INTO transactions (
 				id, type, amount, currency, description, status, payment_method,
-				reference, initiated_by, recipient_id, metadata, created_at, updated_at
-			) VALUES ($1, 'contribution', $2, 'KES', $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				chama_id, reference, initiated_by, recipient_id, metadata, created_at, updated_at
+			) VALUES ($1, 'contribution', $2, 'KES', $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`
-		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, req.MpesaReference, transactionInitiator, transactionRecipient, string(metadataJSON)}
+		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, req.ChamaID, req.MpesaReference, transactionInitiator, transactionRecipient, string(metadataJSON)}
 	} else {
 		insertQuery = `
 			INSERT INTO transactions (
 				id, type, amount, currency, description, status, payment_method,
-				initiated_by, recipient_id, metadata, created_at, updated_at
-			) VALUES ($1, 'contribution', $2, 'KES', $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				chama_id, initiated_by, recipient_id, metadata, created_at, updated_at
+			) VALUES ($1, 'contribution', $2, 'KES', $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`
-		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, transactionInitiator, transactionRecipient, string(metadataJSON)}
+		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, req.ChamaID, transactionInitiator, transactionRecipient, string(metadataJSON)}
 	}
 
 	fmt.Printf("🔍 Executing transaction insert query with %d args\n", len(insertArgs))
