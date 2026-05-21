@@ -565,7 +565,7 @@ const WelfareScreen = ({ route, navigation }) => {
 
       console.log('🗳️ Sending vote data:', voteData);
 
-      const response = await ApiService.voteOnWelfareRequest(requestId, voteData);
+      const response = await ApiService.voteOnWelfareRequest(requestId, voteData.vote);
 
       console.log('🗳️ === PROCESSING RESPONSE ===');
       console.log('🗳️ Final vote response:', response);
@@ -1697,61 +1697,84 @@ const WelfareScreen = ({ route, navigation }) => {
 
               <View style={styles.categorySection}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Category *</Text>
-                <View style={styles.categoryOptions}>
-                  {welfareCategories.map(category => (
-                    <TouchableOpacity
-                      key={category.id}
-                      style={[
-                        styles.categoryOption,
-                        {
-                          backgroundColor: newRequest.category === category.id ? category.color + '20' : colors.background,
-                          borderColor: newRequest.category === category.id ? category.color : colors.border,
-                        }
-                      ]}
-                      onPress={() => {
-                        setNewRequest(prev => ({ ...prev, category: category.id }));
-                        clearFieldError('category');
-                      }}
-                    >
-                      <Ionicons name={category.icon} size={20} color={newRequest.category === category.id ? category.color : colors.textSecondary} />
-                      <Text style={[
-                        styles.categoryOptionText,
-                        { color: newRequest.category === category.id ? category.color : colors.text }
-                      ]}>
-                        {category.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                <View style={styles.categoryGrid}>
+                  {welfareCategories.map((category, idx) => {
+                    const isSelected = newRequest.category === category.id;
+                    return (
+                      <TouchableOpacity
+                        key={category.id}
+                        style={[
+                          styles.categoryGridItem,
+                          {
+                            backgroundColor: isSelected ? category.color + '12' : colors.background,
+                            borderColor: isSelected ? category.color : colors.border,
+                            borderWidth: isSelected ? 1.5 : 1,
+                          }
+                        ]}
+                        onPress={() => {
+                          setNewRequest(prev => ({ ...prev, category: category.id }));
+                          clearFieldError('category');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[
+                          styles.categoryIconCircle,
+                          { backgroundColor: isSelected ? category.color + '25' : colors.surface }
+                        ]}>
+                          <Ionicons
+                            name={category.icon}
+                            size={22}
+                            color={isSelected ? category.color : colors.textTertiary}
+                          />
+                        </View>
+                        <Text style={[
+                          styles.categoryGridText,
+                          { color: isSelected ? category.color : colors.text }
+                        ]}>
+                          {category.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
                 <ErrorText error={formErrors.category} />
               </View>
 
               <View style={styles.urgencySection}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Priority Level *</Text>
-                <View style={styles.urgencyOptions}>
-                  {urgencyLevels.map(level => (
-                    <TouchableOpacity
-                      key={level.id}
-                      style={[
-                        styles.urgencyOption,
-                        {
-                          backgroundColor: newRequest.urgency === level.id ? level.color + '20' : colors.background,
-                          borderColor: newRequest.urgency === level.id ? level.color : colors.border,
-                        }
-                      ]}
-                      onPress={() => {
-                        setNewRequest(prev => ({ ...prev, urgency: level.id }));
-                        clearFieldError('urgency');
-                      }}
-                    >
-                      <Text style={[
-                        styles.urgencyOptionText,
-                        { color: newRequest.urgency === level.id ? level.color : colors.text }
-                      ]}>
-                        {level.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                <View style={styles.urgencyGrid}>
+                  {urgencyLevels.map((level) => {
+                    const isSelected = newRequest.urgency === level.id;
+                    return (
+                      <TouchableOpacity
+                        key={level.id}
+                        style={[
+                          styles.urgencyGridItem,
+                          {
+                            backgroundColor: isSelected ? level.color + '12' : colors.background,
+                            borderColor: isSelected ? level.color : colors.border,
+                            borderWidth: isSelected ? 1.5 : 1,
+                          }
+                        ]}
+                        onPress={() => {
+                          setNewRequest(prev => ({ ...prev, urgency: level.id }));
+                          clearFieldError('urgency');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[
+                          styles.urgencyDot,
+                          { backgroundColor: isSelected ? level.color : colors.textTertiary + '60' }
+                        ]} />
+                        <Text style={[
+                          styles.urgencyGridText,
+                          { color: isSelected ? level.color : colors.text }
+                        ]}>
+                          {level.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
                 <ErrorText error={formErrors.urgency} />
               </View>
@@ -2438,36 +2461,66 @@ const styles = StyleSheet.create({
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.md,
     marginBottom: spacing.md,
   },
-  categoryOption: {
-    flexDirection: 'row',
+  categoryGridItem: {
+    width: '48%',
+    flexDirection: 'column',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     gap: spacing.xs,
-    minWidth: '45%',
   },
-  categoryOptionText: {
-    fontSize: typography.fontSize.sm,
+  categoryIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryGridText: {
+    fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
+    textAlign: 'center',
+    lineHeight: typography.fontSize.xs * 1.3,
   },
   urgencyGrid: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
     marginBottom: spacing.lg,
   },
-  urgencyOption: {
+  urgencyGridItem: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.md,
     borderWidth: 1,
+    gap: spacing.xs,
   },
-  urgencyOptionText: {
+  urgencyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  urgencyGridText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: 'center',
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+  },
+  categoryText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
   },

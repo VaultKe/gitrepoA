@@ -25,8 +25,6 @@ const ViewMember = ({ route, navigation }) => {
   const [memberData, setMemberData] = useState(null);
   const [memberStats, setMemberStats] = useState(null);
   const [imageExpanded, setImageExpanded] = useState(false);
-  const [activityPage, setActivityPage] = useState(1);
-  const activityItemsPerPage = 10;
 
   useEffect(() => {
     loadMemberDetails();
@@ -205,21 +203,6 @@ const ViewMember = ({ route, navigation }) => {
         return 'wallet';
       default:
         return 'person';
-    }
-  };
-
-  const getActivityColor = (type) => {
-    switch (type?.toLowerCase()) {
-      case 'contribution':
-      case 'deposit':
-        return colors.success;
-      case 'withdrawal':
-      case 'loan':
-        return colors.error;
-      case 'transfer':
-        return colors.primary;
-      default:
-        return colors.text;
     }
   };
 
@@ -539,77 +522,6 @@ const ViewMember = ({ route, navigation }) => {
             )}
           </View>
         </View>
-
-        {/* Recent Activity Table - Private View */}
-        {memberData.user_id === user?.id && (
-          <View style={{ marginTop: 32 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12, fontSize: 16 }]}>
-              Recent Activity
-            </Text>
-
-            {/* Activity Table Header */}
-            <View style={[styles.tableHeader, { backgroundColor: colors.primary + '10' }]}>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Date</Text>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Type</Text>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Amount</Text>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Description</Text>
-            </View>
-
-            {/* Activity Table Body */}
-            <View style={styles.activityTable}>
-              {((memberStats && memberStats.recent_activity) || [
-                { id: 1, date: new Date().toISOString(), type: 'contribution', amount: 5000, description: 'Monthly contribution' },
-                { id: 2, date: new Date(Date.now() - 86400000).toISOString(), type: 'loan', amount: 15000, description: 'Emergency loan' },
-                { id: 3, date: new Date(Date.now() - 172800000).toISOString(), type: 'contribution', amount: 5000, description: 'Monthly contribution' }
-              ]).slice(0, activityItemsPerPage).map((activity, index) => (
-                <View
-                  key={activity.id || index}
-                  style={[styles.activityRow, {
-                    backgroundColor: index % 2 === 0 ? colors.background : colors.surface
-                  }]}
-                >
-                  <Text style={[styles.activityCellText, { color: colors.textSecondary, fontSize: 8.5 }]}>
-                    {new Date(activity.date).toLocaleDateString()}
-                  </Text>
-                  <Text style={[styles.activityCellText, { color: getActivityColor(activity.type), fontSize: 8.5 }]}>
-                    {activity.type}
-                  </Text>
-                  <Text style={[styles.activityCellText, { color: colors.text, fontSize: 8.5 }]}>
-                    {formatCurrency(activity.amount)}
-                  </Text>
-                  <Text style={[styles.activityCellText, { color: colors.text, fontSize: 8.5 }]}>
-                    {activity.description || 'N/A'}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Pagination for Activity */}
-            {memberStats && memberStats.recent_activity && memberStats.recent_activity.length > 10 && (
-              <View style={styles.paginationContainer}>
-                <TouchableOpacity
-                  style={[styles.paginationButton, { backgroundColor: colors.primary }]}
-                  onPress={() => setActivityPage(Math.max(1, activityPage - 1))}
-                  disabled={activityPage === 1}
-                >
-                  <Ionicons name="chevron-back" size={16} color={colors.white} />
-                </TouchableOpacity>
-
-              <Text style={[styles.paginationText, { color: colors.text }]}>
-                Page {activityPage} of {Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage)}
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.paginationButton, { backgroundColor: colors.primary }]}
-                onPress={() => setActivityPage(Math.min(Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage), activityPage + 1))}
-                disabled={activityPage === Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage)}
-              >
-                  <Ionicons name="chevron-forward" size={16} color={colors.white} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
 
         {/* Actions */}
         {userRole === 'chairperson' && memberData.user_id !== user.id && (
@@ -964,47 +876,6 @@ const styles = StyleSheet.create({
   tableValueText: {
     fontSize: 8.5,
     flex: 1,
-  },
-  // Activity Table Styles
-  activityTable: {
-    marginTop: 8,
-  },
-  activityRow: {
-    flexDirection: 'row',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
-    alignItems: 'center',
-  },
-  activityHeaderText: {
-    flex: 1,
-    fontSize: 9,
-    fontWeight: 'bold',
-    textAlign: 'left',
-  },
-  activityCellText: {
-    flex: 1,
-    fontSize: 8.5,
-    textAlign: 'left',
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 16,
-  },
-  paginationButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paginationText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
 });
 

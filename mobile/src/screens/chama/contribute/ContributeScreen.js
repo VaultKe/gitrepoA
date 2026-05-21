@@ -602,12 +602,103 @@ const ContributeScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleWalletContribution = async (cleanChamaId) => {
+const handleWalletContribution = async (cleanChamaId) => {
+  if (contributionType === 'welfare') {
+    // Use welfare contribute endpoint for welfare contributions
+    const welfareData = {
+      welfareRequestId: proposalId,
+      amount: parseFloat(amount),
+      message: description || getDefaultDescription(),
+      chamaId: cleanChamaId,
+    };
+
+    console.log('🔄 Making welfare contribution with data:', welfareData);
+
+    const response = await ApiService.contributeToWelfare(welfareData);
+
+    console.log('🔍 Welfare contribution response:', response);
+
+    if (response.success) {
+      console.log('🎉 Welfare contribution successful! Preparing success notification...');
+      console.log('💰 Welfare contribution successful, refreshing wallet balance...');
+
+      // Refresh wallet balance after successful contribution
+      const oldBalance = walletBalance;
+      await loadWalletBalance();
+      console.log(`💰 Wallet balance updated: ${oldBalance} → ${walletBalance}`);
+
+      // Also refresh the global wallet data in AppContext
+      try {
+        await refreshSpecificData('wallet');
+        console.log('✅ Global wallet data refreshed');
+      } catch (error) {
+        console.warn('⚠️ Failed to refresh global wallet data:', error);
+      }
+
+      const getSuccessMessage = () => {
+        const amountText = formatCurrency(parseFloat(amount));
+        const chamaName = chama?.name || 'the group';
+
+        console.log('🔍 Success message data:', {
+          amountText,
+          contributionType,
+          chamaName,
+          isAnonymous
+        });
+
+        let baseMessage;
+        switch (contributionType) {
+          case 'welfare':
+            baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to the welfare fund`;
+            break;
+          default:
+            baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to ${chamaName}`;
+        }
+
+        // Add anonymous note if applicable
+        if (isAnonymous) {
+          baseMessage += '\n\n🔒 This contribution was made anonymously and will appear as "Anonymous" in transaction records.';
+        }
+
+        return baseMessage;
+      };
+
+      // Show success toast notification
+      console.log('🎉 Showing success toast:', 'Welfare Contribution Successful!', getSuccessMessage());
+
+      Toast.show({
+        type: 'success',
+        text1: 'Welfare Contribution Successful!',
+        text2: getSuccessMessage(),
+        position: 'top',
+        visibilityTime: 4000,
+        topOffset: 60,
+      });
+
+      console.log('🎉 Success toast should be displayed now');
+
+      // Reset form and navigate back after a short delay
+      setTimeout(() => {
+        setAmount('');
+        setDescription('');
+        setIsAnonymous(false);
+        navigation.goBack();
+      }, 2000); // Give user time to see the toast
+    } else {
+      throw new Error(response.error || 'Welfare contribution failed');
+    }
+  } else {
+    // Use regular contribution endpoint for non-welfare contributions
+    const validContributionType = (() => {
+      const validTypes = ['regular', 'penalty', 'special', 'merry-go-round'];
+      return validTypes.includes(contributionType) ? contributionType : 'regular';
+    })();
+
     const contributionData = {
       chamaId: cleanChamaId,
       amount: parseFloat(amount),
       description: description || getDefaultDescription(),
-      type: contributionType,
+      type: validContributionType,
       paymentMethod: 'wallet',
       isAnonymous: chama?.category === 'contribution' ? isAnonymous : false, // Only for contribution groups
       ...(roundId && { roundId }), // Include roundId if it exists
@@ -735,9 +826,93 @@ const ContributeScreen = ({ route, navigation }) => {
     } else {
       throw new Error(response.error || 'Wallet contribution failed');
     }
-  };
+  }
+};
 
-  const handleMpesaContribution = async (cleanChamaId) => {
+const handleMpesaContribution = async (cleanChamaId) => {
+  // For welfare contributions, use the welfare endpoint
+  if (contributionType === 'welfare') {
+    // Use welfare contribute endpoint for welfare contributions
+    const welfareData = {
+      welfareRequestId: proposalId,
+      amount: parseFloat(amount),
+      message: description || getDefaultDescription(),
+      chamaId: cleanChamaId,
+    };
+
+    console.log('🔄 Making welfare contribution via M-Pesa with data:', welfareData);
+
+    const mpesaResponse = await ApiService.contributeToWelfare(welfareData);
+
+    console.log('🔍 Welfare contribution response:', mpesaResponse);
+
+    if (mpesaResponse.success) {
+      // Refresh wallet balance after successful contribution
+      const oldBalance = walletBalance;
+      await loadWalletBalance();
+      console.log(`💰 Wallet balance updated: ${oldBalance} → ${walletBalance}`);
+
+      // Also refresh the global wallet data in AppContext
+      try {
+        await refreshSpecificData('wallet');
+        console.log('✅ Global wallet data refreshed');
+      } catch (error) {
+        console.warn('⚠️ Failed to refresh global wallet data:', error);
+      }
+
+      const getSuccessMessage = () => {
+        const amountText = formatCurrency(parseFloat(amount));
+        const chamaName = chama?.name || 'the group';
+
+        console.log('🔍 Success message data:', {
+          amountText,
+          contributionType,
+          chamaName,
+          isAnonymous
+        });
+
+        let baseMessage;
+        switch (contributionType) {
+          case 'welfare':
+            baseMessage = `You have successfully contributed ${amountText} via M-Pesa to the welfare fund`;
+            break;
+          default:
+            baseMessage = `You have successfully contributed ${amountText} via M-Pesa to ${chamaName}`;
+        }
+
+        // Add anonymous note if applicable
+        if (isAnonymous) {
+          baseMessage += '\n\n🔒 This contribution was made anonymously and will appear as "Anonymous" in transaction records.';
+        }
+
+        return baseMessage;
+      };
+
+      // Show success toast notification
+      console.log('🎉 Showing success toast:', 'Welfare Contribution Successful!', getSuccessMessage());
+
+      Toast.show({
+        type: 'success',
+        text1: 'Welfare Contribution Successful!',
+        text2: getSuccessMessage(),
+        position: 'top',
+        visibilityTime: 4000,
+        topOffset: 60,
+      });
+
+      console.log('🎉 Success toast should be displayed now');
+
+      // Reset form and navigate back after a short delay
+      setTimeout(() => {
+        setAmount('');
+        setDescription('');
+        setIsAnonymous(false);
+        navigation.goBack();
+      }, 2000); // Give user time to see the toast
+    } else {
+      throw new Error(mpesaResponse.error || 'Welfare contribution failed');
+    }
+  } else {
     // Format user's registered phone number for M-Pesa
     let formattedPhone = user.phone.replace(/\s+/g, '');
     if (formattedPhone.startsWith('0')) {
@@ -807,7 +982,8 @@ const ContributeScreen = ({ route, navigation }) => {
     } else {
       throw new Error(mpesaResponse.error || 'Failed to initiate M-Pesa payment');
     }
-  };
+  }
+};
 
   const handleCashContribution = async (cleanChamaId) => {
     // Validate cash contribution requirements
@@ -815,11 +991,16 @@ const ContributeScreen = ({ route, navigation }) => {
       throw new Error('Please select the member who made this contribution');
     }
 
+    const validContributionType = (() => {
+      const validTypes = ['regular', 'penalty', 'special', 'merry-go-round'];
+      return validTypes.includes(contributionType) ? contributionType : 'regular';
+    })();
+
     const contributionData = {
       chamaId: cleanChamaId,
       amount: parseFloat(amount),
       description: description || getDefaultDescription(),
-      type: contributionType || 'regular',
+      type: validContributionType,
       paymentMethod: paymentMethod, // 'cash' or 'cheque'
       contributorId: selectedContributor.id,
       cashType: paymentMethod, // 'cash' or 'cheque'

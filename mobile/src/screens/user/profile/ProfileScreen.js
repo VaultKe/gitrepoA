@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   SafeAreaView,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
@@ -19,6 +21,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import apiService from '../../../services/api';
+import { getTransactions } from '../../../services/api/walletEndpoints';
 
 const ProfileScreen = ({ navigation }) => {
   const { theme, setTheme, user, userRole, updateUser, wallets, chamas, logout, getCachedData, getLightningData, getCachedAvatarData } = useApp();
@@ -45,28 +48,24 @@ const ProfileScreen = ({ navigation }) => {
   );
   const [avatarData, setAvatarData] = useState(null);
 
-  // Debug current user avatar data
-  useEffect(() => {
-    // console.log('🖼️ ProfileScreen - Current user data:', {
-    //   avatar: user?.avatar,
-    //   profile_image: user?.profile_image,
-    //   profileImageState: profileImage
-    // });
+  // Recent Activities state
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+
+  // Helper: format currency
+  useEffect(() => {  
   }, [user, profileImage]);
 
   // Handle cached avatar data
   useEffect(() => {
     const loadAvatarData = async () => {
       if (user?.avatar === 'avatar://cached-base64-image' || user?.profile_image === 'avatar://cached-base64-image') {
-        console.log('🖼️ ProfileScreen: Loading cached avatar data');
         try {
           const cachedData = await getCachedAvatarData();
           if (cachedData) {
-            console.log('🖼️ ProfileScreen: Found cached avatar data');
             setAvatarData(cachedData);
           }
         } catch (error) {
-          console.log('🖼️ ProfileScreen: Failed to load cached avatar data:', error);
         }
       } else {
         setAvatarData(null);
@@ -120,25 +119,14 @@ const ProfileScreen = ({ navigation }) => {
       const response = await apiService.getProfile();
 
       if (response.success && response.data) {
-        // console.log('📊 Fresh profile data received from API');
-        // console.log('🔍 Full API response:', response);
-
-        // Use helper function to update profile data
         updateProfileFromResponse(response);
 
         // Update context with fresh data
         const userData = response.data.User || response.data.user || response.data;
-        // console.log('👤 Extracted user data:', userData);
-        // console.log('🖼️ Avatar in user data:', userData.avatar);
-        // console.log('🖼️ Profile image in user data:', userData.profile_image);
-
         await updateUser(userData);
 
         // Set profile image with proper URL handling
         const avatarUrl = userData.avatar || userData.profile_image;
-        // console.log('🖼️ Final avatar URL for display:', avatarUrl);
-
-
         if (avatarUrl) {
           let fullAvatarUrl;
 
@@ -149,10 +137,6 @@ const ProfileScreen = ({ navigation }) => {
             // If it's a relative path, make it absolute
             fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
           }
-
-          // console.log('🖼️ Setting profile image from API response:', fullAvatarUrl);
-
-          // Set image URL - error handling will be done by Image component
           setProfileImage(fullAvatarUrl);
         } else {
            setProfileImage(null);
@@ -183,9 +167,6 @@ const ProfileScreen = ({ navigation }) => {
 
     // Handle profile image URL - check user context first, then preserve existing component state
     const avatarUrl = user?.avatar || user?.profile_image;
-    // console.log('🖼️ updateLocalProfileData - Avatar URL from user context:', avatarUrl);
-    // console.log('🖼️ updateLocalProfileData - Current profileImage state:', profileImage);
-
     if (avatarUrl && avatarUrl !== 'avatar://cached-base64-image') {
       let fullAvatarUrl;
 
@@ -196,18 +177,12 @@ const ProfileScreen = ({ navigation }) => {
         // If it's a relative path, make it absolute
         fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
       }
-      // console.log('🖼️ updateLocalProfileData - Setting profile image from user context:', fullAvatarUrl);
       setProfileImage(fullAvatarUrl);
     } else if (avatarUrl === 'avatar://cached-base64-image') {
-      // Don't set the cached identifier as profileImage, let the useEffect handle it
-      // console.log('🖼️ updateLocalProfileData - Found cached avatar identifier, not setting as profileImage');
       setProfileImage(null);
     } else if (!profileImage) {
-      // Only set to null if we don't already have a profile image
-      // console.log('🖼️ updateLocalProfileData - No avatar in user context and no existing profileImage, setting to null');
       setProfileImage(null);
     } else {
-      // console.log('🖼️ updateLocalProfileData - No avatar in user context, but preserving existing profileImage:', profileImage);
     }
   };
 
@@ -421,11 +396,227 @@ const ProfileScreen = ({ navigation }) => {
     }).format(amount);
   };
 
+  // Load all recent activities (transactions) for the current user across all chamas
+  const loadRecentActivities = useCallback(async () => {
+    try {
+      setActivitiesLoading(true);
+      const response = await getTransactions(50, 0);
+
+      if (response.success && Array.isArray(response.data)) {
+        // Sort by created_at descending (most recent first)
+        const sorted = [...response.data].sort(
+          (a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0)
+        );
+        setRecentActivities(sorted);
+      } else {
+        setRecentActivities([]);
+      }
+    } catch (error) {
+      console.warn('Failed to load recent activities:', error);
+      setRecentActivities([]);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecentActivities();
+  }, [loadRecentActivities]);
+
+  const getActivityColor = (type, paymentMethod) => {
+    const t = (type || '').toLowerCase();
+    switch (t) {
+      case 'contribution':
+      case 'deposit':
+        return colors.success;
+      case 'withdrawal':
+      case 'loan':
+        return colors.error;
+      case 'transfer':
+        return colors.primary;
+      case 'fee':
+        return colors.warning;
+      case 'loan_repayment':
+        return colors.info || colors.primary;
+      case 'purchase':
+      case 'refund':
+        return colors.textTertiary || colors.textSecondary;
+      default:
+        // Fall back to payment method
+        const pm = (paymentMethod || '').toLowerCase();
+        if (pm === 'wallet' || pm === 'cash') return colors.primary;
+        if (pm === 'mpesa') return colors.success;
+        if (pm === 'cheque') return colors.warning;
+        return colors.text;
+    }
+  };
+
+  const getActivityIcon = (type) => {
+    const t = (type || '').toLowerCase();
+    switch (t) {
+      case 'contribution': return 'people';
+      case 'deposit': return 'arrow-down-circle';
+      case 'withdrawal': return 'arrow-up-circle';
+      case 'transfer': return 'swap-horizontal';
+      case 'loan': return 'card';
+      case 'loan_repayment': return 'card';
+      case 'fee': return 'receipt';
+      case 'purchase': return 'cart';
+      case 'refund': return 'refresh';
+      default: return 'ellipsis-horizontal-circle';
+    }
+  };
+
+  const getActivityDescription = (tx) => {
+    const desc = tx.description || '';
+    const type = tx.type || 'transaction';
+    const paymentMethod = tx.paymentMethod || '';
+
+    if (desc.trim()) {
+      // Clean up auto-generated M-Pesa deposit descriptions
+      if (desc.includes('Auto-generated')) return `${type.charAt(0).toUpperCase() + type.slice(1)}`;
+      return desc;
+    }
+
+    const typeLabel = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ');
+    const methodLabel = paymentMethod ? ` via ${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)}` : '';
+    return `${typeLabel}${methodLabel}`;
+  };
+
+  const formatActivityDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   const getTotalBalance = () => {
     return wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
   };
 
+  // Renders the user's recent activity across all chamas
+  const renderRecentActivity = () => {
+    if (activitiesLoading) {
+      return (
+        <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={{ marginTop: 8, color: colors.textSecondary }}>Loading activities…</Text>
+        </View>
+      );
+    }
 
+    if (recentActivities.length === 0) {
+      return (
+        <View>
+          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: spacing.md, marginBottom: 0 }]}>
+            Recent Activity
+          </Text>
+          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+            <Ionicons name="time-outline" size={40} color={colors.textTertiary || colors.textSecondary} />
+            <Text style={{ marginTop: 8, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 32 }}>
+              No activities yet. Your contributions and transactions will appear here.{'\n'}
+              Tap a chama on the Home tab to make your first contribution.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    const displayActivities = recentActivities.slice(0, 10); // Top 10 most recent
+
+    return (
+      <View>
+        <Text style={[styles.sectionTitle, { color: colors.text, marginTop: spacing.md, marginBottom: 0 }]}>
+          Recent Activity
+        </Text>
+
+        {/* Activity Table Header */}
+        <View style={[styles.activityTableHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Date</Text>
+          <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Type</Text>
+          <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Amount</Text>
+          <Text style={[styles.activityHeaderText, { flex: 2, color: colors.textSecondary }]}>Description</Text>
+        </View>
+
+        {/* Activity Table Body */}
+        <View style={[styles.activityTableBody, { borderBottomColor: colors.border }]}>
+          {displayActivities.map((activity, index) => {
+            const isAlt = index % 2 !== 0;
+            return (
+              <View
+                key={activity.id || index}
+                style={[
+                  styles.activityRow,
+                  { backgroundColor: isAlt ? colors.surface + '30' : colors.background },
+                  { borderBottomColor: colors.border },
+                ]}
+              >
+                {/* Date */}
+                <View style={styles.activityCell}>
+                  <Ionicons name="calendar-outline" size={11} color={colors.textTertiary || colors.textSecondary} />
+                  <Text style={[styles.activityCellText, { color: colors.textSecondary, fontSize: 11, marginLeft: 3 }]}>
+                    {formatActivityDate(activity.createdAt || activity.created_at)}
+                  </Text>
+                </View>
+
+                {/* Type badge */}
+                <View style={styles.activityTypeCell}>
+                  <View style={[styles.activityTypeBadge, { backgroundColor: getActivityColor(activity.type, activity.paymentMethod) + '18' }]}>
+                    <Ionicons
+                      name={getActivityIcon(activity.type)}
+                      size={12}
+                      color={getActivityColor(activity.type, activity.paymentMethod)}
+                    />
+                    <Text style={[styles.activityTypeText, { color: getActivityColor(activity.type, activity.paymentMethod) }]}>
+                      {(activity.type || 'Transaction').replace(/_/g, ' ')}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Amount */}
+                <Text
+                  style={[
+                    styles.activityAmountText,
+                    {
+                      color:
+                        (activity.type || '').toLowerCase() === 'withdrawal' || (activity.type || '').toLowerCase() === 'loan'
+                          ? colors.error
+                          : colors.success || colors.primary,
+                      fontWeight: '600',
+                    },
+                  ]}
+                >
+                  {typeof activity.amount === 'number'
+                    ? formatCurrency(activity.amount)
+                    : formatCurrency(parseFloat(activity.amount) || 0)}
+                </Text>
+
+                {/* Description */}
+                <Text
+                  style={[styles.activityDescText, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {getActivityDescription(activity)}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {recentActivities.length > 10 && (
+          <View style={styles.activityFooter}>
+            <Text style={{ color: colors.textTertiary || colors.textSecondary, fontSize: 12 }}>
+              Showing 10 of {recentActivities.length} activities
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const handleLogout = async () => {
     setLoading(true);
@@ -876,6 +1067,9 @@ const ProfileScreen = ({ navigation }) => {
       >
         {renderProfileHeader()}
         {renderPersonalInfo()}
+        <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.lg }}>
+          {renderRecentActivity()}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -903,6 +1097,74 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.md,
   },
+
+  // ── Recent Activity table (pure, no-card) ──
+  activityTableHeader: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.ss,
+    borderBottomWidth: 1,
+  },
+  activityHeaderText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  activityTableBody: {
+    borderBottomWidth: 1,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 0.5,
+    minHeight: 44,
+  },
+  activityCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 85,
+    marginRight: spacing.xs,
+  },
+  activityCellText: {
+    flex: 1,
+  },
+  activityTypeCell: {
+    width: 105,
+    marginRight: spacing.xs,
+  },
+  activityTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  activityTypeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: 3,
+    flexShrink: 1,
+  },
+  activityAmountText: {
+    fontSize: 12,
+    width: 80,
+    textAlign: 'right',
+    marginRight: spacing.xs,
+    flexShrink: 0,
+  },
+  activityDescText: {
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  activityFooter: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
