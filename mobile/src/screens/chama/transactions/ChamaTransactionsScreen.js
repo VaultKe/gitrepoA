@@ -343,22 +343,50 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
         console.warn('Contributions API not available:', error);
       }
 
-      // Fetch paginated welfare transactions/contributions
-      try {
-        const welfareResponse = await ApiService.getWelfareRequests(currentChamaId, itemsPerPage, offset);
-        if (welfareResponse.success) {
-          const welfareData = welfareResponse.data || [];
-          // Add welfare data with proper type
-          const welfareTransactions = welfareData.map(item => ({
-            ...item,
-            type: 'welfare',
-            transaction_type: 'welfare'
-          }));
-          allData = [...allData, ...welfareTransactions];
-        }
-      } catch (error) {
-        console.warn('Welfare API not available:', error);
-      }
+       // Fetch paginated welfare transactions/contributions
+       try {
+         const welfareResponse = await ApiService.getWelfareRequests(currentChamaId, itemsPerPage, offset);
+         if (welfareResponse.success) {
+           const welfareData = welfareResponse.data || [];
+           // Add welfare data with proper type
+           const welfareTransactions = welfareData.map(item => ({
+             ...item,
+             type: 'welfare',
+             transaction_type: 'welfare'
+           }));
+           allData = [...allData, ...welfareTransactions];
+         }
+       } catch (error) {
+         console.warn('Welfare API not available:', error);
+       }
+       
+       // Fetch paginated welfare contributions (actual money given to welfare requests)
+       try {
+         // First get all welfare requests to get their IDs
+         const allWelfareRequests = await ApiService.getWelfareRequests(currentChamaId, 500, 0); // Get all requests
+         if (allWelfareRequests.success && allWelfareRequests.data) {
+           const welfareRequests = allWelfareRequests.data || [];
+           const welfareContributionPromises = welfareRequests.map(request => 
+             ApiService.getWelfareContributions(request.id, itemsPerPage, offset)
+           );
+           const welfareContributionsResponses = await Promise.all(welfareContributionPromises);
+           
+           welfareContributionsResponses.forEach(response => {
+             if (response.success && response.data) {
+               const contributionData = response.data || [];
+               // Add welfare contribution data with proper type
+               const welfareContributionTransactions = contributionData.map(item => ({
+                 ...item,
+                 type: 'welfare_contribution',
+                 transaction_type: 'welfare_contribution'
+               }));
+               allData = [...allData, ...welfareContributionTransactions];
+             }
+           });
+         }
+       } catch (error) {
+         console.warn('Welfare contributions API not available:', error);
+       }
       // Fetch paginated loan data
       try {
         const loanResponse = await ApiService.getLoans(currentChamaId, itemsPerPage, offset);
@@ -427,14 +455,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
       let dataToExport = [];
       let reportTitle = '';
       let memberName = '';
-
-      console.log('🔍 Download data check:', {
-        scope,
-        allRecordsCount: allRecords?.length || 0,
-        transactionsCount: transactions?.length || 0,
-        canViewGroupRecords: canViewGroupRecords(),
-        memberId
-      });
 
       if (scope === 'all' && canViewGroupRecords()) {
         // Leadership downloading all chama records
@@ -687,7 +707,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
 
     // For merry-go-round contributions, check if we have participant info
     if (item.type === 'merry-go-round' || item.transaction_type === 'merry-go-round') {
-      // Check if we have participant information in the item
       if (item.participant) {
         const participant = item.participant;
         const firstName = participant.first_name || participant.user?.first_name || '';

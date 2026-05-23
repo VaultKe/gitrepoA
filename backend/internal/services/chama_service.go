@@ -1082,14 +1082,14 @@ func (s *ChamaService) GetMemberStatistics(chamaID, memberID string) (map[string
 	return s.getUserChamaStatistics(chamaID, memberID)
 }
 
-	// GetChamaTransactions retrieves all transactions for a chama
+// GetChamaTransactions retrieves all transactions for a chama
 func (s *ChamaService) GetChamaTransactions(chamaID string, limit, offset int) ([]*models.Transaction, error) {
 	query := `
 		SELECT
 			t.id, t.from_wallet_id, t.to_wallet_id, t.type, t.status, t.amount, t.currency,
 			t.description, t.reference, t.payment_method, t.metadata, t.fees,
 			t.initiated_by, t.recipient_id, t.approved_by, t.requires_approval, t.approval_deadline,
-			t.created_at, t.updated_at, t.chama_id,
+			t.created_at, t.updated_at,
 			u.first_name, u.last_name, u.email, u.phone
 		FROM transactions t
 		LEFT JOIN users u ON t.initiated_by = u.id

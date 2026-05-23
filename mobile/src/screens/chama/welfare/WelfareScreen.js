@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -133,7 +134,7 @@ const WelfareScreen = ({ route, navigation }) => {
 
   // State declarations (must be before any early returns)
   const [welfareRequests, setWelfareRequests] = useState([]);
-  const [welfareContributions, setWelfareContributions] = useState([]);
+  const [approvedWelfareRequests, setApprovedWelfareRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -177,13 +178,13 @@ const WelfareScreen = ({ route, navigation }) => {
   // Check if we have a valid chama
   const hasValidChama = Boolean(chamaId);
 
-  useEffect(() => {
-    if (chamaId) {
-      loadChamaDetails();
-      loadWelfareRequests();
-      loadWelfareContributions();
-    }
-  }, [chamaId]);
+   useEffect(() => {
+     if (chamaId) {
+       loadChamaDetails();
+       loadWelfareRequests();
+       // loadWelfareContributions(); // Disabled: Welfare contributions now only show in WelfareContributionsScreen
+     }
+   }, [chamaId]);
 
   // Load chama members when create modal opens
   useEffect(() => {
@@ -191,6 +192,15 @@ const WelfareScreen = ({ route, navigation }) => {
       loadChamaMembers();
     }
   }, [showCreateModal]);
+
+   // Re-fetch welfare contributions whenever the Contributions tab becomes active
+   useFocusEffect(
+     useCallback(() => {
+       if (chamaId && activeTab === 'contributions') {
+         // loadWelfareContributions(); // Disabled: Welfare contributions now only show in WelfareContributionsScreen
+       }
+     }, [chamaId, activeTab])
+   );
 
   const loadChamaDetails = async () => {
     try {
@@ -209,43 +219,17 @@ const WelfareScreen = ({ route, navigation }) => {
       setLoading(true);
       const offset = (page - 1) * itemsPerPage;
       const response = await ApiService.getWelfareRequests(chamaId, itemsPerPage, offset);
-      console.log('🔍 Welfare requests API response:', response);
-
       if (response.success) {
         const allRequests = response.data || [];
-        console.log('🔍 All welfare requests:', allRequests);
-        console.log('🔍 Sample welfare request structure:', allRequests[0]);
-
-        // Filter requests for the "Requests" tab:
-        // - Show requests that are still in voting process (pending status)
-        // - Show requests where voting hasn't completed yet
         const pendingRequests = allRequests.filter(request => {
-          console.log('🔍 Processing request:', request);
-
-          // Show pending requests (still in voting process)
-          if (request.status === 'pending') {
-            console.log('🔍 Including pending request for voting:', request.title);
-            return true;
-          }
-
-          // Also show requests that might be in voting but not yet processed
-          // (in case backend hasn't updated status yet)
-          if (request.status === 'voting') {
-            console.log('🔍 Including request in voting process:', request.title);
-            return true;
-          }
-
-          console.log('🔍 Filtering out completed request:', request.status, request.title);
-          return false;
+          return request.status === 'pending' || request.status === 'voting';
         });
-
-        console.log('🔍 Filtered pending requests:', pendingRequests);
+        const approvedRequests = allRequests.filter(request => request.status === 'approved');
         setWelfareRequests(pendingRequests);
+        setApprovedWelfareRequests(approvedRequests);
       } else {
-        console.error('🔍 Welfare requests API failed:', response);
       }
     } catch (error) {
-      console.error('Failed to load welfare requests:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -256,35 +240,7 @@ const WelfareScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadWelfareContributions = async () => {
-    try {
-      // Load all welfare requests and filter for approved ones
-      const response = await ApiService.getWelfareRequests(chamaId);
-      if (response.success) {
-        const allRequests = response.data || [];
 
-        // Filter for approved requests that passed majority voting
-        const approvedRequests = allRequests.filter(request => {
-          console.log('🔍 Processing contribution request:', request);
-
-          // Only show approved requests
-          if (request.status !== 'approved') {
-            console.log('🔍 Filtering out non-approved request:', request.status);
-            return false;
-          }
-
-          // For now, show all approved requests
-          // TODO: Add proper voting validation when voting is fully implemented
-          console.log('🔍 Including approved request for contributions:', request.title);
-          return true;
-        });
-
-        setWelfareContributions(approvedRequests);
-      }
-    } catch (error) {
-      console.error('Failed to load welfare contributions:', error);
-    }
-  };
 
 
 
@@ -295,8 +251,6 @@ const WelfareScreen = ({ route, navigation }) => {
 
       if (response.success) {
         const members = response.data || [];
-        console.log('🔍 Loaded chama members:', members);
-        console.log('🔍 Sample member structure:', members[0]);
         setChamaMembers(members);
         // Filter out current user from initial display
         const eligibleMembers = members.filter(member => {
@@ -466,14 +420,14 @@ const WelfareScreen = ({ route, navigation }) => {
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([
-      loadWelfareRequests(),
-      loadWelfareContributions()
-    ]);
-    setRefreshing(false);
-  };
+   const onRefresh = async () => {
+     setRefreshing(true);
+     await Promise.all([
+       loadWelfareRequests()
+       // loadWelfareContributions() // Disabled: Welfare contributions now only show in WelfareContributionsScreen
+     ]);
+     setRefreshing(false);
+   };
 
   const handleCreateRequest = async () => {
     // Validate form
@@ -535,21 +489,12 @@ const WelfareScreen = ({ route, navigation }) => {
   };
 
   const handleVote = async (requestId, vote) => {
-    console.log('🗳️ === STARTING VOTE PROCESS ===');
-    console.log('🗳️ Request ID:', requestId);
-    console.log('🗳️ Vote:', vote);
-    console.log('🗳️ User:', user);
-    console.log('🗳️ Chama ID:', chamaId);
-
     try {
       setVotingInProgress(prev => ({ ...prev, [requestId]: true }));
 
       // Check if user has already voted
       const request = welfareRequests.find(r => r.id === requestId);
-      console.log('🗳️ Found request:', request);
-
       if (request?.userVote) {
-        console.log('🗳️ User has already voted:', request.userVote);
         Toast.show({
           type: 'error',
           text1: 'Already Voted',
@@ -558,23 +503,10 @@ const WelfareScreen = ({ route, navigation }) => {
         return;
       }
 
-      console.log('🗳️ User has not voted yet, proceeding...');
-
       // Backend expects { vote: "yes" } or { vote: "no" }
       const voteData = { vote: vote === 'for' ? 'yes' : 'no' };
-
-      console.log('🗳️ Sending vote data:', voteData);
-
       const response = await ApiService.voteOnWelfareRequest(requestId, voteData.vote);
-
-      console.log('🗳️ === PROCESSING RESPONSE ===');
-      console.log('🗳️ Final vote response:', response);
-      console.log('🗳️ Response success:', response?.success);
-      console.log('🗳️ Response error:', response?.error);
-      console.log('🗳️ Response data:', response?.data);
-
       if (response && response.success) {
-        console.log('🗳️ Vote was successful, updating UI...');
         // Update local state immediately for better UX
         setWelfareRequests(prev => {
           return prev.map(req => {
@@ -690,19 +622,11 @@ const WelfareScreen = ({ route, navigation }) => {
           }
         }
 
-        // Refresh data from server to ensure consistency
-        console.log('🗳️ Refreshing welfare data...');
-        await Promise.all([
-          loadWelfareRequests(),
-          loadWelfareContributions()
-        ]);
-        console.log('🗳️ Vote process completed successfully');
-      } else {
-        console.error('🗳️ === VOTE FAILED ===');
-        console.error('🗳️ Vote failed response:', response);
-        console.error('🗳️ Response type:', typeof response);
-        console.error('🗳️ Response keys:', response ? Object.keys(response) : 'null/undefined');
-
+         await Promise.all([
+           loadWelfareRequests()
+           // loadWelfareContributions() // Disabled: Welfare contributions now only show in WelfareContributionsScreen
+         ]);
+      } else {       
         Toast.show({
           type: 'error',
           text1: 'Vote Failed',
@@ -941,7 +865,164 @@ const WelfareScreen = ({ route, navigation }) => {
     );
   };
 
+  const renderApprovedWelfareRequestRow = ({ item, index }) => {
+    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
+    return (
+      <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}> 
+        {/* Title Column */}
+        <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+          <View style={tableStyles.nameContainer}>
+            <View style={[tableStyles.typeIcon, { backgroundColor: getCategoryColor(item.category) + '20' }]}> 
+              <Ionicons name={getCategoryIcon(item.category)} size={12} color={getCategoryColor(item.category)} />
+            </View>
+            <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
+              {item.title}
+            </Text>
+          </View>
+        </View>
+
+        {/* Beneficiary Column */}
+        <View style={[tableStyles.tableCell, { flex: 2 }]}> 
+          <Text style={tableStyles.tableCellText} numberOfLines={1}>
+            {getBeneficiaryDisplayName(item)}
+          </Text>
+        </View>
+
+        {/* Amount Needed Column */}
+        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+          <Text style={[
+            tableStyles.tableCellText,
+            { color: colors.primary, fontWeight: typography.fontWeight.medium }
+          ]}>
+            {formatCurrency(item.amount)}
+          </Text>
+        </View>
+
+        {/* Amount Raised Column */}
+        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+          <Text style={[
+            tableStyles.tableCellText,
+            { color: colors.success, fontWeight: typography.fontWeight.medium }
+          ]}>
+            {formatCurrency(item.totalContributions || 0)}
+          </Text>
+        </View>
+
+        {/* Progress Column */}
+        <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+          <View style={[tableStyles.statusBadge, { backgroundColor: colors.primary + '20' }]}> 
+            <Text style={[tableStyles.statusText, { color: colors.primary }]}> 
+              {Math.min(Math.round(((item.totalContributions || 0) / item.amount) * 100), 100)}%
+            </Text>
+          </View>
+        </View>
+
+        {/* Actions Column */}
+        <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+          <TouchableOpacity
+            style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => {
+              setSelectedTableItem(item);
+              setShowActionModal(true);
+            }}
+          >
+            <Ionicons
+              name="ellipsis-vertical"
+              size={12}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+
+  const renderWelfareContributionRow = ({ item, index }) => {
+    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
+
+    // Get contributor display name from the contribution record
+    const getContributorName = (contribution) => {
+      if (contribution.contributor) {
+        const c = contribution.contributor;
+        const userData = c.user || c;
+        const firstName = userData.first_name || c.first_name || userData.firstName || '';
+        const lastName = userData.last_name || c.last_name || userData.lastName || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        return fullName || userData.name || c.name || userData.email?.split('@')[0] || 'Anonymous';
+      }
+      return 'Anonymous';
+    };
+
+    return (
+      <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
+        {/* Contributor Column */}
+        <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+          <View style={tableStyles.nameContainer}>
+            <View style={[tableStyles.typeIcon, { backgroundColor: colors.primary + '20' }]}>
+              <Ionicons name="person" size={12} color={colors.primary} />
+            </View>
+            <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
+              {getContributorName(item)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Welfare Request Column */}
+        <View style={[tableStyles.tableCell, { flex: 2 }]}>
+          <Text style={tableStyles.tableCellText} numberOfLines={1}>
+            {item.welfareRequestTitle?.length > 15 
+              ? item.welfareRequestTitle.substring(0, 15) + '...' 
+              : item.welfareRequestTitle || 'Welfare Fund'}
+          </Text>
+        </View>
+
+        {/* Amount Column */}
+        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+          <Text style={[
+            tableStyles.tableCellText,
+            { color: colors.success, fontWeight: typography.fontWeight.medium }
+          ]}>
+            {formatCurrency(item.amount)}
+          </Text>
+        </View>
+
+        {/* Date Column */}
+        <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+          <Text style={tableStyles.tableCellText}>
+            {formatDate(item.createdAt || item.contributed_at)}
+          </Text>
+        </View>
+
+        {/* Progress Column */}
+        <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+          <View style={[tableStyles.statusBadge, { backgroundColor: colors.success + '20' }]}>
+            <Text style={[tableStyles.statusText, { color: colors.success }]}>
+              Contributed
+            </Text>
+          </View>
+        </View>
+
+        {/* Actions Column */}
+        <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+          <TouchableOpacity
+            style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => {
+              setSelectedTableItem(item);
+              setShowActionModal(true);
+            }}
+          >
+            <Ionicons
+              name="ellipsis-vertical"
+              size={12}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   const renderTableRow = ({ item, index }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
@@ -1505,59 +1586,59 @@ const WelfareScreen = ({ route, navigation }) => {
                 )}
               </View>
             </>
-          ) : (
-            <>
-              {/* Table Container */}
-              <View style={tableStyles.tableContainer}>
-                {/* Table Header */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View>
-                    <View style={tableStyles.tableHeader}>
-                      <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-                        <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Beneficiary</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, { flex: 2 }]}>
-                        <Text style={tableStyles.tableHeaderText}>Title</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Needed</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Raised</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Progress</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Actions</Text>
-                      </View>
-                    </View>
+) : (
+             <>
+               {/* Table Container */}
+               <View style={tableStyles.tableContainer}>
+                 {/* Table Header */}
+                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                   <View>
+                     <View style={tableStyles.tableHeader}>
+                       <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                         <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
+                       </View>
+                       <View style={[tableStyles.tableCell, { flex: 2 }]}>
+                         <Text style={tableStyles.tableHeaderText}>Beneficiary</Text>
+                       </View>
+                       <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                         <Text style={tableStyles.tableHeaderText}>Needed</Text>
+                       </View>
+                       <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                         <Text style={tableStyles.tableHeaderText}>Raised</Text>
+                       </View>
+                       <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                         <Text style={tableStyles.tableHeaderText}>Progress</Text>
+                       </View>
+                       <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+                         <Text style={tableStyles.tableHeaderText}>Actions</Text>
+                       </View>
+                     </View>
 
-                    {/* Table Body */}
-                    {welfareContributions.map((item, index) => (
-                      <View key={item.id}>
-                        {renderTableRow({ item, index })}
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
+                     {/* Table Body */}
+                     {approvedWelfareRequests.map((item, index) => (
+                       <View key={item.id}>
+                           {renderApprovedWelfareRequestRow({ item, index })}
+                       </View>
+                     ))}
+                   </View>
+                 </ScrollView>
 
-                {welfareContributions.length === 0 && !loading && (
-                  <View style={styles.emptyState}>
-                    <Ionicons name="wallet-outline" size={64} color={colors.textTertiary} />
-                    <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                      No approved welfare requests
-                    </Text>
-                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                      Approved welfare requests will appear here for contributions
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </>
-          )}
-        </View>
-      </ScrollView>
+                 {approvedWelfareRequests.length === 0 && !loading && (
+                   <View style={styles.emptyState}>
+                     <Ionicons name="wallet-outline" size={64} color={colors.textTertiary} />
+                     <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                       No approved welfare requests yet
+                     </Text>
+                     <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                       Approved welfare requests ready for contribution will appear here
+                     </Text>
+                   </View>
+                 )}
+               </View>
+             </>
+           )}
+         </View>
+       </ScrollView>
 
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
@@ -2093,7 +2174,10 @@ const WelfareScreen = ({ route, navigation }) => {
                     style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
                     onPress={() => {
                       setShowActionModal(false);
-                      navigation.navigate('WelfareContributions', { welfareRequestId: selectedTableItem.id, chamaId });
+                      navigation.navigate('WelfareContributions', {
+                        welfareRequestId: selectedTableItem.welfareRequestId || selectedTableItem.id,
+                        chamaId,
+                      });
                     }}
                   >
                     <Ionicons name="list" size={18} color={colors.info} />
@@ -2114,9 +2198,9 @@ const WelfareScreen = ({ route, navigation }) => {
                       navigation.navigate('ContributeScreen', {
                         chamaId: chamaId,
                         contributionType: 'welfare',
-                        proposalId: selectedTableItem.id,
-                        proposalTitle: selectedTableItem.title,
-                        requestedAmount: selectedTableItem.amount
+                        proposalId: selectedTableItem.welfareRequestId || selectedTableItem.id,
+                        proposalTitle: selectedTableItem.welfareRequestTitle || selectedTableItem.title,
+                        requestedAmount: selectedTableItem.welfareRequestAmount || selectedTableItem.amount
                       });
                     }}
                   >

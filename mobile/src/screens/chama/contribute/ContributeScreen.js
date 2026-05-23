@@ -688,11 +688,11 @@ const handleWalletContribution = async (cleanChamaId) => {
       throw new Error(response.error || 'Welfare contribution failed');
     }
   } else {
-    // Use regular contribution endpoint for non-welfare contributions
-    const validContributionType = (() => {
-      const validTypes = ['regular', 'penalty', 'special', 'merry-go-round'];
-      return validTypes.includes(contributionType) ? contributionType : 'regular';
-    })();
+     // Use regular contribution endpoint for non-welfare contributions
+     const validContributionType = (() => {
+       const validTypes = ['regular', 'penalty', 'special', 'merry-go-round', 'welfare'];
+       return validTypes.includes(contributionType) ? contributionType : 'regular';
+     })();
 
     const contributionData = {
       chamaId: cleanChamaId,
@@ -985,34 +985,87 @@ const handleMpesaContribution = async (cleanChamaId) => {
   }
 };
 
-  const handleCashContribution = async (cleanChamaId) => {
-    // Validate cash contribution requirements
-    if (!selectedContributor) {
-      throw new Error('Please select the member who made this contribution');
-    }
+   const handleCashContribution = async (cleanChamaId) => {
+     // Validate cash contribution requirements
+     if (!selectedContributor) {
+       throw new Error('Please select the member who made this contribution');
+     }
 
-    const validContributionType = (() => {
-      const validTypes = ['regular', 'penalty', 'special', 'merry-go-round'];
-      return validTypes.includes(contributionType) ? contributionType : 'regular';
-    })();
+     // For welfare contributions, use the welfare endpoint
+     if (contributionType === 'welfare') {
+       const welfareData = {
+         welfareRequestId: proposalId,
+         amount: parseFloat(amount),
+         message: description || getDefaultDescription(),
+         chamaId: cleanChamaId,
+       };
 
-    const contributionData = {
-      chamaId: cleanChamaId,
-      amount: parseFloat(amount),
-      description: description || getDefaultDescription(),
-      type: validContributionType,
-      paymentMethod: paymentMethod, // 'cash' or 'cheque'
-      contributorId: selectedContributor.id,
-      cashType: paymentMethod, // 'cash' or 'cheque'
-      isAnonymous: false, // Cash/cheque contributions can't be anonymous
-    };
+       console.log('🔄 Making welfare cash contribution with data:', welfareData);
 
-    console.log('🔄 Making cash contribution:', contributionData);
+       const response = await ApiService.contributeToWelfare(welfareData);
 
-    const response = await ApiService.makeRequest('/contributions', {
-      method: 'POST',
-      body: JSON.stringify(contributionData),
-    });
+       if (response.success) {
+         // Refresh data
+         if (refreshSpecificData) {
+           refreshSpecificData('chamas');
+           refreshSpecificData('wallets');
+           refreshSpecificData('transactions');
+         }
+
+         const contributorName = selectedContributor.fullName;
+         const paymentTypeText = paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1);
+
+         Toast.show({
+           type: 'success',
+           text1: `${paymentTypeText} Contribution Recorded`,
+           text2: `${paymentTypeText} contribution by ${contributorName} recorded successfully`,
+           position: 'top',
+           visibilityTime: 4000,
+           topOffset: 60,
+         });
+
+         // Show success alert with details
+         Alert.alert(
+           'Contribution Recorded Successfully',
+           `${contributorName}'s ${paymentMethod} contribution of ${formatCurrency(parseFloat(amount))} has been recorded.`,
+           [
+             {
+               text: 'OK',
+               onPress: () => {
+                 navigation.goBack();
+               },
+             },
+           ]
+         );
+       } else {
+         throw new Error(response.error || 'Failed to record welfare cash contribution');
+       }
+
+       return;
+     }
+
+     const validContributionType = (() => {
+       const validTypes = ['regular', 'penalty', 'special', 'merry-go-round', 'welfare'];
+       return validTypes.includes(contributionType) ? contributionType : 'regular';
+     })();
+
+     const contributionData = {
+       chamaId: cleanChamaId,
+       amount: parseFloat(amount),
+       description: description || getDefaultDescription(),
+       type: validContributionType,
+       paymentMethod: paymentMethod, // 'cash' or 'cheque'
+       contributorId: selectedContributor.id,
+       cashType: paymentMethod, // 'cash' or 'cheque'
+       isAnonymous: false, // Cash/cheque contributions can't be anonymous
+     };
+
+     console.log('🔄 Making cash contribution:', contributionData);
+
+     const response = await ApiService.makeRequest('/contributions', {
+       method: 'POST',
+       body: JSON.stringify(contributionData),
+     });
 
     if (response.success) {
       // Refresh data
@@ -2077,7 +2130,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
               )}
 
               {paymentMethod === 'cash' && (
-                <>
                   <View style={styles.confirmationRow}>
                     <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
                       Contributor:
@@ -2086,9 +2138,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
                       {selectedContributor?.fullName || 'Not selected'}
                     </Text>
                   </View>
-
-
-                </>
               )}
 
               <View style={styles.confirmationRow}>
