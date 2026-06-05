@@ -183,6 +183,20 @@ const createHeaderStyles = (colors, spacing, typography, borderRadius) => ({
     fontSize: typography.fontSize.sm,
     marginLeft: spacing.sm,
   },
+  bulkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginRight: spacing.sm,
+    gap: spacing.xs,
+  },
+  bulkButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.white,
+  },
 });
 
 const WelfareDisbursementScreen = ({ route, navigation }) => {
@@ -239,44 +253,37 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
   }, [currentChamaId]);
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      // When searching, filter from all data and show paginated results
-      const filteredData = filterWelfareFundsData(allWelfareFunds, searchQuery, selectedFilter);
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      setWelfareFunds(filteredData.slice(startIndex, endIndex));
-      setTotalItems(filteredData.length);
-      setTotalPages(Math.ceil(filteredData.length / pageSize));
-    } else {
-      // When not searching, use server-side pagination
-      loadWelfareFunds(currentPage);
+    if (!allWelfareFunds.length) return;
+    let filtered = allWelfareFunds;
+    if (selectedFilter !== 'all') {
+      filtered = filtered.filter(fund =>
+        fund.status?.toLowerCase() === selectedFilter.toLowerCase()
+      );
     }
-  }, [currentPage, selectedFilter]);
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(fund =>
+        (fund.memberName || getRequesterDisplayName(fund)).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        fund.id?.toString().includes(searchQuery) ||
+        fund.amount?.toString().includes(searchQuery) ||
+        (fund.purpose?.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    setWelfareFunds(filtered.slice(startIndex, endIndex));
+    setTotalItems(filtered.length);
+    setTotalPages(Math.ceil(filtered.length / pageSize));
+  }, [allWelfareFunds, searchQuery, selectedFilter]);
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      // Trigger search filtering
-      const filteredData = filterWelfareFundsData(allWelfareFunds, searchQuery, selectedFilter);
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      setWelfareFunds(filteredData.slice(startIndex, endIndex));
-      setTotalItems(filteredData.length);
-      setTotalPages(Math.ceil(filteredData.length / pageSize));
-      setCurrentPage(1); // Reset to first page when searching
-    } else {
-      // Clear search and reload with pagination
-      loadWelfareFunds(1);
-      setCurrentPage(1);
-    }
-  }, [searchQuery]);
+    setCurrentPage(1);
+  }, [searchQuery, selectedFilter]);
 
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      await Promise.all([
-        loadUserRole(),
-        loadWelfareFunds(),
-      ]);
+      await loadUserRole();
+      await loadWelfareFundsAll();
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {
@@ -296,121 +303,67 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadWelfareFunds = async (page = 1, search = '') => {
+  const enrichWelfareFund = async (fund) => {
+    try {
+      const requester = fund.requester;
+      if (requester) {
+        const fullName = requester.fullName ||
+          `${requester.firstName || requester.first_name || ''} ${requester.lastName || requester.last_name || ''}`.trim();
+        return {
+          ...fund,
+          requester_name: fullName || requester.email?.split('@')[0] || 'Unknown Requester',
+          memberName: fullName || requester.email?.split('@')[0] || 'Unknown Requester',
+        };
+      }
+
+      const name = fund.requesterFirstName || fund.requester_first_name;
+      if (name) {
+        const fullName = `${name} ${fund.requesterLastName || fund.requester_last_name || ''}`.trim();
+        return {
+          ...fund,
+          requester_name: fullName,
+          memberName: fullName,
+        };
+      }
+
+      const existingName = fund.requester_name || fund.memberName;
+      if (existingName && existingName !== 'Unknown Requester') {
+        return { ...fund, requester_name: existingName, memberName: existingName };
+      }
+
+      const fallbackId = fund.id || fund.requester_id;
+      const fallbackName = fallbackId ? `Member ${fallbackId}` : 'Unknown Requester';
+      return {
+        ...fund,
+        requester_name: fallbackName,
+        memberName: fallbackName,
+      };
+    } catch (error) {
+      const existingName = fund.requester_name || fund.memberName;
+      if (existingName && existingName !== 'Unknown Requester') {
+        return { ...fund, requester_name: existingName, memberName: existingName };
+      }
+      const fallbackId = fund.id || fund.requester_id;
+      const fallbackName = fallbackId ? `Member ${fallbackId}` : 'Unknown Requester';
+      return {
+        ...fund,
+        requester_name: fallbackName,
+        memberName: fallbackName,
+      };
+    }
+  };
+
+  const loadWelfareFundsAll = async () => {
     try {
       setLoading(true);
-      const offset = (page - 1) * pageSize;
-      const response = await ApiService.getWelfareRequests(currentChamaId, pageSize, offset);
-
+      const response = await ApiService.getWelfareRequests(currentChamaId, 1000, 0);
       if (response.success) {
         let fundsData = response.data || [];
-
-        // Enrich welfare funds with requester user information
-        const enrichedFunds = await Promise.all(
-          fundsData.map(async (fund) => {
-            try {
-              const userId = fund.requester_id || fund.requesterId || fund.user_id || fund.memberId || fund.requested_by;
-              if (userId) {
-                const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                if (userResponse.success && userResponse.data) {
-                  const userData = userResponse.data;
-                  const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-
-                  return {
-                    ...fund,
-                    requester_id: userId,
-                    requester_name: fullName,
-                    memberId: userId,
-                    memberName: fullName,
-                    requester: {
-                      id: userId,
-                      first_name: userData.firstName || userData.first_name,
-                      last_name: userData.lastName || userData.last_name,
-                      name: fullName,
-                      username: userData.username || userData.email
-                    }
-                  };
-                }
-              }
-
-              return {
-                ...fund,
-                requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
-                memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
-              };
-            } catch (error) {
-              return {
-                ...fund,
-                requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
-                memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
-              };
-            }
-          })
-        );
-
+        const enrichedFunds = await Promise.all(fundsData.map(enrichWelfareFund));
         setWelfareFunds(enrichedFunds);
-
-        // For search functionality, if searching, load all data
-        if (search.trim()) {
-          const allResponse = await ApiService.getWelfareRequests(currentChamaId, 1000, 0); // Load more for search
-          if (allResponse.success) {
-            let allFundsData = allResponse.data || [];
-
-            // Enrich all welfare funds data as well
-            const enrichedAllFunds = await Promise.all(
-              allFundsData.map(async (fund) => {
-                try {
-                  const userId = fund.requester_id || fund.requesterId || fund.user_id || fund.memberId || fund.requested_by;
-                  if (userId) {
-                    const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                    if (userResponse.success && userResponse.data) {
-                      const userData = userResponse.data;
-                      const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-
-                      return {
-                        ...fund,
-                        requester_id: userId,
-                        requester_name: fullName,
-                        memberId: userId,
-                        memberName: fullName,
-                        requester: {
-                          id: userId,
-                          first_name: userData.firstName || userData.first_name,
-                          last_name: userData.lastName || userData.last_name,
-                          name: fullName,
-                          username: userData.username || userData.email
-                        }
-                      };
-                    }
-                  }
-
-                  return {
-                    ...fund,
-                    requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
-                    memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
-                  };
-                } catch (error) {
-                  return {
-                    ...fund,
-                    requester_name: fund.requester_name || fund.memberName || 'Unknown Requester',
-                    memberName: fund.requester_name || fund.memberName || 'Unknown Requester',
-                  };
-                }
-              })
-            );
-
-            setAllWelfareFunds(enrichedAllFunds);
-            // Calculate pagination info from all data
-            const filteredData = filterWelfareFundsData(enrichedAllFunds, search, selectedFilter);
-            setTotalItems(filteredData.length);
-            setTotalPages(Math.ceil(filteredData.length / pageSize));
-          }
-        } else {
-          setAllWelfareFunds(enrichedFunds);
-          // Use pagination info from API if available, otherwise estimate
-          setTotalItems(response.totalCount || response.data?.length || enrichedFunds.length);
-          setTotalPages(Math.ceil((response.totalCount || enrichedFunds.length) / pageSize));
-        }
+        setAllWelfareFunds(enrichedFunds);
+        setTotalItems(enrichedFunds.length);
+        setTotalPages(Math.ceil(enrichedFunds.length / pageSize));
       } else {
         console.error('Failed to load welfare funds:', response.error);
         setWelfareFunds([]);
@@ -429,32 +382,36 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
     }
   };
 
-  const filterWelfareFundsData = (fundsData, search, filter) => {
-    let filtered = fundsData;
-
-    // Apply status filter
-    if (filter !== 'all') {
-      filtered = filtered.filter(fund =>
-        fund.status?.toLowerCase() === filter.toLowerCase()
-      );
+  const loadWelfareFunds = async (page = 1) => {
+    try {
+      setLoading(true);
+      const offset = (page - 1) * pageSize;
+      const response = await ApiService.getWelfareRequests(currentChamaId, pageSize, offset);
+      if (response.success) {
+        let fundsData = response.data || [];
+        const enrichedFunds = await Promise.all(fundsData.map(enrichWelfareFund));
+        setWelfareFunds(enrichedFunds);
+        setAllWelfareFunds(enrichedFunds);
+        setTotalItems(response.totalCount || enrichedFunds.length);
+        setTotalPages(Math.ceil((response.totalCount || enrichedFunds.length) / pageSize));
+      } else {
+        setWelfareFunds([]);
+        setTotalItems(0);
+        setTotalPages(1);
+      }
+    } catch (error) {
+      console.error('Error loading welfare funds:', error);
+      setWelfareFunds([]);
+      setTotalItems(0);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
     }
-
-    // Apply search filter
-    if (search.trim()) {
-      filtered = filtered.filter(fund =>
-        fund.memberName?.toLowerCase().includes(search.toLowerCase()) ||
-        fund.id?.toString().includes(search) ||
-        fund.amount?.toString().includes(search) ||
-        fund.purpose?.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    return filtered;
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadWelfareFunds();
+    await loadWelfareFundsAll();
     setRefreshing(false);
   };
 
@@ -498,14 +455,20 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
 
   // Helper function to get requester display name
   const getRequesterDisplayName = (request) => {
-    if (!request.requester) return 'Unknown Requester';
+    if (!request) return 'Unknown';
 
-    const requester = request.requester;
-    const userData = requester.user || requester;
-    const firstName = userData.first_name || requester.first_name || userData.firstName || '';
-    const lastName = userData.last_name || requester.last_name || userData.lastName || '';
-    const fullName = `${firstName} ${lastName}`.trim();
-    return fullName || userData.name || requester.name || userData.email?.split('@')[0] || requester.email?.split('@')[0] || 'Unknown Requester';
+    if (request.requester_name || request.memberName) {
+      return request.requester_name || request.memberName;
+    }
+
+    if (request.requester) {
+      const requester = request.requester;
+      const fullName = requester.fullName ||
+        `${requester.firstName || requester.first_name || ''} ${requester.lastName || requester.last_name || ''}`.trim();
+      return fullName || requester.email?.split('@')[0] || 'Unknown Requester';
+    }
+
+    return request.id ? `Member ${request.id}` : 'Unknown';
   };
 
   // Helper function to get beneficiary display name
@@ -545,7 +508,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       Alert.alert('Access Denied', 'You do not have permission to disburse welfare funds.');
       return;
     }
-    const approvedFunds = welfareFunds.filter(fund => fund.status === 'approved');
+    const approvedFunds = allWelfareFunds.filter(fund => fund.status === 'approved');
     if (approvedFunds.length === 0) {
       Alert.alert('No Funds Available', 'No approved welfare funds available for disbursement.');
       return;
@@ -631,7 +594,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-            {item.requester_name || item.memberName || getBeneficiaryDisplayName(item)}
+            {item.requester_name || item.memberName || getRequesterDisplayName(item)}
           </Text>
         </View>
 
@@ -692,50 +655,61 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
     </View>
   );
 
-  const renderHeader = () => (
-    <View style={[headerStyles.header, { backgroundColor: colors.surface }]}>
-      <View style={headerStyles.headerContent}>
-        {/* Search Bar */}
-        <View style={headerStyles.searchContainer}>
-          <Ionicons name="search" size={16} color={colors.textSecondary} />
-          <TextInput
-            style={[headerStyles.searchInput, { color: colors.text }]}
-            placeholder="Search by name"
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
+  const renderHeader = () => {
+    const approvedCount = allWelfareFunds.filter(fund => fund.status === 'approved').length;
+    return (
+      <View style={[headerStyles.header, { backgroundColor: colors.surface }]}>
+        <View style={headerStyles.headerContent}>
+          {/* Search Bar */}
+          <View style={[headerStyles.searchContainer, { marginRight: spacing.sm }]}>
+            <Ionicons name="search" size={16} color={colors.textSecondary} />
+            <TextInput
+              style={[headerStyles.searchInput, { color: colors.text }]}
+              placeholder="Search by name"
+              placeholderTextColor={colors.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
 
-        {/* Filter Dropdown */}
-        <View style={headerStyles.filterContainer}>
-          <TouchableOpacity
-            style={headerStyles.filterButton}
-            onPress={() => setShowFilterDropdown(!showFilterDropdown)}
-          >
-            <Ionicons
-              name={filters.find(f => f.id === selectedFilter)?.icon || 'list'}
-              size={16}
-              color={colors.primary}
-            />
-            <Text style={[headerStyles.filterButtonText, { color: colors.text }]}>
-              {filters.find(f => f.id === selectedFilter)?.name || 'All'}
-            </Text>
-            <Ionicons
-              name={showFilterDropdown ? "chevron-up" : "chevron-down"}
-              size={16}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
+          {/* Bulk Disburse Button */}
+          {canDisburseWelfare() && (
+            <TouchableOpacity
+              style={[headerStyles.bulkButton, { backgroundColor: colors.warning }]}
+              onPress={handleBulkDisburse}
+            >
+              <Ionicons name="cash" size={16} color={colors.white} />
+              <Text style={[headerStyles.bulkButtonText, { color: colors.white }]}>
+                Bulk ({approvedCount})
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Filter Dropdown Trigger */}
+          <View style={headerStyles.filterContainer}>
+            <TouchableOpacity
+              style={headerStyles.filterButton}
+              onPress={() => setShowFilterDropdown(!showFilterDropdown)}
+            >
+              <Ionicons
+                name={filters.find(f => f.id === selectedFilter)?.icon || 'list'}
+                size={16}
+                color={colors.primary}
+              />
+              <Text style={[headerStyles.filterButtonText, { color: colors.text }]}>
+                {filters.find(f => f.id === selectedFilter)?.name || 'All'}
+              </Text>
+              <Ionicons
+                name={showFilterDropdown ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <>
@@ -814,18 +788,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                 <Text style={[styles.paginationText, currentPage === totalPages && styles.paginationTextDisabled]}>Next</Text>
                 <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? colors.textTertiary : colors.primary} />
               </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Bulk Actions */}
-          {canDisburseWelfare() && welfareFunds.filter(fund => fund.status === 'approved').length > 0 && (
-            <View style={styles.bulkActions}>
-              <Button
-                title={`Bulk Disburse (${welfareFunds.filter(fund => fund.status === 'approved').length} approved funds)`}
-                onPress={handleBulkDisburse}
-                style={{ backgroundColor: colors.warning }}
-                icon={<Ionicons name="cash" size={16} color={colors.white} />}
-              />
             </View>
           )}
         </View>
@@ -1005,14 +967,14 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                 />
               </View>
 
-              <View style={styles.bulkSummary}>
+              <View style={[styles.bulkSummary, { backgroundColor: colors.surface }]}>
                 <Text style={[styles.summaryTitle, { color: colors.text }]}>
                   Disbursement Summary
                 </Text>
                 {bulkDisburseData.selectedFunds.map((fund, index) => (
                   <View key={fund.id} style={styles.summaryItem}>
                     <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
-                      {index + 1}. {fund.requester_name || fund.memberName || 'Unknown'}
+                      {index + 1}. {getRequesterDisplayName(fund)}
                     </Text>
                     <Text style={[styles.summaryAmount, { color: colors.success }]}>
                       {formatCurrency(fund.amount)}
@@ -1142,7 +1104,6 @@ const styles = StyleSheet.create({
   bulkSummary: {
     marginTop: spacing.lg,
     padding: spacing.md,
-    backgroundColor: '#f5f5f5',
     borderRadius: borderRadius.md,
   },
   summaryTitle: {

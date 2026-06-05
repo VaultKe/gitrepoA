@@ -593,10 +593,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
               fontWeight: 'medium',
               color: colors.text,
             }}>
-              {(item.role.charAt(0).toUpperCase() + item.role.slice(1)).length > 5
-                ? (item.role.charAt(0).toUpperCase() + item.role.slice(1)).substring(0, 5) + '...'
-                : item.role.charAt(0).toUpperCase() + item.role.slice(1)
-              }
+              {getMemberName(item)}
             </Text>
         </View>
 
