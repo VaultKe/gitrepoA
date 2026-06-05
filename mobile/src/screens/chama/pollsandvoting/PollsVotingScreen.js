@@ -531,103 +531,104 @@ const PollsVotingScreen = ({ route, navigation }) => {
     }
 
     try {
-              // Immediately update UI to show vote was cast (optimistic update)
-              setVotes(prevVotes =>
-                prevVotes.map(vote =>
-                  vote.id === pollId
-                    ? { ...vote, userVoted: true }
-                    : vote
-                )
-              );
+      // Immediately update UI to show vote was cast (optimistic update)
+      setVotes(prevVotes =>
+        prevVotes.map(vote =>
+          vote.id === pollId
+            ? { ...vote, userVoted: true }
+            : vote
+        )
+      );
 
-              const response = await ApiService.castVote(chamaId, pollId, voteData);
-              if (response.success) {
-                // Check if this vote completed the poll and it's a role escalation
-                if (poll.type === 'Election / Voting' && response.data?.pollCompleted) {
-                  if (response.data?.result === 'passed') {
-                    // Get the winning candidate info
-                    const candidateName = response.data?.candidateName || 'the candidate';
-                    const newRole = response.data?.newRole || 'new role';
+      const response = await ApiService.castVote(chamaId, pollId, optionId);
 
-                    Alert.alert(
-                      '🎉 Congratulations!',
-                      `${candidateName} has been successfully elected to the ${newRole} position! The role change has taken effect immediately.`,
-                      [{ text: 'OK', onPress: () => loadPolls() }]
-                    );
-                  } else {
-                    Alert.alert(
-                      'Vote Complete',
-                      'The role escalation vote has been completed. The role change was not approved.',
-                      [{ text: 'OK', onPress: () => loadVotes() }]
-                    );
-                  }
-                } else {
-                  // Vote state already updated optimistically above
+      if (response.success) {
+        // Check if this vote completed the poll and it's a role escalation
+        if (poll.type === 'Election / Voting' && response.data?.pollCompleted) {
+          if (response.data?.result === 'passed') {
+            // Get the winning candidate info
+            const candidateName = response.data?.candidateName || 'the candidate';
+            const newRole = response.data?.newRole || 'new role';
 
-                  // Update vote counts in local state
-                  setVotes(prevVotes =>
-                    prevVotes.map(vote => {
-                      if (vote.id === pollId) {
-                        return {
-                          ...vote,
-                          options: vote.options.map(opt =>
-                            opt.id === optionId
-                              ? { ...opt, voteCount: opt.voteCount + 1 }
-                              : opt
-                          ),
-                          totalVotes: (vote.totalVotes || 0) + 1
-                        };
-                      }
-                      return vote;
-                    })
-                  );
+            Alert.alert(
+              '🎉 Congratulations!',
+              `${candidateName} has been successfully elected to the ${newRole} position! The role change has taken effect immediately.`,
+              [{ text: 'OK', onPress: () => loadPolls() }]
+            );
+          } else {
+            Alert.alert(
+              'Vote Complete',
+              'The role escalation vote has been completed. The role change was not approved.',
+              [{ text: 'OK', onPress: () => loadVotes() }]
+            );
+          }
+        } else {
+          // Vote state already updated optimistically above
 
-                  // Also update polls state for backward compatibility
-                  setPolls(prevPolls =>
-                    prevPolls.map(poll => {
-                      if (poll.id === pollId) {
-                        return {
-                          ...poll,
-                          options: poll.options.map(opt =>
-                            opt.id === optionId
-                              ? { ...opt, voteCount: opt.voteCount + 1 }
-                              : opt
-                          ),
-                          totalVotes: (poll.totalVotes || 0) + 1
-                        };
-                      }
-                      return poll;
-                    })
-                  );
-
-                  Alert.alert(
-                    'Vote Cast Successfully! 🎉',
-                    'Your vote has been recorded and vote counts updated!',
-                    [{ text: 'OK' }]
-                  );
-                }
-              } else {
-                // Revert optimistic update on failure
-                setVotes(prevVotes =>
-                  prevVotes.map(vote =>
-                    vote.id === pollId
-                      ? { ...vote, userVoted: false }
-                      : vote
-                  )
-                );
-                Alert.alert('Error', response.error || 'Failed to cast vote');
+          // Update vote counts in local state
+          setVotes(prevVotes =>
+            prevVotes.map(vote => {
+              if (vote.id === pollId) {
+                return {
+                  ...vote,
+                  options: vote.options.map(opt =>
+                    opt.id === optionId
+                      ? { ...opt, voteCount: opt.voteCount + 1 }
+                      : opt
+                  ),
+                  totalVotes: (vote.totalVotes || 0) + 1
+                };
               }
-            } catch (error) {
-              // Revert optimistic update on error
-              setVotes(prevVotes =>
-                prevVotes.map(vote =>
-                  vote.id === pollId
-                    ? { ...vote, userVoted: false }
-                    : vote
-                )
-              );
-              Alert.alert('Error', 'Failed to cast vote');
-            }
+              return vote;
+            })
+          );
+
+          // Also update polls state for backward compatibility
+          setPolls(prevPolls =>
+            prevPolls.map(poll => {
+              if (poll.id === pollId) {
+                return {
+                  ...poll,
+                  options: poll.options.map(opt =>
+                    opt.id === optionId
+                      ? { ...opt, voteCount: opt.voteCount + 1 }
+                      : opt
+                  ),
+                  totalVotes: (poll.totalVotes || 0) + 1
+                };
+              }
+              return poll;
+            })
+          );
+
+          Alert.alert(
+            'Vote Cast Successfully! 🎉',
+            'Your vote has been recorded and vote counts updated!',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        // Revert optimistic update on failure
+        setVotes(prevVotes =>
+          prevVotes.map(vote =>
+            vote.id === pollId
+              ? { ...vote, userVoted: false }
+              : vote
+          )
+        );
+        Alert.alert('Error', response.error || 'Failed to cast vote');
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      setVotes(prevVotes =>
+        prevVotes.map(vote =>
+          vote.id === pollId
+            ? { ...vote, userVoted: false }
+            : vote
+        )
+      );
+      Alert.alert('Error', 'Failed to cast vote');
+    }
   };
 
   const resetPollForm = () => {
@@ -1092,10 +1093,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
     ];
 
     return (
-      <Card
-        style={cardStyle}
+      <View style={cardStyle}
         accessibilityLabel={`${item.title} poll. ${item.status} status. ${getTotalVotesCast(item)} out of ${getTotalEligibleVoters(item)} votes cast.`}
-        accessibilityRole="button"
       >
       <View style={styles.pollHeader}>
         <View style={styles.pollInfo}>
@@ -1372,9 +1371,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
           );
         })}
         </View>
-        )}
 
-      {/* Only show "You have voted" badge for active polls */}}
+      {/* Only show "You have voted" badge for active polls */}
       {item.userVoted && item.status === 'active' && (
         <View style={[styles.votedBadge, { backgroundColor: colors.success + '15' }]}>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} />
@@ -1454,7 +1452,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           )}
         </View>
       </View>
-    </Card>
+    </View>
     );
   };
 
