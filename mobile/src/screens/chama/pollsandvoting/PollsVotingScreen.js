@@ -1752,8 +1752,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 </Text>
                 <TextInput
                   style={[
-                    styles.formInput,
-                    { backgroundColor: colors.surface, color: colors.text },
+                  styles.formInput,
+                  { backgroundColor: colors.primary + '08', color: colors.text },
                     isDesktop && styles.formInputDesktop
                   ]}
                   value={pollForm.title}
@@ -1775,7 +1775,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 style={[
                   styles.formInput,
                   styles.textArea,
-                  { backgroundColor: colors.surface, color: colors.text },
+                  { backgroundColor: colors.primary + '08', color: colors.text },
                   isDesktop && styles.formInputDesktop
                 ]}
                 value={pollForm.description}
@@ -1864,7 +1864,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                   <TextInput
                     style={[
                       styles.formInput,
-                      { backgroundColor: colors.surface, color: colors.text },
+                      { backgroundColor: colors.primary + '08', color: colors.text },
                       isDesktop && styles.formInputDesktop
                     ]}
                     value={memberSearchQuery}
@@ -1996,7 +1996,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                     Justification
                   </Text>
                   <TextInput
-                    style={[styles.formInput, styles.textArea, { backgroundColor: colors.surface, color: colors.text }]}
+                    style={[styles.formInput, styles.textArea, { backgroundColor: colors.primary + '08', color: colors.text }]}
                     value={roleForm.justification}
                     onChangeText={(text) => setRoleForm(prev => ({ ...prev, justification: text }))}
                     placeholder="Explain why this role change is needed"
@@ -2028,7 +2028,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                         style={[
                           styles.formInput,
                           styles.optionInput,
-                          { backgroundColor: colors.surface, color: colors.text },
+                  { backgroundColor: colors.primary + '08', color: colors.text },
                           isDesktop && styles.formInputDesktop
                         ]}
                         value={option}
@@ -2114,7 +2114,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 Select Candidate Member *
               </Text>
               <TextInput
-                style={[styles.formInput, { backgroundColor: colors.surface, color: colors.text }]}
+                style={[styles.formInput, { backgroundColor: colors.primary + '08', color: colors.text }]}
                 value={memberSearchQuery}
                 onChangeText={handleMemberSearch}
                 placeholder="Search members by name, email, or role"
@@ -2200,7 +2200,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 Justification
               </Text>
               <TextInput
-                style={[styles.formInput, styles.textArea, { backgroundColor: colors.surface, color: colors.text }]}
+                style={[styles.formInput, styles.textArea, { backgroundColor: colors.primary + '08', color: colors.text }]}
                 value={roleForm.justification}
                 onChangeText={(text) => setRoleForm(prev => ({ ...prev, justification: text }))}
                 placeholder="Explain why this role change is needed"
