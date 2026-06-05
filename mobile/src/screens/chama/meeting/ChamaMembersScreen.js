@@ -579,7 +579,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     return (
       <View style={{
         flexDirection: 'row',
-        paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
         backgroundColor: rowBackgroundColor,
         borderBottomWidth: 1,
@@ -973,11 +972,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
       {/* Content based on active tab */}
       {activeTab === 'members' ? (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginHorizontal: spacing.md }}>
           {/* Table Header */}
           <View style={{
             flexDirection: 'row',
-            paddingHorizontal: spacing.md,
             paddingVertical: spacing.sm,
             backgroundColor: colors.surface,
             borderBottomWidth: 2,
