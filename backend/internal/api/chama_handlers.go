@@ -2432,6 +2432,7 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		PrivateNote     string  `json:"privateNote"`
 		FromAccount     string  `json:"fromAccount" binding:"required"`
 		ToAccount       string  `json:"toAccount" binding:"required"`
+		RecipientID     string  `json:"recipientId" binding:"required"`
 		InitiatedBy     string  `json:"initiatedBy" binding:"required"`
 		InitiatedByID   string  `json:"initiatedById" binding:"required"`
 		Timestamp       string  `json:"timestamp" binding:"required"`
@@ -2458,7 +2459,17 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		return
 	}
 
-	// Insert disbursement record
+	// Start transaction
+	tx, err := db.(*sql.DB).Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to start transaction: " + err.Error(),
+		})
+		return
+	}
+	defer tx.Rollback()
+
 	query := `
 		INSERT INTO disbursements (
 			id, chama_id, type, category, member_id, member_name, amount, purpose,
@@ -2467,17 +2478,17 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 
-	disburseID := fmt.Sprintf("DISB_%d", time.Now().Unix())
+	disburseID := fmt.Sprintf("DISB_%d", time.Now().UnixNano())
 	now := time.Now()
 
-	_, err := db.(*sql.DB).Exec(
-		query,
+	recipientWalletID := fmt.Sprintf("wallet-personal-%s", req.RecipientID)
+
+	_, err = tx.Exec(query,
 		disburseID, chamaID, req.Type, req.Category, req.MemberID, req.MemberName,
 		req.Amount, req.Purpose, req.PrivateNote, req.FromAccount, req.ToAccount,
 		req.InitiatedBy, req.InitiatedByID, req.Timestamp, req.Status,
 		req.TransactionID, req.SecurityHash, now, now,
 	)
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -2486,11 +2497,54 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		return
 	}
 
+	var currentBalance float64
+	err = tx.QueryRow("SELECT balance FROM wallets WHERE id = $1", recipientWalletID).Scan(&currentBalance)
+	if err == sql.ErrNoRows {
+		_, err = tx.Exec(
+			"INSERT INTO wallets (id, type, owner_id, balance, currency, is_active, is_locked, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+			recipientWalletID, models.WalletTypePersonal, req.RecipientID, req.Amount, "KES", true, false, now, now,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to create recipient wallet: " + err.Error(),
+			})
+			return
+		}
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to check recipient wallet: " + err.Error(),
+		})
+		return
+	} else {
+		_, err = tx.Exec("UPDATE wallets SET balance = $1, updated_at = $2 WHERE id = $3", currentBalance+req.Amount, now, recipientWalletID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to credit recipient wallet: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to commit transaction: " + err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Individual disbursement created successfully",
 		"data": gin.H{
-			"id": disburseID,
+			"id":             disburseID,
+			"recipientId":    req.RecipientID,
+			"creditedAmount": req.Amount,
+			"walletId":       recipientWalletID,
 		},
 	})
 }
@@ -2595,7 +2649,7 @@ func CreateBulkDisbursement(c *gin.Context) {
 		memberName, _ := member["name"].(string)
 		sharesOwned, _ := member["sharesOwned"].(float64)
 
-		dividendID := fmt.Sprintf("DIV_%d_%s", time.Now().Unix(), memberID)
+	dividendID := fmt.Sprintf("DIV_%d_%s", time.Now().UnixNano(), memberID)
 		amount := sharesOwned * req.DividendPerShare
 
 		_, err = tx.Exec(

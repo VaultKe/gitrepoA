@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -206,7 +206,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
   const tableStyles = createTableStyles(colors, spacing, typography, shadows);
   const headerStyles = createHeaderStyles(colors, spacing, typography, borderRadius);
 
-  // State variables
   const [welfareFunds, setWelfareFunds] = useState([]);
   const [allWelfareFunds, setAllWelfareFunds] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -216,13 +215,11 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [userRole, setUserRole] = useState('member');
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const pageSize = 15;
 
-  // Modal states
   const [showDisburseModal, setShowDisburseModal] = useState(false);
   const [selectedFund, setSelectedFund] = useState(null);
   const [showBulkDisburseModal, setShowBulkDisburseModal] = useState(false);
@@ -285,7 +282,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       await loadUserRole();
       await loadWelfareFundsAll();
     } catch (error) {
-      console.error('Error loading initial data:', error);
+      Alert.alert('Error', 'Failed to load initial data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -298,59 +295,44 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         setUserRole(response.data?.role || 'member');
       }
     } catch (error) {
-      console.error('Error loading user role:', error);
       setUserRole('member');
     }
   };
 
   const enrichWelfareFund = async (fund) => {
-    try {
-      const requester = fund.requester;
-      if (requester) {
-        const fullName = requester.fullName ||
-          `${requester.firstName || requester.first_name || ''} ${requester.lastName || requester.last_name || ''}`.trim();
-        return {
-          ...fund,
-          requester_name: fullName || requester.email?.split('@')[0] || 'Unknown Requester',
-          memberName: fullName || requester.email?.split('@')[0] || 'Unknown Requester',
-        };
-      }
-
-      const name = fund.requesterFirstName || fund.requester_first_name;
-      if (name) {
-        const fullName = `${name} ${fund.requesterLastName || fund.requester_last_name || ''}`.trim();
-        return {
-          ...fund,
-          requester_name: fullName,
-          memberName: fullName,
-        };
-      }
-
-      const existingName = fund.requester_name || fund.memberName;
-      if (existingName && existingName !== 'Unknown Requester') {
-        return { ...fund, requester_name: existingName, memberName: existingName };
-      }
-
-      const fallbackId = fund.id || fund.requester_id;
-      const fallbackName = fallbackId ? `Member ${fallbackId}` : 'Unknown Requester';
+    const requester = fund.requester;
+    if (requester) {
+      const fullName = requester.fullName ||
+        `${requester.firstName || requester.first_name || ''} ${requester.lastName || requester.last_name || ''}`.trim();
       return {
         ...fund,
-        requester_name: fallbackName,
-        memberName: fallbackName,
-      };
-    } catch (error) {
-      const existingName = fund.requester_name || fund.memberName;
-      if (existingName && existingName !== 'Unknown Requester') {
-        return { ...fund, requester_name: existingName, memberName: existingName };
-      }
-      const fallbackId = fund.id || fund.requester_id;
-      const fallbackName = fallbackId ? `Member ${fallbackId}` : 'Unknown Requester';
-      return {
-        ...fund,
-        requester_name: fallbackName,
-        memberName: fallbackName,
+        requester_name: fullName || requester.email?.split('@')[0] || 'Unknown Requester',
+        memberName: fullName || requester.email?.split('@')[0] || 'Unknown Requester',
       };
     }
+
+    const name = fund.requesterFirstName || fund.requester_first_name;
+    if (name) {
+      const fullName = `${name} ${fund.requesterLastName || fund.requester_last_name || ''}`.trim();
+      return {
+        ...fund,
+        requester_name: fullName,
+        memberName: fullName,
+      };
+    }
+
+    const existingName = fund.requester_name || fund.memberName;
+    if (existingName && existingName !== 'Unknown Requester') {
+      return { ...fund, requester_name: existingName, memberName: existingName };
+    }
+
+    const fallbackId = fund.id || fund.requester_id;
+    const fallbackName = fallbackId ? `Member ${fallbackId}` : 'Unknown Requester';
+    return {
+      ...fund,
+      requester_name: fallbackName,
+      memberName: fallbackName,
+    };
   };
 
   const loadWelfareFundsAll = async () => {
@@ -365,14 +347,12 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         setTotalItems(enrichedFunds.length);
         setTotalPages(Math.ceil(enrichedFunds.length / pageSize));
       } else {
-        console.error('Failed to load welfare funds:', response.error);
         setWelfareFunds([]);
         setAllWelfareFunds([]);
         setTotalItems(0);
         setTotalPages(1);
       }
     } catch (error) {
-      console.error('Error loading welfare funds:', error);
       setWelfareFunds([]);
       setAllWelfareFunds([]);
       setTotalItems(0);
@@ -400,7 +380,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         setTotalPages(1);
       }
     } catch (error) {
-      console.error('Error loading welfare funds:', error);
       setWelfareFunds([]);
       setTotalItems(0);
       setTotalPages(1);
@@ -438,7 +417,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown Date';
-
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid Date';
@@ -448,43 +426,22 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         day: 'numeric',
       });
     } catch (error) {
-      console.warn('Date formatting error:', error);
       return 'Invalid Date';
     }
   };
 
-  // Helper function to get requester display name
   const getRequesterDisplayName = (request) => {
     if (!request) return 'Unknown';
-
     if (request.requester_name || request.memberName) {
       return request.requester_name || request.memberName;
     }
-
     if (request.requester) {
       const requester = request.requester;
       const fullName = requester.fullName ||
         `${requester.firstName || requester.first_name || ''} ${requester.lastName || requester.last_name || ''}`.trim();
       return fullName || requester.email?.split('@')[0] || 'Unknown Requester';
     }
-
     return request.id ? `Member ${request.id}` : 'Unknown';
-  };
-
-  // Helper function to get beneficiary display name
-  const getBeneficiaryDisplayName = (request) => {
-    // If there's a specific beneficiary (different from requester)
-    if (request.beneficiary && request.beneficiaryId !== request.requesterId) {
-      const beneficiary = request.beneficiary;
-      const userData = beneficiary.user || beneficiary;
-      const firstName = userData.first_name || beneficiary.first_name || userData.firstName || beneficiary.firstName || '';
-      const lastName = userData.last_name || beneficiary.last_name || userData.lastName || beneficiary.lastName || '';
-      const fullName = `${firstName} ${lastName}`.trim();
-      return fullName || userData.name || beneficiary.name || userData.email?.split('@')[0] || beneficiary.email?.split('@')[0] || 'Unknown Member';
-    }
-
-    // Otherwise, it's for the requester themselves
-    return getRequesterDisplayName(request);
   };
 
   const handleDisburse = (fund) => {
@@ -492,12 +449,14 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       Alert.alert('Access Denied', 'You do not have permission to disburse welfare funds.');
       return;
     }
+    const recipientId = fund.requester_id || fund.memberId || (fund.requester?.id) || fund.id;
+    const recipientName = fund.requester_name || fund.memberName || fund.requester?.name || 'Unknown';
     setSelectedFund(fund);
     setDisburseForm({
       amount: fund.amount?.toString() || '',
-      recipientId: fund.memberId || fund.requester_id || fund.id,
-      recipientName: fund.requester_name || fund.memberName || fund.requester?.name || 'Unknown',
-      description: `Welfare disbursement to ${fund.requester_name || fund.memberName || 'member'}`,
+      recipientId,
+      recipientName,
+      description: `Welfare disbursement to ${recipientName}`,
       privateNote: '',
     });
     setShowDisburseModal(true);
@@ -508,7 +467,9 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       Alert.alert('Access Denied', 'You do not have permission to disburse welfare funds.');
       return;
     }
-    const approvedFunds = allWelfareFunds.filter(fund => fund.status === 'approved');
+    const approvedFunds = allWelfareFunds.filter(fund =>
+      fund.status === 'approved' && fund.status !== 'disbursed' && fund.status !== 'cancelled'
+    );
     if (approvedFunds.length === 0) {
       Alert.alert('No Funds Available', 'No approved welfare funds available for disbursement.');
       return;
@@ -522,7 +483,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
 
   const submitDisbursement = async () => {
     if (!selectedFund) return;
-
     try {
       const disbursementData = {
         type: 'welfare',
@@ -536,18 +496,19 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         initiatedById: user.id,
         timestamp: new Date().toISOString(),
       };
-
       const response = await ApiService.disburseWelfareFund(currentChamaId, disbursementData);
-
       if (response.success) {
         Alert.alert('Success', 'Welfare fund disbursed successfully.');
         setShowDisburseModal(false);
-        await loadWelfareFunds();
+        const updatedAll = allWelfareFunds.map(f =>
+          f.id === selectedFund.id ? { ...f, status: 'disbursed' } : f
+        );
+        setAllWelfareFunds(updatedAll);
+        setWelfareFunds(updatedAll.slice(0, pageSize));
       } else {
         Alert.alert('Error', response.error || 'Failed to disburse welfare fund.');
       }
     } catch (error) {
-      console.error('Disbursement error:', error);
       Alert.alert('Error', 'Failed to process disbursement. Please try again.');
     }
   };
@@ -557,8 +518,8 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       const bulkData = {
         funds: bulkDisburseData.selectedFunds.map(fund => ({
           fundId: fund.id,
-          recipientId: fund.memberId || fund.requester_id,
-          recipientName: fund.requester_name || fund.memberName || 'Unknown',
+          recipientId: fund.requester_id || fund.memberId || (fund.requester?.id) || fund.id,
+          recipientName: fund.requester_name || fund.memberName || fund.requester?.name || 'Unknown',
           amount: fund.amount,
         })),
         description: bulkDisburseData.description,
@@ -566,19 +527,21 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         initiatedById: user.id,
         timestamp: new Date().toISOString(),
       };
-
       const response = await ApiService.bulkDisburseWelfareFunds(currentChamaId, bulkData);
-
       if (response.success) {
         Alert.alert('Success', `Bulk disbursement completed for ${bulkDisburseData.selectedFunds.length} members.`);
         setShowBulkDisburseModal(false);
-        await loadWelfareFunds();
+        const disbursedIds = new Set(bulkDisburseData.selectedFunds.map(f => f.id));
+        const updatedAll = allWelfareFunds.map(f =>
+          disbursedIds.has(f.id) ? { ...f, status: 'disbursed' } : f
+        );
+        setAllWelfareFunds(updatedAll);
+        setWelfareFunds(updatedAll.slice(0, pageSize));
       } else {
         Alert.alert('Error', response.error || 'Failed to process bulk disbursement.');
       }
     } catch (error) {
-      console.error('Bulk disbursement error:', error);
-      Alert.alert('Error', 'Failed to process bulk disbursement. Please try again.');
+      Alert.alert('Error', 'Failed to process bulk disbursement.');
     }
   };
 
@@ -588,31 +551,23 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
 
   const renderTableRow = ({ item, index }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
-
     return (
       <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
-        {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
             {item.requester_name || item.memberName || getRequesterDisplayName(item)}
           </Text>
         </View>
-
-        {/* Amount */}
         <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
           <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium }]}>
             {formatCurrency(item.amount)}
           </Text>
         </View>
-
-        {/* Date */}
         <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
           <Text style={tableStyles.tableCellText}>
             {formatDate(item.createdAt || item.created_at)}
           </Text>
         </View>
-
-        {/* Status */}
         <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
           <View style={[tableStyles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
             <Text style={[tableStyles.statusText, { color: getStatusColor(item.status) }]}>
@@ -620,13 +575,12 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
             </Text>
           </View>
         </View>
-
-        {/* Actions */}
         <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
           <View style={tableStyles.actionButtons}>
             <TouchableOpacity
               style={[tableStyles.actionButton, { backgroundColor: colors.info + '20' }]}
-              onPress={() => navigation.navigate('WelfareDetails', { fundId: item.id, chamaId: currentChamaId })}            >
+              onPress={() => navigation.navigate('WelfareDetails', { fundId: item.id, chamaId: currentChamaId })}
+            >
               <Ionicons name="eye" size={14} color={colors.info} />
             </TouchableOpacity>
             {canDisburseWelfare() && item.status === 'approved' && (
@@ -649,8 +603,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         {selectedFilter === 'all'
           ? 'No welfare funds have been approved yet'
-          : `No welfare funds with status "${selectedFilter}" found`
-        }
+          : `No welfare funds with status "${selectedFilter}" found`}
       </Text>
     </View>
   );
@@ -660,7 +613,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
     return (
       <View style={[headerStyles.header, { backgroundColor: colors.surface }]}>
         <View style={headerStyles.headerContent}>
-          {/* Search Bar */}
           <View style={[headerStyles.searchContainer, { marginRight: spacing.sm }]}>
             <Ionicons name="search" size={16} color={colors.textSecondary} />
             <TextInput
@@ -671,8 +623,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
               onChangeText={setSearchQuery}
             />
           </View>
-
-          {/* Bulk Disburse Button */}
           {canDisburseWelfare() && (
             <TouchableOpacity
               style={[headerStyles.bulkButton, { backgroundColor: colors.warning }]}
@@ -684,8 +634,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
           )}
-
-          {/* Filter Dropdown Trigger */}
           <View style={headerStyles.filterContainer}>
             <TouchableOpacity
               style={headerStyles.filterButton}
@@ -715,8 +663,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
     <>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {renderHeader()}
-
-        {/* Dropdown Overlay */}
         {showFilterDropdown && (
           <TouchableOpacity
             style={styles.dropdownOverlay}
@@ -724,10 +670,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
             onPress={() => setShowFilterDropdown(false)}
           />
         )}
-
-        {/* Table Container */}
         <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-          {/* Table Header */}
           <View style={tableStyles.tableHeader}>
             <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
               <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member</Text>
@@ -745,8 +688,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
               <Text style={tableStyles.tableHeaderText}>Actions</Text>
             </View>
           </View>
-
-          {/* Table Body */}
           <FlatList
             data={welfareFunds}
             renderItem={renderTableRow}
@@ -763,8 +704,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
             }
             ListEmptyComponent={!loading && renderEmptyState()}
           />
-
-          {/* Pagination */}
           {totalItems > pageSize && (
             <View style={styles.pagination}>
               <TouchableOpacity
@@ -775,11 +714,9 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                 <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? colors.textTertiary : colors.primary} />
                 <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>Previous</Text>
               </TouchableOpacity>
-
               <Text style={styles.paginationInfo}>
                 Page {currentPage} of {totalPages} ({totalItems} total)
               </Text>
-
               <TouchableOpacity
                 style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
                 onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
@@ -791,11 +728,9 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
             </View>
           )}
         </View>
-
         {loading && <LoadingSpinner />}
       </SafeAreaView>
 
-      {/* Filter Dropdown */}
       {showFilterDropdown && (
         <View style={[headerStyles.dropdownContainer, {
           position: 'absolute',
@@ -834,7 +769,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      {/* Disburse Modal */}
       <Modal
         visible={showDisburseModal}
         transparent={true}
@@ -844,28 +778,19 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Disburse Welfare Fund
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowDisburseModal(false)}
-                style={styles.modalCloseButton}
-              >
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Disburse Welfare Fund</Text>
+              <TouchableOpacity onPress={() => setShowDisburseModal(false)} style={styles.modalCloseButton}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-
             <ScrollView style={styles.modalBody}>
               {selectedFund && (
                 <View>
                   <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
                     {selectedFund.memberName} - {formatCurrency(selectedFund.amount)}
                   </Text>
-
                   <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: colors.text }]}>
-                      Amount to Disburse (KES) *
-                    </Text>
+                    <Text style={[styles.formLabel, { color: colors.text }]}>Amount to Disburse (KES) *</Text>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                       value={disburseForm.amount}
@@ -875,11 +800,8 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                       keyboardType="numeric"
                     />
                   </View>
-
                   <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: colors.text }]}>
-                      Description *
-                    </Text>
+                    <Text style={[styles.formLabel, { color: colors.text }]}>Description *</Text>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                       value={disburseForm.description}
@@ -890,11 +812,8 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                       numberOfLines={2}
                     />
                   </View>
-
                   <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: colors.text }]}>
-                      Private Note (Audit Trail)
-                    </Text>
+                    <Text style={[styles.formLabel, { color: colors.text }]}>Private Note (Audit Trail)</Text>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                       value={disburseForm.privateNote}
@@ -905,7 +824,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                       numberOfLines={2}
                     />
                   </View>
-
                   <View style={styles.modalActions}>
                     <Button
                       title="Cancel"
@@ -926,7 +844,6 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Bulk Disburse Modal */}
       <Modal
         visible={showBulkDisburseModal}
         transparent={true}
@@ -936,26 +853,17 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Bulk Welfare Disbursement
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowBulkDisburseModal(false)}
-                style={styles.modalCloseButton}
-              >
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Bulk Welfare Disbursement</Text>
+              <TouchableOpacity onPress={() => setShowBulkDisburseModal(false)} style={styles.modalCloseButton}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-
             <ScrollView style={styles.modalBody}>
               <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
                 Disburse welfare funds to {bulkDisburseData.selectedFunds.length} approved members
               </Text>
-
               <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: colors.text }]}>
-                  Description *
-                </Text>
+                <Text style={[styles.formLabel, { color: colors.text }]}>Description *</Text>
                 <TextInput
                   style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                   value={bulkDisburseData.description}
@@ -966,11 +874,8 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                   numberOfLines={2}
                 />
               </View>
-
               <View style={[styles.bulkSummary, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.summaryTitle, { color: colors.text }]}>
-                  Disbursement Summary
-                </Text>
+                <Text style={[styles.summaryTitle, { color: colors.text }]}>Disbursement Summary</Text>
                 {bulkDisburseData.selectedFunds.map((fund, index) => (
                   <View key={fund.id} style={styles.summaryItem}>
                     <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
@@ -982,15 +887,12 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
                   </View>
                 ))}
                 <View style={styles.totalSummary}>
-                  <Text style={[styles.totalText, { color: colors.text }]}>
-                    Total Amount:
-                  </Text>
+                  <Text style={[styles.totalText, { color: colors.text }]}>Total Amount:</Text>
                   <Text style={[styles.totalAmount, { color: colors.success }]}>
                     {formatCurrency(bulkDisburseData.selectedFunds.reduce((sum, fund) => sum + (fund.amount || 0), 0))}
                   </Text>
                 </View>
               </View>
-
               <View style={styles.modalActions}>
                 <Button
                   title="Cancel"
@@ -1013,20 +915,12 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-  },
-  emptyTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
   },
   emptySubtitle: {
     fontSize: typography.fontSize.base,
@@ -1041,11 +935,34 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     zIndex: 999,
   },
-  bulkActions: {
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: spacing.md,
-    backgroundColor: 'white',
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: '#e5e7eb',
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
+  },
+  paginationButtonDisabled: { opacity: 0.5 },
+  paginationText: {
+    fontSize: typography.fontSize.sm,
+    color: '#2563eb',
+    fontWeight: typography.fontWeight.medium,
+  },
+  paginationTextDisabled: { color: '#9ca3af' },
+  paginationInfo: {
+    fontSize: typography.fontSize.sm,
+    color: '#6b7280',
+    fontWeight: typography.fontWeight.medium,
   },
   modalOverlay: {
     flex: 1,
@@ -1071,19 +988,13 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
   },
-  modalCloseButton: {
-    padding: spacing.xs,
-  },
-  modalBody: {
-    flex: 1,
-  },
+  modalCloseButton: { padding: spacing.xs },
+  modalBody: { flex: 1 },
   modalSubtitle: {
     fontSize: typography.fontSize.sm,
     marginBottom: spacing.lg,
   },
-  formGroup: {
-    marginBottom: spacing.md,
-  },
+  formGroup: { marginBottom: spacing.md },
   formLabel: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
@@ -1116,9 +1027,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.xs,
   },
-  summaryText: {
-    fontSize: typography.fontSize.sm,
-  },
+  summaryText: { fontSize: typography.fontSize.sm },
   summaryAmount: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
@@ -1138,39 +1047,6 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.md,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  paginationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  paginationButtonDisabled: {
-    opacity: 0.5,
-  },
-  paginationText: {
-    fontSize: typography.fontSize.sm,
-    color: '#2563eb',
-    fontWeight: typography.fontWeight.medium,
-  },
-  paginationTextDisabled: {
-    color: '#9ca3af',
-  },
-  paginationInfo: {
-    fontSize: typography.fontSize.sm,
-    color: '#6b7280',
-    fontWeight: typography.fontWeight.medium,
   },
 });
 
