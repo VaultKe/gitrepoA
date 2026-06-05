@@ -166,10 +166,6 @@ const CreateMerryGoRound = ({ route, navigation }) => {
       const response = await ApiService.createMerryGoRound(merryGoRoundData);
       
       if (response.success) {
-        console.log('🎉 Merry-go-round created successfully!');
-
-        // Navigate back immediately with the new merry-go-round data
-        console.log('🔙 Navigating back with new merry-go-round data...');
         navigation.navigate('MerryGoRoundScreen', {
           chamaId,
           newMerryGoRound: response.data,

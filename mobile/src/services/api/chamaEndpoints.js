@@ -32,6 +32,13 @@ const getMerryGoRounds = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/merry-go-rounds`);
 };
 
+const createMerryGoRound = async (data) => {
+  return await makeRequest('/merry-go-rounds/', {
+    method: 'POST',
+    body: data,
+  });
+};
+
 const createChama = async (chamaData) => {
   return await makeRequest('/chamas/', {
     method: 'POST',
@@ -67,6 +74,7 @@ export {
   getChamaMembers,
   getChamaTransactions,
   getMerryGoRounds,
+  createMerryGoRound,
   createChama,
   updateChama,
   joinChama,
