@@ -25,7 +25,7 @@ func (w *corsResponseWriter) WriteHeader(code int) {
 
 	// For redirects (3xx status codes), ensure proper handling
 	if code >= 300 && code < 400 {
-		log.Printf("🔒 CORS: Handling redirect response (status: %d) with CORS headers", code)
+		// log.Printf("🔒 CORS: Handling redirect response (status: %d) with CORS headers", code)
 	}
 
 	w.ResponseWriter.WriteHeader(code)
@@ -35,7 +35,7 @@ func (w *corsResponseWriter) WriteHeader(code int) {
 func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		method := c.Request.Method
+		// method := c.Request.Method
 		path := c.Request.URL.Path
 
 		// Define allowed origins for different environments
@@ -83,10 +83,7 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Log CORS processing for debugging
-		log.Printf("🔒 CORS: Origin=%s, Method=%s, Path=%s, AllowedOrigin=%s", origin, method, path, allowedOrigin)
-		log.Printf("🔒 CORS: Headers - Origin:%s, Host:%s, User-Agent:%s", c.GetHeader("Origin"), c.GetHeader("Host"), c.GetHeader("User-Agent"))
-
+		
 		// Replace response writer with CORS-enabled one
 		c.Writer = &corsResponseWriter{
 			ResponseWriter: c.Writer,
@@ -95,7 +92,7 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 
 		// Handle preflight OPTIONS requests
 		if c.Request.Method == "OPTIONS" {
-			log.Printf("🔒 CORS: Handling OPTIONS preflight for %s", path)
+			// log.Printf("🔒 CORS: Handling OPTIONS preflight for %s", path)
 			c.Header("Access-Control-Allow-Origin", allowedOrigin)
 			c.Header("Access-Control-Allow-Credentials", "false")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-CSRF-Token, X-File-Name, X-File-Size, X-Timezone, X-Language, X-Screen-Resolution, X-Device-Type, X-Device-Name, X-Browser-Name, X-OS-Name, X-Connection-Type")
@@ -108,7 +105,7 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 
 		// For POST requests to /api/v1/chamas, ensure no redirects
 		if c.Request.Method == "POST" && strings.HasPrefix(path, "/api/v1/chamas") && !strings.HasSuffix(path, "/") {
-			log.Printf("🔒 CORS: Ensuring no redirect for POST /api/v1/chamas")
+			// log.Printf("🔒 CORS: Ensuring no redirect for POST /api/v1/chamas")
 		}
 
 		c.Next()
