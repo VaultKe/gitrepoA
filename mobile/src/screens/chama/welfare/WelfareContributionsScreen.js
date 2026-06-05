@@ -122,26 +122,12 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
      if (!welfareRequestId) return;
      try {
        setRequestLoading(true);
-       console.log(
-         "🔍 [WelfareContributionsScreen] loadWelfareRequestDetails started for",
-         welfareRequestId,
-       );
 
        // Fetch request summary and live contribution records in parallel
        const [requestsResponse, contributionsResponse] = await Promise.all([
          ApiService.getWelfareRequests(chamaId, 500, 0),
          ApiService.getWelfareContributions(welfareRequestId, 500, 0),
        ]);
-
-       console.log(
-         "🔍 [WelfareContributionsScreen] loadWelfareRequestDetails responses:",
-         {
-           welfareRequestsSuccess: requestsResponse?.success,
-           welfareRequestsCount: requestsResponse?.data?.length,
-           welfareContributionsSuccess: contributionsResponse?.success,
-           welfareContributionsCount: contributionsResponse?.data?.length,
-         }
-       );
 
         let request = null;
 
@@ -231,36 +217,12 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
 
     try {
       setContributionsLoading(true);
-      console.log(
-        "🔍 [WelfareContributionsScreen] → getWelfareContributions for welfareRequestId:",
-        welfareRequestId,
-      );
-
+    
       const response =
         await ApiService.getWelfareContributions(welfareRequestId);
 
-      console.log(
-        "🔍 [WelfareContributionsScreen] ← getWelfareContributions response:",
-        {
-          ok: response?.success,
-          rawDataLength: Array.isArray(response?.data)
-            ? response.data.length
-            : typeof response?.data,
-          rawData: response?.data,
-        },
-      );
-
       if (response?.success) {
         const contribs = Array.isArray(response.data) ? response.data : [];
-        console.log(
-          "✅ [WelfareContributionsScreen] Loaded",
-          contribs.length,
-          "contribution rec(s) for",
-          welfareRequestId,
-          contribs.length > 0 &&
-            `| latest: id=${contribs[0].id} amount=${contribs[0].amount} msg="${contribs[0].message}"`,
-        );
-
         setAllContributions(contribs);
         setTotalItems(contribs.length);
         setTotalPages(Math.max(1, Math.ceil(contribs.length / pageSize)));
@@ -290,11 +252,7 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
   // ── Effects ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (welfareRequestId) {
-      console.log(
-        "🔁 [useEffect] WelfareContributionsScreen mounting with welfareRequestId:",
-        welfareRequestId,
-      );
-      loadWelfareRequestDetails();
+     loadWelfareRequestDetails();
       loadContributions();
     } else {
       console.warn(
@@ -309,10 +267,6 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
     // optional chaining on the singleton = safe on web where it's undefined
     React.useCallback(() => {
       if (welfareRequestId) {
-        console.log(
-          "🔁 [useFocusEffect] WelfareContributionsScreen gained focus – loading contributions for",
-          welfareRequestId,
-        );
         loadContributions();
       }
     }, [welfareRequestId]),
@@ -322,11 +276,6 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
   const contributions = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
     const slice = allContributions.slice(startIndex, startIndex + pageSize);
-    console.log("🔁 useMemo contributions redraw:", {
-      allContributionsLen: allContributions.length,
-      startIndex,
-      sliceLen: slice.length,
-    });
     return slice;
   }, [allContributions, currentPage, pageSize]);
 

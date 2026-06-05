@@ -112,7 +112,7 @@ func GetMerryGoRounds(c *gin.Context) {
 		return
 	}
 
-	chamaID := c.Query("chamaId")
+	chamaID := c.Param("id")
 	if chamaID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,

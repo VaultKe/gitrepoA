@@ -231,7 +231,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
 
     if (shouldShowGroupData) {
       // Leadership in group view: show ALL records
-      console.log('👑 Leadership group view: showing all', allData.length, 'records');
       return allData;
     } else {
       // Personal view OR regular member: show personal + group welfare/merry-go-round
@@ -251,7 +250,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
         return isUserRecord || isGroupVisible;
       });
 
-      console.log('👤 Personal/member view: showing', filteredData.length, 'of', allData.length, 'records');
       return filteredData;
     }
   };
@@ -276,7 +274,6 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
   // Separate effect for view mode changes to re-filter existing data
   useEffect(() => {
     if (allRecords.length > 0) {
-      console.log('🔄 View mode changed to:', viewMode, '- Re-filtering data');
       const filteredData = applyRoleBasedFiltering(allRecords);
 
       // Apply selected filter
@@ -289,8 +286,7 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
       }
 
       setTransactions(finalData);
-      console.log('📊 Re-filtered to', finalData.length, 'records');
-    }
+   }
   }, [viewMode, selectedFilter]);
 
   const loadInitialData = async () => {
@@ -313,12 +309,10 @@ const ChamaTransactionsScreen = ({ route, navigation }) => {
       let allData = [];
 
       // Fetch paginated chama transactions (15 items per page)
-      console.log('🔍 Fetching paginated transactions for chama:', currentChamaId);
       const offset = (currentPage - 1) * itemsPerPage;
       const transactionResponse = await ApiService.getChamaTransactions(currentChamaId, itemsPerPage, offset);
       if (transactionResponse.success) {
         const transactionData = transactionResponse.data || [];
-        console.log('📊 Fetched transactions:', transactionData.length);
         allData = [...allData, ...transactionData];
       }
 

@@ -15,7 +15,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
-BACKEND_URL="http://localhost:8080"
+BACKEND_URL="http://localhost:8085"
 FRONTEND_PORT="19006"
 
 # Helper functions

@@ -12,13 +12,13 @@ sql: Scan error on column index 8, name "notes": converting NULL to string is un
 
 ### Error 2: Missing PATCH Endpoint
 ```
-PATCH http://localhost:8080/api/v1/meetings/meeting-1753546745491881159 404 (Not Found)
+PATCH http://localhost:8085/api/v1/meetings/meeting-1753546745491881159 404 (Not Found)
 ```
 **Fix**: Implement the PATCH endpoint for updating meeting status.
 
 ### Error 3: CORS Policy (if still occurring)
 ```
-Access to fetch at 'http://localhost:8080/api/v1/meetings?chamaId=...' from origin 'http://dqtl6f-ip-41-139-130-223.tunnelmole.net'
+Access to fetch at 'http://localhost:8085/api/v1/meetings?chamaId=...' from origin 'http://dqtl6f-ip-41-139-130-223.tunnelmole.net'
 has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
 ```
 
@@ -262,8 +262,8 @@ app.get('/api/v1/meetings', (req, res) => {
   });
 });
 
-app.listen(8080, () => {
-  console.log('Backend server running on http://localhost:8080');
+app.listen(8085, () => {
+  console.log('Backend server running on http://localhost:8085');
 });
 ```
 
@@ -276,7 +276,7 @@ node server.js
 
 ### 2. Test API Endpoint
 ```bash
-curl "http://localhost:8080/api/v1/meetings?chamaId=test-id"
+curl "http://localhost:8085/api/v1/meetings?chamaId=test-id"
 ```
 
 ### 3. Check CORS Headers
@@ -285,13 +285,13 @@ curl -H "Origin: http://dqtl6f-ip-41-139-130-223.tunnelmole.net" \
      -H "Access-Control-Request-Method: GET" \
      -H "Access-Control-Request-Headers: Content-Type" \
      -X OPTIONS \
-     http://localhost:8080/api/v1/meetings
+     http://localhost:8085/api/v1/meetings
 ```
 
 ## Common Issues and Solutions
 
 ### Issue 1: CORS Still Blocked
-- Ensure backend server is running on port 8080
+- Ensure backend server is running on port 8085
 - Check that CORS middleware is properly configured
 - Verify the origin URL matches exactly
 

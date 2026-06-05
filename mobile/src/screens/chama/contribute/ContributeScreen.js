@@ -60,7 +60,6 @@ const ContributeScreen = ({ route, navigation }) => {
   useEffect(() => {
     // For merry-go-round contributions, set amount immediately from route params
     if (contributionType === 'merry-go-round' && amountPerRound && amountPerRound > 0) {
-      // console.log('🎯 Setting merry-go-round amount from route params:', amountPerRound);
       setAmount(amountPerRound.toString());
     }
 
@@ -94,7 +93,6 @@ const ContributeScreen = ({ route, navigation }) => {
     try {
       // For merry-go-round contributions, load members from the merry-go-round circle
       if (contributionType === 'merry-go-round' && roundId) {
-        // console.log('🎯 Loading merry-go-round participants for circle:', roundId);
         const response = await ApiService.makeRequest(`/merry-go-rounds/${roundId}`);
 
         if (response.success && response.data) {
@@ -120,16 +118,12 @@ const ContributeScreen = ({ route, navigation }) => {
               position: participant.position || (participants.indexOf(participant) + 1)
             };
           });
-
-          // console.log('🎯 Filtered to', eligibleMembers.length, 'merry-go-round participants');
-          // console.log('🎯 Participants:', eligibleMembers.map(p => ({ id: p.id, name: p.fullName, position: p.position })));
           setChamaMembers(eligibleMembers);
           return;
         }
       }
 
       // For regular contributions, load all chama members (treasurer only)
-      // console.log('👥 Loading all chama members for regular contributions');
       const response = await ApiService.makeRequest(`/contributions/chamas/${chamaId}/members`);
       if (response.success) {
         setChamaMembers(response.data);
@@ -314,8 +308,6 @@ const ContributeScreen = ({ route, navigation }) => {
       setChamaLoading(true);
       const response = await ApiService.getChamaById(chamaId);
 
-      console.log('Chama details response:', response); // Debug log
-
       // Handle different response structures
       let chamaData = null;
 
@@ -351,16 +343,12 @@ const ContributeScreen = ({ route, navigation }) => {
 
   const loadWalletBalance = async () => {
     try {
-      console.log('🔄 Loading wallet balance...');
       const response = await ApiService.getWalletBalance();
-      console.log('💰 Wallet balance response:', response);
 
       if (response.success && response.data) {
         const balance = response.data.balance || 0;
         setWalletBalance(balance);
-        console.log('✅ Wallet balance loaded:', balance);
       } else {
-        console.log('⚠️ Wallet balance response not successful:', response);
         setWalletBalance(0);
       }
     } catch (error) {
@@ -382,8 +370,6 @@ const ContributeScreen = ({ route, navigation }) => {
 
     // For merry-go-round, check real-time contribution status with backend assertions
     if (contributionType === 'merry-go-round') {
-      console.log('🎪 Validating merry-go-round contribution...');
-
       // Refresh status before proceeding
       await checkContributionStatus();
 
@@ -413,7 +399,6 @@ const ContributeScreen = ({ route, navigation }) => {
         return;
       }
 
-      console.log('✅ Merry-go-round validation passed');
     }
 
     // Validate payment method for merry-go-round
@@ -544,8 +529,6 @@ const ContributeScreen = ({ route, navigation }) => {
 
       // Handle merry-go-round specific errors
       if (contributionType === 'merry-go-round') {
-        console.log('🎪 Handling merry-go-round specific error...');
-
         // Check for specific backend validation error messages
         const errorMessage = error.message || '';
 
@@ -612,25 +595,14 @@ const handleWalletContribution = async (cleanChamaId) => {
       chamaId: cleanChamaId,
     };
 
-    console.log('🔄 Making welfare contribution with data:', welfareData);
-
-    const response = await ApiService.contributeToWelfare(welfareData);
-
-    console.log('🔍 Welfare contribution response:', response);
+       const response = await ApiService.contributeToWelfare(welfareData);
 
     if (response.success) {
-      console.log('🎉 Welfare contribution successful! Preparing success notification...');
-      console.log('💰 Welfare contribution successful, refreshing wallet balance...');
-
-      // Refresh wallet balance after successful contribution
       const oldBalance = walletBalance;
       await loadWalletBalance();
-      console.log(`💰 Wallet balance updated: ${oldBalance} → ${walletBalance}`);
-
       // Also refresh the global wallet data in AppContext
       try {
         await refreshSpecificData('wallet');
-        console.log('✅ Global wallet data refreshed');
       } catch (error) {
         console.warn('⚠️ Failed to refresh global wallet data:', error);
       }
@@ -638,14 +610,6 @@ const handleWalletContribution = async (cleanChamaId) => {
       const getSuccessMessage = () => {
         const amountText = formatCurrency(parseFloat(amount));
         const chamaName = chama?.name || 'the group';
-
-        console.log('🔍 Success message data:', {
-          amountText,
-          contributionType,
-          chamaName,
-          isAnonymous
-        });
-
         let baseMessage;
         switch (contributionType) {
           case 'welfare':
@@ -662,10 +626,6 @@ const handleWalletContribution = async (cleanChamaId) => {
 
         return baseMessage;
       };
-
-      // Show success toast notification
-      console.log('🎉 Showing success toast:', 'Welfare Contribution Successful!', getSuccessMessage());
-
       Toast.show({
         type: 'success',
         text1: 'Welfare Contribution Successful!',
@@ -674,9 +634,6 @@ const handleWalletContribution = async (cleanChamaId) => {
         visibilityTime: 4000,
         topOffset: 60,
       });
-
-      console.log('🎉 Success toast should be displayed now');
-
       // Reset form and navigate back after a short delay
       setTimeout(() => {
         setAmount('');
@@ -717,45 +674,14 @@ const handleWalletContribution = async (cleanChamaId) => {
             return `Contribution to ${chama.name}`;
         }
       }
-
-    console.log('🔄 Making contribution with data:', contributionData);
-    console.log('🔄 Clean chamaId:', cleanChamaId);
-
-    // Debug log for merry-go-round contributions
-    if (contributionType === 'merry-go-round') {
-      console.log('🎪 MERRY-GO-ROUND CONTRIBUTION DEBUG:', {
-        roundId: roundId,
-        roundName: roundName,
-        amount: parseFloat(amount),
-        expectedAmount: contributionStatus?.amountPerRound || currentRecipient?.amountPerRound,
-        contributor: user?.id,
-        chamaId: cleanChamaId,
-        currentRecipient: currentRecipient?.fullName,
-        currentRound: contributionStatus?.currentRound,
-        hasContributed: contributionStatus?.hasContributed,
-        isParticipant: contributionStatus?.isParticipant,
-        paymentMethod: paymentMethod,
-        isAnonymous: isAnonymous
-      });
-    }
-
     const response = await ApiService.makeContribution(contributionData);
-
-    console.log('🔍 Contribution response:', response);
-
     if (response.success) {
-      console.log('🎉 Contribution successful! Preparing success notification...');
-      console.log('💰 Contribution successful, refreshing wallet balance...');
-
-      // Refresh wallet balance after successful contribution
+           // Refresh wallet balance after successful contribution
       const oldBalance = walletBalance;
       await loadWalletBalance();
-      console.log(`💰 Wallet balance updated: ${oldBalance} → ${walletBalance}`);
-
       // Also refresh the global wallet data in AppContext
       try {
         await refreshSpecificData('wallet');
-        console.log('✅ Global wallet data refreshed');
       } catch (error) {
         console.warn('⚠️ Failed to refresh global wallet data:', error);
       }
@@ -767,15 +693,6 @@ const handleWalletContribution = async (cleanChamaId) => {
       const getSuccessMessage = () => {
         const amountText = formatCurrency(parseFloat(amount));
         const chamaName = chama?.name || 'the group';
-
-        console.log('🔍 Success message data:', {
-          amountText,
-          contributionType,
-          chamaName,
-          roundName,
-          isAnonymous
-        });
-
         let baseMessage;
         switch (contributionType) {
           case 'merry-go-round':
@@ -803,8 +720,6 @@ const handleWalletContribution = async (cleanChamaId) => {
       };
 
       // Show success toast notification
-      console.log('🎉 Showing success toast:', successTitle, getSuccessMessage());
-
       Toast.show({
         type: 'success',
         text1: successTitle,
@@ -813,9 +728,6 @@ const handleWalletContribution = async (cleanChamaId) => {
         visibilityTime: 4000,
         topOffset: 60,
       });
-
-      console.log('🎉 Success toast should be displayed now');
-
       // Reset form and navigate back after a short delay
       setTimeout(() => {
         setAmount('');
@@ -840,22 +752,15 @@ const handleMpesaContribution = async (cleanChamaId) => {
       chamaId: cleanChamaId,
     };
 
-    console.log('🔄 Making welfare contribution via M-Pesa with data:', welfareData);
-
     const mpesaResponse = await ApiService.contributeToWelfare(welfareData);
-
-    console.log('🔍 Welfare contribution response:', mpesaResponse);
 
     if (mpesaResponse.success) {
       // Refresh wallet balance after successful contribution
       const oldBalance = walletBalance;
       await loadWalletBalance();
-      console.log(`💰 Wallet balance updated: ${oldBalance} → ${walletBalance}`);
-
       // Also refresh the global wallet data in AppContext
       try {
         await refreshSpecificData('wallet');
-        console.log('✅ Global wallet data refreshed');
       } catch (error) {
         console.warn('⚠️ Failed to refresh global wallet data:', error);
       }
@@ -863,14 +768,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
       const getSuccessMessage = () => {
         const amountText = formatCurrency(parseFloat(amount));
         const chamaName = chama?.name || 'the group';
-
-        console.log('🔍 Success message data:', {
-          amountText,
-          contributionType,
-          chamaName,
-          isAnonymous
-        });
-
         let baseMessage;
         switch (contributionType) {
           case 'welfare':
@@ -887,10 +784,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
 
         return baseMessage;
       };
-
-      // Show success toast notification
-      console.log('🎉 Showing success toast:', 'Welfare Contribution Successful!', getSuccessMessage());
-
       Toast.show({
         type: 'success',
         text1: 'Welfare Contribution Successful!',
@@ -899,9 +792,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
         visibilityTime: 4000,
         topOffset: 60,
       });
-
-      console.log('🎉 Success toast should be displayed now');
-
       // Reset form and navigate back after a short delay
       setTimeout(() => {
         setAmount('');
@@ -938,14 +828,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
           return `Contribution to ${chama.name}`;
       }
     }
-
-    console.log('🔄 Initiating M-Pesa payment:', {
-      phone: formattedPhone,
-      amount: parseFloat(amount),
-      reference: accountReference,
-      description: transactionDesc
-    });
-
     const mpesaResponse = await ApiService.initiateMpesaPayment(
       formattedPhone,
       parseFloat(amount),
@@ -999,8 +881,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
          message: description || getDefaultDescription(),
          chamaId: cleanChamaId,
        };
-
-       console.log('🔄 Making welfare cash contribution with data:', welfareData);
 
        const response = await ApiService.contributeToWelfare(welfareData);
 
@@ -1059,8 +939,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
        cashType: paymentMethod, // 'cash' or 'cheque'
        isAnonymous: false, // Cash/cheque contributions can't be anonymous
      };
-
-     console.log('🔄 Making cash contribution:', contributionData);
 
      const response = await ApiService.makeRequest('/contributions', {
        method: 'POST',
@@ -1160,8 +1038,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
   // Validate payment method for merry-go-round contributions (matches backend assertions)
   const validatePaymentMethod = (method) => {
     if (contributionType === 'merry-go-round') {
-      console.log('💳 Validating payment method for merry-go-round...');
-
       // Backend assertion: No anonymous contributions for merry-go-round
       if (isAnonymous) {
         Alert.alert(
@@ -1192,7 +1068,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
         return false;
       }
 
-      console.log('✅ Payment method validation passed:', method);
     }
     return true;
   };
@@ -1200,8 +1075,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
   // Validate amount for merry-go-round contributions (matches backend assertions)
   const validateContributionAmount = (amount) => {
     if (contributionType === 'merry-go-round') {
-      console.log('💰 Validating merry-go-round contribution amount...');
-
       // Get expected amount from contribution status, current recipient, or route params
       const expectedAmount = contributionStatus?.amountPerRound || currentRecipient?.amountPerRound || amountPerRound || 0;
 
@@ -1218,7 +1091,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
           return false;
         }
 
-        console.log('✅ Amount validation passed:', inputAmount, 'KES');
       } else {
         console.warn('⚠️ No expected amount available for validation');
       }
