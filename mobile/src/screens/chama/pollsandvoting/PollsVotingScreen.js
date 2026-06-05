@@ -187,13 +187,11 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
   const loadVotes = async () => {
     try {
-      // Security: Verify chamaId is valid and user has access
       if (!chamaId || typeof chamaId !== 'string') {
         Alert.alert('Error', 'Invalid chama access. Please try again.');
         return;
       }
 
-          // Always fetch both active and completed polls to ensure we have all data for processing
       const [activeResponse, completedResponse] = await Promise.all([
         ApiService.getActiveVotes(chamaId),
         ApiService.getVoteResults(chamaId)
@@ -201,42 +199,35 @@ const PollsVotingScreen = ({ route, navigation }) => {
       const allPolls = [];
       const pollMap = new Map();
 
-      // Add active polls first
       if (activeResponse.success && activeResponse.data) {
         activeResponse.data.forEach(poll => pollMap.set(poll.id, poll));
       }
 
-      // Add completed polls (these will override active ones if they exist)
       if (completedResponse.success && completedResponse.data) {
         completedResponse.data.forEach(poll => pollMap.set(poll.id, poll));
       }
 
-      allPolls.push(...pollMap.values());
-      if (allPolls.length > 0) {
-      }
-      response = { success: true, data: allPolls };
+      const response = { success: true, data: [...pollMap.values()] };
 
       if (response.success) {
         const validVotes = (response.data || []).filter(vote => {
-          if (!vote.id || !vote.id.includes('vote-')) {
+          if (!vote.id) {
             return false;
           }
           return true;
         });
 
-        // Process polls for completion status
         const processedVotes = validVotes.map(vote => {
           const totalVotesCast = getTotalVotesCast(vote);
           const totalEligibleVoters = getTotalEligibleVoters(vote);
           const isFullyVoted = totalVotesCast >= totalEligibleVoters;
 
-          // If fully voted and still active, mark as completed and adjust end time
           if (isFullyVoted && vote.status === 'active') {
             return {
               ...vote,
               status: 'completed',
               result: 'completed_early',
-              endsAt: new Date().toISOString(), // Set end time to now
+              endsAt: new Date().toISOString(),
               isFullyVoted: true,
               completionStatus: 'Completed (100% participation)'
             };
@@ -249,34 +240,31 @@ const PollsVotingScreen = ({ route, navigation }) => {
           };
         });
 
-        // Separate completed polls for table view
         const allCompletedPolls = processedVotes.filter(vote => vote.status === 'completed');
         setCompletedPolls(allCompletedPolls);
 
-        // Filter polls based on current tab after processing completion status
         let filteredVotes;
         if (activeTab === 'active') {
           filteredVotes = processedVotes.filter(vote => vote.status === 'active');
         } else if (activeTab === 'completed') {
           filteredVotes = processedVotes.filter(vote => vote.status === 'completed');
         } else {
-          // For role escalation tab, show all
           filteredVotes = processedVotes;
         }
 
         setVotes(filteredVotes);
-        setPolls(filteredVotes); // Keep setPolls for backward compatibility
+        setPolls(filteredVotes);
       } else {
         setVotes([]);
         setPolls([]);
 
-        // Check if it's an access denied error
         if (response.error?.includes('Access denied') || response.error?.includes('not a member')) {
           Alert.alert('Access Denied', 'You do not have permission to view votes for this chama.');
         }
       }
     } catch (error) {
       setPolls([]);
+      setVotes([]);
     }
   };
 
@@ -1383,9 +1371,10 @@ const PollsVotingScreen = ({ route, navigation }) => {
             </View>
           );
         })}
-      </View>
+        </View>
+        )}
 
-      {/* Only show "You have voted" badge for active polls */}
+      {/* Only show "You have voted" badge for active polls */}}
       {item.userVoted && item.status === 'active' && (
         <View style={[styles.votedBadge, { backgroundColor: colors.success + '15' }]}>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} />
