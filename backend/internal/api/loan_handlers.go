@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,46 +16,40 @@ import (
 )
 
 // createNotificationTx inserts a notification with all required fields using a transaction
-func createNotificationTx(tx *sql.Tx, notificationID, userID, notificationType, title, message, data string, referenceType string, referenceID interface{}) error {
-	// Ensure all required fields are included with proper defaults
+func createNotificationTx(tx *sql.Tx, _ string, userID, notificationType, title, message, data string, referenceType string, referenceID interface{}) error {
 	_, err := tx.Exec(`
 		INSERT INTO notifications (
-			user_id, type, title, message, data, is_read, created_at, updated_at,
-			priority, category, reference_type, status, scheduled_for,
-			is_push, is_email, is_sms
-		) VALUES ($1, $2, $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-			$6, $7, $8, 'pending', CURRENT_TIMESTAMP,
-			$9, $10, $11)
-	`, userID, notificationType, title, message, data,
+			user_id, title, message, type, priority, category,
+			reference_type, reference_id, status, is_read, data,
+			scheduled_for, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6,
+			$7, $8, 'pending', false, $9,
+			CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, userID, title, message, notificationType,
 		getNotificationPriority(notificationType),
 		getNotificationCategory(notificationType),
 		referenceType,
-		getNotificationPushEnabled(notificationType),
-		getNotificationEmailEnabled(notificationType),
-		getNotificationSMSEnabled(notificationType))
-
+		referenceID,
+		data)
 	return err
 }
 
 // createNotification inserts a notification with all required fields using a database connection
-func createNotification(db *sql.DB, notificationID, userID, notificationType, title, message, data string, referenceType string, referenceID interface{}) error {
-	// Ensure all required fields are included with proper defaults
+func createNotification(db *sql.DB, _ string, userID, notificationType, title, message, data string, referenceType string, referenceID interface{}) error {
 	_, err := db.Exec(`
 		INSERT INTO notifications (
-			user_id, type, title, message, data, is_read, created_at, updated_at,
-			priority, category, reference_type, status, scheduled_for,
-			is_push, is_email, is_sms
-		) VALUES ($1, $2, $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-			$6, $7, $8, 'pending', CURRENT_TIMESTAMP,
-			$9, $10, $11)
-	`, userID, notificationType, title, message, data,
+			user_id, title, message, type, priority, category,
+			reference_type, reference_id, status, is_read, data,
+			scheduled_for, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6,
+			$7, $8, 'pending', false, $9,
+			CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, userID, title, message, notificationType,
 		getNotificationPriority(notificationType),
 		getNotificationCategory(notificationType),
 		referenceType,
-		getNotificationPushEnabled(notificationType),
-		getNotificationEmailEnabled(notificationType),
-		getNotificationSMSEnabled(notificationType))
-
+		referenceID,
+		data)
 	return err
 }
 
@@ -280,6 +275,8 @@ func CreateLoanApplication(c *gin.Context) {
 
 	var req struct {
 		ChamaID         string                 `json:"chamaId" binding:"required"`
+		LoanTypeID      string                 `json:"loanTypeId"`
+		LoanTypeName    string                 `json:"loanTypeName"`
 		Amount          float64                `json:"amount" binding:"required"`
 		Purpose         string                 `json:"purpose" binding:"required"`
 		RepaymentPeriod int                    `json:"repaymentPeriod" binding:"required"`
@@ -326,9 +323,10 @@ func CreateLoanApplication(c *gin.Context) {
 		})
 		return
 	}
+	sqlDB := db.(*sql.DB)
 
 	// Start transaction
-	tx, err := db.(*sql.DB).Begin()
+	tx, err := sqlDB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -350,12 +348,12 @@ func CreateLoanApplication(c *gin.Context) {
 	// Insert loan application
 	_, err = tx.Exec(`
 		INSERT INTO loans (
-			id, borrower_id, chama_id, type, amount, interest_rate,
+			id, borrower_id, chama_id, loan_type_id, type, amount, interest_rate,
 			duration, purpose, status, total_amount, remaining_amount,
 			required_guarantors, approved_guarantors, due_date,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, 'regular', $4, $5, $6, $7, 'pending', $8, $9, $10, 0, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, loanID, userID, req.ChamaID, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, totalAmount, len(req.Guarantors), dueDate)
+		) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'regular'), $6, $7, $8, $9, 'pending', $10, $10, $11, 0, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, loanID, userID, req.ChamaID, req.LoanTypeID, req.LoanTypeName, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, len(req.Guarantors), dueDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -365,8 +363,24 @@ func CreateLoanApplication(c *gin.Context) {
 	}
 
 	// Insert guarantors and send notifications
+	resolvedGuarantorIDs := make([]string, 0, len(req.Guarantors))
 	for _, guarantorID := range req.Guarantors {
-		guarantorAmount := req.Amount / float64(len(req.Guarantors)) // Split equally
+		realUserID := guarantorID
+		if strings.HasPrefix(guarantorID, "cm-") {
+			row := sqlDB.QueryRow(`SELECT user_id FROM chama_members WHERE id = $1 AND chama_id = $2`, guarantorID, req.ChamaID)
+			if err := row.Scan(&realUserID); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"error":   fmt.Sprintf("Invalid guarantor %s: %v", guarantorID, err),
+				})
+				return
+			}
+		}
+		resolvedGuarantorIDs = append(resolvedGuarantorIDs, realUserID)
+	}
+
+	for _, guarantorID := range resolvedGuarantorIDs {
+		guarantorAmount := req.Amount / float64(len(resolvedGuarantorIDs)) // Split equally
 		guarantorRecordID := fmt.Sprintf("guarantor-%d-%s", time.Now().UnixNano(), guarantorID)
 
 		_, err = tx.Exec(`
@@ -420,7 +434,7 @@ func CreateLoanApplication(c *gin.Context) {
 			"purpose":            req.Purpose,
 			"repaymentPeriod":    req.RepaymentPeriod,
 			"interestRate":       req.InterestRate,
-			"guarantors":         req.Guarantors,
+			"guarantors":         resolvedGuarantorIDs,
 			"totalAmount":        totalAmount,
 			"remainingAmount":    totalAmount,
 			"status":             "pending",

@@ -26,10 +26,11 @@ import { spacing, typography, borderRadius, shadows } from '../../../utils/theme
 const ApplyForLoanScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { theme, user } = useApp();
+  const { theme, user, selectedChama } = useApp();
   const colors = getThemeColors(theme);
 
-  const chamaId = route.params?.chamaId || route.params?.id || null;
+  const routeChamaId = route.params?.chamaId || route.params?.id || selectedChama?.id || null;
+  const chamaId = typeof routeChamaId === 'string' ? routeChamaId : null;
 
   const [newLoan, setNewLoan] = useState({
     amount: '',
@@ -71,7 +72,11 @@ const ApplyForLoanScreen = () => {
       const response = await ApiService.getChamaMembers(chamaId);
       if (response.success) {
         const members = (response.data || []).filter(
-          m => m.userId !== user?.id && m.isActive !== false
+          m => {
+            const uid = m.user_id || m.user?.id || m.userId || m.id;
+            const isActive = m.is_active !== false && m.status !== 'inactive';
+            return uid !== user?.id && isActive;
+          }
         );
         setAvailableGuarantors(members);
       }
@@ -89,9 +94,13 @@ const ApplyForLoanScreen = () => {
   }, [chamaId, loadLoanTypesForForm, loadAvailableGuarantors]);
 
   const addGuarantor = (guarantor) => {
+    const userId = guarantor.user_id || guarantor.user?.id || guarantor.userId || guarantor.id;
+    const firstName = guarantor.user?.first_name || guarantor.firstName || '';
+    const lastName = guarantor.user?.last_name || guarantor.lastName || '';
+    const email = guarantor.user?.email || guarantor.email || '';
     setNewLoan((prev) => ({
       ...prev,
-      guarantors: [...prev.guarantors, { id: guarantor.userId || guarantor.id, firstName: guarantor.firstName, lastName: guarantor.lastName, email: guarantor.email }],
+      guarantors: [...prev.guarantors, { id: userId, firstName, lastName, email }],
     }));
   };
 
@@ -113,9 +122,10 @@ const ApplyForLoanScreen = () => {
     setShowLoanTypePicker(false);
   };
 
-  const handleSubmit = async () => {
-    if (!chamaId || !user?.id) {
-      Alert.alert('Error', 'Missing chama or user context');
+   const handleSubmit = async () => {
+    console.log('[ApplyForLoan] handleSubmit called', { chamaId: !!chamaId, userId: user?.id, loan: newLoan });
+    if (!chamaId || !user?.id || typeof chamaId !== 'string') {
+      Alert.alert('Error', `Missing chama or user context: chamaId=${chamaId}`);
       return;
     }
 
@@ -140,31 +150,43 @@ const ApplyForLoanScreen = () => {
       return;
     }
 
+    if (newLoan.guarantors.length < 2) {
+      Alert.alert('Validation Error', 'Please select at least 2 guarantors.');
+      return;
+    }
+
     try {
       setSubmitting(true);
+      console.log('[ApplyForLoan] Preflight: token exists', !!await ApiService.getAuthToken ? await ApiService.getAuthToken().then(t => !!t).catch(() => false) : false);
 
-      const response = await ApiService.applyForLoan(chamaId, {
+      const payload = {
+        chamaId,
         loanTypeId: newLoan.loanTypeId,
         loanTypeName: newLoan.loanTypeName,
         amount,
         purpose: newLoan.purpose,
         interestRate: parseFloat(newLoan.interestRate || '0'),
-        termMonths: parseInt(newLoan.repaymentPeriod || newLoan.termMonths, 10),
-        monthlyIncome: newLoan.monthlyIncome,
-        guarantors: newLoan.guarantors.map((g) => ({ userId: g.id, name: `${g.firstName} ${g.lastName}` })),
+        repaymentPeriod: parseInt(newLoan.repaymentPeriod || newLoan.termMonths, 10),
+        monthlyIncome: parseFloat(newLoan.monthlyIncome || '0'),
+        guarantors: newLoan.guarantors.map((g) => g.id),
         businessPlan: newLoan.businessPlan,
         otherLoans: newLoan.otherLoans,
-      });
+      };
+      console.log('[ApplyForLoan] Submitting payload', payload);
 
-      if (response.success) {
+      const response = await ApiService.applyForLoan(payload);
+      console.log('[ApplyForLoan] API response', response);
+
+      if (response?.success || response?.data) {
         Alert.alert('Success', 'Loan application submitted successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       } else {
-        Alert.alert('Error', response.error || 'Failed to submit loan application');
+        Alert.alert('Error', response?.error || response?.message || 'Failed to submit loan application');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to submit loan application');
+      console.error('[ApplyForLoan] Submit error', error);
+      Alert.alert('Error', error?.message || 'Failed to submit loan application');
     } finally {
       setSubmitting(false);
     }
@@ -386,7 +408,7 @@ const ApplyForLoanScreen = () => {
                 <Text style={[styles.guarantorName, { color: colors.white, fontWeight: '700' }]}>
                   {guarantor.firstName} {guarantor.lastName}
                 </Text>
-                <Text style={[styles.guarantorEmail, { color: colors.white + 'dd', fontWeight: '600' }]}>{guarantor.email}</Text>
+                <Text style={[styles.guarantorEmail, { color: colors.white, fontWeight: '600' }]}>{guarantor.email}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => removeGuarantor(guarantor.id)}
@@ -531,7 +553,8 @@ const ApplyForLoanScreen = () => {
               style={{ maxHeight: 320 }}
               contentContainerStyle={{ paddingVertical: spacing.sm }}
               renderItem={({ item }) => {
-                const isSelected = newLoan.guarantors.some((g) => g.id === (item.userId || item.id));
+                const user = item.user || item;
+                const isSelected = newLoan.guarantors.some((g) => g.id === (user.id || item.user_id));
                 return (
                   <TouchableOpacity
                     style={[
@@ -543,15 +566,15 @@ const ApplyForLoanScreen = () => {
                       },
                     ]}
                     onPress={() => {
-                      const id = item.userId || item.id;
+                      const id = user.id || item.user_id;
                       if (isSelected) {
                         removeGuarantor(id);
                       } else {
                         addGuarantor({
                           id,
-                          firstName: item.firstName,
-                          lastName: item.lastName,
-                          email: item.email,
+                          firstName: user.first_name || user.firstName || '',
+                          lastName: user.last_name || user.lastName || '',
+                          email: user.email || '',
                         });
                       }
                     }}
@@ -562,9 +585,9 @@ const ApplyForLoanScreen = () => {
                       </View>
                       <View style={styles.guarantorDetails}>
                         <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
-                          {item.firstName} {item.lastName}
+                          {user.first_name || user.firstName} {user.last_name || user.lastName}
                         </Text>
-                        <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary + 'cc' : colors.textSecondary, fontWeight: '500' }]}>{item.email}</Text>
+                        <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary + 'cc' : colors.textSecondary, fontWeight: '500' }]}>{user.email}</Text>
                       </View>
                     </View>
                   </TouchableOpacity>

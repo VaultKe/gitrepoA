@@ -61,24 +61,11 @@ func Migrate(db *sql.DB) error {
 		createWelfareTable,
 		createWelfareContributionsTable,
 		createWelfareRequestsTable,
-		addWelfareRequestBeneficiaryField,
-		addUserProfileFields,
-		addChatMessageFields,
-		addWelfareContributionFields,
-		addMeetingDocumentFileUrl,
 		createChamaInvitationsTable,
-		addChamaPermissionsColumn,
-		addInvitationRoleColumns,
 		createLearningTables,
 		createRemindersTable,
 		createSharesAndDividendsTables,
-		// createPollsAndVotingTables, // DISABLED: Conflicts with existing vote system
 		createDisbursementTables,
-		addEnhancedLearningContentFields,
-		createQuizResultsTable,
-		addChamaCategoryColumn,
-		addRecipientIDToTransactionsMigration,
-		addDividendTypeColumnMigration,
 		createDevicesTable,
 		createSignalIdentityKeysTable,
 		createSignalPreKeysTable,
@@ -90,74 +77,34 @@ func Migrate(db *sql.DB) error {
 	}
 
 	for i, migration := range migrations {
-		// Handle special migrations that need custom logic
-		if i == len(migrations)-10 { // Tenth to last migration is addWelfareRequestBeneficiaryField
-			if err := addMissingWelfareRequestBeneficiaryField(db); err != nil {
-				return fmt.Errorf("failed to add welfare request beneficiary field: %w", err)
-			}
-		} else if i == len(migrations)-9 { // Ninth to last migration is addUserProfileFields
-			if err := addMissingUserProfileFields(db); err != nil {
-				return fmt.Errorf("failed to add user profile fields: %w", err)
-			}
-		} else if i == len(migrations)-8 { // Eighth to last migration is addChatMessageFields
-			if err := addMissingChatMessageFields(db); err != nil {
-				return fmt.Errorf("failed to add chat message fields: %w", err)
-			}
-		} else if i == len(migrations)-7 { // Seventh to last migration is addWelfareContributionFields
-			if err := addMissingWelfareContributionFields(db); err != nil {
-				return fmt.Errorf("failed to add welfare contribution fields: %w", err)
-			}
-		} else if i == len(migrations)-6 { // Sixth to last migration is addMeetingDocumentFileUrl
-			if err := addMissingMeetingDocumentFileUrl(db); err != nil {
-				return fmt.Errorf("failed to add meeting document file_url field: %w", err)
-			}
-		} else if i == len(migrations)-5 { // Fifth to last migration is addChamaPermissionsColumn
-			if err := addMissingChamaPermissionsColumn(db); err != nil {
-				return fmt.Errorf("failed to add chama permissions column: %w", err)
-			}
-		} else if i == len(migrations)-4 { // Fourth to last migration is addInvitationRoleColumns
-			if err := addMissingInvitationRoleColumns(db); err != nil {
-				return fmt.Errorf("failed to add invitation role columns: %w", err)
-			}
-		} else if i == len(migrations)-3 { // Third to last migration is addEnhancedLearningContentFields
-			if err := addMissingEnhancedLearningContentFields(db); err != nil {
-				return fmt.Errorf("failed to add enhanced learning content fields: %w", err)
-			}
-		// len(migrations)-2 = quiz/results (anchor at -7 / unquestionably valid hit)
-		} else if i == len(migrations)-7 { // createQuizResultsTable
-			if _, err := db.Exec(migration); err != nil {
-				return fmt.Errorf("failed to create quiz results table: %w", err)
-			}
-		// len(migrations)-1 = addDividendTypeColumn (anchor / unconditionally valid)
-		} else if i == len(migrations)-1 { // addDividendTypeColumn
-			if err := addDividendTypeColumn(db); err != nil {
-				return fmt.Errorf("failed to add dividend_type column to dividend_declarations table: %w", err)
-			}
-		// len(migrations)-2 (40 from 42) = addRecipientIDToTransactions
-		} else if i == len(migrations)-10 { // addRecipientIDToTransactions is NOW at -10
-			if err := addRecipientIDToTransactions(db); err != nil {
-				return fmt.Errorf("failed to add recipient_id to transactions table: %w", err)
-			}
-		// len(migrations)-3 = addChamaCategoryColumn
-		} else if i == len(migrations)-8 { // addChamaCategoryColumn is NOW at -8
-			if err := addCategoryColumnToChamasTable(db); err != nil {
-				return fmt.Errorf("failed to add chama category column: %w", err)
-			}
-		// rest of the "negative" checks ...
-		} else if i == len(migrations)-10 { // Tenth to last
-			// Regular migrations
-			if _, err := db.Exec(migration); err != nil {
-				return fmt.Errorf("failed to run migration %d: %w", i+1, err)
-			}
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("failed to run migration %d: %w", i+1, err)
 		}
 	}
 
-	if err := addMissingChamaIDColumnToTransactions(db); err != nil {
-		return fmt.Errorf("failed to ensure chama_id on transactions table: %w", err)
+	customMigrations := []struct {
+		name string
+		fn   func(*sql.DB) error
+	}{
+		{"addWelfareRequestBeneficiaryField", addMissingWelfareRequestBeneficiaryField},
+		{"addUserProfileFields", addMissingUserProfileFields},
+		{"addChatMessageFields", addMissingChatMessageFields},
+		{"addWelfareContributionFields", addMissingWelfareContributionFields},
+		{"addMeetingDocumentFileUrl", addMissingMeetingDocumentFileUrl},
+		{"addChamaPermissionsColumn", addMissingChamaPermissionsColumn},
+		{"addInvitationRoleColumns", addMissingInvitationRoleColumns},
+		{"addEnhancedLearningContentFields", addMissingEnhancedLearningContentFields},
+		{"createQuizResultsTable", createQuizResultsTableFunc},
+		{"addChamaCategoryColumn", addCategoryColumnToChamasTable},
+		{"addRecipientIDToTransactions", addRecipientIDToTransactions},
+		{"addDividendTypeColumn", addDividendTypeColumn},
+		{"addLoanTypeIdToLoans", addLoanTypeIdColumn},
 	}
 
-	if err := addMissingRecipientIDColumnToTransactions(db); err != nil {
-		return fmt.Errorf("failed to ensure recipient_id on transactions table: %w", err)
+	for _, m := range customMigrations {
+		if err := m.fn(db); err != nil {
+			return fmt.Errorf("failed to run migration %s: %w", m.name, err)
+		}
 	}
 
 	if err := addMissingTransactionFields(db); err != nil {
@@ -165,7 +112,7 @@ func Migrate(db *sql.DB) error {
 	}
 
 	log.Println("Database migrations completed successfully")
-  return nil
+	return nil
 }
 
 const addRecipientIDToTransactionsMigration = "SELECT 1"
@@ -332,6 +279,29 @@ func addDividendTypeColumn(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func addLoanTypeIdColumn(db *sql.DB) error {
+	var exists bool
+	query := `SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'loans' AND column_name = 'loan_type_id'`
+	err := db.QueryRow(query).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check if loan_type_id column exists: %w", err)
+	}
+	if !exists {
+		if _, err := db.Exec("ALTER TABLE loans ADD COLUMN loan_type_id TEXT REFERENCES loan_types(id)"); err != nil {
+			return fmt.Errorf("failed to add loan_type_id column: %w", err)
+		}
+		log.Println("Added loan_type_id column to loans table")
+	} else {
+		log.Println("Column loan_type_id already exists in loans table")
+	}
+	return nil
+}
+
+func createQuizResultsTableFunc(db *sql.DB) error {
+	_, err := db.Exec(createQuizResultsTable)
+	return err
 }
 
 // SQL migration statements
