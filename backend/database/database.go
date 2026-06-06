@@ -2752,3 +2752,18 @@ func refactorChatMessageContent(db *sql.DB) error {
 	log.Printf("Refactored chat message content to store only ciphertext")
 	return nil
 }
+
+func EnsureLoanTypesTable(db *sql.DB) error {
+	queries := []string{
+		"CREATE TABLE IF NOT EXISTS loan_types (id TEXT PRIMARY KEY, chama_id TEXT NOT NULL REFERENCES chamas(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT, max_amount NUMERIC NOT NULL, min_amount NUMERIC DEFAULT 0, interest_rate NUMERIC NOT NULL, term_months INTEGER NOT NULL, eligibility_criteria TEXT DEFAULT 'active_members', approval_required BOOLEAN DEFAULT TRUE, grace_period_days INTEGER DEFAULT 0, penalty_rate NUMERIC DEFAULT 0, max_loans_per_member INTEGER DEFAULT 1, requires_collateral BOOLEAN DEFAULT FALSE, collateral_description TEXT, status TEXT DEFAULT 'active', created_by TEXT NOT NULL REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_chama ON loan_types(chama_id)",
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_status ON loan_types(status)",
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to create loan_types table/index: %w", err)
+		}
+	}
+	log.Println("✅ loan_types schema ready")
+	return nil
+}

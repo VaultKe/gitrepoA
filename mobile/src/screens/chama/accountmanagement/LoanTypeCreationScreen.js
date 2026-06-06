@@ -266,11 +266,12 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
 
   const loadLoanTypes = async () => {
     try {
-      // Note: Loan types API is not yet implemented in the backend
-      // For now, we'll show an empty state
-      // TODO: Implement loan types API in backend
-      console.log('Loan types loading - API not yet implemented');
-      setAllLoanTypes([]);
+      const response = await ApiService.getLoanTypes(currentChamaId, selectedFilter !== 'all' ? selectedFilter : '');
+      if (response.success) {
+        setAllLoanTypes(response.data || []);
+      } else {
+        setAllLoanTypes([]);
+      }
     } catch (error) {
       console.error('Error loading loan types:', error);
       setAllLoanTypes([]);
@@ -322,7 +323,6 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
       return;
     }
 
-    // Validate form
     if (!createForm.name || !createForm.maxAmount || !createForm.interestRate || !createForm.termMonths) {
       Alert.alert('Validation Error', 'Please fill in all required fields.');
       return;
@@ -338,15 +338,17 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         gracePeriodDays: parseInt(createForm.gracePeriodDays) || 0,
         penaltyRate: parseFloat(createForm.penaltyRate) || 0,
         maxLoansPerMember: parseInt(createForm.maxLoansPerMember) || 1,
-        createdBy: userRole,
-        createdById: user.id,
-        timestamp: new Date().toISOString(),
       };
 
-      // TODO: Implement createLoanType API in backend
-      Alert.alert('Feature Coming Soon', 'Loan type creation will be available once the backend API is implemented.');
-      setShowCreateModal(false);
-      resetCreateForm();
+      const response = await ApiService.createLoanType(currentChamaId, loanTypeData);
+      if (response.success) {
+        Alert.alert('Success', 'Loan type created successfully');
+        setShowCreateModal(false);
+        resetCreateForm();
+        loadLoanTypes();
+      } else {
+        Alert.alert('Error', response.error || 'Failed to create loan type');
+      }
     } catch (error) {
       console.error('Create loan type error:', error);
       Alert.alert('Error', 'Failed to create loan type. Please try again.');

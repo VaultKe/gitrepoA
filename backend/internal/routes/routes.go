@@ -509,6 +509,15 @@ func SetupRoutes(
 				loans.POST("/:id/guarantor-response", api.RespondToGuarantorRequest)
 				loans.GET("/guarantor-requests", api.GetGuarantorRequests)
 				loans.POST("/guarantors/:guarantorId/respond", api.RespondToGuarantorRequest)
+
+				loans.POST("/:id/loan-types", api.CreateLoanType)
+				loans.GET("/:id/loan-types", api.GetChamaLoanTypes)
+			}
+			loanTypes := protected.Group("/loans/loan-types")
+			{
+				loanTypes.GET("/:loanTypeId", api.GetLoanType)
+				loanTypes.PUT("/:loanTypeId", api.UpdateLoanType)
+				loanTypes.DELETE("/:loanTypeId", api.DeleteLoanType)
 			}
 
 			if testDataGenerator != nil {

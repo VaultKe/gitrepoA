@@ -169,8 +169,8 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   const [availableGuarantors, setAvailableGuarantors] = useState([]);
   const [guarantorSearch, setGuarantorSearch] = useState('');
   const [showGuarantorSearch, setShowGuarantorSearch] = useState(false);
-
-
+  const [loanTypes, setLoanTypes] = useState([]);
+  const [showLoanTypePicker, setShowLoanTypePicker] = useState(false);
 
   useEffect(() => {
     loadUserRole();
@@ -277,20 +277,35 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleApplyForLoan = () => {
-    // 🔐 Security check: Ensure user is authenticated and has valid session
     if (!user || !user.id) {
-      Alert.alert(
-        'Authentication Required',
-        'Please log in to apply for a loan.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Authentication Required', 'Please log in to apply for a loan.', [{ text: 'OK' }]);
       return;
     }
-
-    console.log('🔐 Loan application initiated by user:', user.id);
-    // Option 1: Use modal (current behavior)
     setShowCreateModal(true);
     loadAvailableGuarantors();
+    loadLoanTypesForForm();
+  };
+
+  const loadLoanTypesForForm = async () => {
+    try {
+      const response = await ApiService.getLoanTypes(chamaId, 'active');
+      if (response.success) {
+        setLoanTypes(response.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load loan types for form:', error);
+    }
+  };
+
+  const handleSelectLoanType = (loanType) => {
+    setNewLoan(prev => ({
+      ...prev,
+      loanTypeId: loanType.id,
+      loanTypeName: loanType.name,
+      repaymentPeriod: String(loanType.termMonths || prev.repaymentPeriod),
+      interestRate: String(loanType.interestRate || prev.interestRate),
+    }));
+    setShowLoanTypePicker(false);
   };
 
   const handleNavigateToLoanForm = () => {
@@ -690,6 +705,23 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
                 keyboardType="numeric"
               />
 
+              {/* Loan Type Selection */}
+              <TouchableOpacity
+                style={[styles.formGroup, { marginBottom: spacing.md }]}
+                onPress={() => setShowLoanTypePicker(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.formLabel, { color: colors.text }]}>
+                  Loan Type {newLoan.loanTypeName ? `(${newLoan.loanTypeName})` : '*'}
+                </Text>
+                <View style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                  <Text style={{ color: newLoan.loanTypeName ? colors.text : colors.textSecondary, flex: 1 }}>
+                    {newLoan.loanTypeName || 'Select a loan type'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+                </View>
+              </TouchableOpacity>
+
               {/* Loan Terms Section */}
               <View style={styles.sectionHeader}>
                 <Ionicons name="calculator" size={20} color={colors.secondary} />
@@ -950,6 +982,67 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
           </View>
         </View>
       </Modal>
+
+      {showLoanTypePicker && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setShowLoanTypePicker(false)}>
+          <View style={styles.searchModalOverlay}>
+            <View style={[styles.searchModalContent, { backgroundColor: colors.surface }]}>
+              <View style={styles.searchModalHeader}>
+                <View>
+                  <Text style={[styles.searchModalTitle, { color: colors.text }]}>Select Loan Type</Text>
+                  <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Choose a loan type to prefill your application</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowLoanTypePicker(false)} style={styles.closeButton}>
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={loanTypes}
+                keyExtractor={(item) => item.id}
+                style={styles.guarantorsList}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.guarantorCard, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, marginBottom: spacing.sm }]}
+                    onPress={() => handleSelectLoanType(item)}
+                  >
+                    <View style={styles.guarantorCardContent}>
+                      <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="cash" size={20} color={colors.primary} />
+                      </View>
+                      <View style={styles.guarantorDetails}>
+                        <Text style={[styles.guarantorName, { color: colors.text }]}>{item.name}</Text>
+                        <Text style={[styles.guarantorEmail, { color: colors.textSecondary }]}>
+                          KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
+                        </Text>
+                      </View>
+                      <View style={styles.selectionIndicator}>
+                        <View style={[styles.selectedBadge, { backgroundColor: colors.primary }]}>
+                          <Ionicons name="checkmark" size={14} color={colors.white} />
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <Ionicons name="cash-outline" size={48} color={colors.textTertiary} />
+                    <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No active loan types</Text>
+                  </View>
+                }
+              />
+              <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+                <TouchableOpacity
+                  style={[styles.doneButton, { backgroundColor: colors.textSecondary }]}
+                  onPress={() => setShowLoanTypePicker(false)}
+                >
+                  <Text style={[styles.doneButtonText, { color: colors.white }]}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={handleApplyForLoan}

@@ -218,6 +218,28 @@ const LoanManagementScreen = ({ route, navigation }) => {
     description: '',
   });
 
+  // Loan types subview state
+  const [loanSubview, setLoanSubview] = useState('loans'); // 'loans' | 'loan-types' | 'create-loan-type'
+  const [loanTypes, setLoanTypes] = useState([]);
+  const [loanTypesLoading, setLoanTypesLoading] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    description: '',
+    maxAmount: '',
+    minAmount: '',
+    interestRate: '',
+    termMonths: '',
+    eligibilityCriteria: 'active_members',
+    approvalRequired: true,
+    gracePeriodDays: '0',
+    penaltyRate: '0',
+    maxLoansPerMember: '1',
+    requiresCollateral: false,
+    collateralDescription: '',
+    status: 'active',
+  });
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+
   const filters = [
     { id: 'all', name: 'All Loans', icon: 'list' },
     { id: 'delinquent', name: 'Delinquent', icon: 'warning' },
@@ -333,6 +355,87 @@ const LoanManagementScreen = ({ route, navigation }) => {
       setTotalPages(1);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const canManageLoanTypes = () => {
+    return ['chairperson', 'secretary', 'treasurer'].includes(userRole.toLowerCase());
+  };
+
+  const resetCreateForm = () => {
+    setCreateForm({
+      name: '',
+      description: '',
+      maxAmount: '',
+      minAmount: '',
+      interestRate: '',
+      termMonths: '',
+      eligibilityCriteria: 'active_members',
+      approvalRequired: true,
+      gracePeriodDays: '0',
+      penaltyRate: '0',
+      maxLoansPerMember: '1',
+      requiresCollateral: false,
+      collateralDescription: '',
+      status: 'active',
+    });
+  };
+
+  const loadLoanTypes = async () => {
+    try {
+      setLoanTypesLoading(true);
+      const response = await ApiService.getLoanTypes(currentChamaId);
+      if (response.success) {
+        setLoanTypes(response.data || []);
+      } else {
+        setLoanTypes([]);
+      }
+    } catch (error) {
+      console.error('Failed to load loan types:', error);
+      setLoanTypes([]);
+    } finally {
+      setLoanTypesLoading(false);
+    }
+  };
+
+  const handleCreateLoanType = async () => {
+    if (!canManageLoanTypes()) {
+      Alert.alert('Access Denied', 'You do not have permission to create loan types.');
+      return;
+    }
+
+    if (!createForm.name || !createForm.maxAmount || !createForm.interestRate || !createForm.termMonths) {
+      Alert.alert('Validation Error', 'Please fill in all required fields (name, max amount, interest rate, term months).');
+      return;
+    }
+
+    try {
+      setCreateSubmitting(true);
+      const payload = {
+        ...createForm,
+        maxAmount: parseFloat(createForm.maxAmount),
+        minAmount: parseFloat(createForm.minAmount) || 0,
+        interestRate: parseFloat(createForm.interestRate),
+        termMonths: parseInt(createForm.termMonths, 10),
+        gracePeriodDays: parseInt(createForm.gracePeriodDays, 10) || 0,
+        penaltyRate: parseFloat(createForm.penaltyRate) || 0,
+        maxLoansPerMember: parseInt(createForm.maxLoansPerMember, 10) || 1,
+      };
+
+      const response = await ApiService.createLoanType(currentChamaId, payload);
+      if (response.success) {
+        Alert.alert('Success', 'Loan type created successfully');
+        setLoanSubview('loan-types');
+        resetCreateForm();
+        await loadLoanTypes();
+      } else {
+        Alert.alert('Error', response.error || 'Failed to create loan type');
+      }
+    } catch (error) {
+      console.error('Create loan type error:', error);
+      Alert.alert('Error', 'Failed to create loan type. Please try again.');
+    } finally {
+      setCreateSubmitting(false);
     }
   };
 
@@ -586,93 +689,283 @@ const LoanManagementScreen = ({ route, navigation }) => {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {renderHeader()}
 
-        {/* Dropdown Overlay */}
-        {showFilterDropdown && (
+        {/* Subview tabs */}
+        <View style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing.sm }}>
           <TouchableOpacity
-            style={styles.dropdownOverlay}
-            activeOpacity={1}
-            onPress={() => setShowFilterDropdown(false)}
-          />
-        )}
+            style={{ flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: borderRadius.md, backgroundColor: loanSubview === 'loans' ? colors.primary + '18' : 'transparent', borderBottomWidth: loanSubview === 'loans' ? 2 : 0, borderBottomColor: colors.primary }}
+            onPress={() => setLoanSubview('loans')}
+          >
+            <Ionicons name="list" size={18} color={loanSubview === 'loans' ? colors.primary : colors.textSecondary} />
+            <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginTop: spacing.xs, color: loanSubview === 'loans' ? colors.primary : colors.textSecondary }}>Loans</Text>
+          </TouchableOpacity>
+          {canManageLoanTypes() && (
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: borderRadius.md, backgroundColor: loanSubview === 'loan-types' ? colors.primary + '18' : 'transparent', borderBottomWidth: loanSubview === 'loan-types' ? 2 : 0, borderBottomColor: colors.primary }}
+              onPress={() => {
+                setLoanSubview('loan-types');
+                loadLoanTypes();
+              }}
+            >
+              <Ionicons name="cash" size={18} color={loanSubview === 'loan-types' ? colors.primary : colors.textSecondary} />
+              <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginTop: spacing.xs, color: loanSubview === 'loan-types' ? colors.primary : colors.textSecondary }}>Loan Types</Text>
+            </TouchableOpacity>
+          )}
+          {canManageLoanTypes() && (
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: borderRadius.md, backgroundColor: loanSubview === 'create-loan-type' ? colors.primary + '18' : 'transparent', borderBottomWidth: loanSubview === 'create-loan-type' ? 2 : 0, borderBottomColor: colors.primary }}
+              onPress={() => setLoanSubview('create-loan-type')}
+            >
+              <Ionicons name="add-circle" size={18} color={loanSubview === 'create-loan-type' ? colors.primary : colors.textSecondary} />
+              <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginTop: spacing.xs, color: loanSubview === 'create-loan-type' ? colors.primary : colors.textSecondary }}>Create Loan Type</Text>
+            </TouchableOpacity>
+           )}
+        </View>
 
-        {/* Table Container */}
-        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-          {/* Table Header */}
-          <View style={tableStyles.tableHeader}>
-            <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-              <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-              <Text style={tableStyles.tableHeaderText}>Amount</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-              <Text style={tableStyles.tableHeaderText}>Date</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-              <Text style={tableStyles.tableHeaderText}>Status</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-              <Text style={tableStyles.tableHeaderText}>Actions</Text>
+        {/* Subview content */}
+        {loanSubview === 'loans' ? (
+          <View>
+            {/* Dropdown Overlay */}
+            {showFilterDropdown && (
+              <TouchableOpacity
+                style={styles.dropdownOverlay}
+                activeOpacity={1}
+                onPress={() => setShowFilterDropdown(false)}
+              />
+            )}
+
+            {/* Table Container */}
+            <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
+              {/* Table Header */}
+              <View style={tableStyles.tableHeader}>
+                <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                  <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member</Text>
+                </View>
+                <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                  <Text style={tableStyles.tableHeaderText}>Amount</Text>
+                </View>
+                <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+                  <Text style={tableStyles.tableHeaderText}>Date</Text>
+                </View>
+                <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                  <Text style={tableStyles.tableHeaderText}>Status</Text>
+                </View>
+                <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+                  <Text style={tableStyles.tableHeaderText}>Actions</Text>
+                </View>
+              </View>
+
+              {/* Table Body */}
+              <FlatList
+                data={loans}
+                renderItem={renderTableRow}
+                keyExtractor={(item) => item.id?.toString()}
+                style={{ flex: 1, zIndex: 1 }}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    colors={[colors.primary]}
+                    tintColor={colors.primary}
+                  />
+                }
+                ListEmptyComponent={!loading && renderEmptyState()}
+              />         
             </View>
           </View>
-
-          {/* Table Body */}
-          <FlatList
-            data={loans}
-            renderItem={renderTableRow}
-            keyExtractor={(item) => item.id?.toString()}
-            style={{ flex: 1, zIndex: 1 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            ListEmptyComponent={!loading && renderEmptyState()}
-          />
-
-          {/* Pagination */}
-          {totalItems > pageSize && (
-            <View style={styles.pagination}>
-              <TouchableOpacity
-                style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
-                onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? colors.textTertiary : colors.primary} />
-                <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>Previous</Text>
-              </TouchableOpacity>
-
-              <Text style={styles.paginationInfo}>
-                Page {currentPage} of {totalPages} ({totalItems} total)
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
-                onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                <Text style={[styles.paginationText, currentPage === totalPages && styles.paginationTextDisabled]}>Next</Text>
-                <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? colors.textTertiary : colors.primary} />
-              </TouchableOpacity>
+        ) : loanSubview === 'loan-types' ? (
+          <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
+            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+              <Text style={{ flex: 2, fontSize: 9, fontWeight: 'semibold', color: colors.text, paddingHorizontal: spacing.xs }}>Name</Text>
+              <Text style={{ flex: 1.5, fontSize: 9, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Max Amount</Text>
+              <Text style={{ flex: 1, fontSize: 9, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Rate</Text>
+              <Text style={{ flex: 1.5, fontSize: 9, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Term</Text>
+              <Text style={{ flex: 1, fontSize: 9, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Status</Text>
             </View>
-          )}
-
-          {/* Bulk Actions */}
-          {canDisburseLoans() && loans.filter(loan => loan.status === 'disbursement').length > 0 && (
-            <View style={styles.bulkActions}>
+            <FlatList
+              data={loanTypes}
+              keyExtractor={(item) => item.id}
+              refreshControl={
+                <RefreshControl
+                  refreshing={loanTypesLoading}
+                  onRefresh={loadLoanTypes}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                />
+              }
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+                  <Ionicons name="cash-outline" size={48} color={colors.textSecondary} />
+                  <Text style={{ color: colors.textSecondary, marginTop: spacing.sm }}>No loan types found</Text>
+                </View>
+              }
+              renderItem={({ item, index }) => (
+                <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: index % 2 === 0 ? colors.background : colors.surface }}>
+                  <View style={{ flex: 2, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
+                    <Text style={{ fontSize: 8, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{item.name}</Text>
+                    <Text style={{ fontSize: 7, color: colors.textSecondary }} numberOfLines={1}>{item.description || '-'}</Text>
+                  </View>
+                  <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 8, color: colors.text }}>KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 8, color: colors.text }}>{item.interestRate}%</Text>
+                  </View>
+                  <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 8, color: colors.text }}>{item.termMonths} mo</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{ paddingHorizontal: spacing.xs / 2, paddingVertical: spacing.xs / 2, borderRadius: 4, backgroundColor: (item.status === 'active' ? colors.success : colors.textSecondary) + '20' }}>
+                      <Text style={{ fontSize: 7, fontWeight: 'bold', color: item.status === 'active' ? colors.success : colors.textSecondary, textTransform: 'capitalize' }}>{item.status}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        ) : loanSubview === 'create-loan-type' ? (
+          <ScrollView style={{ flex: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.md }} showsVerticalScrollIndicator={false}>
+            <View style={{ marginBottom: spacing.lg }}>
+              <Text style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.text, marginBottom: spacing.xs }}>Loan Type Information</Text>
+              <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary }}>Fill in the details below to define a new loan product for this chama.</Text>
+            </View>
+            <View style={{ gap: spacing.md }}>
+              <View>
+                <Text style={[styles.formLabel, { color: colors.text }]}>Name *</Text>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md }]}
+                  value={createForm.name}
+                  onChangeText={(text) => setCreateForm((prev) => ({ ...prev, name: text }))}
+                  placeholder="Loan type name"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+              <View>
+                <Text style={[styles.formLabel, { color: colors.text }]}>Description</Text>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md, minHeight: 80 }]}
+                  value={createForm.description}
+                  onChangeText={(text) => setCreateForm((prev) => ({ ...prev, description: text }))}
+                  placeholder="Describe this loan type"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Max Amount (KES) *</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md }]}
+                    value={createForm.maxAmount}
+                    onChangeText={(text) => setCreateForm((prev) => ({ ...prev, maxAmount: text }))}
+                    placeholder="100000"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Min Amount (KES)</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md }]}
+                    value={createForm.minAmount}
+                    onChangeText={(text) => setCreateForm((prev) => ({ ...prev, minAmount: text }))}
+                    placeholder="0"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Interest Rate (%) *</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md }]}
+                    value={createForm.interestRate}
+                    onChangeText={(text) => setCreateForm((prev) => ({ ...prev, interestRate: text }))}
+                    placeholder="12"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Term (Months) *</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md }]}
+                    value={createForm.termMonths}
+                    onChangeText={(text) => setCreateForm((prev) => ({ ...prev, termMonths: text }))}
+                    placeholder="12"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+              <View>
+                <Text style={[styles.formLabel, { color: colors.text }]}>Eligibility Criteria</Text>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md }]}
+                  value={createForm.eligibilityCriteria}
+                  onChangeText={(text) => setCreateForm((prev) => ({ ...prev, eligibilityCriteria: text }))}
+                  placeholder="active_members"
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+                  onPress={() => setCreateForm((prev) => ({ ...prev, approvalRequired: !prev.approvalRequired }))}
+                >
+                  <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: createForm.approvalRequired ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+                    {createForm.approvalRequired && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                  </View>
+                  <Text style={{ color: colors.text }}>Requires approval</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+                  onPress={() => setCreateForm((prev) => ({ ...prev, requiresCollateral: !prev.requiresCollateral }))}
+                >
+                  <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: createForm.requiresCollateral ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+                    {createForm.requiresCollateral && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                  </View>
+                  <Text style={{ color: colors.text }}>Requires collateral</Text>
+                </TouchableOpacity>
+              </View>
+              <View>
+                <Text style={[styles.formLabel, { color: colors.text }]}>Collateral Description</Text>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md, minHeight: 80 }]}
+                  value={createForm.collateralDescription}
+                  onChangeText={(text) => setCreateForm((prev) => ({ ...prev, collateralDescription: text }))}
+                  placeholder="Describe collateral requirements"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Status</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md }]}
+                    value={createForm.status}
+                    onChangeText={(text) => setCreateForm((prev) => ({ ...prev, status: text }))}
+                    placeholder="active"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+              </View>
               <Button
-                title={`Bulk Disburse (${loans.filter(loan => loan.status === 'disbursement').length} loans)`}
-                onPress={() => setShowBulkDisburseModal(true)}
-                style={{ backgroundColor: colors.primary }}
-                icon={<Ionicons name="send" size={16} color={colors.white} />}
+                title={createSubmitting ? 'Creating...' : 'Create Loan Type'}
+                onPress={handleCreateLoanType}
+                disabled={createSubmitting}
+                style={{ backgroundColor: colors.primary, marginTop: spacing.md }}
+                icon={!createSubmitting && <Ionicons name="add" size={16} color={colors.white} />}
               />
             </View>
-          )}
-        </View>
+          </ScrollView>
+        ) : null}
         {loading && <LoadingSpinner />}
       </SafeAreaView>
 

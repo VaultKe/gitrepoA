@@ -47,6 +47,11 @@ func main() {
 		log.Fatal("Failed to run notification system migrations:", err)
 	}
 
+	// Ensure loan_types table/indexes exist
+	if err := database.EnsureLoanTypesTable(db); err != nil {
+		log.Fatalf("Failed to ensure loan types table: %v", err)
+	}
+
 	// Initialize Gin router
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
