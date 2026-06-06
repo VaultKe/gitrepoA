@@ -1104,14 +1104,9 @@ func GetGuarantorRequests(c *gin.Context) {
 }
 
 func CreateLoanType(c *gin.Context) {
-	userID := c.GetString("userId")
-	userRole := c.GetString("userRole")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
-		return
-	}
-	if userRole != "admin" && !containsRole(userRole, "chairperson", "secretary", "treasurer") {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "Only chairperson, secretary, or treasurer can create loan types"})
 		return
 	}
 
@@ -1185,14 +1180,9 @@ func GetLoanType(c *gin.Context) {
 }
 
 func UpdateLoanType(c *gin.Context) {
-	userID := c.GetString("userId")
-	userRole := c.GetString("userRole")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
-		return
-	}
-	if userRole != "admin" && !containsRole(userRole, "chairperson", "secretary", "treasurer") {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "Only chairperson, secretary, or treasurer can update loan types"})
 		return
 	}
 
@@ -1223,14 +1213,9 @@ func UpdateLoanType(c *gin.Context) {
 }
 
 func DeleteLoanType(c *gin.Context) {
-	userID := c.GetString("userId")
-	userRole := c.GetString("userRole")
+	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
-		return
-	}
-	if userRole != "admin" && !containsRole(userRole, "chairperson", "secretary", "treasurer") {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "Only chairperson, secretary, or treasurer can delete loan types"})
 		return
 	}
 

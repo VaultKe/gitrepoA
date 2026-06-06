@@ -14,7 +14,8 @@ import ChamaMeetingsScreen from '../../screens/chama/meeting/ChamaMeetingsScreen
 import MerryGoRoundScreen from '../../screens/chama/merry-go-round/MerryGoRoundScreen';
 import WelfareScreen from '../../screens/chama/welfare/WelfareScreen';
 import ChamaSettings from '../../screens/chama/settings/ChamaSettings';
-import LoanApplication from '../../screens/chama/loans/LoanApplication';
+import ApplyForLoanScreen from '../../screens/chama/loans/ApplyForLoanScreen';
+import ApplyForLoanScreen from '../../screens/chama/loans/ApplyForLoanScreen';
 import CreateMeeting from '../../screens/chama/meeting/CreateMeeting';
 import CreateMerryGoRound from '../../screens/chama/merry-go-round/CreateMerryGoRound';
 import JitsiMeetScreen from '../../screens/chama/meeting/JitsiMeetScreen';
@@ -57,7 +58,7 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
     welfare: WelfareScreen,
     
     // Forms and additional screens
-    'loan-application': LoanApplication,
+    'loan-application': ApplyForLoanScreen,
     'create-meeting': CreateMeeting,
     'create-merry-go-round': CreateMerryGoRound,
     'online-meeting': JitsiMeetScreen,

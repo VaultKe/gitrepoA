@@ -43,7 +43,7 @@ import CreateChamaScreen from '../screens/user/chamaandgroups/CreateChamaScreen'
 import ChamaDetailsScreen from '../screens/user/chamaandgroups/ChamaDetailsScreen';
 import ChamaMembersScreen from '../screens/chama/meeting/ChamaMembersScreen';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
-import LoanApplication from '../screens/chama/loans/LoanApplication';
+import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
@@ -233,11 +233,11 @@ function UserTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="LoanApplication"
-        component={LoanApplication}
+        name="ApplyForLoanScreen"
+        component={ApplyForLoanScreen}
         options={{
-          title: 'Loan Application',
-          tabBarButton: () => null, // Hide from tab bar
+          title: 'Apply for Loan',
+          tabBarButton: () => null,
         }}
       />
 

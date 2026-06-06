@@ -17,7 +17,7 @@ import MerryGoRoundScreen from '../screens/chama/merry-go-round/MerryGoRoundScre
 import MerryGoRoundRulesScreen from '../screens/chama/merry-go-round/MerryGoRoundRulesScreen';
 import WelfareScreen from '../screens/chama/welfare/WelfareScreen';
 import ChamaSettings from '../screens/chama/settings/ChamaSettings';
-import LoanApplication from '../screens/chama/loans/LoanApplication';
+import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import CreateMeeting from '../screens/chama/meeting/CreateMeeting';
 import CreateMerryGoRound from '../screens/chama/merry-go-round/CreateMerryGoRound';
 import InviteMembers from '../screens/chama/chamamember/InviteMembers';
@@ -293,8 +293,8 @@ function ChamaTabNavigator({ route }) {
         initialParams={{ chamaId, chamaName, chama }}
       />
       <Tab.Screen
-        name="LoanApplication"
-        component={LoanApplication}
+        name="ApplyForLoanScreen"
+        component={ApplyForLoanScreen}
         options={{
           title: 'Apply for Loan',
           tabBarButton: () => null, // Hide from tab bar

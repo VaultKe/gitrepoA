@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+	"log"
 
 	"github.com/google/uuid"
 
@@ -567,11 +568,17 @@ func (s *LoanService) notifyLoanReadyForApproval(loan *models.Loan) {
 // canManageLoanTypes checks whether a user may administer loan types in a chama
 func (s *LoanService) canManageLoanTypes(userID, chamaID string) bool {
 	query := `
-		SELECT 1 FROM chama_members
-		WHERE user_id = $1 AND chama_id = $2 AND role IN ('chairperson', 'secretary', 'treasurer') AND is_active = true
+		SELECT role FROM chama_members
+		WHERE user_id = $1 AND chama_id = $2 AND is_active = true
 	`
-	var exists int
-	if err := s.db.QueryRow(query, userID, chamaID).Scan(&exists); err != nil {
+	var role string
+	err := s.db.QueryRow(query, userID, chamaID).Scan(&role)
+	if err != nil {
+		log.Printf("Loan type permission denied for user %s in chama %s: %v", userID, chamaID, err)
+		return false
+	}
+	if role != "chairperson" && role != "secretary" && role != "treasurer" {
+		log.Printf("Loan type permission denied: user %s has role '%s' in chama %s (requires chairperson/secretary/treasurer)", userID, role, chamaID)
 		return false
 	}
 	return true

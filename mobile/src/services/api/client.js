@@ -1,5 +1,6 @@
 import { API_BASE_URL, REQUEST_TIMEOUT, getAuthToken, getDeviceInfo, sanitizeHeaderValue } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { triggerAppLogout } from '../../utils/authLogout';
 
 const makeRequest = async (endpoint, options = {}) => {
   const token = await getAuthToken();
@@ -43,11 +44,9 @@ const makeRequest = async (endpoint, options = {}) => {
       data = await response.json();
     } else {
       const textResponse = await response.text();
-      // Try to parse as JSON anyway in case content-type is wrong
       data = JSON.parse(textResponse);
     }
   } catch (parseError) {
-    // If not valid JSON, return error message
     if (!response.ok) {
       throw new Error(`Server error: ${response.statusText}`);
     }
@@ -56,11 +55,8 @@ const makeRequest = async (endpoint, options = {}) => {
 
   if (!response.ok) {
     if (response.status === 401) {
-      const { removeAuthToken } = await import('./auth');
-      await removeAuthToken();
-      await AsyncStorage.removeItem('userRole');
-      await AsyncStorage.removeItem('userData');
-      throw new Error('Your session has expired. Please log in again.');
+      await triggerAppLogout();
+      throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
     }
     if (response.status === 429) {
       throw new Error('Too many requests. Please wait a moment and try again.');
