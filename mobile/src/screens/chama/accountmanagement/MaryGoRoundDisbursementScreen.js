@@ -420,14 +420,12 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
             );
 
             setAllMaryGoRoundCycles(enrichedAllCycles);
-            // Calculate pagination info from all data
             const filteredData = filterMaryGoRoundCyclesData(enrichedAllCycles, search, selectedFilter);
             setTotalItems(filteredData.length);
             setTotalPages(Math.ceil(filteredData.length / pageSize));
           }
         } else {
           setAllMaryGoRoundCycles(enrichedCycles);
-          // Use pagination info from API if available, otherwise estimate
           setTotalItems(response.totalCount || response.data?.length || enrichedCycles.length);
           setTotalPages(Math.ceil((response.totalCount || enrichedCycles.length) / pageSize));
         }

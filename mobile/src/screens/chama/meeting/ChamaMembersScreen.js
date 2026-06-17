@@ -22,50 +22,13 @@ import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import ApiService from '../../../services/api';
 
-// Simple Avatar Component with fallback handling
-const AvatarWithFallback = ({ uri, firstName, lastName, size = 50, backgroundColor, textColor }) => {
-  const [imageError, setImageError] = useState(false);
-
-  const initials = `${firstName?.[0]?.toUpperCase() || 'U'}${lastName?.[0]?.toUpperCase() || ''}`;
-
-  if (imageError || !uri) {
-    return (
-      <View style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: backgroundColor || '#00D4AA',
-        justifyContent: 'center',
-        alignItems: 'center'
-      }}>
-        <Text style={{
-          color: textColor || '#FFFFFF',
-          fontSize: size * 0.4,
-          fontWeight: 'bold'
-        }}>
-          {initials}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <Image
-      source={{ uri }}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2
-      }}
-      onError={() => setImageError(true)}
-    />
-  );
-};
+// Simple Avatar Component with fallback handling removed; renderMemberAvatar handles avatars inline with shared styles.
 
 const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const { chamaId } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
+  const styles = createStyles(colors);
 
   // Responsive layout logic
   const screenWidth = Dimensions.get('window').width;
@@ -337,6 +300,32 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     }
   };
 
+  const getMemberRoleBadgeStyle = (role) => {
+    switch (role) {
+      case 'chairperson':
+      case 'treasurer':
+      case 'secretary':
+        return [styles.roleBadge, styles.roleBadgeWarning];
+      case 'assistant':
+        return [styles.roleBadge, styles.roleBadgeSecondary];
+      default:
+        return [styles.roleBadge, styles.roleBadgeMuted];
+    }
+  };
+
+  const getMemberRoleTextStyle = (role) => {
+    switch (role) {
+      case 'chairperson':
+      case 'treasurer':
+      case 'secretary':
+        return [styles.roleText, styles.roleTextWarning];
+      case 'assistant':
+        return [styles.roleText, styles.roleTextSecondary];
+      default:
+        return [styles.roleText, styles.roleTextMuted];
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -358,35 +347,65 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     return { status: 'pending', color: colors.primary };
   };
 
+  const getInvitationStatusBadgeStyle = (status) => {
+    switch (status) {
+      case 'accepted':
+        return [styles.statusBadge, styles.statusBadgeSuccess];
+      case 'rejected':
+        return [styles.statusBadge, styles.statusBadgeError];
+      case 'cancelled':
+        return [styles.statusBadge, styles.statusBadgeMuted];
+      case 'expired':
+        return [styles.statusBadge, styles.statusBadgeWarning];
+      default:
+        return [styles.statusBadge, styles.statusBadgePrimary];
+    }
+  };
+
+  const getInvitationStatusTextStyle = (status) => {
+    switch (status) {
+      case 'accepted':
+        return [styles.statusText, styles.statusTextSuccess];
+      case 'rejected':
+        return [styles.statusText, styles.statusTextError];
+      case 'cancelled':
+        return [styles.statusText, styles.statusTextMuted];
+      case 'expired':
+        return [styles.statusText, styles.statusTextWarning];
+      default:
+        return [styles.statusText, styles.statusTextPrimary];
+    }
+  };
+
   const renderInvitationCard = ({ item }) => {
     const statusInfo = getInvitationStatus(item);
     const isExpired = statusInfo.status === 'expired';
     const isPending = statusInfo.status === 'pending';
 
     return (
-      <Card variant="outlined" style={[styles.invitationCard, { opacity: isExpired ? 0.7 : 1 }]}>
+      <Card variant="outlined" style={[styles.invitationCard, isExpired && styles.invitationCardExpired]}>
         <View style={styles.invitationHeader}>
           <View style={styles.invitationInfo}>
-            <Text style={[styles.inviteeEmail, { color: colors.text }]}>
+            <Text style={[styles.inviteeEmail, styles.inviteeEmailText]}>
               {item.email}
             </Text>
             {item.phone_number && (
-              <Text style={[styles.inviteePhone, { color: colors.textSecondary }]}>
+              <Text style={[styles.inviteePhone, styles.inviteePhoneText]}>
                 {item.phone_number}
               </Text>
             )}
             {item.role && (
               <View style={styles.invitationRole}>
                 <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
-                <Text style={[styles.roleText, { color: colors.primary }]}>
+                <Text style={[styles.roleText, styles.roleTextPrimary]}>
                   {item.role_name || item.role}
                 </Text>
               </View>
             )}
           </View>
 
-          <View style={[styles.statusBadge, { backgroundColor: statusInfo.color + '20' }]}>
-            <Text style={[styles.statusText, { color: statusInfo.color }]}>
+          <View style={getInvitationStatusBadgeStyle(statusInfo.status)}>
+            <Text style={getInvitationStatusTextStyle(statusInfo.status)}>
               {statusInfo.status.toUpperCase()}
             </Text>
           </View>
@@ -395,20 +414,20 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         <View style={styles.invitationDetails}>
           <View style={styles.detailRow}>
             <Ionicons name="calendar" size={16} color={colors.textSecondary} />
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+            <Text style={[styles.detailLabel, styles.detailLabelText]}>
               Sent:
             </Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
+            <Text style={[styles.detailValue, styles.detailValueText]}>
               {formatDate(item.created_at)}
             </Text>
           </View>
 
           <View style={styles.detailRow}>
             <Ionicons name="time" size={16} color={colors.textSecondary} />
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+            <Text style={[styles.detailLabel, styles.detailLabelText]}>
               Expires:
             </Text>
-            <Text style={[styles.detailValue, { color: isExpired ? colors.error : colors.text }]}>
+            <Text style={[styles.detailValue, isExpired ? styles.detailValueTextError : styles.detailValueText]}>
               {formatDate(item.expires_at)}
             </Text>
           </View>
@@ -416,10 +435,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           {item.responded_at && (
             <View style={styles.detailRow}>
               <Ionicons name="checkmark-circle" size={16} color={statusInfo.color} />
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.detailLabel, styles.detailLabelText]}>
                 Responded:
               </Text>
-              <Text style={[styles.detailValue, { color: colors.text }]}>
+              <Text style={[styles.detailValue, styles.detailValueText]}>
                 {formatDate(item.responded_at)}
               </Text>
             </View>
@@ -428,10 +447,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
         {item.message && (
           <View style={styles.messageContainer}>
-            <Text style={[styles.messageLabel, { color: colors.textSecondary }]}>
+            <Text style={[styles.messageLabel, styles.messageLabelText]}>
               Message:
             </Text>
-            <Text style={[styles.messageText, { color: colors.text }]} numberOfLines={2}>
+            <Text style={[styles.messageText, styles.messageTextText]} numberOfLines={2}>
               {item.message}
             </Text>
           </View>
@@ -452,8 +471,8 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
               variant="outline"
               size="small"
               onPress={() => handleCancelInvitation(item.id)}
-              style={[styles.actionButton, { borderColor: colors.error }]}
-              textStyle={{ color: colors.error }}
+              style={[styles.actionButton, styles.actionButtonError]}
+              textStyle={styles.errorButtonText}
               icon={<Ionicons name="close" size={16} color={colors.error} />}
             />
           </View>
@@ -521,8 +540,8 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
     // Final fallback to initials
     return (
-      <View style={[styles.memberAvatar, { backgroundColor: colors.primary }]}>
-        <Text style={[styles.memberInitials, { color: colors.white }]}>
+      <View style={[styles.memberAvatar, styles.memberAvatarPrimary]}>
+        <Text style={[styles.memberInitials, styles.memberInitialsWhite]}>
           {firstName?.[0]?.toUpperCase() || 'U'}{lastName?.[0]?.toUpperCase() || ''}
         </Text>
       </View>
@@ -572,150 +591,90 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     return 'Recently joined';
   };
 
-  const renderMemberRow = ({ item, index }) => {
-    // Zebra design: alternate background colors
-    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
+  const renderMemberRow = ({ item, index }) => (
+    <View style={index % 2 === 0 ? styles.memberTableRowEven : styles.memberTableRowOdd}>
+      <View style={styles.memberNameCell}>
+        <Text style={styles.memberNameText}>{getMemberName(item)}</Text>
+      </View>
 
-    return (
-      <View style={{
-        flexDirection: 'row',
-        paddingVertical: spacing.sm,
-        backgroundColor: rowBackgroundColor,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        alignItems: 'center',
-      }}>
-        {/* Name */}
-        <View style={{ flex: 3, justifyContent: 'center' }}>
-            <Text style={{
-              fontSize: 8.5,
-              fontWeight: 'medium',
-              color: colors.text,
-            }}>
-              {getMemberName(item)}
-            </Text>
-        </View>
-
-        {/* Role */}
-        <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 4,
-            paddingVertical: 2,
-            borderRadius: 4,
-            backgroundColor: getRoleColor(item.role) + '20',
-          }}>
-            <Ionicons
-              name={getRoleIcon(item.role)}
-              size={10}
-              color={getRoleColor(item.role)}
-            />
-            <Text style={{
-              fontSize: 8.5,
-              fontWeight: 'medium',
-              color: getRoleColor(item.role),
-              marginLeft: 2,
-            }}>
-              {item.role.charAt(0).toUpperCase() + item.role.slice(1)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Attendance Rate */}
-        <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{
-            fontSize: 8.5,
-            fontWeight: 'medium',
-            color: colors.text,
-          }}>
-            {item.attendance_rate?.toFixed(1) || 0}%
+      <View style={styles.roleCell}>
+        <View style={getMemberRoleBadgeStyle(item.role)}>
+          <Ionicons
+            name={getRoleIcon(item.role)}
+            size={10}
+            color={getRoleColor(item.role)}
+          />
+          <Text style={getMemberRoleTextStyle(item.role)}>
+            {item.role.charAt(0).toUpperCase() + item.role.slice(1)}
           </Text>
-        </View>
-
-        {/* Reputation */}
-        <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}>
-          <Ionicons name="star" size={12} color={colors.warning} />
-          <Text style={{
-            fontSize: 8.5,
-            fontWeight: 'medium',
-            color: colors.text,
-            marginLeft: 2,
-          }}>
-            {item.reputation_score?.toFixed(1) || 0}
-          </Text>
-        </View>
-
-        {/* Actions */}
-        <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
-          <TouchableOpacity
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              backgroundColor: colors.primary + '20',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onPress={() => {
-              navigation.navigate('ViewMember', {
-                memberId: item.user_id,
-                chamaId: chamaId,
-                userRole: userRole,
-              });
-            }}
-          >
-            <Ionicons
-              name={item.user_id === user?.id ? "person-circle" : "person"}
-              size={12}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
-
-          {item.user_id !== user?.id && (
-            <TouchableOpacity
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                backgroundColor: colors.secondary + '20',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              onPress={async () => {
-                try {
-                  const recipientId = item.user_id;
-                  if (!recipientId) {
-                    Alert.alert('Error', 'Cannot start chat: User ID not found');
-                    return;
-                  }
-
-                  const response = await ApiService.createPrivateChat(recipientId);
-                  if (response.success) {
-                    const roomName = item.user?.first_name && item.user?.last_name
-                      ? `${item.user.first_name} ${item.user.last_name}`
-                      : 'Chat';
-
-                    navigation.navigate('ChatRoom', {
-                      roomId: response.data.id,
-                      roomName: roomName,
-                      roomType: 'private'
-                    });
-                  } else {
-                    Alert.alert('Error', response.error || 'Failed to create chat room');
-                  }
-                } catch (error) {
-                  Alert.alert('Error', 'Failed to start chat: ' + error.message);
-                }
-              }}
-            >
-              <Ionicons name="chatbubble" size={12} color={colors.secondary} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
-    );
-  };
+
+      <View style={styles.centeredCell}>
+        <Text style={styles.memberTableText}>
+          {item.attendance_rate?.toFixed(1) || 0}%
+        </Text>
+      </View>
+
+      <View style={styles.reputationCell}>
+        <Ionicons name="star" size={12} color={colors.warning} />
+        <Text style={styles.memberTableText}>{item.reputation_score?.toFixed(1) || 0}</Text>
+      </View>
+
+      <View style={styles.actionCell}>
+        <TouchableOpacity
+          style={styles.iconButtonPrimary}
+          onPress={() => {
+            navigation.navigate('ViewMember', {
+              memberId: item.user_id,
+              chamaId: chamaId,
+              userRole: userRole,
+            });
+          }}
+        >
+          <Ionicons
+            name={item.user_id === user?.id ? "person-circle" : "person"}
+            size={12}
+            color={colors.primary}
+          />
+        </TouchableOpacity>
+
+        {item.user_id !== user?.id && (
+          <TouchableOpacity
+            style={styles.iconButtonSecondary}
+            onPress={async () => {
+              try {
+                const recipientId = item.user_id;
+                if (!recipientId) {
+                  Alert.alert('Error', 'Cannot start chat: User ID not found');
+                  return;
+                }
+
+                const response = await ApiService.createPrivateChat(recipientId);
+                if (response.success) {
+                  const roomName = item.user?.first_name && item.user?.last_name
+                    ? `${item.user.first_name} ${item.user.last_name}`
+                    : 'Chat';
+
+                  navigation.navigate('ChatRoom', {
+                    roomId: response.data.id,
+                    roomName: roomName,
+                    roomType: 'private'
+                  });
+                } else {
+                  Alert.alert('Error', response.error || 'Failed to create chat room');
+                }
+              } catch (error) {
+                Alert.alert('Error', 'Failed to start chat: ' + error.message);
+              }
+            }}
+          >
+            <Ionicons name="chatbubble" size={12} color={colors.secondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
 
   const renderRoleModal = () => (
     <Modal
@@ -725,9 +684,9 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
       onRequestClose={() => setShowRoleModal(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+        <View style={[styles.modalContent, styles.modalContentSurface]}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
+            <Text style={[styles.modalTitle, styles.modalTitleText]}>
               Manage Member
             </Text>
             <TouchableOpacity onPress={() => setShowRoleModal(false)}>
@@ -737,13 +696,13 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
           {selectedMember && (
             <View style={styles.modalBody}>
-              <Text style={[styles.memberNameModal, { color: colors.text }]}>
+              <Text style={[styles.memberNameModal, styles.memberNameModalText]}>
                 {selectedMember.user?.first_name} {selectedMember.user?.last_name}
               </Text>
 
               {canManageRoles() && (
                 <View style={styles.roleSection}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  <Text style={[styles.sectionTitle, styles.sectionTitleText]}>
                     Change Role
                   </Text>
                   {roles.map((role) => (
@@ -751,10 +710,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
                       key={role.id}
                       style={[
                         styles.roleOption,
-                        {
-                          backgroundColor: selectedMember.role === role.id ? colors.primary + '20' : 'transparent',
-                          borderColor: colors.border,
-                        }
+                        selectedMember.role === role.id ? styles.roleOptionSelected : styles.roleOptionDefault,
                       ]}
                       onPress={() => handleChangeRole(selectedMember.id, role.id)}
                     >
@@ -766,11 +722,11 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
                       <View style={styles.roleInfo}>
                         <Text style={[
                           styles.roleName,
-                          { color: selectedMember.role === role.id ? colors.primary : colors.text }
+                          selectedMember.role === role.id ? styles.roleNameSelected : styles.roleNameDefault,
                         ]}>
                           {role.name}
                         </Text>
-                        <Text style={[styles.roleDescription, { color: colors.textSecondary }]}>
+                        <Text style={[styles.roleDescription, styles.roleDescriptionText]}>
                           {role.description}
                         </Text>
                       </View>
@@ -787,8 +743,8 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
                     setShowRoleModal(false);
                     handleRemoveMember(selectedMember);
                   }}
-                  style={[styles.removeButton, { borderColor: colors.error }]}
-                  textStyle={{ color: colors.error }}
+                  style={[styles.removeButton, styles.removeButtonError]}
+                  textStyle={styles.errorButtonText}
                 />
               </View>
             </View>
@@ -805,10 +761,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         size={64}
         color={colors.textTertiary}
       />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+      <Text style={[styles.emptyTitle, styles.emptyTitleText]}>
         {activeTab === 'members' ? 'No members found' : 'No invitations sent'}
       </Text>
-      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+      <Text style={[styles.emptySubtitle, styles.emptySubtitleText]}>
         {activeTab === 'members'
           ? (searchQuery ? 'Try adjusting your search' : 'Invite people to join your chama')
           : 'Send invitations to grow your chama membership'
@@ -818,11 +774,11 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   );
 
   const renderTabNavigation = () => (
-    <View style={[styles.tabContainer, { backgroundColor: colors.surface }]}>
+    <View style={[styles.tabContainer, styles.tabContainerSurface]}>
       <TouchableOpacity
         style={[
           styles.tab,
-          activeTab === 'members' && { backgroundColor: colors.primary + '15', borderBottomColor: colors.primary }
+          activeTab === 'members' ? styles.tabActive : styles.tabInactive,
         ]}
         onPress={() => setActiveTab('members')}
       >
@@ -833,7 +789,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         />
         <Text style={[
           styles.tabText,
-          { color: activeTab === 'members' ? colors.primary : colors.textSecondary }
+          activeTab === 'members' ? styles.tabTextActive : styles.tabTextInactive,
         ]}>
           Members ({filteredMembers.length})
         </Text>
@@ -843,7 +799,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         <TouchableOpacity
           style={[
             styles.tab,
-            activeTab === 'invitations' && { backgroundColor: colors.primary + '15', borderBottomColor: colors.primary }
+            activeTab === 'invitations' ? styles.tabActive : styles.tabInactive,
           ]}
           onPress={() => setActiveTab('invitations')}
         >
@@ -854,7 +810,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           />
           <Text style={[
             styles.tabText,
-            { color: activeTab === 'invitations' ? colors.primary : colors.textSecondary }
+            activeTab === 'invitations' ? styles.tabTextActive : styles.tabTextInactive,
           ]}>
             Invitations ({sentInvitations.length})
           </Text>
@@ -877,27 +833,27 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, styles.containerBackground]}>
         <View style={styles.loadingContainer}>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '70%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
+          <View style={[styles.skeletonCard, styles.skeletonCardSurface]}>
+            <View style={[styles.skeletonLine, styles.skeletonLine70]} />
+            <View style={[styles.skeletonLine, styles.skeletonLine50]} />
           </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '60%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '40%' }]} />
+          <View style={[styles.skeletonCard, styles.skeletonCardSurface]}>
+            <View style={[styles.skeletonLine, styles.skeletonLine60]} />
+            <View style={[styles.skeletonLine, styles.skeletonLine40]} />
           </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '80%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '30%' }]} />
+          <View style={[styles.skeletonCard, styles.skeletonCardSurface]}>
+            <View style={[styles.skeletonLine, styles.skeletonLine80]} />
+            <View style={[styles.skeletonLine, styles.skeletonLine30]} />
           </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '55%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '65%' }]} />
+          <View style={[styles.skeletonCard, styles.skeletonCardSurface]}>
+            <View style={[styles.skeletonLine, styles.skeletonLine55]} />
+            <View style={[styles.skeletonLine, styles.skeletonLine65]} />
           </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '45%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '75%' }]} />
+          <View style={[styles.skeletonCard, styles.skeletonCardSurface]}>
+            <View style={[styles.skeletonLine, styles.skeletonLine45]} />
+            <View style={[styles.skeletonLine, styles.skeletonLine75]} />
           </View>
         </View>
       </SafeAreaView>
@@ -905,31 +861,23 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, styles.containerBackground]}>
       {/* Header Card */}
-      <View style={[styles.headerCard, {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        marginHorizontal: spacing.md,
-        marginTop: spacing.sm,
-        marginBottom: spacing.sm
-      }]}>
+      <Card variant="outlined" padding="none" style={styles.headerCard}>
         <Input
           placeholder={activeTab === 'members' ? "Search members..." : "Search invitations..."}
           value={searchQuery}
           onChangeText={setSearchQuery}
           leftIcon="search"
-          style={[styles.searchInput, { marginBottom: spacing.sm }]}
+          style={styles.searchInput}
         />
 
         {/* Compact Tab Navigation */}
-        <View style={[styles.tabContainer, { backgroundColor: 'transparent', paddingHorizontal: 0 }]}>
+        <View style={styles.compactTabContainer}>
           <TouchableOpacity
             style={[
               styles.compactTab,
-              activeTab === 'members' && { backgroundColor: colors.primary + '15', borderBottomColor: colors.primary }
+              activeTab === 'members' ? styles.compactTabActive : styles.compactTabInactive,
             ]}
             onPress={() => setActiveTab('members')}
           >
@@ -940,7 +888,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
             />
             <Text style={[
               styles.compactTabText,
-              { color: activeTab === 'members' ? colors.primary : colors.textSecondary }
+              activeTab === 'members' ? styles.compactTabTextActive : styles.compactTabTextInactive,
             ]}>
               Members ({filteredMembers.length})
             </Text>
@@ -950,7 +898,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
             <TouchableOpacity
               style={[
                 styles.compactTab,
-                activeTab === 'invitations' && { backgroundColor: colors.primary + '15', borderBottomColor: colors.primary }
+                activeTab === 'invitations' ? styles.compactTabActive : styles.compactTabInactive,
               ]}
               onPress={() => setActiveTab('invitations')}
             >
@@ -961,143 +909,83 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
               />
               <Text style={[
                 styles.compactTabText,
-                { color: activeTab === 'invitations' ? colors.primary : colors.textSecondary }
+                activeTab === 'invitations' ? styles.compactTabTextActive : styles.compactTabTextInactive,
               ]}>
                 Invitations ({sentInvitations.length})
               </Text>
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </Card>
 
       {/* Content based on active tab */}
       {activeTab === 'members' ? (
-        <View style={{ flex: 1, marginHorizontal: spacing.md }}>
-          {/* Table Header */}
-          <View style={{
-            flexDirection: 'row',
-            paddingVertical: spacing.sm,
-            backgroundColor: colors.surface,
-            borderBottomWidth: 2,
-            borderBottomColor: colors.primary,
-          }}>
-            <Text style={{
-              flex: 3,
-              fontSize: 9,
-              fontWeight: 'semibold',
-              color: colors.text,
-            }}>Name</Text>
-            <Text style={{
-              flex: 1.5,
-              fontSize: 9,
-              fontWeight: 'semibold',
-              color: colors.text,
-              textAlign: 'center',
-            }}>Role</Text>
-            <Text style={{
-              flex: 1.5,
-              fontSize: 9,
-              fontWeight: 'semibold',
-              color: colors.text,
-              textAlign: 'center',
-            }}>Attendance</Text>
-            <Text style={{
-              flex: 1.5,
-              fontSize: 9,
-              fontWeight: 'semibold',
-              color: colors.text,
-              textAlign: 'center',
-            }}>Reputation</Text>
-            <Text style={{
-              flex: 1.5,
-              fontSize: 9,
-              fontWeight: 'semibold',
-              color: colors.text,
-              textAlign: 'center',
-            }}>Actions</Text>
-          </View>
-
-          {/* Table Body */}
-          <FlatList
-            data={getCurrentPageMembers()}
-            renderItem={renderMemberRow}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.membersList}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            ListEmptyComponent={!loading && filteredMembers.length === 0 && renderEmptyState()}
-            showsVerticalScrollIndicator={false}
-          />
-
-          {/* Pagination Controls */}
-          {filteredMembers.length > itemsPerPage && (
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'center',
-              alignItems: 'center',
-              paddingVertical: spacing.lg,
-              paddingHorizontal: spacing.md,
-              backgroundColor: colors.surface,
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-            }}>
-              <TouchableOpacity
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginHorizontal: spacing.sm,
-                  backgroundColor: currentPage === 1 ? colors.border : colors.primary
-                }}
-                onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-              >
-                <Ionicons
-                  name="chevron-back"
-                  size={16}
-                  color={currentPage === 1 ? colors.textSecondary : colors.white}
-                />
-              </TouchableOpacity>
-
-              <Text style={{
-                fontSize: typography.fontSize.sm,
-                fontWeight: typography.fontWeight.medium,
-                minWidth: 80,
-                textAlign: 'center',
-                color: colors.text
-              }}>
-                Page {currentPage} of {totalPages}
-              </Text>
-
-              <TouchableOpacity
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginHorizontal: spacing.sm,
-                  backgroundColor: currentPage === totalPages ? colors.border : colors.primary
-                }}
-                onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-              >
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={currentPage === totalPages ? colors.textSecondary : colors.white}
-                />
-              </TouchableOpacity>
+        <View style={styles.membersTableContainer}>
+          <Card variant="outlined" padding="none" style={styles.membersTableCard}>
+            <View style={styles.membersTableHeader}>
+              <Text style={styles.tableHeaderName}>Name</Text>
+              <Text style={styles.tableHeaderCenter}>Role</Text>
+              <Text style={styles.tableHeaderCenter}>Attendance</Text>
+              <Text style={styles.tableHeaderCenter}>Reputation</Text>
+              <Text style={styles.tableHeaderCenter}>Actions</Text>
             </View>
-          )}
+
+            <FlatList
+              style={styles.membersTableList}
+              data={getCurrentPageMembers()}
+              renderItem={renderMemberRow}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.membersList}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                />
+              }
+              ListEmptyComponent={!loading && filteredMembers.length === 0 && renderEmptyState()}
+              showsVerticalScrollIndicator={false}
+            />
+
+            {filteredMembers.length > itemsPerPage && (
+              <View style={styles.paginationContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.paginationButton,
+                    currentPage === 1 ? styles.paginationButtonDisabled : styles.paginationButtonActive,
+                  ]}
+                  onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={16}
+                    color={currentPage === 1 ? colors.textSecondary : colors.white}
+                  />
+                </TouchableOpacity>
+
+                <Text style={styles.paginationText}>
+                  Page {currentPage} of {totalPages}
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.paginationButton,
+                    currentPage === totalPages ? styles.paginationButtonDisabled : styles.paginationButtonActive,
+                  ]}
+                  onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={currentPage === totalPages ? colors.textSecondary : colors.white}
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+          </Card>
         </View>
       ) : (
         <FlatList
@@ -1124,7 +1012,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
       {canManageMembers() && (
         <TouchableOpacity
-          style={[styles.fab, { backgroundColor: colors.primary }]}
+          style={[styles.fab, styles.fabPrimary]}
           onPress={() => {
             if (onRouteChange) {
               // Use route change to stay within ChamaLayoutProvider
@@ -1150,9 +1038,12 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  containerBackground: {
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -1165,61 +1056,51 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     padding: spacing.md,
   },
+  skeletonCardSurface: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
   skeletonLine: {
     height: 12,
     borderRadius: 6,
     marginBottom: spacing.sm,
+    backgroundColor: colors.border,
   },
-  header: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    ...shadows.sm,
+  skeletonLine70: {
+    width: '70%',
+  },
+  skeletonLine50: {
+    width: '50%',
+  },
+  skeletonLine60: {
+    width: '60%',
+  },
+  skeletonLine40: {
+    width: '40%',
+  },
+  skeletonLine80: {
+    width: '80%',
+  },
+  skeletonLine30: {
+    width: '30%',
+  },
+  skeletonLine55: {
+    width: '55%',
+  },
+  skeletonLine65: {
+    width: '65%',
+  },
+  skeletonLine45: {
+    width: '45%',
+  },
+  skeletonLine75: {
+    width: '75%',
   },
   searchInput: {
     marginBottom: spacing.sm,
   },
-  statsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  memberCount: {
-    alignItems: 'flex-start',
-  },
-  countText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-  statsText: {
-    fontSize: typography.fontSize.xs,
-    marginTop: spacing.xs,
-  },
-  lastUpdated: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  lastUpdatedText: {
-    fontSize: typography.fontSize.xs,
-  },
   membersList: {
     padding: spacing.md,
-  },
-  row: {
-    justifyContent: 'space-around',
-    marginHorizontal: -spacing.md / 2,
-  },
-  memberCard: {
-    marginBottom: spacing.md,
-  },
-  memberHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  memberAvatarContainer: {
-    position: 'relative',
-    marginRight: spacing.md,
   },
   memberAvatar: {
     width: 50,
@@ -1227,147 +1108,18 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden', // Ensures image stays within circular bounds
-    backgroundColor: '#f0f0f0', // Light background for loading state
+    overflow: 'hidden',
+    backgroundColor: colors.backgroundTertiary,
   },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: 'white',
+  memberAvatarPrimary: {
+    backgroundColor: colors.primary,
   },
   memberInitials: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
   },
-  memberInfo: {
-    flex: 1,
-  },
-  memberNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  memberName: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  memberDetails: {
-    gap: spacing.xs,
-  },
-  memberRole: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  roleText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginLeft: spacing.xs,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    marginLeft: spacing.sm,
-  },
-  statusText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
-    textTransform: 'capitalize',
-  },
-  memberJoined: {
-    fontSize: typography.fontSize.sm,
-  },
-  reputationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  financialSummary: {
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    gap: spacing.sm,
-  },
-  financialItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  financialLabel: {
-    fontSize: typography.fontSize.sm,
-    flex: 1,
-  },
-  financialValue: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    textAlign: 'right',
-  },
-  activitySummary: {
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  activityTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.md,
-  },
-  activityGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  activityItem: {
-    alignItems: 'center',
-  },
-  activityValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.xs,
-  },
-  activityLabel: {
-    fontSize: typography.fontSize.xs,
-    textAlign: 'center',
-  },
-  menuButton: {
-    padding: spacing.sm,
-  },
-  memberStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.xs,
-  },
-  statValue: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  memberActions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  memberActionButton: {
-    flex: 1,
-  },
-  fullWidthButton: {
-    flex: 0,
-    width: '100%',
+  memberInitialsWhite: {
+    color: colors.white,
   },
   modalOverlay: {
     flex: 1,
@@ -1380,6 +1132,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl,
     maxHeight: '80%',
+  },
+  modalContentSurface: {
+    backgroundColor: colors.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1394,6 +1149,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
   },
+  modalTitleText: {
+    color: colors.text,
+  },
   modalBody: {
     gap: spacing.lg,
   },
@@ -1402,6 +1160,9 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     textAlign: 'center',
   },
+  memberNameModalText: {
+    color: colors.text,
+  },
   roleSection: {
     gap: spacing.md,
   },
@@ -1409,12 +1170,23 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
   },
+  sectionTitleText: {
+    color: colors.text,
+  },
   roleOption: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1,
+  },
+  roleOptionSelected: {
+    backgroundColor: colors.primary + '20',
+    borderColor: colors.primary,
+  },
+  roleOptionDefault: {
+    backgroundColor: 'transparent',
+    borderColor: colors.border,
   },
   roleInfo: {
     marginLeft: spacing.md,
@@ -1425,14 +1197,29 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     marginBottom: spacing.xs,
   },
+  roleNameSelected: {
+    color: colors.primary,
+  },
+  roleNameDefault: {
+    color: colors.text,
+  },
   roleDescription: {
     fontSize: typography.fontSize.sm,
+  },
+  roleDescriptionText: {
+    color: colors.textSecondary,
   },
   actionSection: {
     gap: spacing.md,
   },
   removeButton: {
     marginTop: spacing.md,
+  },
+  removeButtonError: {
+    borderColor: colors.error,
+  },
+  errorButtonText: {
+    color: colors.error,
   },
   emptyState: {
     flex: 1,
@@ -1446,9 +1233,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+  emptyTitleText: {
+    color: colors.text,
+  },
   emptySubtitle: {
     fontSize: typography.fontSize.base,
     textAlign: 'center',
+  },
+  emptySubtitleText: {
+    color: colors.textSecondary,
   },
   fab: {
     position: 'absolute',
@@ -1461,10 +1254,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.lg,
   },
-  // Tab navigation styles
+  fabPrimary: {
+    backgroundColor: colors.primary,
+  },
   tabContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
+  },
+  tabContainerSurface: {
+    backgroundColor: colors.surface,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   tab: {
@@ -1477,14 +1275,30 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
+  tabActive: {
+    backgroundColor: colors.primary + '15',
+    borderBottomColor: colors.primary,
+  },
+  tabInactive: {
+    backgroundColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
   tabText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     marginLeft: spacing.xs,
   },
-  // Invitation card styles
+  tabTextActive: {
+    color: colors.primary,
+  },
+  tabTextInactive: {
+    color: colors.textSecondary,
+  },
   invitationCard: {
     marginBottom: spacing.md,
+  },
+  invitationCardExpired: {
+    opacity: 0.7,
   },
   invitationHeader: {
     flexDirection: 'row',
@@ -1501,14 +1315,69 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.xs,
   },
+  inviteeEmailText: {
+    color: colors.text,
+  },
   inviteePhone: {
     fontSize: typography.fontSize.sm,
     marginBottom: spacing.xs,
+  },
+  inviteePhoneText: {
+    color: colors.textSecondary,
   },
   invitationRole: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: spacing.xs,
+  },
+  roleText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.xs,
+  },
+  roleTextPrimary: {
+    color: colors.primary,
+  },
+  statusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    marginLeft: spacing.sm,
+  },
+  statusBadgePrimary: {
+    backgroundColor: colors.primary + '20',
+  },
+  statusBadgeSuccess: {
+    backgroundColor: colors.success + '20',
+  },
+  statusBadgeError: {
+    backgroundColor: colors.error + '20',
+  },
+  statusBadgeMuted: {
+    backgroundColor: colors.textSecondary + '20',
+  },
+  statusBadgeWarning: {
+    backgroundColor: colors.warning + '20',
+  },
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    textTransform: 'capitalize',
+  },
+  statusTextPrimary: {
+    color: colors.primary,
+  },
+  statusTextSuccess: {
+    color: colors.success,
+  },
+  statusTextError: {
+    color: colors.error,
+  },
+  statusTextMuted: {
+    color: colors.textSecondary,
+  },
+  statusTextWarning: {
+    color: colors.warning,
   },
   invitationDetails: {
     gap: spacing.sm,
@@ -1527,9 +1396,18 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     minWidth: 80,
   },
+  detailLabelText: {
+    color: colors.textSecondary,
+  },
   detailValue: {
     fontSize: typography.fontSize.sm,
     flex: 1,
+  },
+  detailValueText: {
+    color: colors.text,
+  },
+  detailValueTextError: {
+    color: colors.error,
   },
   messageContainer: {
     marginBottom: spacing.md,
@@ -1542,9 +1420,15 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     marginBottom: spacing.xs,
   },
+  messageLabelText: {
+    color: colors.textSecondary,
+  },
   messageText: {
     fontSize: typography.fontSize.sm,
     lineHeight: 20,
+  },
+  messageTextText: {
+    color: colors.text,
   },
   invitationActions: {
     flexDirection: 'row',
@@ -1553,9 +1437,20 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
   },
-  // Compact Header Styles
+  actionButtonError: {
+    borderColor: colors.error,
+  },
   headerCard: {
     padding: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    borderRadius: 8,
+  },
+  compactTabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
   },
   compactTab: {
     flex: 1,
@@ -1569,10 +1464,180 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
+  compactTabActive: {
+    backgroundColor: colors.primary + '15',
+    borderBottomColor: colors.primary,
+  },
+  compactTabInactive: {
+    backgroundColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
   compactTabText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     marginLeft: spacing.xs,
+  },
+  compactTabTextActive: {
+    color: colors.primary,
+  },
+  compactTabTextInactive: {
+    color: colors.textSecondary,
+  },
+  membersTableContainer: {
+    flex: 1,
+    marginHorizontal: spacing.md,
+  },
+  membersTableCard: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+  },
+  membersTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  tableHeaderName: {
+    flex: 3,
+    fontSize: 9,
+    fontWeight: 'semibold',
+    color: colors.text,
+  },
+  tableHeaderCenter: {
+    flex: 1.5,
+    fontSize: 9,
+    fontWeight: 'semibold',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  membersTableList: {
+    flex: 1,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  paginationButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.sm,
+  },
+  paginationButtonDisabled: {
+    backgroundColor: colors.border,
+  },
+  paginationButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  paginationText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    minWidth: 80,
+    textAlign: 'center',
+    color: colors.text,
+  },
+  memberTableRowEven: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    alignItems: 'center',
+  },
+  memberTableRowOdd: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    alignItems: 'center',
+  },
+  memberNameCell: {
+    flex: 3,
+    justifyContent: 'center',
+  },
+  memberNameText: {
+    fontSize: 8.5,
+    fontWeight: 'medium',
+    color: colors.text,
+  },
+  roleCell: {
+    flex: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  roleBadgeWarning: {
+    backgroundColor: colors.warning + '20',
+  },
+  roleBadgeSecondary: {
+    backgroundColor: colors.secondary + '20',
+  },
+  roleBadgeMuted: {
+    backgroundColor: colors.textSecondary + '20',
+  },
+  roleTextWarning: {
+    color: colors.warning,
+  },
+  roleTextSecondary: {
+    color: colors.secondary,
+  },
+  roleTextMuted: {
+    color: colors.textSecondary,
+  },
+  centeredCell: {
+    flex: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberTableText: {
+    fontSize: 8.5,
+    fontWeight: 'medium',
+    color: colors.text,
+  },
+  reputationCell: {
+    flex: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  actionCell: {
+    flex: 1.5,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  iconButtonPrimary: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonSecondary: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.secondary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
