@@ -23,6 +23,11 @@ export const generatePDFReceipt = async (transaction, userInfo = {}, chamaMember
 
     if (Platform.OS === 'web') {
       const printWindow = window.open('', '_blank');
+
+      if (!printWindow) {
+        return generateWebDownload(html, `VaultKe_Receipt_${receiptId}_${new Date().toISOString().split('T')[0]}.html`, 'text/html');
+      }
+
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
