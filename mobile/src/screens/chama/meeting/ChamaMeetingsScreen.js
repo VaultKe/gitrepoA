@@ -23,6 +23,7 @@ import { toEAT, formatDate, nowEAT } from '../../../utils/dateUtils';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ApiService from '../../../services/api';
+import ChamaMeetingsTable from './ChamaMeetingsTable';
 
 const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
   const { chamaId, chamaName, newMeeting, refresh, fromUserDashboard } = route.params || {};
@@ -247,11 +248,11 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
           return;
         }
       } catch (apiError) {
-        console.error('📅 API call failed:', apiError);
+        console.error('API call failed:', apiError);
 
         // Check if it's a specific database error
         if (apiError.message && apiError.message.includes('no such column')) {
-          console.error('📅 Database schema error detected - backend needs to be updated');
+          console.error('Database schema error detected - backend needs to be updated');
         }
 
         // For now, don't use mock data - let the user know there's an issue
@@ -348,6 +349,34 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
     updatePersistentNotifications(allMeetings);
   };
 
+  const navigateToPhysicalMeeting = (meeting) => {
+    const params = {
+      meetingId: meeting.id,
+      meetingTitle: meeting.title,
+      userRole: getUserRole(),
+      meetingData: meeting,
+      chamaId: chamaId || meeting.chamaId,
+    };
+
+    try {
+      if (onRouteChange) {
+        onRouteChange('physical-meeting', 'PhysicalMeeting', params);
+      } else {
+        navigation.navigate('PhysicalMeeting', params);
+      }
+
+      console.log('Successfully navigated to PhysicalMeeting');
+      return true;
+    } catch (error) {
+      console.error('Failed to navigate to PhysicalMeeting:', error);
+      Alert.alert(
+        'Navigation Error',
+        'Failed to open the physical meeting dashboard. Please try again.'
+      );
+      return false;
+    }
+  };
+
   const handleJoinMeeting = (meeting) => {
     // Debug: Log the entire meeting object to see what fields are available
     console.log('🔍 Full meeting object:', meeting);
@@ -370,7 +399,7 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
     // Handle ended meetings
     if (isMeetingEnded) {
       Alert.alert(
-        '📝 Meeting Ended',
+        'Meeting Ended',
         `The meeting "${meeting.title}" has ended.\n\nWould you like to view the meeting summary or notes?`,
         [
           { text: 'Cancel', style: 'cancel' },
@@ -532,113 +561,7 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
         }
       }
     } else if (meetingType === 'physical') {
-      // For active physical meetings, navigate directly without showing alert
-      if (isMeetingActive || isMeetingStartingSoon) {
-        try {
-          let navigationSuccess = false;
-          try {
-            if (onRouteChange) {
-              onRouteChange('physical-meeting', 'PhysicalMeeting', {
-                meetingId: meeting.id,
-                meetingTitle: meeting.title,
-                userRole: getUserRole(),
-                meetingData: meeting,
-                chamaId: chamaId,
-              });
-              navigationSuccess = true;
-              console.log('✅ Chama layout navigation successful');
-            } else {
-              // Fallback to direct navigation if onRouteChange not available
-              console.log('🔄 Fallback to direct navigation');
-              navigation.navigate('PhysicalMeeting', {
-                meetingId: meeting.id,
-                meetingTitle: meeting.title,
-                userRole: getUserRole(),
-                meetingData: meeting,
-                chamaId: chamaId,
-              });
-              navigationSuccess = true;
-              console.log('✅ Direct navigation successful');
-            }
-          } catch (error) {
-            console.error('❌ Navigation failed:', error);
-          }
-
-          if (navigationSuccess) {
-            return; // Exit early to avoid showing the alert
-          } else {
-            console.error('❌ All navigation methods failed');
-            Alert.alert('Navigation Error', 'Failed to join meeting. Please try again.');
-            return;
-          }
-        } catch (error) {
-          console.error('❌ Navigation error:', error);
-          Alert.alert('Navigation Error', 'Failed to join meeting. Please try again.');
-          return;
-        }
-      }
-
-      // For non-active physical meetings, show the alert with options
-      console.log('📌 Showing physical meeting details...');
-      const statusMessage = isMeetingActive
-        ? 'The meeting is currently in progress!'
-        : isMeetingStartingSoon
-          ? 'The meeting will start soon. Please head to the location.'
-          : 'Please arrive at the location on time.';
-
-      Alert.alert(
-        '📌 Physical Meeting',
-        `Meeting: ${meeting.title}\n\nLocation: ${meeting.location}\n\nTime: ${formatMeetingTime(meeting.scheduledAt || meeting.date)} EAT\n\n${statusMessage}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Get Directions',
-            onPress: () => {
-              // TODO: Integrate with maps app
-              Alert.alert('Directions', 'Map integration will be implemented here.');
-            }
-          },
-          {
-            text: 'Add to Calendar',
-            onPress: () => handleAddToCalendar(meeting)
-          },
-          {
-            text: 'Join Meeting',
-            style: 'default',
-            onPress: () => {
-              console.log('📌 Navigating to PhysicalMeeting from alert...');
-
-              try {
-                if (onRouteChange) {
-                  console.log('🔄 Using onRouteChange for PhysicalMeeting from alert');
-                  onRouteChange('physical-meeting', 'PhysicalMeeting', {
-                    meetingId: meeting.id,
-                    meetingTitle: meeting.title,
-                    userRole: getUserRole(),
-                    meetingData: meeting,
-                    chamaId: chamaId,
-                  });
-                } else {
-                  // Fallback to direct navigation
-                  const rootNavigation = navigation.getParent?.() || navigation;
-                  rootNavigation.navigate('PhysicalMeeting', {
-                    meetingId: meeting.id,
-                    meetingTitle: meeting.title,
-                    userRole: getUserRole(),
-                    meetingData: meeting,
-                    chamaId: chamaId,
-                  });
-                }
-
-                console.log('✅ Successfully navigated to PhysicalMeeting from alert');
-              } catch (error) {
-                console.error('❌ Navigation error from alert:', error);
-                Alert.alert('Navigation Error', 'Failed to join meeting. Please try again.');
-              }
-            }
-          },
-        ]
-      );
+      navigateToPhysicalMeeting(meeting);
     } else if (meetingType === 'hybrid') {
       // Show options for hybrid meeting
       console.log('🔄 Showing hybrid meeting options...');
@@ -701,39 +624,7 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
                   {
                     text: 'Join Meeting',
                     style: 'default',
-                    onPress: () => {
-                      console.log('📌 Navigating to PhysicalMeeting from hybrid choice');
-
-                      // Navigate to PhysicalMeeting screen for hybrid physical attendance
-                      console.log('🔄 Navigating to PhysicalMeeting for hybrid meeting...');
-                      try {
-                        if (onRouteChange) {
-                          console.log('🔄 Using onRouteChange for PhysicalMeeting from hybrid');
-                          onRouteChange('physical-meeting', 'PhysicalMeeting', {
-                            meetingId: meeting.id,
-                            meetingTitle: meeting.title,
-                            userRole: getUserRole(),
-                            meetingData: meeting,
-                            chamaId: chamaId,
-                          });
-                        } else {
-                          // Fallback to direct navigation
-                          const rootNavigation = navigation.getParent?.() || navigation;
-                          rootNavigation.navigate('PhysicalMeeting', {
-                            meetingId: meeting.id,
-                            meetingTitle: meeting.title,
-                            userRole: getUserRole(),
-                            meetingData: meeting,
-                            chamaId: chamaId,
-                          });
-                        }
-
-                        console.log('✅ Successfully navigated to PhysicalMeeting for hybrid');
-                      } catch (error) {
-                        console.error('❌ Navigation error:', error);
-                        Alert.alert('Navigation Error', 'Failed to join meeting. Please try again.');
-                      }
-                    }
+                    onPress: () => navigateToPhysicalMeeting(meeting)
                   }
                 ]
               );
@@ -1160,102 +1051,23 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
     const { meetings: filteredMeetings, totalCount, totalPages } = getFilteredMeetings();
 
     return (
-      <View style={styles.tableContainer}>
-        {/* Table Header */}
-        <View style={[styles.tableHeader, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.tableHeaderText, { color: colors.text, flex: 2 }]}>Title</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.text, flex: 1.5 }]}>Date</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.text, flex: 1 }]}>Location</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.text, flex: 1 }]}>Status</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.text, flex: 1.5 }]}>Actions</Text>
-        </View>
-
-        {/* Table Body */}
-        <FlatList
-          data={filteredMeetings}
-          renderItem={({ item, index }) => (
-            <View style={[styles.tableRow, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-              <View style={{ flex: 2 }}>
-                <Text style={[styles.tableCellText, { color: colors.text }]} numberOfLines={2}>
-                  {item.title.length > 10 ? item.title.substring(0, 10) + '..' : item.title}
-                </Text>
-              </View>
-              <View style={{ flex: 1.5 }}>
-                <Text style={[styles.tableCellText, { color: colors.text }]}>
-                  {formatMeetingDate(item.scheduledAt || item.date)}
-                </Text>
-              </View>
-              <Text style={[styles.tableCellText, { color: colors.text, flex: 1 }]}>
-                {item.location}
-              </Text>
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(getDynamicStatus(item, 'all')) + '20' }]}>
-                  <Text style={[styles.statusText, { color: getStatusColor(getDynamicStatus(item, 'all')) }]}>
-                    {getDynamicStatus(item, 'all')}
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.tableActions, { flex: 1.5 }]}>
-                <TouchableOpacity
-                  style={[styles.actionButtonSmall, { backgroundColor: colors.primary }]}
-                  onPress={() => handleViewSummary(item)}
-                >
-                  <Ionicons name="eye" size={12} color={colors.white} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButtonSmall, { backgroundColor: colors.success }]}
-                  onPress={() => handleAttend(item)}
-                >
-                  <Ionicons name="play" size={12} color={colors.white} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButtonSmall, { backgroundColor: colors.error }]}
-                  onPress={() => handleDelete(item)}
-                >
-                  <Ionicons name="trash" size={12} color={colors.white} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-          keyExtractor={(item) => item.id}
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          ListEmptyComponent={!loading && renderEmptyState()}
-        />
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <View style={styles.pagination}>
-            <TouchableOpacity
-              style={[styles.pageButton, currentPage === 1 && styles.pageButtonDisabled]}
-              onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? colors.textSecondary : colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.pageText, { color: colors.text }]}>
-              {currentPage} of {totalPages}
-            </Text>
-            <TouchableOpacity
-              style={[styles.pageButton, currentPage === totalPages && styles.pageButtonDisabled]}
-              onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? colors.textSecondary : colors.text} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-
-      </View>
+      <ChamaMeetingsTable
+        meetings={filteredMeetings}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        loading={loading}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        renderEmptyState={renderEmptyState}
+        formatMeetingDate={formatMeetingDate}
+        getDynamicStatus={getDynamicStatus}
+        getStatusColor={getStatusColor}
+        onViewSummary={handleViewSummary}
+        onAttend={handleAttend}
+        onDelete={handleDelete}
+      />
     );
   };
 

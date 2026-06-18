@@ -74,7 +74,7 @@ function ChamaTabBar({ state, descriptors, navigation }) {
     { name: 'Home', label: 'Home', icon: 'home', onPress: () => navigation.navigate('Home') },
     { name: 'Members', label: 'Members', icon: 'people', onPress: () => navigation.navigate('ChamaMembersScreen') },
     { name: 'Contribute', label: 'Contribute', icon: 'wallet', onPress: () => navigation.navigate('ContributeScreen') },
-    { name: 'Contributions', label: 'Contributions', icon: 'heart', onPress: () => navigation.navigate('ContributionsScreen') },
+    { name: 'Contributions', label: 'Welfare', icon: 'heart', onPress: () => navigation.navigate('ContributionsScreen') },
     { name: 'Loans', label: 'Loans', icon: 'card', onPress: () => navigation.navigate('ChamaLoansScreen') },
     { name: 'Exit', label: 'Exit', icon: 'exit', onPress: () => switchToUserDashboard() },
   ];
