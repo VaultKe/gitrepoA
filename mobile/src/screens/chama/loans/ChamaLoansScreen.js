@@ -1,150 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
   SafeAreaView,
-  RefreshControl,
+  StyleSheet,
   TouchableOpacity,
   Alert,
-  Modal,
-  ScrollView,
-  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius, shadows, createThemedStyles } from '../../../utils/theme';
-import Card from '../../../components/common/Card';
-import Button from '../../../components/common/Button';
-import Input from '../../../components/common/Input';
-
+import { getThemeColors, spacing, shadows } from '../../../utils/theme';
 import ApiService from '../../../services/api';
+import ChamaLoansSearchCard from './ChamaLoansSearchCard';
+import ChamaLoansTable from './ChamaLoansTable';
 import ApplyForLoanScreen from './ApplyForLoanScreen';
-
-const createTableStyles = createThemedStyles((colors, spacing, typography, shadows) => ({
-  tableContainer: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tableCell: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  nameCell: {
-    flex: 2,
-    alignItems: 'flex-start',
-  },
-  amountCell: {
-    flex: 1.2,
-  },
-  statusCell: {
-    flex: 1,
-  },
-  dateCell: {
-    flex: 1.2,
-  },
-  actionsCell: {
-    flex: 1.2,
-  },
-  tableHeaderText: {
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text,
-    fontSize: 9,
-    textAlign: 'center',
-  },
-  tableCellText: {
-    fontSize: 8.5,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  nameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typeIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs,
-  },
-  nameText: {
-    fontWeight: typography.fontWeight.medium,
-    textAlign: 'left',
-  },
-  subText: {
-    fontSize: 7,
-    color: colors.textSecondary,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
-  },
-  statusText: {
-    fontSize: 7,
-    fontWeight: typography.fontWeight.bold,
-    textTransform: 'capitalize',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  actionButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: typography.fontSize.base,
-    color: colors.text,
-    paddingVertical: 0,
-    fontWeight: '500',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-  },
-  searchIcon: {
-    marginRight: spacing.sm,
-  },
-}));
 
 const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   const { chamaId } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
-  const themedStyles = createTableStyles(theme);
+  const styles = createStyles(colors);
 
   const [loans, setLoans] = useState([]);
   const [filteredLoans, setFilteredLoans] = useState([]);
@@ -431,230 +304,26 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Date not available';
-
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid date';
-
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch (error) {
-      console.warn('Error formatting date:', dateString, error);
-      return 'Date error';
-    }
-  };
-
-  const getUserRole = (item) => {
-    // For loans, we determine role based on user permissions
-    // This is a simplified version - in reality you'd check against user roles
-    if (canManageLoans()) {
-      return 'chairperson'; // Can manage loans
-    }
-    return 'member'; // Regular member
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending':
-        return colors.warning;
-      case 'approved':
-        return colors.info;
-      case 'active':
-        return colors.primary;
-      case 'completed':
-        return colors.success;
-      case 'rejected':
-        return colors.error;
-      default:
-        return colors.textSecondary;
-    }
-  };
-
-  const renderTableRow = ({ item, index }) => {
-    const userRole = getUserRole(item);
-    const isContributionGroup = item.category === 'contribution';
-
-    const typeConfig = isContributionGroup ? {
-      color: colors.success,
-      icon: 'heart',
-      label: 'Contribution',
-    } : {
-      color: colors.primary,
-      icon: 'people',
-      label: 'Chama',
-    };
-
-    const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
-
-    return (
-      
-      <View style={[themedStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
-        <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
-          <Text style={[themedStyles.tableCellText, themedStyles.nameText]} numberOfLines={1}>
-            {(() => {
-              const borrowerName = item.borrower?.firstName || item.borrower?.lastName
-                ? `${item.borrower.firstName || ''} ${item.borrower.lastName || ''}`.trim()
-                : item.borrower?.fullName;
-
-              if (borrowerName) return borrowerName;
-
-              const applicantName = item.applicant?.first_name || item.applicant?.firstName || item.user?.first_name || item.user?.firstName || item.applicant?.name || item.user?.name || item.applicant_name || item.user_name;
-
-              if (applicantName) return applicantName;
-
-              if (item.borrower_id === user.id) {
-                const userName = `${user.firstName || user.first_name || user.name || 'You'} ${user.lastName || user.last_name || ''}`.trim();
-                return userName || 'You';
-              }
-
-              return 'Loading...';
-            })()}
-          </Text>
-        </View>
-
-        <View style={[themedStyles.tableCell, themedStyles.amountCell]}>
-          <Text style={themedStyles.tableCellText}>
-            {formatCurrency(item.amount)}
-          </Text>
-        </View>
-
-        <View style={[themedStyles.tableCell, themedStyles.statusCell]}>
-          <View style={[themedStyles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-            <Text style={[themedStyles.statusText, { color: getStatusColor(item.status) }]}>
-              {item.status}
-            </Text>
-          </View>
-        </View>
-
-        <View style={[themedStyles.tableCell, themedStyles.dateCell]}>
-          <Text style={themedStyles.tableCellText}>
-            {formatDate(item.created_at || item.createdAt)}
-          </Text>
-        </View>
-
-        <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
-          <View style={themedStyles.actionButtons}>
-            <TouchableOpacity
-              style={[themedStyles.actionButton, { backgroundColor: colors.primary }]}
-              onPress={() => navigation.navigate('LoanDetails', { loanId: item.id })}
-            >
-              <Ionicons name="eye" size={10} color={colors.white} />
-            </TouchableOpacity>
-            {canManageLoans() && item.status === 'pending' && (
-              <>
-                <TouchableOpacity
-                  style={[themedStyles.actionButton, { backgroundColor: colors.success }]}
-                  onPress={() => handleLoanAction(item, 'approve')}
-                >
-                  <Ionicons name="checkmark" size={10} color={colors.white} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[themedStyles.actionButton, { backgroundColor: colors.error }]}
-                  onPress={() => handleLoanAction(item, 'reject')}
-                >
-                  <Ionicons name="close" size={10} color={colors.white} />
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-        {canViewAllLoans()
-          ? 'No loans are available'
-          : 'You have no loan applications yet.'
-        }
-      </Text>
-
-      {/* 🔐 Security Privacy Notice */}
-      <View style={[styles.privacyNotice, { backgroundColor: colors.info + '10' }]}>
-        <Ionicons name="shield-checkmark" size={16} color={colors.info} />
-        <Text style={[styles.privacyText, { color: colors.textSecondary }]}>
-          {canViewAllLoans()
-            ? 'As a chama leader, you can view all member loan records.'
-            : 'Your loan information is secure.'
-          }
-        </Text>
-      </View>
-    </View>
-  );
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Search Bar */}
-      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
-        <Card style={{ marginBottom: 0 }}>
-          <View style={themedStyles.searchContainer}>
-            <Ionicons name="search" size={14} color={colors.textSecondary} style={themedStyles.searchIcon} />
-            <TextInput
-              style={themedStyles.searchInput}
-              placeholder="Search loans..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-        </Card>
-      </View>
+    <SafeAreaView style={[styles.container, styles.containerBackground]}>
+      <ChamaLoansSearchCard
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+      />
 
-      {/* Table Container */}
-      <View style={{ flex: 1, paddingHorizontal: spacing.md }}>
-        {/* Table Header */}
-        <View style={themedStyles.tableHeader}>
-          <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
-            <Text style={themedStyles.tableHeaderText}>Name</Text>
-          </View>
-          <View style={[themedStyles.tableCell, themedStyles.amountCell]}>
-            <Text style={themedStyles.tableHeaderText}>Amount</Text>
-          </View>
-          <View style={[themedStyles.tableCell, themedStyles.statusCell]}>
-            <Text style={themedStyles.tableHeaderText}>Status</Text>
-          </View>
-          <View style={[themedStyles.tableCell, themedStyles.dateCell]}>
-            <Text style={themedStyles.tableHeaderText}>Date</Text>
-          </View>
-          <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
-            <Text style={themedStyles.tableHeaderText}>Actions</Text>
-          </View>
-        </View>
+      <ChamaLoansTable
+        loans={filteredLoans}
+        loading={loading}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        navigation={navigation}
+        currentUser={user}
+        canManageLoans={canManageLoans}
+        onLoanAction={handleLoanAction}
+      />
 
-        {/* Table Body */}
-        <FlatList
-          data={filteredLoans}
-          renderItem={renderTableRow}
-          keyExtractor={(item) => item.id}
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          ListEmptyComponent={!loading && renderEmptyState()}
-        />
-      </View>
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
+        style={[styles.fab, styles.fabPrimary]}
         onPress={handleApplyForLoan}
       >
         <Ionicons name="add" size={24} color={colors.white} />
@@ -663,59 +332,12 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
-    ...shadows.sm,
-  },
-  headerTitle: {
-    fontSize: typography.fontSize['2xl'],
-    fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.xs,
-  },
-  headerSubtitle: {
-    fontSize: typography.fontSize.base,
-  },
-  tabContainer: {
-    paddingVertical: spacing.md,
-    backgroundColor: 'transparent',
-  },
-  tabsContent: {
-    paddingHorizontal: spacing.md,
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-    marginRight: spacing.sm,
-    borderWidth: 1,
-  },
-  tabText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginLeft: spacing.xs,
-  },
-  loansList: {
-    padding: spacing.md,
-  },
-  privacyNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginVertical: spacing.md,
-    gap: spacing.sm,
-  },
-  privacyText: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    lineHeight: 20,
+  containerBackground: {
+    backgroundColor: colors.background,
   },
   fab: {
     position: 'absolute',
@@ -728,207 +350,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.lg,
   },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: borderRadius.xl,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: '85%',
-    ...shadows.xl,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  modalTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: 'black',
-  },
-  modalBody: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 0,
-    paddingBottom: spacing.lg,
-    maxHeight: 500,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-    paddingBottom: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  sectionTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  sectionSubtitle: {
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.md,
-    color: 'gray',
-  },
-  submitButton: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-
-  // Improved Guarantor Selection Modal Styles
-  searchModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  searchModalContent: {
-    borderRadius: borderRadius.xl,
-    width: '100%',
-    maxWidth: 420,
-    maxHeight: '90%',
-    ...shadows.xl,
-  },
-  searchModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-  },
-  searchModalTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    marginLeft: spacing.sm,
-  },
-  headerSubtitle: {
-    fontSize: typography.fontSize.sm,
-    marginTop: spacing.xs / 2,
-  },
-  closeButton: {
-    padding: spacing.xs,
-    marginTop: -spacing.xs,
-    marginRight: -spacing.xs,
-  },
-  searchSection: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: typography.fontSize.base,
-    marginLeft: spacing.sm,
-    marginRight: spacing.sm,
-  },
-  guarantorsList: {
-    maxHeight: 350,
-    paddingHorizontal: spacing.lg,
-  },
-  guarantorCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 2,
-    ...shadows.sm,
-  },
-  guarantorCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  avatarText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold,
-  },
-  guarantorDetails: {
-    flex: 1,
-  },
-  selectionIndicator: {
-    marginLeft: spacing.md,
-  },
-  selectedBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  modalFooter: {
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    marginTop: spacing.md,
-  },
-  doneButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-  },
-  doneButtonText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxxl,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: typography.fontSize.base,
-    textAlign: 'center',
-    lineHeight: 20,
+  fabPrimary: {
+    backgroundColor: colors.primary,
   },
 });
 
