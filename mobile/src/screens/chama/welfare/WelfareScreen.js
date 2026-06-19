@@ -1501,12 +1501,10 @@ const WelfareScreen = ({ route, navigation }) => {
         <View style={styles.content}>
           {activeTab === 'requests' ? (
             <>
-              {/* Table Container */}
-              <View style={tableStyles.tableContainer}>
-                {/* Table Header */}
+              <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View>
-                    <View style={tableStyles.tableHeader}>
+                    <View style={[tableStyles.tableHeader, { backgroundColor: colors.surface, borderBottomColor: colors.primary }]}>
                       <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
                         <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
                       </View>
@@ -1556,7 +1554,7 @@ const WelfareScreen = ({ route, navigation }) => {
 
                 {/* Pagination */}
                 {welfareRequests.length > itemsPerPage && (
-                  <View style={styles.pagination}>
+                  <View style={[styles.pagination, { borderTopColor: colors.border }]}>
                     <TouchableOpacity
                       style={[
                         styles.pageButton,
@@ -1584,61 +1582,59 @@ const WelfareScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                   </View>
                 )}
-              </View>
+              </Card>
             </>
-) : (
-             <>
-               {/* Table Container */}
-               <View style={tableStyles.tableContainer}>
-                 {/* Table Header */}
-                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                   <View>
-                     <View style={tableStyles.tableHeader}>
-                       <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-                         <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
-                       </View>
-                       <View style={[tableStyles.tableCell, { flex: 2 }]}>
-                         <Text style={tableStyles.tableHeaderText}>Beneficiary</Text>
-                       </View>
-                       <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                         <Text style={tableStyles.tableHeaderText}>Needed</Text>
-                       </View>
-                       <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                         <Text style={tableStyles.tableHeaderText}>Raised</Text>
-                       </View>
-                       <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-                         <Text style={tableStyles.tableHeaderText}>Progress</Text>
-                       </View>
-                       <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-                         <Text style={tableStyles.tableHeaderText}>Actions</Text>
-                       </View>
-                     </View>
+          ) : (
+            <>
+              <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View>
+                    <View style={[tableStyles.tableHeader, { backgroundColor: colors.surface, borderBottomColor: colors.primary }]}>
+                      <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                        <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, { flex: 2 }]}>
+                        <Text style={tableStyles.tableHeaderText}>Beneficiary</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Needed</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Raised</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Progress</Text>
+                      </View>
+                      <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+                        <Text style={tableStyles.tableHeaderText}>Actions</Text>
+                      </View>
+                    </View>
 
-                     {/* Table Body */}
-                     {approvedWelfareRequests.map((item, index) => (
-                       <View key={item.id}>
+                    {/* Table Body */}
+                    {approvedWelfareRequests.map((item, index) => (
+                      <View key={item.id}>
                            {renderApprovedWelfareRequestRow({ item, index })}
                        </View>
-                     ))}
-                   </View>
-                 </ScrollView>
+                  ))}
+                </View>
+              </ScrollView>
 
-                 {approvedWelfareRequests.length === 0 && !loading && (
-                   <View style={styles.emptyState}>
-                     <Ionicons name="wallet-outline" size={64} color={colors.textTertiary} />
-                     <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                       No approved welfare requests yet
-                     </Text>
-                     <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                       Approved welfare requests ready for contribution will appear here
-                     </Text>
-                   </View>
-                 )}
-               </View>
-             </>
-           )}
-         </View>
-       </ScrollView>
+              {approvedWelfareRequests.length === 0 && !loading && (
+                <View style={styles.emptyState}>
+                  <Ionicons name="wallet-outline" size={64} color={colors.textTertiary} />
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    No approved welfare requests yet
+                  </Text>
+                  <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                    Approved welfare requests ready for contribution will appear here
+                  </Text>
+                </View>
+              )}
+            </Card>
+              </>
+            )}
+          </View>
+        </ScrollView>
 
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}

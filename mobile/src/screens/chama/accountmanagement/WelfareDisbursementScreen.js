@@ -671,62 +671,64 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
           />
         )}
         <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-          <View style={tableStyles.tableHeader}>
-            <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-              <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member</Text>
+          <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <View style={tableStyles.tableHeader}>
+              <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                <Text style={tableStyles.tableHeaderText}>Amount</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+                <Text style={tableStyles.tableHeaderText}>Date</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                <Text style={tableStyles.tableHeaderText}>Status</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+                <Text style={tableStyles.tableHeaderText}>Actions</Text>
+              </View>
             </View>
-            <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-              <Text style={tableStyles.tableHeaderText}>Amount</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-              <Text style={tableStyles.tableHeaderText}>Date</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-              <Text style={tableStyles.tableHeaderText}>Status</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-              <Text style={tableStyles.tableHeaderText}>Actions</Text>
-            </View>
-          </View>
-          <FlatList
-            data={welfareFunds}
-            renderItem={renderTableRow}
-            keyExtractor={(item) => item.id?.toString()}
-            style={{ flex: 1, zIndex: 1 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            ListEmptyComponent={!loading && renderEmptyState()}
-          />
-          {totalItems > pageSize && (
-            <View style={styles.pagination}>
-              <TouchableOpacity
-                style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
-                onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? colors.textTertiary : colors.primary} />
-                <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>Previous</Text>
-              </TouchableOpacity>
-              <Text style={styles.paginationInfo}>
-                Page {currentPage} of {totalPages} ({totalItems} total)
-              </Text>
-              <TouchableOpacity
-                style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
-                onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                <Text style={[styles.paginationText, currentPage === totalPages && styles.paginationTextDisabled]}>Next</Text>
-                <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? colors.textTertiary : colors.primary} />
-              </TouchableOpacity>
-            </View>
-          )}
+            <FlatList
+              data={welfareFunds}
+              renderItem={renderTableRow}
+              keyExtractor={(item) => item.id?.toString()}
+              style={{ flex: 1, zIndex: 1 }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                />
+              }
+              ListEmptyComponent={!loading && renderEmptyState()}
+            />
+            {totalItems > pageSize && (
+              <View style={[styles.pagination, { borderTopColor: colors.border }]}>
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+                  onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? colors.textTertiary : colors.primary} />
+                  <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>Previous</Text>
+                </TouchableOpacity>
+                <Text style={[styles.paginationInfo, { color: colors.text }]}>
+                  Page {currentPage} of {totalPages} ({totalItems} total)
+                </Text>
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
+                  onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  <Text style={[styles.paginationText, currentPage === totalPages && styles.paginationTextDisabled]}>Next</Text>
+                  <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? colors.textTertiary : colors.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </Card>
         </View>
         {loading && <LoadingSpinner />}
       </SafeAreaView>

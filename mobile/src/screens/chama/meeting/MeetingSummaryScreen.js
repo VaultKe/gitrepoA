@@ -471,94 +471,94 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
         {/* Attendance Details Table */}
         <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.sm }]}>Attendance Details</Text>
         {totalAttendanceItems > 0 ? (
-          <Card variant="outlined" style={styles.attendanceCard}>
+          <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
             <View style={styles.attendanceTable}>
               {/* Table Header */}
               <View style={tableStyles.tableHeader}>
-              <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-                <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member Name</Text>
-              </View>
-              <View style={tableStyles.tableCell}>
-                <Text style={tableStyles.tableHeaderText}>Meeting Type</Text>
-              </View>
-              <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-                <Text style={tableStyles.tableHeaderText}>Status</Text>
-              </View>
-            </View>
-
-            {/* Table Body */}
-            {attendanceData.map((attendance, index) => (
-              <View
-                key={attendance.id || index}
-                style={[
-                  tableStyles.tableRow,
-                  index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }
-                ]}
-              >
-                {/* Member Name */}
                 <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-                  <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-                    {getAttendeeName(attendance)}
-                  </Text>
+                  <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member Name</Text>
                 </View>
-
-                {/* Attendance Type */}
                 <View style={tableStyles.tableCell}>
-                  <Text style={tableStyles.tableCellText}>
-                    {attendance.attendanceType || 'Physical'}
-                  </Text>
+                  <Text style={tableStyles.tableHeaderText}>Meeting Type</Text>
                 </View>
-
-                {/* Status */}
                 <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-                  <View style={[
-                    tableStyles.statusBadge,
-                    { backgroundColor: attendance.isPresent ? colors.success + '20' : colors.error + '20' }
-                  ]}>
-                    <Ionicons
-                      name={attendance.isPresent ? "checkmark-circle" : "close-circle"}
-                      size={14}
-                      color={attendance.isPresent ? colors.success : colors.error}
-                    />
-                    <Text style={[
-                      { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: attendance.isPresent ? colors.success : colors.error }
-                    ]}>
-                      {attendance.isPresent ? 'Present' : 'Absent'}
+                  <Text style={tableStyles.tableHeaderText}>Status</Text>
+                </View>
+              </View>
+
+              {/* Table Body */}
+              {attendanceData.map((attendance, index) => (
+                <View
+                  key={attendance.id || index}
+                  style={[
+                    tableStyles.tableRow,
+                    index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }
+                  ]}
+                >
+                  {/* Member Name */}
+                  <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                    <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
+                      {getAttendeeName(attendance)}
                     </Text>
                   </View>
+
+                  {/* Attendance Type */}
+                  <View style={tableStyles.tableCell}>
+                    <Text style={tableStyles.tableCellText}>
+                      {attendance.attendanceType || 'Physical'}
+                    </Text>
+                  </View>
+
+                  {/* Status */}
+                  <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                    <View style={[
+                      tableStyles.statusBadge,
+                      { backgroundColor: attendance.isPresent ? colors.success + '20' : colors.error + '20' }
+                    ]}>
+                      <Ionicons
+                        name={attendance.isPresent ? "checkmark-circle" : "close-circle"}
+                        size={14}
+                        color={attendance.isPresent ? colors.success : colors.error}
+                      />
+                      <Text style={[
+                        { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: attendance.isPresent ? colors.success : colors.error }
+                      ]}>
+                        {attendance.isPresent ? 'Present' : 'Absent'}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-              </View>
-            ))}
+              ))}
 
-            {/* Pagination */}
-{totalAttendanceItems > attendancePageSize && (
-               <View style={styles.paginationContainer}>
-                 <TouchableOpacity
-                   style={[styles.paginationButton, attendancePage === 1 && styles.paginationButtonDisabled]}
-                   onPress={() => attendancePage > 1 && setAttendancePage(attendancePage - 1)}
-                   disabled={attendancePage === 1}
-                 >
-                   <Ionicons name="chevron-back" size={16} color={attendancePage === 1 ? colors.textTertiary : colors.primary} />
-                   <Text style={[styles.paginationText, attendancePage === 1 && styles.paginationTextDisabled]}>Previous</Text>
-                 </TouchableOpacity>
+              {/* Pagination */}
+              {totalAttendanceItems > attendancePageSize && (
+                <View style={[styles.paginationContainer, { borderTopColor: colors.border }]}>
+                  <TouchableOpacity
+                    style={[styles.paginationButton, attendancePage === 1 && styles.paginationButtonDisabled]}
+                    onPress={() => attendancePage > 1 && setAttendancePage(attendancePage - 1)}
+                    disabled={attendancePage === 1}
+                  >
+                    <Ionicons name="chevron-back" size={16} color={attendancePage === 1 ? colors.textTertiary : colors.primary} />
+                    <Text style={[styles.paginationText, attendancePage === 1 && styles.paginationTextDisabled]}>Previous</Text>
+                  </TouchableOpacity>
 
-                 <Text style={styles.paginationInfo}>
-                   Page {attendancePage} of {totalAttendancePages} ({totalAttendanceItems} total)
-                 </Text>
+                  <Text style={[styles.paginationInfo, { color: colors.text }]}>
+                    Page {attendancePage} of {totalAttendancePages} ({totalAttendanceItems} total)
+                  </Text>
 
-                 <TouchableOpacity
-                   style={[styles.paginationButton, attendancePage === totalAttendancePages && styles.paginationButtonDisabled]}
-                   onPress={() => attendancePage < totalAttendancePages && setAttendancePage(attendancePage + 1)}
-                   disabled={attendancePage === totalAttendancePages}
-                 >
-                   <Text style={[styles.paginationText, attendancePage === totalAttendancePages && styles.paginationTextDisabled]}>Next</Text>
-                   <Ionicons name="chevron-forward" size={16} color={attendancePage === totalAttendancePages ? colors.textTertiary : colors.primary} />
-                 </TouchableOpacity>
-               </View>
-             )}
-           </View>
+                  <TouchableOpacity
+                    style={[styles.paginationButton, attendancePage === totalAttendancePages && styles.paginationButtonDisabled]}
+                    onPress={() => attendancePage < totalAttendancePages && setAttendancePage(attendancePage + 1)}
+                    disabled={attendancePage === totalAttendancePages}
+                  >
+                    <Text style={[styles.paginationText, attendancePage === totalAttendancePages && styles.paginationTextDisabled]}>Next</Text>
+                    <Ionicons name="chevron-forward" size={16} color={attendancePage === totalAttendancePages ? colors.textTertiary : colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </Card>
-         ) : (
+        ) : (
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
             <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No attendance data available</Text>

@@ -665,7 +665,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   );
 
   const renderMeetings = () => (
-    <Card style={styles.section} variant="outlined">
+    <Card style={styles.section} variant="default">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Recent Meetings ({meetings.length})
@@ -694,7 +694,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
           {/* Table Rows */}
           {meetings.slice(0, 5).map((meeting, index) => {
-            // Parse meeting date safely (using ChamaMeetingsScreen structure)
             let meetingDate = 'Unknown Date';
             let meetingTime = '';
 
@@ -710,7 +709,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             } catch (error) {
             }
 
-            // Determine meeting status and icon
             const meetingStatus = meeting.status || 'scheduled';
             const isCompleted = meetingStatus === 'completed' || meetingStatus === 'ended';
             const isPast = new Date(meeting.scheduledAt || meeting.scheduled_date || meeting.date) < new Date();
@@ -729,9 +727,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       )}
     </Card>
   );
+ 
 
   const renderTransactions = () => (
-    <Card style={styles.section} variant="outlined">
+    <Card style={styles.section} variant="default">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           My Transactions ({transactions.length})
@@ -762,11 +761,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
           {/* Table Rows */}
           {transactions.slice(0, 5).map((transaction, index) => {
-            // Parse contribution date - simplified approach like TransactionHistoryScreen
             let contributionDate = 'Unknown Date';
 
             try {
-              // Try the most common date fields first, similar to TransactionHistoryScreen
               const dateValue = transaction.createdAt || transaction.created_at || transaction.date || transaction.transaction_date;
 
               if (dateValue) {
@@ -782,21 +779,16 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             } catch (error) {
             }
 
-            // Determine transaction type and description
             const transactionType = transaction.type || 'transaction';
             const isContribution = transactionType === 'contribution' || transactionType === 'deposit' || transaction.description?.toLowerCase().includes('contribution');
             const transactionDescription = transaction.description || (isContribution ? 'Chama Contribution' : 'Transaction') || transactionType;
-
-            // Debug: log transaction fields to understand date structure
-            if (contributionDate === 'Unknown Date') {
-            }
 
             return (
               <View key={transaction.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
                 <Text style={{ flex: 2, fontSize: 8, color: colors.text }} numberOfLines={1}>{transactionDescription}</Text>
                 <Text style={{ flex: 1, fontSize: 8, color: colors.textSecondary, textAlign: 'center' }}>{contributionDate}</Text>
                 <Text style={{ flex: 1, fontSize: 8, fontWeight: typography.fontWeight.medium, color: isContribution ? colors.success : colors.primary, textAlign: 'right' }}>
-                  {isContribution ? '+' : '-'}{formatCurrency(transaction.amount || 0)}
+                  {formatCurrency(transaction.amount)}
                 </Text>
               </View>
             );
@@ -859,11 +851,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
             {/* Table Rows */}
             {recentVotedPolls.map((poll, index) => {
-              // Check if user has voted on this poll
               const hasUserVoted = poll.userVoted || poll.user_has_voted;
               const pollStatus = poll.status || 'active';
 
-              // Determine if poll is still active - any poll with a past end date is closed
               const endDate = poll.endDate || poll.end_date || poll.endsAt;
               const hasEnded = endDate && new Date(endDate) < new Date();
               const isActive = pollStatus === 'active' && !hasEnded;

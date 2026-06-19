@@ -56,51 +56,53 @@ const AccountManagementScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Stat Cards 2x2 Grid */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statRow}>
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="card" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Loans</Text>
-              </View>
-            </Card>
+        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          <View style={styles.statsContainer}>
+            <View style={styles.statRow}>
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="card" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Loans</Text>
+                </View>
+              </Card>
 
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="heart" size={24} color={colors.warning} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Welfare Funds</Text>
-              </View>
-            </Card>
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="heart" size={24} color={colors.warning} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Welfare Funds</Text>
+                </View>
+              </Card>
+            </View>
+
+            <View style={styles.statRow}>
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="wallet" size={24} color={colors.secondary} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>KES 0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Savings</Text>
+                </View>
+              </Card>
+
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="refresh-circle" size={24} color={colors.info} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MGR Cycles</Text>
+                </View>
+              </Card>
+            </View>
           </View>
-
-          <View style={styles.statRow}>
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="wallet" size={24} color={colors.secondary} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>KES 0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Savings</Text>
-              </View>
-            </Card>
-
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="refresh-circle" size={24} color={colors.info} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MGR Cycles</Text>
-              </View>
-            </Card>
-          </View>
-        </View>
+        </Card>
 
         {/* Management Modules */}
         <View style={styles.navigationContainer}>

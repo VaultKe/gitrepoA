@@ -533,39 +533,41 @@ const MyChamasScreen = ({ navigation, route }) => {
 
       {/* Table Container */}
       <View style={{ flex: 1, paddingHorizontal: spacing.md }}>
-        {/* Table Header */}
-        <View style={themedStyles.tableHeader}>
-          <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
-            <Text style={themedStyles.tableHeaderText}>Name</Text>
+        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          {/* Table Header */}
+          <View style={themedStyles.tableHeader}>
+            <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
+              <Text style={themedStyles.tableHeaderText}>Name</Text>
+            </View>
+            <View style={[themedStyles.tableCell, themedStyles.categoryCell]}>
+              <Text style={themedStyles.tableHeaderText}>Category</Text>
+            </View>
+            <View style={[themedStyles.tableCell, themedStyles.membersCell]}>
+              <Text style={themedStyles.tableHeaderText}>Members</Text>
+            </View>
+            <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
+              <Text style={themedStyles.tableHeaderText}>Action</Text>
+            </View>
           </View>
-          <View style={[themedStyles.tableCell, themedStyles.categoryCell]}>
-            <Text style={themedStyles.tableHeaderText}>Category</Text>
-          </View>
-          <View style={[themedStyles.tableCell, themedStyles.membersCell]}>
-            <Text style={themedStyles.tableHeaderText}>Members</Text>
-          </View>
-          <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
-            <Text style={themedStyles.tableHeaderText}>Action</Text>
-          </View>
-        </View>
 
-        {/* Table Body */}
-        <FlatList
-          data={filteredChamas}
-          renderItem={renderTableRow}
-          keyExtractor={(item) => item.id}
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          ListEmptyComponent={!loading && renderEmptyState()}
-        />
+          {/* Table Body */}
+          <FlatList
+            data={filteredChamas}
+            renderItem={renderTableRow}
+            keyExtractor={(item) => item.id}
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            ListEmptyComponent={!loading && renderEmptyState()}
+          />
+        </Card>
       </View>
 
       <TouchableOpacity

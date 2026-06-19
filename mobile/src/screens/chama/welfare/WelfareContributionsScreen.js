@@ -21,6 +21,7 @@ import {
   shadows,
 } from "../../../utils/theme";
 import LoadingSpinner from "../../../components/common/LoadingSpinner";
+import Card from "../../../components/common/Card";
 import ApiService from "../../../services/api";
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
@@ -586,7 +587,7 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
         >
           Contribution Details
         </Text>
-        <View style={styles.contributionsTable}>
+        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
           {/* Table header */}
           <View style={tableStyles.tableHeader}>
             <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
@@ -696,7 +697,7 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
 
           {/* Pagination */}
           {totalItems > pageSize && (
-            <View style={styles.paginationContainer}>
+            <View style={[styles.paginationContainer, { borderTopColor: colors.border }]}>
               <TouchableOpacity
                 style={[
                   styles.paginationButton,
@@ -716,7 +717,7 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
                 />
               </TouchableOpacity>
 
-              <Text style={styles.paginationInfo}>
+              <Text style={[styles.paginationInfo, { color: colors.text }]}>
                 Page {currentPage} of {totalPages} ({totalItems} total)
               </Text>
 
@@ -742,7 +743,7 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
               </TouchableOpacity>
             </View>
           )}
-        </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -751,7 +752,6 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollView: { flex: 1, padding: spacing.md },
-  contributionsTable: { marginTop: spacing.md },
   header: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
@@ -810,9 +810,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: spacing.md,
-    backgroundColor: "#f5f5f5",
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
     marginTop: spacing.sm,
   },
   paginationButton: {

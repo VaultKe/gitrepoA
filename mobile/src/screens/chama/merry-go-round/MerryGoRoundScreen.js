@@ -326,59 +326,61 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     };
 
     return (
-      <View style={styles.tableSection}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ minWidth: width - 32 }}>
-            <View style={styles.tableHeaderRow}>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 0.5 }]}>#</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 3 }]}>Member</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Status</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Amount</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Payout Date</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Receive</Text>
-            </View>
-            {rows.map(row => (
-              <View key={row.id} style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
-                <Text style={[styles.tableCell, { color: colors.text }, { flex: 0.5 }]}>{row.position}</Text>
-                <Text style={[styles.tableCell, { color: colors.text }, { flex: 3 }]} numberOfLines={1}>{row.name}</Text>
-                <View style={[
-                  { flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
-                  { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20' }
-                ]}>
-                  <Ionicons
-                    name={row.contributed ? 'checkmark-circle' : 'time'}
-                    size={10}
-                    color={row.contributed ? colors.success : colors.warning}
-                  />
-                  <Text style={{
-                    fontSize: 8.5,
-                    fontWeight: 'medium',
-                    color: row.contributed ? colors.success : colors.warning,
-                    marginLeft: 2,
-                  }}>
-                    {row.contributed ? 'Paid' : 'Pending'}
+      <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+        <View style={styles.tableSection}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ minWidth: width - 32 }}>
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 0.5 }]}>#</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 3 }]}>Member</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Status</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Amount</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Payout Date</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Receive</Text>
+              </View>
+              {rows.map(row => (
+                <View key={row.id} style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
+                  <Text style={[styles.tableCell, { color: colors.text }, { flex: 0.5 }]}>{row.position}</Text>
+                  <Text style={[styles.tableCell, { color: colors.text }, { flex: 3 }]} numberOfLines={1}>{row.name}</Text>
+                  <View style={[
+                    { flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
+                    { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20' }
+                  ]}>
+                    <Ionicons
+                      name={row.contributed ? 'checkmark-circle' : 'time'}
+                      size={10}
+                      color={row.contributed ? colors.success : colors.warning}
+                    />
+                    <Text style={{
+                      fontSize: 8.5,
+                      fontWeight: 'medium',
+                      color: row.contributed ? colors.success : colors.warning,
+                      marginLeft: 2,
+                    }}>
+                      {row.contributed ? 'Paid' : 'Pending'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.tableCell, { color: colors.text }, { flex: 1.5 }]}>{formatCurrency(row.amount)}</Text>
+                  <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 1.5 }]}>{getPayoutDate(row)}</Text>
+                  <Text style={[styles.tableCell, { color: row.eligibleToContributeToAll ? colors.success : colors.textTertiary }, { flex: 1.5 }]}>
+                    {row.eligibleToContributeToAll ? 'Yes' : 'Partial'}
                   </Text>
                 </View>
-                <Text style={[styles.tableCell, { color: colors.text }, { flex: 1.5 }]}>{formatCurrency(row.amount)}</Text>
-                <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 1.5 }]}>{getPayoutDate(row)}</Text>
-                <Text style={[styles.tableCell, { color: row.eligibleToContributeToAll ? colors.success : colors.textTertiary }, { flex: 1.5 }]}>
-                  {row.eligibleToContributeToAll ? 'Yes' : 'Partial'}
-                </Text>
-              </View>
-            ))}
-            {!rows.length && (
-              <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
-                <Text style={{ color: colors.textSecondary }}>No members match this filter.</Text>
-              </View>
-            )}
+              ))}
+              {!rows.length && (
+                <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+                  <Text style={{ color: colors.textSecondary }}>No members match this filter.</Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+          <View style={[styles.tableFooter, { borderTopColor: colors.border }]}>
+            <Text style={[styles.tableFooterText, { color: colors.textSecondary }]}>
+              {totalContributed} paid • {formatCurrency(totalAmount)} raised
+            </Text>
           </View>
-        </ScrollView>
-        <View style={[styles.tableFooter, { borderTopColor: colors.border }]}>
-          <Text style={[styles.tableFooterText, { color: colors.textSecondary }]}>
-            {totalContributed} paid • {formatCurrency(totalAmount)} raised
-          </Text>
         </View>
-      </View>
+      </Card>
     );
   };
 

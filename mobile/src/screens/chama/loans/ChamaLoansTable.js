@@ -177,17 +177,16 @@ const createStyles = (colors) => StyleSheet.create({
     borderBottomColor: colors.primary,
   },
   tableCell: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 4,
   },
   nameCell: {
-    flex: 2,
+    flex: 1.6,
     alignItems: 'flex-start',
   },
   amountCell: {
-    flex: 1.2,
+    flex: 1.3,
   },
   statusCell: {
     flex: 1,
@@ -196,7 +195,7 @@ const createStyles = (colors) => StyleSheet.create({
     flex: 1.2,
   },
   actionsCell: {
-    flex: 1.2,
+    flex: 1,
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
