@@ -332,6 +332,11 @@ func SetupRoutes(
 				auth.POST("/logout-device/:sessionId", api.LogoutSpecificDevice)
 			}
 
+			security := protected.Group("/security")
+			{
+				security.POST("/scan-file", api.ScanFile)
+			}
+
 			learning := protected.Group("/learning")
 			{
 				learning.GET("/categories", api.GetLearningCategories)

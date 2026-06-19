@@ -553,7 +553,7 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
 
 
 
-  const uploadDocument = async () => {
+   const uploadDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
@@ -563,74 +563,87 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const document = result.assets[0];
 
-        // Create FormData for file upload
-        const formData = new FormData();
-
-        console.log('📄 Document details:', {
-          uri: document.uri,
-          type: document.mimeType,
-          name: document.name,
-          size: document.size
+        const uploadToast = Toast.show({
+          type: 'info',
+          text1: 'Uploading',
+          text2: `Uploading ${document.name}...`,
+          visibilityTime: 0,
         });
 
-        // Convert data URI to File object for web compatibility
-        let fileToUpload;
-        if (document.uri.startsWith('data:')) {
-          // Convert data URI to Blob/File for web
-          const response = await fetch(document.uri);
-          const blob = await response.blob();
-          fileToUpload = new File([blob], document.name, { type: document.mimeType });
-        } else {
-          // For React Native, use the original format
-          fileToUpload = {
+        try {
+          const formData = new FormData();
+
+          console.log('📄 Document details:', {
             uri: document.uri,
             type: document.mimeType,
-            name: document.name,
-          };
-        }
-
-        formData.append('file', fileToUpload);
-        formData.append('meetingId', meetingId);
-        formData.append('documentType', 'meeting_document');
-        formData.append('description', `Document uploaded during physical meeting: ${meetingTitle}`);
-
-        console.log('📄 FormData created, about to upload...');
-
-        // Upload to backend
-        const response = await api.makeRequest(`/meetings/${meetingId}/documents`, {
-          method: 'POST',
-          body: formData,
-          // Don't set Content-Type header - let browser set it automatically for FormData
-        });
-
-        if (response.success) {
-          const newDoc = {
-            id: response.data.id || Date.now().toString(),
             name: document.name,
             size: document.size,
-            type: document.mimeType,
-            uri: document.uri,
-            uploadedAt: new Date().toISOString(),
-            url: response.data.url,
-          };
-
-          setUploadedDocuments(prev => [...prev, newDoc]);
-
-          Toast.show({
-            type: 'success',
-            text1: 'Document Uploaded',
-            text2: `${document.name} has been uploaded to the meeting`,
           });
-        } else {
-          throw new Error(response.error || 'Upload failed');
+
+          let fileToUpload;
+          if (document.uri.startsWith('data:')) {
+            const response = await fetch(document.uri);
+            const blob = await response.blob();
+            fileToUpload = new File([blob], document.name, { type: document.mimeType });
+          } else {
+            fileToUpload = {
+              uri: document.uri,
+              type: document.mimeType,
+              name: document.name,
+            };
+          }
+
+          formData.append('file', fileToUpload);
+          formData.append('meetingId', meetingId);
+          formData.append('documentType', 'meeting_document');
+          formData.append('description', `Document uploaded during physical meeting: ${meetingTitle}`);
+
+          console.log('📄 FormData created, about to upload...');
+
+          const response = await api.makeRequest(`/meetings/${meetingId}/documents`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          Toast.hide(uploadToast);
+
+          if (response.success) {
+            const newDoc = {
+              id: response.data.id || Date.now().toString(),
+              name: document.name,
+              size: document.size,
+              type: document.mimeType,
+              uri: document.uri,
+              uploadedAt: new Date().toISOString(),
+              url: response.data.url,
+            };
+
+            setUploadedDocuments(prev => [...prev, newDoc]);
+
+            Toast.show({
+              type: 'success',
+              text1: 'Document Uploaded',
+              text2: `${document.name} has been uploaded to the meeting`,
+            });
+          } else {
+            throw new Error(response.error || 'Upload failed');
+          }
+        } catch (uploadError) {
+          Toast.hide(uploadToast);
+          console.error('Failed to upload document:', uploadError);
+          Toast.show({
+            type: 'error',
+            text1: 'Upload Failed',
+            text2: uploadError.message || 'Failed to upload document to server',
+          });
         }
       }
     } catch (error) {
-      console.error('Failed to upload document:', error);
+      console.error('Failed to pick or upload document:', error);
       Toast.show({
         type: 'error',
         text1: 'Upload Failed',
-        text2: error.message || 'Failed to upload document to server',
+        text2: error.message || 'Failed to process document',
       });
     }
   };

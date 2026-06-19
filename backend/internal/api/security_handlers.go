@@ -4,11 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"vaultke-backend/internal/services"
 )
 
 // LoginSession represents a user login session
@@ -461,4 +464,102 @@ func RecordLoginSession(db *sql.DB, userID, deviceType, deviceName, os, browser,
 
 	fmt.Printf("Successfully recorded login session for user %s\n", userID)
 	return nil
+}
+
+// ScanFileRequest represents a file scan request
+type ScanFileRequest struct {
+	FileName  string `json:"fileName" binding:"required"`
+	MimeType  string `json:"mimeType"`
+	Size      int64  `json:"size"`
+	URI       string `json:"uri"`
+	MeetingID string `json:"meetingId"`
+}
+
+// ScanFileResponse represents a file scan response
+type ScanFileResponse struct {
+	IsClean bool   `json:"isClean"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// ScanFileWithClamAV scans a file using ClamAV and returns the result
+func ScanFileWithClamAV(filePath string) *services.ClamAVScanResult {
+	return services.ScanFileWithClamAV(filePath)
+}
+
+// ScanFile handles file scanning requests from the frontend
+func ScanFile(c *gin.Context) {
+	var req ScanFileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	if !services.IsClamAVAvailable() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "ClamAV scanning service is not available on the server",
+		})
+		return
+	}
+
+	allowedExtensions := map[string]bool{
+		".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true,
+		".pdf": true, ".doc": true, ".docx": true, ".xls": true, ".xlsx": true,
+		".ppt": true, ".pptx": true, ".txt": true, ".csv": true,
+	}
+
+	ext := strings.ToLower(filepath.Ext(req.FileName))
+	if !allowedExtensions[ext] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("File type not allowed: %s", ext),
+		})
+		return
+	}
+
+	if req.Size > 50*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "File too large. Maximum size is 50MB",
+		})
+		return
+	}
+
+	scanResult := services.ScanFileWithClamAV(req.URI)
+
+	response := ScanFileResponse{
+		IsClean: scanResult.IsClean && !scanResult.Infected,
+		Status:  "clean",
+	}
+
+	if scanResult.ScanError != nil {
+		response.Status = "error"
+		response.Message = fmt.Sprintf("Scan failed: %v", scanResult.ScanError)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"data":    response,
+			"error":   response.Message,
+		})
+		return
+	}
+
+	if scanResult.Infected {
+		response.Status = "infected"
+		response.Message = "Malware detected: " + scanResult.ScanOutput
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    response,
+		})
+		return
+	}
+
+	response.Message = "File is clean"
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    response,
+	})
 }
