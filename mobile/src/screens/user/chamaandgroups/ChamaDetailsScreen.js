@@ -58,7 +58,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   // Create responsive styles
-  const styles = getResponsiveStyles(screenType, screenWidth);
+  const styles = getResponsiveStyles(screenType, screenWidth, colors);
 
   // Smart responsive layout component
   const SmartResponsiveLayout = ({ children }) => {

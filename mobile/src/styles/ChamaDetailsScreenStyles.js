@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { spacing, typography, borderRadius } from '../utils/theme';
 
-const getResponsiveStyles = (screenType, screenWidth) => StyleSheet.create({
+const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -112,9 +112,9 @@ const getResponsiveStyles = (screenType, screenWidth) => StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
   },
   statValue: {
     fontSize: typography.fontSize.base,
@@ -331,7 +331,7 @@ const getResponsiveStyles = (screenType, screenWidth) => StyleSheet.create({
     paddingLeft: spacing.md,
     paddingRight: spacing.sm,
     paddingVertical: spacing.xs,
-    backgroundColor: 'rgba(0,0,0,0.02)',
+    backgroundColor: colors.surface,
     borderRadius: 8,
   },
   ruleHeader: {
@@ -597,7 +597,7 @@ const getResponsiveStyles = (screenType, screenWidth) => StyleSheet.create({
     marginTop: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: colors.border,
   },
   descriptionLabel: {
     fontSize: typography.fontSize.sm,
