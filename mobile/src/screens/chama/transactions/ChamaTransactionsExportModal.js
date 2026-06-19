@@ -9,8 +9,9 @@ const ChamaTransactionsExportModal = ({
   exportLoading,
   onClose,
   onExport,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const exportOptions = [
     {

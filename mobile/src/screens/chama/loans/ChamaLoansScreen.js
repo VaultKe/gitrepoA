@@ -309,6 +309,7 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
       <ChamaLoansSearchCard
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
+        theme={theme}
       />
 
       <ChamaLoansTable
@@ -320,6 +321,7 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
         currentUser={user}
         canManageLoans={canManageLoans}
         onLoanAction={handleLoanAction}
+        theme={theme}
       />
 
       <TouchableOpacity

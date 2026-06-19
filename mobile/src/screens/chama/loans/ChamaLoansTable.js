@@ -22,8 +22,9 @@ const ChamaLoansTable = ({
   currentUser,
   canManageLoans,
   onLoanAction,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   const renderTableRow = ({ item, index }) => {
@@ -130,7 +131,7 @@ const ChamaLoansTable = ({
                 />
               }
               ListEmptyComponent={!loading && (
-                <ChamaLoansEmptyState canViewAllLoans={canManageLoans} />
+                <ChamaLoansEmptyState canViewAllLoans={canManageLoans} theme={theme} />
               )}
             />
           </View>

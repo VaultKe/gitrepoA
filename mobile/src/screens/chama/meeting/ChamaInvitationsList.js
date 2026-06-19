@@ -11,8 +11,9 @@ const ChamaInvitationsList = ({
   searchQuery,
   onResendInvitation,
   onCancelInvitation,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const filteredInvitations = getFilteredInvitations(invitations, searchQuery);
 
@@ -30,7 +31,7 @@ const ChamaInvitationsList = ({
       contentContainerStyle={styles.membersList}
       scrollEnabled={false}
       ListEmptyComponent={!loading && (
-        <ChamaMembersEmptyState type="invitations" searchQuery={searchQuery} />
+        <ChamaMembersEmptyState type="invitations" searchQuery={searchQuery} theme={theme} />
       )}
       showsVerticalScrollIndicator={false}
     />

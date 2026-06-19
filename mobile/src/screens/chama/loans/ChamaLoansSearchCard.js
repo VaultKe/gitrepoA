@@ -7,8 +7,9 @@ import { getThemeColors, spacing, typography, borderRadius } from '../../../util
 const ChamaLoansSearchCard = ({
   searchQuery,
   setSearchQuery,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (

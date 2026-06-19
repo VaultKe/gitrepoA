@@ -12,8 +12,9 @@ const ChamaTransactionsHeader = ({
   isDropdownOpen,
   canViewGroupRecords,
   onToggleFilter,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const selected = filters.find(filter => filter.id === selectedFilter);
 

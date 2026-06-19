@@ -16,13 +16,14 @@ const ChamaTransactionsTable = ({
   onReceiptPress,
   exportLoading,
   selectedFilter,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (
     <View style={styles.tableContainer}>
-      <Card variant="outlined" padding="none" style={styles.tableCard}>
+      <Card variant="default" style={styles.tableCard}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -59,6 +60,7 @@ const ChamaTransactionsTable = ({
                   chamaMembers={chamaMembers}
                   onReceiptPress={onReceiptPress}
                   exportLoading={exportLoading}
+                  theme={theme}
                 />
               )}
               keyExtractor={(item) => item.id}
@@ -66,7 +68,7 @@ const ChamaTransactionsTable = ({
               scrollEnabled={false}
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={!loading && (
-                <ChamaTransactionsEmptyState selectedFilter={selectedFilter} />
+                <ChamaTransactionsEmptyState selectedFilter={selectedFilter} theme={theme} />
               )}
             />
 

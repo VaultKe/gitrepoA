@@ -3,8 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography } from '../../../utils/theme';
 
-const ChamaTransactionsEmptyState = ({ selectedFilter }) => {
-  const colors = getThemeColors();
+const ChamaTransactionsEmptyState = ({ selectedFilter, theme }) => {
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (

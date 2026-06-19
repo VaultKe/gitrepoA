@@ -533,87 +533,89 @@ const ProfileScreen = ({ navigation }) => {
           Recent Activity
         </Text>
 
-        {/* Activity Table Header */}
-        <View style={[styles.activityTableHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Date</Text>
-          <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Type</Text>
-          <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Amount</Text>
-          <Text style={[styles.activityHeaderText, { flex: 2, color: colors.textSecondary }]}>Description</Text>
-        </View>
+        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          {/* Activity Table Header */}
+          <View style={[styles.activityTableHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Date</Text>
+            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Type</Text>
+            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Amount</Text>
+            <Text style={[styles.activityHeaderText, { flex: 2, color: colors.textSecondary }]}>Description</Text>
+          </View>
 
-        {/* Activity Table Body */}
-        <View style={[styles.activityTableBody, { borderBottomColor: colors.border }]}>
-          {displayActivities.map((activity, index) => {
-            const isAlt = index % 2 !== 0;
-            return (
-              <View
-                key={activity.id || index}
-                style={[
-                  styles.activityRow,
-                  { backgroundColor: isAlt ? colors.surface + '30' : colors.background },
-                  { borderBottomColor: colors.border },
-                ]}
-              >
-                {/* Date */}
-                <View style={styles.activityCell}>
-                  <Ionicons name="calendar-outline" size={11} color={colors.textTertiary || colors.textSecondary} />
-                  <Text style={[styles.activityCellText, { color: colors.textSecondary, fontSize: 11, marginLeft: 3 }]}>
-                    {formatActivityDate(activity.createdAt || activity.created_at)}
-                  </Text>
-                </View>
-
-                {/* Type badge */}
-                <View style={styles.activityTypeCell}>
-                  <View style={[styles.activityTypeBadge, { backgroundColor: getActivityColor(activity.type, activity.paymentMethod) + '18' }]}>
-                    <Ionicons
-                      name={getActivityIcon(activity.type)}
-                      size={12}
-                      color={getActivityColor(activity.type, activity.paymentMethod)}
-                    />
-                    <Text style={[styles.activityTypeText, { color: getActivityColor(activity.type, activity.paymentMethod) }]}>
-                      {(activity.type || 'Transaction').replace(/_/g, ' ')}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Amount */}
-                <Text
+          {/* Activity Table Body */}
+          <View style={[styles.activityTableBody, { borderBottomColor: colors.border }]}>
+            {displayActivities.map((activity, index) => {
+              const isAlt = index % 2 !== 0;
+              return (
+                <View
+                  key={activity.id || index}
                   style={[
-                    styles.activityAmountText,
-                    {
-                      color:
-                        (activity.type || '').toLowerCase() === 'withdrawal' || (activity.type || '').toLowerCase() === 'loan'
-                          ? colors.error
-                          : colors.success || colors.primary,
-                      fontWeight: '600',
-                    },
+                    styles.activityRow,
+                    { backgroundColor: isAlt ? colors.surface : colors.background },
+                    { borderBottomColor: colors.border },
                   ]}
                 >
-                  {typeof activity.amount === 'number'
-                    ? formatCurrency(activity.amount)
-                    : formatCurrency(parseFloat(activity.amount) || 0)}
-                </Text>
+                  {/* Date */}
+                  <View style={styles.activityCell}>
+                    <Ionicons name="calendar-outline" size={11} color={colors.textTertiary || colors.textSecondary} />
+                    <Text style={[styles.activityCellText, { color: colors.textSecondary, fontSize: 11, marginLeft: 3 }]}>
+                      {formatActivityDate(activity.createdAt || activity.created_at)}
+                    </Text>
+                  </View>
 
-                {/* Description */}
-                <Text
-                  style={[styles.activityDescText, { color: colors.textSecondary }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {getActivityDescription(activity)}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
+                  {/* Type badge */}
+                  <View style={styles.activityTypeCell}>
+                    <View style={[styles.activityTypeBadge, { backgroundColor: getActivityColor(activity.type, activity.paymentMethod) + '18' }]}>
+                      <Ionicons
+                        name={getActivityIcon(activity.type)}
+                        size={12}
+                        color={getActivityColor(activity.type, activity.paymentMethod)}
+                      />
+                      <Text style={[styles.activityTypeText, { color: getActivityColor(activity.type, activity.paymentMethod) }]}>
+                        {(activity.type || 'Transaction').replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                  </View>
 
-        {recentActivities.length > 10 && (
-          <View style={styles.activityFooter}>
-            <Text style={{ color: colors.textTertiary || colors.textSecondary, fontSize: 12 }}>
-              Showing 10 of {recentActivities.length} activities
-            </Text>
+                  {/* Amount */}
+                  <Text
+                    style={[
+                      styles.activityAmountText,
+                      {
+                        color:
+                          (activity.type || '').toLowerCase() === 'withdrawal' || (activity.type || '').toLowerCase() === 'loan'
+                            ? colors.error
+                            : colors.success || colors.primary,
+                        fontWeight: '600',
+                      },
+                    ]}
+                  >
+                    {typeof activity.amount === 'number'
+                      ? formatCurrency(activity.amount)
+                      : formatCurrency(parseFloat(activity.amount) || 0)}
+                  </Text>
+
+                  {/* Description */}
+                  <Text
+                    style={[styles.activityDescText, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {getActivityDescription(activity)}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
-        )}
+
+          {recentActivities.length > 10 && (
+            <View style={[styles.activityFooter, { borderTopColor: colors.border }]}>
+              <Text style={{ color: colors.textTertiary || colors.textSecondary, fontSize: 12 }}>
+                Showing 10 of {recentActivities.length} activities
+              </Text>
+            </View>
+          )}
+        </Card>
       </View>
     );
   };

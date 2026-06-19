@@ -19,8 +19,9 @@ const ChamaTransactionRow = ({
   chamaMembers,
   onReceiptPress,
   exportLoading,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const transactionType = item.type || item.transaction_type || 'other';
   const transactionColor = getTransactionColor(transactionType, colors);

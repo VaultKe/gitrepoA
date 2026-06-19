@@ -389,7 +389,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
   };
 
   if (!currentChamaId) {
-    return <ChamaTransactionsNoChama navigation={navigation} />;
+    return <ChamaTransactionsNoChama navigation={navigation} theme={theme} />;
   }
 
   return (
@@ -414,11 +414,13 @@ const ChamaTransactionsScreen = ({ navigation }) => {
           isDropdownOpen={showFilterDropdown}
           canViewGroupRecords={canViewGroupRecords}
           onToggleFilter={() => setShowFilterDropdown(!showFilterDropdown)}
+          theme={theme}
         />
 
         <ChamaTransactionsFilterChips
           selectedFilter={selectedFilter}
           onSelectFilter={handleSelectFilter}
+          theme={theme}
         />
 
         <ChamaTransactionsTable
@@ -431,6 +433,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
           onReceiptPress={handleIndividualReceipt}
           exportLoading={exportLoading}
           selectedFilter={selectedFilter}
+          theme={theme}
         />
 
         <View style={styles.bottomSpacer} />
@@ -440,6 +443,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
         <ChamaTransactionsFilterDropdown
           selectedFilter={selectedFilter}
           onSelectFilter={handleSelectFilter}
+          theme={theme}
         />
       )}
 
@@ -449,6 +453,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
         exportLoading={exportLoading}
         onClose={() => setShowExportModal(false)}
         onExport={handleExport}
+        theme={theme}
       />
 
       <ChamaTransactionsMemberSelectorModal
@@ -458,6 +463,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
         onSelectMember={(memberId) => {
           handleDownload('pdf', 'member', memberId);
         }}
+        theme={theme}
       />
     </SafeAreaView>
   );

@@ -8,12 +8,15 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import ApiService from '../../../services/api';
-import ReceiptService from '../../../services/receiptService';
+import Card from '../../../components/common/Card';
+import { generatePDFOptimizedReceiptHTML } from '../../../services/receiptService/html/template';
+import { COMPANY_INFO } from '../../../services/receiptService/config';
 
 export default function TransactionHistoryScreen() {
   const { theme, user } = useApp();
@@ -23,66 +26,52 @@ export default function TransactionHistoryScreen() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // Removed modal states - instant download only
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [showTransactionMenu, setShowTransactionMenu] = useState(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
 
-   // Load transactions from API and local database
-   const loadTransactions = useCallback(async () => {
-     try {
-       // Try to load from API first
-       let apiTransactions = [];
-       try {
-         const response = await ApiService.getTransactions(50, 0);
-         if (response.success && response.data) {
-           apiTransactions = response.data;
-           
-           // Transform API data to match expected format
-           const formattedTransactions = apiTransactions.map(tx => ({
-             ...tx,
-             date: tx.createdAt || tx.created_at,
-             // Ensure amount is properly signed based on transaction type
-             amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
-           }));
-           
-           setTransactions(formattedTransactions);
-           return; // Exit early if we got API data
-         }
-       } catch (error) {
-         console.warn('Failed to load transactions from API:', error);
-         // Continue with empty API data - will try local fallback
-       }
+  const loadTransactions = useCallback(async () => {
+    try {
+      let apiTransactions = [];
+      try {
+        const response = await ApiService.getTransactions(50, 0);
+        if (response.success && response.data) {
+          apiTransactions = response.data;
+          const formattedTransactions = apiTransactions.map(tx => ({
+            ...tx,
+            date: tx.createdAt || tx.created_at,
+            amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+          }));
+          setTransactions(formattedTransactions);
+          return;
+        }
+      } catch (error) {
+        console.warn('Failed to load transactions from API:', error);
+      }
 
-       // If no API data, try to load from local storage (AsyncStorage fallback)
-       try {
-         const localData = await AsyncStorage.getItem('cachedTransactions');
-         if (localData) {
-           const localTransactions = JSON.parse(localData);
-           
-           // Transform local data to match expected format
-           const formattedTransactions = localTransactions.map(tx => ({
-             ...tx,
-             date: tx.createdAt || tx.created_at,
-             // Ensure amount is properly signed based on transaction type
-             amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
-           }));
-           
-           setTransactions(formattedTransactions);
-           return;
-         }
-       } catch (storageError) {
-         console.warn('Failed to load transactions from local storage:', storageError);
-       }
+      try {
+        const localData = await AsyncStorage.getItem('cachedTransactions');
+        if (localData) {
+          const localTransactions = JSON.parse(localData);
+          const formattedTransactions = localTransactions.map(tx => ({
+            ...tx,
+            date: tx.createdAt || tx.created_at,
+            amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+          }));
+          setTransactions(formattedTransactions);
+          return;
+        }
+      } catch (storageError) {
+        console.warn('Failed to load transactions from local storage:', storageError);
+      }
 
-       // No data available from any source - show empty state
-       setTransactions([]);
-     } catch (error) {
-       console.error('Error in loadTransactions:', error);
-       Alert.alert('Error', 'Failed to load transaction history');
-       setTransactions([]);
-     }
-   }, []);
+      setTransactions([]);
+    } catch (error) {
+      console.error('Error in loadTransactions:', error);
+      Alert.alert('Error', 'Failed to load transaction history');
+      setTransactions([]);
+    }
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -96,7 +85,6 @@ export default function TransactionHistoryScreen() {
       await loadTransactions();
       setLoading(false);
     };
-
     initializeData();
   }, [loadTransactions]);
 
@@ -111,12 +99,10 @@ export default function TransactionHistoryScreen() {
     ? transactions
     : transactions.filter(t => t.type === filter);
 
-
-
   const getTransactionColor = (type, amount) => {
-    if (amount > 0) return colors.success; // Green for incoming
-    if (type === 'withdraw') return colors.error; // Red for withdrawals
-    return colors.primary; // Primary color for transfers
+    if (amount > 0) return colors.success;
+    if (type === 'withdraw') return colors.error;
+    return colors.primary;
   };
 
   const formatDate = (dateString) => {
@@ -129,92 +115,82 @@ export default function TransactionHistoryScreen() {
     });
   };
 
-  // Receipt functionality - INSTANT DOWNLOAD (NO PREVIEW)
-  const handleReceiptAction = (transaction, action) => {
-    switch (action) {
-      case 'download':
-        // INSTANT PDF DOWNLOAD - NO MODAL, NO PREVIEW
-        handleInstantDownloadReceipt(transaction);
-        break;
-      case 'print':
-        handlePrintReceipt(transaction);
-        break;
-      case 'share':
-        handleShareReceipt(transaction);
-        break;
+  const openTransactionReceipt = (transaction, html) => {
+    const receiptId = `RCP-${String(transaction.id || Date.now()).substring(0, 8).toUpperCase()}`;
+    const fileName = `VaultKe_Receipt_${receiptId}_${new Date().toISOString().split('T')[0]}.html`;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+      return { success: true, fileName };
     }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Transaction Receipt - ${receiptId}</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          ${html}
+          <div class="no-print" style="position: fixed; top: 10px; right: 10px; background: #007bff; color: white; padding: 10px; border-radius: 5px; cursor: pointer;" onclick="window.print()">
+            Click here to save as PDF
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(() => window.print(), 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    return { success: true, fileName };
   };
 
-  // INSTANT PDF DOWNLOAD - NO MODAL, NO PREVIEW, NO BULLSHIT
+  const buildUserInfo = () => {
+    const firstName = user?.firstName || user?.first_name || '';
+    const lastName = user?.lastName || user?.last_name || '';
+    const fullName = `${firstName} ${lastName}`.trim() || 'User';
+    return {
+      name: fullName,
+      firstName,
+      lastName,
+      email: user?.email || '',
+      phone: user?.phone || '',
+      isPersonalTransaction: true,
+    };
+  };
+
   const handleInstantDownloadReceipt = async (transaction) => {
     if (!transaction) return;
-
-    // Show loading indicator briefly
     setReceiptLoading(true);
-
     try {
-      // Build user info for receipt - THIS IS THE USER'S PERSONAL TRANSACTION
-      const firstName = user?.firstName || user?.first_name || '';
-      const lastName = user?.lastName || user?.last_name || '';
-      const fullName = `${firstName} ${lastName}`.trim() || 'User';
-
-      const userInfo = {
-        name: fullName,
-        firstName: firstName,
-        lastName: lastName,
-        email: user?.email || '',
-        phone: user?.phone || '',
-        // For personal transactions, the user is always the one who made the transaction
-        isPersonalTransaction: true
-      };
-
-      // DIRECT PDF DOWNLOAD - NO FORMAT SELECTION
-      const result = await ReceiptService.downloadReceipt(transaction, 'pdf', userInfo);
-
+      const html = generatePDFOptimizedReceiptHTML(transaction, 'Wallet', buildUserInfo().name, COMPANY_INFO);
+      const result = openTransactionReceipt(transaction, html);
       if (result.success) {
-        // Show brief success message
-        Alert.alert(
-          'Downloaded',
-          `Receipt saved as ${result.fileName}`,
-          [{ text: 'OK', style: 'default' }],
-          { cancelable: true }
-        );
+        Alert.alert('Downloaded', `Receipt saved as ${result.fileName}`, [{ text: 'OK', style: 'default' }], { cancelable: true });
       } else {
         throw new Error(result.error || 'Download failed');
       }
     } catch (error) {
-      Alert.alert(
-        'Download Failed',
-        'Unable to download receipt. Please try again.',
-        [{ text: 'OK', style: 'default' }]
-      );
-    } finally {
-      setReceiptLoading(false);
-    }
-  };
-
-  // Legacy function - kept for compatibility but not used
-  const handleDownloadReceipt = async (format) => {
-    if (!selectedTransaction) return;
-
-    setReceiptLoading(true);
-    try {
-      // Build user info for legacy function
-      const userInfo = {
-        name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'User',
-        firstName: user?.first_name || '',
-        lastName: user?.last_name || '',
-        email: user?.email || '',
-        phone: user?.phone || '',
-        isPersonalTransaction: true
-      };
-
-      const result = await ReceiptService.downloadReceipt(selectedTransaction, format, userInfo);
-      if (result.success) {
-        setShowReceiptModal(false);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to download receipt');
+      Alert.alert('Download Failed', 'Unable to download receipt. Please try again.', [{ text: 'OK', style: 'default' }]);
     } finally {
       setReceiptLoading(false);
     }
@@ -222,22 +198,8 @@ export default function TransactionHistoryScreen() {
 
   const handlePrintReceipt = async (transaction) => {
     try {
-      // Build user info for print - THIS IS THE USER'S PERSONAL TRANSACTION
-      const firstName = user?.firstName || user?.first_name || '';
-      const lastName = user?.lastName || user?.last_name || '';
-      const fullName = `${firstName} ${lastName}`.trim() || 'User';
-
-      const userInfo = {
-        name: fullName,
-        firstName: firstName,
-        lastName: lastName,
-        email: user?.email || '',
-        phone: user?.phone || '',
-        // For personal transactions, the user is always the one who made the transaction
-        isPersonalTransaction: true
-      };
-
-      await ReceiptService.printReceipt(transaction, userInfo);
+      const html = generatePDFOptimizedReceiptHTML(transaction, 'Wallet', buildUserInfo().name, COMPANY_INFO);
+      openTransactionReceipt(transaction, html);
     } catch (error) {
       Alert.alert('Error', 'Failed to print receipt');
     }
@@ -245,31 +207,24 @@ export default function TransactionHistoryScreen() {
 
   const handleShareReceipt = async (transaction) => {
     try {
-      // Build user info for share - THIS IS THE USER'S PERSONAL TRANSACTION
-      const firstName = user?.firstName || user?.first_name || '';
-      const lastName = user?.lastName || user?.last_name || '';
-      const fullName = `${firstName} ${lastName}`.trim() || 'User';
-
-      const userInfo = {
-        name: fullName,
-        firstName: firstName,
-        lastName: lastName,
-        email: user?.email || '',
-        phone: user?.phone || '',
-        // For personal transactions, the user is always the one who made the transaction
-        isPersonalTransaction: true
-      };
-
-      const result = await ReceiptService.generatePDFReceipt(transaction, userInfo);
-      if (result.success) {
-        await ReceiptService.shareReceipt(result.uri, result.fileName);
-      }
+      const html = generatePDFOptimizedReceiptHTML(transaction, 'Wallet', buildUserInfo().name, COMPANY_INFO);
+      const receiptId = `RCP-${String(transaction.id || Date.now()).substring(0, 8).toUpperCase()}`;
+      const fileName = `VaultKe_Receipt_${receiptId}_${new Date().toISOString().split('T')[0]}.html`;
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (error) {
       Alert.alert('Error', 'Failed to share receipt');
     }
   };
 
-  // INSTANT BULK PDF DOWNLOAD - NO MODAL, NO PREVIEW
   const handleInstantBulkDownload = async () => {
     if (transactions.length === 0) {
       Alert.alert('No Data', 'No transactions available to download');
@@ -278,34 +233,11 @@ export default function TransactionHistoryScreen() {
 
     setReceiptLoading(true);
     try {
-      // Build user info for bulk receipt - THESE ARE THE USER'S PERSONAL TRANSACTIONS
-      const firstName = user?.firstName || user?.first_name || '';
-      const lastName = user?.lastName || user?.last_name || '';
-      const fullName = `${firstName} ${lastName}`.trim() || 'User';
-
-      const userInfo = {
-        name: fullName,
-        firstName: firstName,
-        lastName: lastName,
-        email: user?.email || '',
-        phone: user?.phone || '',
-        // For personal transaction history, the user is always the one who made all transactions
-        isPersonalTransaction: true,
-        reportTitle: 'Personal Transaction History'
-      };
-
-      // DIRECT PDF DOWNLOAD - NO FORMAT SELECTION
-      const result = await ReceiptService.downloadBulkReceipts(transactions, 'pdf', userInfo);
-
-      if (result.success) {
-        Alert.alert(
-          'Downloaded',
-          `Transaction history saved as ${result.fileName}`,
-          [{ text: 'OK', style: 'default' }]
-        );
-      } else {
-        throw new Error(result.error || 'Bulk download failed');
-      }
+      Alert.alert(
+        'Downloaded',
+        `Transaction history download is not available yet.`,
+        [{ text: 'OK', style: 'default' }]
+      );
     } catch (error) {
       Alert.alert(
         'Download Failed',
@@ -317,49 +249,24 @@ export default function TransactionHistoryScreen() {
     }
   };
 
-  // Legacy function - kept for compatibility but not used
-  const handleBulkDownload = async (format) => {
-    if (transactions.length === 0) {
-      Alert.alert('No Data', 'No transactions available to download');
-      return;
-    }
-
-    setReceiptLoading(true);
-    try {
-      // Build user info for legacy function
-      const userInfo = {
-        name: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'User',
-        firstName: user?.first_name || '',
-        lastName: user?.last_name || '',
-        email: user?.email || '',
-        phone: user?.phone || '',
-        isPersonalTransaction: true,
-        reportTitle: 'Personal Transaction History'
-      };
-
-      const result = await ReceiptService.downloadBulkReceipts(transactions, format, userInfo);
-      if (result.success) {
-        Alert.alert(
-          'Success',
-          `Transaction history downloaded successfully as ${result.fileName}`,
-          [{ text: 'OK' }]
-        );
-        // Modal removed - instant download only
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to download transaction history');
-    } finally {
-      setReceiptLoading(false);
+  const handleReceiptAction = (transaction, action) => {
+    switch (action) {
+      case 'download':
+        handleInstantDownloadReceipt(transaction);
+        break;
+      case 'print':
+        handlePrintReceipt(transaction);
+        break;
+      case 'share':
+        handleShareReceipt(transaction);
+        break;
     }
   };
 
-  // Transaction menu actions
   const handleTransactionMenuAction = (transaction, action) => {
     setShowTransactionMenu(null);
     handleReceiptAction(transaction, action);
   };
-
-
 
   const renderTransaction = ({ item, index }) => (
     <View style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
@@ -382,11 +289,9 @@ export default function TransactionHistoryScreen() {
 
   return (
     <View style={[{ flex: 1, backgroundColor: colors.background }]}>
-      {/* Compact Header with Filters */}
       <View style={[{ borderBottomWidth: 1, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={[{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomColor: 'transparent' }]}>
+        <View style={[{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
-            {/* Filters moved to header row - now taking full width */}
             <View style={{ flex: 1 }}>
               <ScrollView
                 horizontal
@@ -418,7 +323,6 @@ export default function TransactionHistoryScreen() {
               </ScrollView>
             </View>
 
-            {/* Three-dot menu for actions */}
             {transactions.length > 0 && (
               <TouchableOpacity
                 style={{ width: 36, height: 36, borderRadius: borderRadius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary }}
@@ -431,7 +335,6 @@ export default function TransactionHistoryScreen() {
         </View>
       </View>
 
-      {/* Header Menu Dropdown */}
       {showHeaderMenu && (
         <View style={{ position: 'absolute', top: 60, right: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, paddingVertical: spacing.xs, minWidth: 150, backgroundColor: colors.surface, borderColor: colors.border, zIndex: 1001, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 }}>
           <TouchableOpacity
@@ -448,7 +351,6 @@ export default function TransactionHistoryScreen() {
             style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm }}
             onPress={() => {
               setShowHeaderMenu(false);
-              // Add export functionality here if needed
             }}
           >
             <Ionicons name="share" size={18} color={colors.text} />
@@ -457,7 +359,6 @@ export default function TransactionHistoryScreen() {
         </View>
       )}
 
-      {/* Overlay to close menu */}
       {showHeaderMenu && (
         <TouchableOpacity
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
@@ -466,7 +367,6 @@ export default function TransactionHistoryScreen() {
         />
       )}
 
-      {/* Scrollable Content */}
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -476,49 +376,42 @@ export default function TransactionHistoryScreen() {
         </View>
       ) : (
         <View style={{ paddingHorizontal: spacing.md }}>
-          {/* Table Header */}
-          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Description</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
-          </View>
-
-          <FlatList
-            data={filteredTransactions}
-            renderItem={renderTransaction}
-            keyExtractor={(item) => item.id}
-            style={{ flex: 1 }}
-            showsVerticalScrollIndicator={false}
-            onScroll={() => setShowTransactionMenu(null)}
-            scrollEventThrottle={16}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+          <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <FlatList
+              data={filteredTransactions}
+              renderItem={renderTransaction}
+              keyExtractor={(item) => item.id}
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              onScroll={() => setShowTransactionMenu(null)}
+              scrollEventThrottle={16}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                />
+              }
+              ListEmptyComponent={() => (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
+                  <Ionicons name="receipt-outline" size={64} color={colors.textTertiary} />
+                  <Text style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.textSecondary, marginTop: spacing.md }}>
+                    {transactions.length === 0 ? 'No transactions yet' : 'No transactions found'}
+                  </Text>
+                  <Text style={{ fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center', color: colors.textTertiary }}>
+                    {transactions.length === 0
+                      ? 'Start by making a deposit or transfer'
+                      : 'Try changing the filter above'
+                    }
+                  </Text>
+                </View>
+              )}
             />
-          }
-          ListEmptyComponent={() => (
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
-              <Ionicons name="receipt-outline" size={64} color={colors.textTertiary} />
-              <Text style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.textSecondary, marginTop: spacing.md }}>
-                {transactions.length === 0 ? 'No transactions yet' : 'No transactions found'}
-              </Text>
-              <Text style={{ fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center', color: colors.textTertiary }}>
-                {transactions.length === 0
-                  ? 'Start by making a deposit or transfer'
-                  : 'Try changing the filter above'
-                }
-              </Text>
-            </View>
-          )}
-        />
+          </Card>
         </View>
       )}
 
-      {/* Transaction Menu Modal */}
       <Modal
         visible={!!showTransactionMenu}
         transparent={true}
@@ -531,7 +424,6 @@ export default function TransactionHistoryScreen() {
           activeOpacity={1}
         >
           <View style={{ width: 220, borderRadius: borderRadius.xl, borderWidth: 1, backgroundColor: colors.surface, borderColor: colors.border, elevation: 20, overflow: 'hidden' }}>
-            {/* Menu Header */}
             <View style={{ padding: spacing.md, borderBottomWidth: 1, alignItems: 'center', borderBottomColor: colors.border }}>
               <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Receipt Actions</Text>
             </View>
@@ -583,5 +475,3 @@ export default function TransactionHistoryScreen() {
     </View>
   );
 }
-
-

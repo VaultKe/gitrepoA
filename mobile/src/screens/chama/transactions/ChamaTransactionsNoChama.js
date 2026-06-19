@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 
-const ChamaTransactionsNoChama = ({ navigation }) => {
-  const colors = getThemeColors();
+const ChamaTransactionsNoChama = ({ navigation, theme }) => {
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (

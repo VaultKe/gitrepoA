@@ -294,6 +294,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
             currentUser={user}
             userRole={userRole}
             searchQuery={searchQuery}
+            theme={theme}
             onOpenRoleModal={(member) => {
               setSelectedMember(member);
               setShowRoleModal(true);

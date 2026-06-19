@@ -3,8 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography } from '../../../utils/theme';
 
-const ChamaMembersEmptyState = ({ type, searchQuery }) => {
-  const colors = getThemeColors();
+const ChamaMembersEmptyState = ({ type, searchQuery, theme }) => {
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const isMembers = type === 'members';
 

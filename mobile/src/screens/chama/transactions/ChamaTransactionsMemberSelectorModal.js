@@ -9,8 +9,9 @@ const ChamaTransactionsMemberSelectorModal = ({
   chamaMembers,
   onClose,
   onSelectMember,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (

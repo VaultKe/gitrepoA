@@ -3,8 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 
-const ChamaLoansEmptyState = ({ canViewAllLoans }) => {
-  const colors = getThemeColors();
+const ChamaLoansEmptyState = ({ canViewAllLoans, theme }) => {
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (

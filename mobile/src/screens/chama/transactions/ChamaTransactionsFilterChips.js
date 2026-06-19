@@ -7,8 +7,9 @@ import { filters } from './chamaTransactionsUtils';
 const ChamaTransactionsFilterChips = ({
   selectedFilter,
   onSelectFilter,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (

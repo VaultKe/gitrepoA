@@ -10,8 +10,9 @@ const ChamaInvitationCard = ({
   item,
   onResend,
   onCancel,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const statusInfo = getInvitationStatus(item, colors);
   const isExpired = statusInfo.status === 'expired';

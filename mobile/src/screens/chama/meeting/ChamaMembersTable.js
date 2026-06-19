@@ -19,8 +19,9 @@ const ChamaMembersTable = ({
   userRole,
   searchQuery,
   onOpenRoleModal,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -54,6 +55,7 @@ const ChamaMembersTable = ({
                   chamaId={chamaId}
                   currentUser={currentUser}
                   userRole={userRole}
+                  theme={theme}
                   onOpenRoleModal={onOpenRoleModal}
                 />
               )}
@@ -61,7 +63,7 @@ const ChamaMembersTable = ({
               contentContainerStyle={styles.membersList}
               scrollEnabled={false}
               ListEmptyComponent={!loading && filteredMembers.length === 0 && (
-                <ChamaMembersEmptyState type="members" searchQuery={searchQuery} />
+                <ChamaMembersEmptyState type="members" searchQuery={searchQuery} theme={theme} />
               )}
               showsVerticalScrollIndicator={false}
             />

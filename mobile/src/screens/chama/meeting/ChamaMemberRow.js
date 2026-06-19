@@ -13,8 +13,9 @@ const ChamaMemberRow = ({
   currentUser,
   userRole,
   onOpenRoleModal,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   const handleStartChat = async () => {
