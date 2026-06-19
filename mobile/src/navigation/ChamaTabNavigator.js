@@ -8,7 +8,7 @@ import { getThemeColors, spacing, typography, borderRadius } from '../utils/them
 
 // Import Chama Screens
 import ChamaDashboard from '../screens/chama/dashboard/ChamaDashboard';
-import ChamaMembersScreen from '../screens/chama/meeting/ChamaMembersScreen';
+import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
 import ContributeScreen from '../screens/chama/contribute/ContributeScreen';
 import ChamaLoansScreen from '../screens/chama/loans/ChamaLoansScreen';
 import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
@@ -20,7 +20,7 @@ import ChamaSettings from '../screens/chama/settings/ChamaSettings';
 import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import CreateMeeting from '../screens/chama/meeting/CreateMeeting';
 import CreateMerryGoRound from '../screens/chama/merry-go-round/CreateMerryGoRound';
-import InviteMembers from '../screens/chama/chamamember/InviteMembers';
+import InviteMembers from '../screens/chama/meeting/InviteMembers';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
 
@@ -36,7 +36,7 @@ import MaryGoRoundDetails from '../screens/chama/merry-go-round/MaryGoRoundDetai
 import WelfareDetails from '../screens/chama/welfare/WelfareDetails';
 import LoanDetails from '../screens/chama/loans/LoanDetails';
 import ViewMember from '../screens/chama/chamamember/ViewMember';
-import PhysicalMeetingScreen from '../screens/chama/chamamember/PhysicalMeetingScreen';
+import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
 import JitsiMeetScreen from '../screens/chama/meeting/JitsiMeetScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
 import WelfareContributionsScreen from '../screens/chama/welfare/WelfareContributionsScreen';
@@ -48,7 +48,7 @@ import SettingsScreen from '../screens/user/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/user/settings/SecuritySettingsScreen';
 import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
 import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryScreen';
-import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
+import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
 import ChangePasswordScreen from '../screens/security/ChangePasswordScreen';
 import LoginHistoryScreen from '../screens/security/LoginHistoryScreen';

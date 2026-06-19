@@ -14,7 +14,7 @@ import ArticleReaderScreen from '../screens/user/learning/ArticleReaderScreen';
 import CourseNavigationScreen from '../screens/user/learning/CourseNavigationScreen';
 import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
-import PhysicalMeetingScreen from '../screens/chama/chamamember/PhysicalMeetingScreen';
+import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
 import JitsiMeetScreen from '../screens/chama/meeting/JitsiMeetScreen';
 
 // Other User Screens
@@ -37,11 +37,11 @@ import NotificationsScreen from '../screens/user/notification/NotificationsScree
 import ReminderScreen from '../screens/user/reminders/ReminderScreen';
 
 // Chama Screens
-import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
+import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import MyChamasScreen from '../screens/user/chamaandgroups/MyChamasScreen';
 import CreateChamaScreen from '../screens/user/chamaandgroups/CreateChamaScreen';
 import ChamaDetailsScreen from '../screens/user/chamaandgroups/ChamaDetailsScreen';
-import ChamaMembersScreen from '../screens/chama/meeting/ChamaMembersScreen';
+import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
 import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';

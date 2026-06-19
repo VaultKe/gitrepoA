@@ -33,7 +33,7 @@ import SettingsScreen from '../screens/user/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/user/settings/SecuritySettingsScreen';
 import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
 import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryScreen';
-import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
+import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
 import AdminSupportScreen from '../screens/admin/support/AdminSupportScreen';
 import AdminSupportChatScreen from '../screens/admin/support/AdminSupportChatScreen';
