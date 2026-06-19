@@ -29,6 +29,14 @@ const PollsVotingScreen = ({ route, navigation }) => {
   const { chamaId } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
+  const formInputStyle = {
+    backgroundColor: colors.backgroundSecondary,
+    borderColor: colors.border,
+    shadowColor: colors.shadowDark,
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  };
 
   // Responsive layout detection
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -791,79 +799,81 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
     return (
       <View style={{ flex: 1 }}>
-        {/* Table Header */}
-        <View style={[styles.tableHeader, {
-          backgroundColor: colors.primary + '15',
-          borderBottomWidth: 2,
-          borderBottomColor: colors.primary
-        }]}>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Title</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Type</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Total</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Ended</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Action</Text>
-        </View>
-
-        {/* Table Rows */}
-        {paginatedPolls.map((poll, index) => (
-          <View key={poll.id} style={[styles.tableRow, { borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-            <Text style={[styles.tableCell, { color: colors.text }]} numberOfLines={2}>{(poll.title || '').length > 10 ? (poll.title || '').substring(0, 10) + '...' : (poll.title || '')}</Text>
-            <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{(poll.type || 'General').length > 7 ? (poll.type || 'General').substring(0, 7) + '...' : (poll.type || 'General')}</Text>
-            <Text style={[styles.tableCell, { color: colors.textSecondary }]}>
-              {getTotalVotesCast(poll)}/{getTotalEligibleVoters(poll)}
-            </Text>
-            <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{formatTableDate(poll.endsAt)}</Text>
-            <TouchableOpacity
-              style={[styles.actionCell, { backgroundColor: colors.primary + '15' }]}
-              onPress={() => openVisualizationModal(poll)}
-            >
-              <Ionicons name="eye" size={16} color={colors.primary} />
-            </TouchableOpacity>
+        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          {/* Table Header */}
+          <View style={[styles.tableHeader, {
+            backgroundColor: colors.primary + '15',
+            borderBottomWidth: 2,
+            borderBottomColor: colors.primary
+          }]}>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Title</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Type</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Total</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Ended</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Action</Text>
           </View>
-        ))}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <View style={styles.paginationContainer}>
-            <TouchableOpacity
-              style={[styles.paginationButton, {
-                backgroundColor: colors.surface,
-                borderColor: colors.border
-              }, currentPage === 1 && styles.paginationButtonDisabled]}
-              onPress={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? colors.textSecondary : colors.primary} />
-            </TouchableOpacity>
+          {/* Table Rows */}
+          {paginatedPolls.map((poll, index) => (
+            <View key={poll.id} style={[styles.tableRow, { borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+              <Text style={[styles.tableCell, { color: colors.text }]} numberOfLines={2}>{(poll.title || '').length > 10 ? (poll.title || '').substring(0, 10) + '...' : (poll.title || '')}</Text>
+              <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{(poll.type || 'General').length > 7 ? (poll.type || 'General').substring(0, 7) + '...' : (poll.type || 'General')}</Text>
+              <Text style={[styles.tableCell, { color: colors.textSecondary }]}>
+                {getTotalVotesCast(poll)}/{getTotalEligibleVoters(poll)}
+              </Text>
+              <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{formatTableDate(poll.endsAt)}</Text>
+              <TouchableOpacity
+                style={[styles.actionCell, { backgroundColor: colors.primary + '15' }]}
+                onPress={() => openVisualizationModal(poll)}
+              >
+                <Ionicons name="eye" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          ))}
 
-            <Text style={[styles.paginationText, { color: colors.textSecondary }]}>
-              Page {currentPage} of {totalPages}
-            </Text>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                style={[styles.paginationButton, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border
+                }, currentPage === 1 && styles.paginationButtonDisabled]}
+                onPress={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? colors.textSecondary : colors.primary} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.paginationButton, {
-                backgroundColor: colors.surface,
-                borderColor: colors.border
-              }, currentPage === totalPages && styles.paginationButtonDisabled]}
-              onPress={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? colors.textSecondary : colors.primary} />
-            </TouchableOpacity>
-          </View>
-        )}
+              <Text style={[styles.paginationText, { color: colors.textSecondary }]}>
+                Page {currentPage} of {totalPages}
+              </Text>
 
-        {completedPolls.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="checkmark-done" size={64} color={colors.textTertiary} />
-            <Text style={styles.emptyText}>
-              No completed polls yet
-            </Text>
-            <Text style={[styles.emptyText, { fontSize: 14, marginTop: 8 }]}>
-              Completed polls will appear here
-            </Text>
-          </View>
-        )}
+              <TouchableOpacity
+                style={[styles.paginationButton, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border
+                }, currentPage === totalPages && styles.paginationButtonDisabled]}
+                onPress={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? colors.textSecondary : colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {completedPolls.length === 0 && (
+            <View style={styles.emptyState}>
+              <Ionicons name="checkmark-done" size={64} color={colors.textTertiary} />
+              <Text style={styles.emptyText}>
+                No completed polls yet
+              </Text>
+              <Text style={[styles.emptyText, { fontSize: 14, marginTop: 8 }]}>
+                Completed polls will appear here
+              </Text>
+            </View>
+          )}
+        </Card>
       </View>
     );
   };
@@ -1752,8 +1762,9 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 </Text>
                 <TextInput
                   style={[
-                  styles.formInput,
-                  { backgroundColor: colors.primary + '08', color: colors.text },
+                    styles.formInput,
+                    formInputStyle,
+                    { color: colors.text },
                     isDesktop && styles.formInputDesktop
                   ]}
                   value={pollForm.title}
@@ -1775,7 +1786,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 style={[
                   styles.formInput,
                   styles.textArea,
-                  { backgroundColor: colors.primary + '08', color: colors.text },
+                  formInputStyle,
+                  { color: colors.text },
                   isDesktop && styles.formInputDesktop
                 ]}
                 value={pollForm.description}
@@ -1864,7 +1876,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                   <TextInput
                     style={[
                       styles.formInput,
-                      { backgroundColor: colors.primary + '08', color: colors.text },
+                      formInputStyle,
+                      { color: colors.text },
                       isDesktop && styles.formInputDesktop
                     ]}
                     value={memberSearchQuery}
@@ -1996,7 +2009,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                     Justification
                   </Text>
                   <TextInput
-                    style={[styles.formInput, styles.textArea, { backgroundColor: colors.primary + '08', color: colors.text }]}
+                    style={[styles.formInput, styles.textArea, formInputStyle, { color: colors.text }]}
                     value={roleForm.justification}
                     onChangeText={(text) => setRoleForm(prev => ({ ...prev, justification: text }))}
                     placeholder="Explain why this role change is needed"
@@ -2028,7 +2041,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                         style={[
                           styles.formInput,
                           styles.optionInput,
-                  { backgroundColor: colors.primary + '08', color: colors.text },
+                          formInputStyle,
+                          { color: colors.text },
                           isDesktop && styles.formInputDesktop
                         ]}
                         value={option}
@@ -2114,7 +2128,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 Select Candidate Member *
               </Text>
               <TextInput
-                style={[styles.formInput, { backgroundColor: colors.primary + '08', color: colors.text }]}
+                style={[styles.formInput, formInputStyle, { color: colors.text }]}
                 value={memberSearchQuery}
                 onChangeText={handleMemberSearch}
                 placeholder="Search members by name, email, or role"
@@ -2200,7 +2214,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 Justification
               </Text>
               <TextInput
-                style={[styles.formInput, styles.textArea, { backgroundColor: colors.primary + '08', color: colors.text }]}
+                style={[styles.formInput, styles.textArea, formInputStyle, { color: colors.text }]}
                 value={roleForm.justification}
                 onChangeText={(text) => setRoleForm(prev => ({ ...prev, justification: text }))}
                 placeholder="Explain why this role change is needed"
