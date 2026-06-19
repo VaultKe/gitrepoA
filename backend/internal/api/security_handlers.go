@@ -264,9 +264,18 @@ func GetLoginHistory(c *gin.Context) {
 
 		// Try to insert this session into the database for future reference
 		insertQuery := `
-			INSERT OR REPLACE INTO login_sessions
+			INSERT INTO login_sessions
 			(id, user_id, device_type, device_name, operating_system, browser, ip_address, location, is_current)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
+			ON CONFLICT (id) DO UPDATE SET
+				user_id = $2,
+				device_type = $3,
+				device_name = $4,
+				operating_system = $5,
+				browser = $6,
+				ip_address = $7,
+				location = $8,
+				is_current = TRUE
 		`
 		_, err := db.(*sql.DB).Exec(insertQuery,
 			currentSession.ID, currentSession.UserID, currentSession.DeviceType,

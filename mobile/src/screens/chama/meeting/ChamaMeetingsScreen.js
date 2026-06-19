@@ -250,7 +250,6 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
       } catch (apiError) {
         console.error('API call failed:', apiError);
 
-        // Check if it's a specific database error
         if (apiError.message && apiError.message.includes('no such column')) {
           console.error('Database schema error detected - backend needs to be updated');
         }
@@ -422,7 +421,7 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
       // Show status-appropriate message
       if (isMeetingStartingSoon) {
         Alert.alert(
-          '⏰ Meeting Starting Soon',
+          'Meeting Starting Soon',
           `"${meeting.title}" will start in a few minutes.\n\nYou can join the virtual meeting room now.`,
           [
             { text: 'Wait', style: 'cancel' },
@@ -447,7 +446,6 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
                         meetingData: meeting,
                       });
                     } else {
-                      // We're in chama context
                       navigation.navigate('OnlineMeeting', {
                         meetingId: meeting.id,
                         meetingTitle: meeting.title,
@@ -456,10 +454,8 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
                       });
                     }
                   } catch (navError) {
-                    // Try to navigate to chama dashboard first, then to meeting
                     try {
                       if (meeting.chamaId) {
-                        // Navigate to chama dashboard first
                         navigation.navigate('ChamaDashboard', {
                           screen: 'ChamaTabs',
                           params: {
@@ -476,7 +472,7 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
                         throw new Error('No chama ID available for navigation');
                       }
                     } catch (altNavError) {
-                      console.error('❌ Alternative navigation failed:', altNavError);
+                      console.error('Alternative navigation failed:', altNavError);
                       Alert.alert(
                         'Navigation Error',
                         'Unable to join meeting through app navigation. This may be due to chama membership restrictions.',
@@ -488,7 +484,7 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
                   }
                 }
               } catch (error) {
-                console.error('❌ Navigation error:', error);
+                console.error('Navigation error:', error);
                 Alert.alert('Navigation Error', `Failed to join meeting: ${error.message}. Please try again.`);
               }
             }}
@@ -525,10 +521,8 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
                 });
               }
             } catch (navError) {
-              // Try to navigate to chama dashboard first, then to meeting
               try {
                 if (meeting.chamaId) {
-                  // Navigate to chama dashboard first
                   navigation.navigate('ChamaDashboard', {
                     screen: 'ChamaTabs',
                     params: {
@@ -556,15 +550,13 @@ const ChamaMeetingsScreen = ({ route, navigation, onRouteChange }) => {
             }
           }
         } catch (error) {
-          console.error('❌ Navigation error:', error);
+          console.error('Navigation error:', error);
           Alert.alert('Navigation Error', 'Failed to join meeting. Please try again.');
         }
       }
     } else if (meetingType === 'physical') {
       navigateToPhysicalMeeting(meeting);
     } else if (meetingType === 'hybrid') {
-      // Show options for hybrid meeting
-      console.log('🔄 Showing hybrid meeting options...');
       const statusText = isMeetingActive
         ? 'The meeting is currently in progress.'
         : isMeetingStartingSoon
@@ -1632,18 +1624,18 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing.md / 2,
   },
   meetingCard: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   meetingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   meetingInfo: {
     flex: 1,
     marginRight: spacing.md,
-    minHeight: 80,
+    minHeight: 40,
   },
   meetingTitle: {
     fontSize: typography.fontSize.lg,
@@ -1658,9 +1650,9 @@ const styles = StyleSheet.create({
   },
   meetingDescription: {
     fontSize: typography.fontSize.base,
-    lineHeight: 24,
+    lineHeight: 18,
     fontWeight: '600',
-    minHeight: 50,
+    minHeight: 30,
     paddingVertical: spacing.xs,
     letterSpacing: 0.4,
   },
@@ -1873,15 +1865,15 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   meetingDetails: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   detailText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.xs,
     marginLeft: spacing.sm,
   },
   timeStatus: {
@@ -1890,8 +1882,8 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
   },
   agendaSection: {
-    marginBottom: spacing.md,
-    paddingTop: spacing.md,
+    marginBottom: spacing.sm,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -1901,19 +1893,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   agendaItem: {
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    marginBottom: spacing.xxs,
     lineHeight: typography.lineHeight.relaxed,
   },
   cardJoinButtonSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
   },
   cardJoinButton: {
     width: '100%',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
     shadowColor: '#000',
     shadowOffset: {
@@ -2059,7 +2051,7 @@ const styles = StyleSheet.create({
   tableControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     gap: spacing.md,
   },
   searchContainer: {
@@ -2095,7 +2087,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 2,
     borderBottomColor: 'rgba(0, 0, 0, 0.1)',
@@ -2107,7 +2099,7 @@ const styles = StyleSheet.create({
   },
   tableRow: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',

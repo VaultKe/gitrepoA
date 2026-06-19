@@ -69,8 +69,6 @@ func GetWalletBalance(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("🔍 GetWalletBalance called for user: %s\n", userID)
-
 	// Get database connection
 	db, exists := c.Get("db")
 	if !exists {

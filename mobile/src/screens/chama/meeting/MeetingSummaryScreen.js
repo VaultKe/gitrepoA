@@ -20,22 +20,20 @@ import Card from '../../../components/common/Card';
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableContainer: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
+    flex: 1,
   },
   tableHeader: {
     flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
     backgroundColor: colors.surface,
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
   },
   tableRow: {
     flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -71,9 +69,9 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
+    paddingVertical: 2,
     borderRadius: borderRadius.sm,
-    gap: spacing.xs,
+    gap: 2,
   },
 });
 import api from '../../../services/api';
@@ -107,7 +105,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
   const attendancePageSize = 10;
 
   const handleDocumentPress = async (document) => {
-    if (!document.url) {
+    if (!document || !document.url) {
       Toast.show({ type: 'info', text1: 'Document URL Missing' });
       return;
     }
@@ -119,9 +117,13 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
         fileUrl = document.url;
       } else {
         // Ensure the base URL doesn't have trailing slash and document URL has leading slash
-        const baseUrl = api.baseURL.replace('/api/v1', '').replace(/\/$/, '');
+        const baseUrl = api.getApiBaseUrl();
+        if (!baseUrl) {
+          throw new Error('API base URL is not configured');
+        }
+        const normalizedBaseUrl = baseUrl.replace('/api/v1', '').replace(/\/$/, '');
         const docUrl = document.url.startsWith('/') ? document.url : `/${document.url}`;
-        fileUrl = `${baseUrl}${docUrl}`;
+        fileUrl = `${normalizedBaseUrl}${docUrl}`;
       }
 
       const fileName = document.name || fileUrl.split('/').pop() || 'document';
@@ -467,11 +469,12 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
         </Card>
 
         {/* Attendance Details Table */}
-        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.md }]}>Attendance Details</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.sm }]}>Attendance Details</Text>
         {totalAttendanceItems > 0 ? (
-          <View style={styles.attendanceTable}>
-            {/* Table Header */}
-            <View style={tableStyles.tableHeader}>
+          <Card variant="outlined" style={styles.attendanceCard}>
+            <View style={styles.attendanceTable}>
+              {/* Table Header */}
+              <View style={tableStyles.tableHeader}>
               <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
                 <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member Name</Text>
               </View>
@@ -528,33 +531,34 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
             ))}
 
             {/* Pagination */}
-            {totalAttendanceItems > attendancePageSize && (
-              <View style={styles.paginationContainer}>
-                <TouchableOpacity
-                  style={[styles.paginationButton, attendancePage === 1 && styles.paginationButtonDisabled]}
-                  onPress={() => attendancePage > 1 && setAttendancePage(attendancePage - 1)}
-                  disabled={attendancePage === 1}
-                >
-                  <Ionicons name="chevron-back" size={16} color={attendancePage === 1 ? colors.textTertiary : colors.primary} />
-                  <Text style={[styles.paginationText, attendancePage === 1 && styles.paginationTextDisabled]}>Previous</Text>
-                </TouchableOpacity>
+{totalAttendanceItems > attendancePageSize && (
+               <View style={styles.paginationContainer}>
+                 <TouchableOpacity
+                   style={[styles.paginationButton, attendancePage === 1 && styles.paginationButtonDisabled]}
+                   onPress={() => attendancePage > 1 && setAttendancePage(attendancePage - 1)}
+                   disabled={attendancePage === 1}
+                 >
+                   <Ionicons name="chevron-back" size={16} color={attendancePage === 1 ? colors.textTertiary : colors.primary} />
+                   <Text style={[styles.paginationText, attendancePage === 1 && styles.paginationTextDisabled]}>Previous</Text>
+                 </TouchableOpacity>
 
-                <Text style={styles.paginationInfo}>
-                  Page {attendancePage} of {totalAttendancePages} ({totalAttendanceItems} total)
-                </Text>
+                 <Text style={styles.paginationInfo}>
+                   Page {attendancePage} of {totalAttendancePages} ({totalAttendanceItems} total)
+                 </Text>
 
-                <TouchableOpacity
-                  style={[styles.paginationButton, attendancePage === totalAttendancePages && styles.paginationButtonDisabled]}
-                  onPress={() => attendancePage < totalAttendancePages && setAttendancePage(attendancePage + 1)}
-                  disabled={attendancePage === totalAttendancePages}
-                >
-                  <Text style={[styles.paginationText, attendancePage === totalAttendancePages && styles.paginationTextDisabled]}>Next</Text>
-                  <Ionicons name="chevron-forward" size={16} color={attendancePage === totalAttendancePages ? colors.textTertiary : colors.primary} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        ) : (
+                 <TouchableOpacity
+                   style={[styles.paginationButton, attendancePage === totalAttendancePages && styles.paginationButtonDisabled]}
+                   onPress={() => attendancePage < totalAttendancePages && setAttendancePage(attendancePage + 1)}
+                   disabled={attendancePage === totalAttendancePages}
+                 >
+                   <Text style={[styles.paginationText, attendancePage === totalAttendancePages && styles.paginationTextDisabled]}>Next</Text>
+                   <Ionicons name="chevron-forward" size={16} color={attendancePage === totalAttendancePages ? colors.textTertiary : colors.primary} />
+                 </TouchableOpacity>
+               </View>
+             )}
+           </View>
+          </Card>
+         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
             <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No attendance data available</Text>
@@ -726,7 +730,7 @@ const styles = StyleSheet.create({
   meetingHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   meetingHeaderInfo: {
     flex: 1,
@@ -809,8 +813,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   overviewCard: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
+    marginBottom: spacing.sm,
     marginHorizontal: -spacing.sm,
   },
   detailsTitle: {
@@ -856,6 +859,11 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: typography.fontSize.sm,
   },
+  attendanceCard: {
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    marginHorizontal: -spacing.sm,
+  },
   attendanceList: {
     marginTop: spacing.md,
   },
@@ -895,16 +903,15 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
   },
-  minutesCard: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
+minutesCard: {
+    marginBottom: spacing.sm,
     marginHorizontal: -spacing.sm,
   },
   minutesContent: {
     fontSize: typography.fontSize.base,
     lineHeight: typography.fontSize.base * 1.6,
-    marginBottom: spacing.md,
-    padding: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
     borderRadius: borderRadius.md,
     backgroundColor: 'rgba(0, 0, 0, 0.02)',
   },
@@ -921,8 +928,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   documentsCard: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
+    marginBottom: spacing.sm,
     marginHorizontal: -spacing.sm,
   },
   documentItem: {
@@ -1002,9 +1008,8 @@ const styles = StyleSheet.create({
 
   // Attendance Table Styles
   attendanceTable: {
-    marginTop: spacing.md,
+    width: '100%',
   },
-
 
 });
 

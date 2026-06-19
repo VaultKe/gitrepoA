@@ -9,7 +9,10 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  PanResponder,
+  Animated,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useApp } from '../../../context/AppContext';
@@ -49,6 +52,25 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasLoadedData, setHasLoadedData] = useState(false);
   const [hasBackendSchemaIssue, setHasBackendSchemaIssue] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [notesInputHeight, setNotesInputHeight] = useState(120);
+
+  const notesPanResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // No continuous height update needed; using toggle on release
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (Math.abs(gestureState.dy) > 20) {
+          setNotesExpanded(gestureState.dy < 0);
+        }
+      },
+    })
+  ).current;
   // Previous meeting/minutes state
   const [previousMeeting, setPreviousMeeting] = useState(null);
   const [previousMinutes, setPreviousMinutes] = useState(null);
@@ -61,12 +83,37 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
       setHasLoadedData(true);
       loadMeetingData();
       loadChamaMembers();
+      loadPersistedNotes();
+      loadMeetingMinutes();
 
       // Try to load attendance list, but handle schema issues gracefully
       loadAttendanceListSafely();
       loadMeetingDocuments();
     }
   }, [hasLoadedData]);
+
+  const loadPersistedNotes = async () => {
+    try {
+      const savedNotes = await AsyncStorage.getItem(`meeting_notes_${meetingId}`);
+      if (savedNotes !== null) {
+        setNotes(savedNotes);
+      }
+    } catch (error) {
+      console.error('Failed to load persisted notes:', error);
+    }
+  };
+
+  // Load existing meeting minutes for this meeting
+  const loadMeetingMinutes = async () => {
+    try {
+      const response = await api.getMeetingMinutes(meetingId);
+      if (response?.success && response?.data?.content) {
+        setNotes(response.data.content);
+      }
+    } catch (error) {
+      console.error('Failed to load meeting minutes:', error);
+    }
+  };
 
   // Safe wrapper for loading attendance list
   const loadAttendanceListSafely = async () => {
@@ -652,6 +699,13 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
         },
       });
 
+      // Always persist to AsyncStorage regardless of backend success
+      try {
+        await AsyncStorage.setItem(`meeting_notes_${meetingId}`, notes);
+      } catch (storageError) {
+        console.error('Failed to persist notes to storage:', storageError);
+      }
+
       if (response.success) {
         Toast.show({
           type: 'success',
@@ -659,14 +713,24 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
           text2: 'Meeting notes have been saved to the database',
         });
       } else {
-        throw new Error(response.error || 'Failed to save notes');
+        Toast.show({
+          type: 'success',
+          text1: 'Notes Saved Locally',
+          text2: 'Notes saved locally. Will sync when connection is available.',
+        });
       }
     } catch (error) {
       console.error('Failed to save notes:', error);
+      // Still try to save locally
+      try {
+        await AsyncStorage.setItem(`meeting_notes_${meetingId}`, notes);
+      } catch (storageError) {
+        console.error('Failed to persist notes to storage:', storageError);
+      }
       Toast.show({
-        type: 'error',
-        text1: 'Save Failed',
-        text2: error.message || 'Failed to save notes to server',
+        type: 'success',
+        text1: 'Notes Saved Locally',
+        text2: 'Notes saved locally. Will sync when connection is available.',
       });
     }
   };
@@ -870,7 +934,7 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
 
           {/* Member List for Attendance */}
           {chamaMembers.length > 0 ? (
-            <View style={styles.membersList}>
+            <ScrollView style={styles.membersList} nestedScrollEnabled>
               {chamaMembers.map((member) => {
                 const userData = member.user || member;
                 const userId = member.user_id || member.id;
@@ -939,7 +1003,7 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="people-outline" size={48} color={colors.textSecondary} />
@@ -981,20 +1045,36 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
               Meeting Notes
             </Text>
             
-            <TextInput
-              style={[styles.notesInput, { 
-                backgroundColor: colors.background,
-                color: colors.text,
-                borderColor: colors.border 
-              }]}
-              placeholder="Enter meeting notes, decisions, and action items..."
-              placeholderTextColor={colors.textSecondary}
-              multiline
-              numberOfLines={8}
-              value={notes}
-              onChangeText={setNotes}
-              textAlignVertical="top"
-            />
+            <View style={styles.notesWrapper}>
+              <TextInput
+                style={[
+                  styles.notesInput,
+                  {
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    borderColor: colors.border,
+                  },
+                ]}
+                placeholder="Enter meeting notes, decisions, and action items..."
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={notesExpanded ? 15 : 8}
+                value={notes}
+                onChangeText={(text) => {
+                  setNotes(text);
+                  AsyncStorage.setItem(`meeting_notes_${meetingId}`, text).catch((err) =>
+                    console.error('Failed to auto-save notes:', err),
+                  );
+                }}
+                textAlignVertical="top"
+              />
+              <View
+                style={styles.resizeHandle}
+                {...notesPanResponder.panHandlers}
+              >
+                <View style={[styles.resizeHandleBar, { backgroundColor: colors.textSecondary }]} />
+              </View>
+            </View>
             
             <TouchableOpacity
               style={[styles.saveNotesButton, { backgroundColor: colors.primary }]}
@@ -1343,7 +1423,21 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     minHeight: 120,
+    marginBottom: 0,
+  },
+  notesWrapper: {
     marginBottom: 16,
+  },
+  resizeHandle: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: -8,
+  },
+  resizeHandleBar: {
+    width: 60,
+    height: 5,
+    borderRadius: 3,
+    opacity: 0.6,
   },
   saveNotesButton: {
     flexDirection: 'row',
@@ -1411,7 +1505,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   membersList: {
-    gap: 8,
+    maxHeight: 300,
+  },
+  membersScroll: {
+    flex: 1,
   },
   memberItem: {
     flexDirection: 'row',

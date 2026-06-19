@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../../components/common/Card';
+import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 
 const ChamaMeetingsTable = ({
@@ -21,7 +22,8 @@ const ChamaMeetingsTable = ({
   onAttend,
   onDelete,
 }) => {
-  const colors = getThemeColors();
+  const { theme } = useApp();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   const renderMeetingRow = ({ item, index }) => {
@@ -31,9 +33,9 @@ const ChamaMeetingsTable = ({
     return (
       <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
         <View style={[styles.tableCell, styles.titleCell]}>
-          <Text style={[styles.tableCellText, styles.tableCellTextDefault]} numberOfLines={2}>
-            {item.title.length > 10 ? `${item.title.substring(0, 10)}..` : item.title}
-          </Text>
+<Text style={[styles.tableCellText, styles.tableCellTextDefault]} numberOfLines={2}>
+             {item.title.length > 30 ? `${item.title.substring(0, 30)}..` : item.title}
+           </Text>
         </View>
         <View style={[styles.tableCell, styles.dateCell]}>
           <Text style={[styles.tableCellText, styles.tableCellTextDefault]}>
@@ -205,7 +207,6 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 8,
     width: '100%',
     alignSelf: 'stretch',
-    padding: spacing.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -221,7 +222,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
@@ -234,11 +235,11 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   titleCell: {
-    flex: 2,
+    flex: 1.5,
     alignItems: 'flex-start',
   },
   dateCell: {
-    flex: 1.5,
+    flex: 1,
   },
   locationCell: {
     flex: 1,
@@ -248,6 +249,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   actionsCell: {
     flex: 1.5,
+    flexDirection: 'row',
+    gap: 4,
   },
   tableHeaderText: {
     fontSize: 9,
@@ -268,7 +271,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableRowEven: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
@@ -277,7 +280,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableRowOdd: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',

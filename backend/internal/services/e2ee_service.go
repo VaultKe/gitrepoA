@@ -571,10 +571,17 @@ func (s *MilitaryGradeE2EEService) validateEncryptedMessage(msg *EncryptedMessag
 // storeKeyBundle stores a user's key bundle in the database
 func (s *MilitaryGradeE2EEService) storeKeyBundle(keyBundle *KeyBundle) error {
 	query := `
-		INSERT OR REPLACE INTO e2ee_key_bundles (
+		INSERT INTO e2ee_key_bundles (
 			user_id, identity_key, signed_pre_key, pre_key_signature,
 			one_time_pre_keys, registration_id, created_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (user_id) DO UPDATE SET
+			identity_key = $2,
+			signed_pre_key = $3,
+			pre_key_signature = $4,
+			one_time_pre_keys = $5,
+			registration_id = $6,
+			created_at = $7
 	`
 
 	oneTimePreKeysJSON, err := json.Marshal(keyBundle.OneTimePreKeys)
@@ -908,10 +915,19 @@ func (s *MilitaryGradeE2EEService) createSession(userAID, userBID string) (*Sess
 // storeSession stores a session in the database
 func (s *MilitaryGradeE2EEService) storeSession(session *Session) error {
 	query := `
-		INSERT OR REPLACE INTO e2ee_sessions (
+		INSERT INTO e2ee_sessions (
 			id, user_a_id, user_b_id, shared_secret, sending_chain,
 			receiving_chain, message_number, created_at, last_used
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (id) DO UPDATE SET
+			user_a_id = $2,
+			user_b_id = $3,
+			shared_secret = $4,
+			sending_chain = $5,
+			receiving_chain = $6,
+			message_number = $7,
+			created_at = $8,
+			last_used = $9
 	`
 
 	_, err := s.db.Exec(query,
