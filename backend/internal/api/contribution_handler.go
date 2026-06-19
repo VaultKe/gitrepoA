@@ -43,7 +43,7 @@ func MakeContribution(c *gin.Context) {
 		Amount        float64 `json:"amount" binding:"required" validate:"required,amount"`
 		Description   string  `json:"description" validate:"max=200,safe_text,no_sql_injection,no_xss"`
 		Type          string  `json:"type" validate:"alphanumeric"` // "regular", "penalty", "special"
-		PaymentMethod string  `json:"paymentMethod" validate:"alphanumeric,max=50"` // "wallet", "mpesa", "cash", or "cheque"
+		PaymentMethod string  `json:"paymentMethod" validate:"alphanumeric,max=50"` // "wallet", "mpesa", "cash""
 		MpesaReference string `json:"mpesaReference,omitempty"` // For M-Pesa payments
 		Status        string  `json:"status,omitempty"` // For pending M-Pesa payments
 		IsAnonymous   bool    `json:"isAnonymous,omitempty"` // For anonymous contributions in contribution groups
@@ -182,19 +182,11 @@ func MakeContribution(c *gin.Context) {
 			return
 		}
 
-		// PAYMENT METHOD RESTRICTIONS: No anonymous or cheque payments for merry-go-round
+		// PAYMENT METHOD RESTRICTIONS: No anonymous  payments for merry-go-round
 		if req.IsAnonymous {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
 				"error":   "Anonymous contributions are not allowed for merry-go-round. All contributions must be traceable to maintain fairness.",
-			})
-			return
-		}
-
-		if req.PaymentMethod == "cheque" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Cheque payments are not allowed for merry-go-round contributions. Only wallet and M-Pesa payments are permitted.",
 			})
 			return
 		}
@@ -210,18 +202,17 @@ func MakeContribution(c *gin.Context) {
 		"wallet": true,
 		"mpesa":  true,
 		"cash":   true,
-		"cheque": true,
 	}
 	if !validPaymentMethods[req.PaymentMethod] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Invalid payment method. Must be 'wallet', 'mpesa', 'cash', or 'cheque'",
+			"error":   "Invalid payment method. Must be 'wallet', 'mpesa', 'cash'",
 		})
 		return
 	}
 
-	// For cash and cheque contributions, validate treasurer role and additional fields
-	if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
+	// For cash contributions, validate treasurer role and additional fields
+	if req.PaymentMethod == "cash" {
 		// Get database connection
 		db, exists := c.Get("db")
 		if !exists {
@@ -249,23 +240,23 @@ func MakeContribution(c *gin.Context) {
 		if userRole != "treasurer" && userRole != "chairperson" {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
-				"error":   "Only treasurers and chairpersons can record cash and cheque contributions",
+				"error":   "Only treasurers and chairpersons can record cash contributions",
 			})
 			return
 		}
 
-		// Validate required fields for cash and cheque contributions
+		// Validate required fields for cash contributions
 		if req.ContributorID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Contributor ID is required for cash and cheque contributions",
+				"error":   "Contributor ID is required for cash contributions",
 			})
 			return
 		}
 
 		// Set cash type based on payment method
 		if req.CashType == "" {
-			req.CashType = req.PaymentMethod // "cash" or "cheque"
+			req.CashType = req.PaymentMethod // "cash""
 		}
 
 		// Verify that the contributor is a member of the chama
@@ -361,7 +352,7 @@ func MakeContribution(c *gin.Context) {
 		// The M-Pesa callback will handle the actual payment processing
 		// This is just creating a contribution record
 		fmt.Printf("Creating M-Pesa contribution record with reference: %s\n", req.MpesaReference)
-	} else if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
+	} else if req.PaymentMethod == "cash"{
 	}
 
 	// Add to chama wallet
@@ -440,8 +431,7 @@ func MakeContribution(c *gin.Context) {
 		metadata["displayName"] = "Anonymous"
 	}
 
-	// Add cash/cheque-specific metadata
-	if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
+	if req.PaymentMethod == "cash" {
 		metadata["contributorId"] = req.ContributorID
 		metadata["cashType"] = req.CashType
 		metadata["recordedBy"] = userID // The treasurer who recorded this
@@ -449,7 +439,7 @@ func MakeContribution(c *gin.Context) {
 
 	metadataJSON, _ := json.Marshal(metadata)
 	transactionInitiator := userID
-	if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
+	if req.PaymentMethod == "cash" {
 		transactionInitiator = req.ContributorID
 	}
 	transactionRecipient := req.ChamaID
@@ -499,10 +489,9 @@ func MakeContribution(c *gin.Context) {
 
 	// Update member's total contributions only for completed transactions
 	if transactionStatus == "completed" {
-		// For cash and cheque contributions, update the actual contributor's record
 		// For other methods, update the current user's record
 		contributorUserID := userID
-		if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
+		if req.PaymentMethod == "cash" {
 			contributorUserID = req.ContributorID
 		}
 
@@ -579,8 +568,6 @@ func MakeContribution(c *gin.Context) {
 		message = "M-Pesa contribution initiated successfully"
 	} else if req.PaymentMethod == "cash" {
 		message = "Cash contribution recorded successfully"
-	} else if req.PaymentMethod == "cheque" {
-		message = "Cheque contribution recorded successfully"
 	} else {
 		message = "Contribution made successfully"
 	}
@@ -598,8 +585,8 @@ func MakeContribution(c *gin.Context) {
 		"createdAt":     time.Now().Format(time.RFC3339),
 	}
 
-	// Add cash/cheque-specific fields to response
-	if req.PaymentMethod == "cash" || req.PaymentMethod == "cheque" {
+	// Add cash specific fields to response
+	if req.PaymentMethod == "cash" {
 		responseData["contributorId"] = req.ContributorID
 		responseData["cashType"] = req.CashType
 		responseData["recordedBy"] = userID
@@ -612,7 +599,7 @@ func MakeContribution(c *gin.Context) {
 	})
 }
 
-// GetChamaMembersForContributions returns list of chama members for cash and cheque contribution selection
+// GetChamaMembersForContributions returns list of chama members for cash contribution selection
 func GetChamaMembersForContributions(c *gin.Context) {
 	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("userID")
@@ -660,7 +647,7 @@ func GetChamaMembersForContributions(c *gin.Context) {
 	if userRole != "treasurer" && userRole != "chairperson" {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
-			"error":   "Only treasurers and chairpersons can access member list for cash and cheque contributions",
+			"error":   "Only treasurers and chairpersons can access member list for cash contributions",
 		})
 		return
 	}

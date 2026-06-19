@@ -13,8 +13,9 @@ const ChamaMembersHeaderCard = ({
   sentInvitationsCount,
   canManageMembers,
   setActiveTab,
+  theme,
 }) => {
-  const colors = getThemeColors();
+  const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
   return (

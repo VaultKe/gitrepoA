@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ApiService from '../../../services/api';
-import { getThemeColors, spacing } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import { formatRoleLabel, getMemberName, getRoleColor, getRoleIcon } from './chamaMembersUtils';
 
 const ChamaMemberRow = ({
@@ -16,7 +16,22 @@ const ChamaMemberRow = ({
   theme,
 }) => {
   const colors = getThemeColors(theme);
-  const styles = createStyles(colors);
+
+  const rowBackground = index % 2 === 0 ? colors.background : colors.surface;
+
+  const roleBadgeBg = {
+    chairperson: colors.warning + '20',
+    treasurer: colors.warning + '20',
+    secretary: colors.warning + '20',
+    assistant: colors.secondary + '20',
+  }[item.role] || colors.textSecondary + '20';
+
+  const roleBadgeColor = {
+    chairperson: colors.warning,
+    treasurer: colors.warning,
+    secretary: colors.warning,
+    assistant: colors.secondary,
+  }[item.role] || colors.textSecondary;
 
   const handleStartChat = async () => {
     try {
@@ -46,47 +61,47 @@ const ChamaMemberRow = ({
   };
 
   return (
-    <View style={index % 2 === 0 ? styles.memberTableRowEven : styles.memberTableRowOdd}>
-      <View style={styles.memberNameCell}>
-        <Text style={styles.memberNameText}>{getMemberName(item)}</Text>
+    <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: rowBackground, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
+      <View style={{ flex: 3, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
+        <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{getMemberName(item)}</Text>
       </View>
 
-      <View style={styles.roleCell}>
+      <View style={{ flex: 1.5, minWidth: 76, alignItems: 'center', justifyContent: 'center' }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.roleScrollContent}
+          contentContainerStyle={{ paddingRight: spacing.xs }}
         >
           <TouchableOpacity
-            style={getMemberRoleBadgeStyle(item.role, styles)}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4, borderRadius: borderRadius.sm, backgroundColor: roleBadgeBg }}
             onPress={() => onOpenRoleModal(item)}
           >
             <Ionicons
               name={getRoleIcon(item.role)}
               size={10}
-              color={getRoleColor(item.role, colors)}
+              color={roleBadgeColor}
             />
-            <Text style={getMemberRoleTextStyle(item.role, styles)}>
+            <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: roleBadgeColor, marginLeft: spacing.xs }}>
               {formatRoleLabel(item.role)}
             </Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
 
-      <View style={styles.centeredCell}>
-        <Text style={styles.memberTableText}>
+      <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: colors.text }}>
           {item.attendance_rate?.toFixed(1) || 0}%
         </Text>
       </View>
 
-      <View style={styles.reputationCell}>
+      <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}>
         <Ionicons name="star" size={12} color={colors.warning} />
-        <Text style={styles.memberTableText}>{item.reputation_score?.toFixed(1) || 0}</Text>
+        <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: colors.text }}>{item.reputation_score?.toFixed(1) || 0}</Text>
       </View>
 
-      <View style={styles.actionCell}>
+      <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
         <TouchableOpacity
-          style={styles.iconButtonPrimary}
+          style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center' }}
           onPress={() => {
             navigation.navigate('ViewMember', {
               memberId: item.user_id,
@@ -104,7 +119,7 @@ const ChamaMemberRow = ({
 
         {item.user_id !== currentUser?.id && (
           <TouchableOpacity
-            style={styles.iconButtonSecondary}
+            style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.secondary + '20', alignItems: 'center', justifyContent: 'center' }}
             onPress={handleStartChat}
           >
             <Ionicons name="chatbubble" size={12} color={colors.secondary} />
@@ -114,137 +129,5 @@ const ChamaMemberRow = ({
     </View>
   );
 };
-
-const getMemberRoleBadgeStyle = (role, styles) => {
-  switch (role) {
-    case 'chairperson':
-    case 'treasurer':
-    case 'secretary':
-      return [styles.roleBadge, styles.roleBadgeWarning];
-    case 'assistant':
-      return [styles.roleBadge, styles.roleBadgeSecondary];
-    default:
-      return [styles.roleBadge, styles.roleBadgeMuted];
-  }
-};
-
-const getMemberRoleTextStyle = (role, styles) => {
-  switch (role) {
-    case 'chairperson':
-    case 'treasurer':
-    case 'secretary':
-      return [styles.roleText, styles.roleTextWarning];
-    case 'assistant':
-      return [styles.roleText, styles.roleTextSecondary];
-    default:
-      return [styles.roleText, styles.roleTextMuted];
-  }
-};
-
-const createStyles = (colors) => StyleSheet.create({
-  memberTableRowEven: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    alignItems: 'center',
-  },
-  memberTableRowOdd: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    alignItems: 'center',
-  },
-  memberNameCell: {
-    flex: 3,
-    justifyContent: 'center',
-  },
-  memberNameText: {
-    fontSize: 8.5,
-    fontWeight: 'medium',
-    color: colors.text,
-  },
-  roleCell: {
-    flex: 1.5,
-    minWidth: 76,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleScrollContent: {
-    paddingRight: spacing.xs,
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  roleBadgeWarning: {
-    backgroundColor: colors.warning + '20',
-  },
-  roleBadgeSecondary: {
-    backgroundColor: colors.secondary + '20',
-  },
-  roleBadgeMuted: {
-    backgroundColor: colors.textSecondary + '20',
-  },
-  roleText: {
-    fontSize: 8.5,
-    fontWeight: 'medium',
-    marginLeft: spacing.xs,
-  },
-  roleTextWarning: {
-    color: colors.warning,
-  },
-  roleTextSecondary: {
-    color: colors.secondary,
-  },
-  roleTextMuted: {
-    color: colors.textSecondary,
-  },
-  centeredCell: {
-    flex: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memberTableText: {
-    fontSize: 8.5,
-    fontWeight: 'medium',
-    color: colors.text,
-  },
-  reputationCell: {
-    flex: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  actionCell: {
-    flex: 1.5,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
-  iconButtonPrimary: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconButtonSecondary: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.secondary + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
 
 export default ChamaMemberRow;

@@ -4,14 +4,13 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
-  StyleSheet,
   ScrollView,
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, shadows } from '../../../utils/theme';
+import { getThemeColors } from '../../../utils/theme';
 import ApiService from '../../../services/api';
 import ChamaMembersHeaderCard from './ChamaMembersHeaderCard';
 import ChamaMembersTable from './ChamaMembersTable';
@@ -24,7 +23,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const { chamaId } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
-  const styles = createStyles(colors);
 
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -250,16 +248,16 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, styles.containerBackground]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         <ChamaMembersLoading />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, styles.containerBackground]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView
-        style={styles.pageScroll}
+        style={{ flex: 1 }}
         nestedScrollEnabled
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -279,6 +277,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           sentInvitationsCount={sentInvitations.length}
           canManageMembers={canManageMembers}
           setActiveTab={setActiveTab}
+          theme={theme}
         />
 
         {activeTab === 'members' ? (
@@ -307,19 +306,20 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
             searchQuery={searchQuery}
             onResendInvitation={handleResendInvitation}
             onCancelInvitation={handleCancelInvitation}
+            theme={theme}
           />
         )}
 
         {canManageMembers() && (
           <TouchableOpacity
-            style={[styles.fab, styles.fabPrimary]}
+            style={{ position: 'absolute', bottom: 32, right: 32, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 }}
             onPress={handleInvitePress}
           >
             <Ionicons name="person-add" size={24} color={colors.white} />
           </TouchableOpacity>
         )}
 
-        <View style={styles.bottomSpacer} />
+        <View style={{ height: 60 }} />
       </ScrollView>
 
       <ChamaMemberRoleModal
@@ -336,39 +336,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
       />
     </SafeAreaView>
   );
-};
-
-const createStyles = (colors) => {
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-    },
-    containerBackground: {
-      backgroundColor: colors.background,
-    },
-    pageScroll: {
-      flex: 1,
-    },
-    bottomSpacer: {
-      height: spacing.xxxl,
-    },
-    fab: {
-      position: 'absolute',
-      bottom: spacing.xl,
-      right: spacing.xl,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      alignItems: 'center',
-      justifyContent: 'center',
-      ...shadows.lg,
-    },
-    fabPrimary: {
-      backgroundColor: colors.primary,
-    },
-  });
-
-  return styles;
 };
 
 export default ChamaMembersScreen;

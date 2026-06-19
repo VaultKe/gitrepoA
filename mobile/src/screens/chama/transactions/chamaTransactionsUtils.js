@@ -36,7 +36,7 @@ export const getTransactionUserName = (item, chamaMembers = []) => {
     return 'Anonymous';
   }
 
-  if ((item.paymentMethod === 'cash' || item.paymentMethod === 'cheque') && item.metadata?.contributorId) {
+  if ((item.paymentMethod === 'cash') && item.metadata?.contributorId) {
     const contributor = chamaMembers.find(member =>
       member.id === item.metadata.contributorId ||
       member.user_id === item.metadata.contributorId

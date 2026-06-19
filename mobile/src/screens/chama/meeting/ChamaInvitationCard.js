@@ -18,101 +18,98 @@ const ChamaInvitationCard = ({
   const isExpired = statusInfo.status === 'expired';
   const isPending = statusInfo.status === 'pending';
 
+  const statusStyle = {
+    accepted: { color: colors.success, bgColor: colors.success + '20' },
+    rejected: { color: colors.error, bgColor: colors.error + '20' },
+    cancelled: { color: colors.textSecondary, bgColor: colors.textSecondary + '20' },
+    expired: { color: colors.warning, bgColor: colors.warning + '20' },
+    pending: { color: colors.primary, bgColor: colors.primary + '20' },
+  }[statusInfo.status] || { color: colors.primary, bgColor: colors.primary + '20' };
+
   return (
-    <Card variant="outlined" style={[styles.invitationCard, isExpired && styles.invitationCardExpired]}>
-      <View style={styles.invitationHeader}>
-        <View style={styles.invitationInfo}>
-          <Text style={[styles.inviteeEmail, styles.inviteeEmailText]}>
-            {item.email}
-          </Text>
-          {item.phone_number && (
-            <Text style={[styles.inviteePhone, styles.inviteePhoneText]}>
-              {item.phone_number}
+    <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden', marginBottom: spacing.md }}>
+      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: colors.surface }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md }}>
+          <View style={{ flex: 1, marginRight: spacing.md }}>
+            <Text style={{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, color: colors.text, marginBottom: spacing.xs }} numberOfLines={1}>
+              {item.email}
             </Text>
-          )}
-          {item.role && (
-            <View style={styles.invitationRole}>
-              <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
-              <Text style={[styles.roleText, styles.roleTextPrimary]}>
-                {item.role_name || item.role}
+            {item.phone_number && (
+              <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs }}>
+                {item.phone_number}
               </Text>
+            )}
+            {item.role && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs }}>
+                <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+                <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.primary, marginLeft: spacing.xs }}>
+                  {item.role_name || item.role}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={[
+            { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.sm, marginLeft: spacing.sm },
+            { backgroundColor: statusStyle.bgColor }
+          ]}>
+            <Text style={{ fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium, textTransform: 'capitalize', color: statusStyle.color }}>
+              {statusInfo.status.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ gap: spacing.sm, marginBottom: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Ionicons name="calendar" size={16} color={colors.textSecondary} />
+            <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, minWidth: 60 }}>Sent:</Text>
+            <Text style={{ fontSize: typography.fontSize.sm, color: colors.text, flex: 1 }}>{formatDate(item.created_at)}</Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Ionicons name="time" size={16} color={colors.textSecondary} />
+            <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, minWidth: 60 }}>Expires:</Text>
+            <Text style={{ fontSize: typography.fontSize.sm, color: isExpired ? colors.error : colors.text, flex: 1 }}>{formatDate(item.expires_at)}</Text>
+          </View>
+
+          {item.responded_at && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <Ionicons name="checkmark-circle" size={16} color={statusInfo.color} />
+              <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, minWidth: 60 }}>Responded:</Text>
+              <Text style={{ fontSize: typography.fontSize.sm, color: colors.text, flex: 1 }}>{formatDate(item.responded_at)}</Text>
             </View>
           )}
         </View>
 
-        <View style={getInvitationStatusBadgeStyle(statusInfo.status, styles)}>
-          <Text style={getInvitationStatusTextStyle(statusInfo.status, styles)}>
-            {statusInfo.status.toUpperCase()}
-          </Text>
-        </View>
-      </View>
+        {item.message && (
+          <View style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.background, borderRadius: borderRadius.md }}>
+            <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.textSecondary, marginBottom: spacing.xs }}>Message:</Text>
+            <Text style={{ fontSize: typography.fontSize.sm, color: colors.text }} numberOfLines={2}>{item.message}</Text>
+          </View>
+        )}
 
-      <View style={styles.invitationDetails}>
-        <View style={styles.detailRow}>
-          <Ionicons name="calendar" size={16} color={colors.textSecondary} />
-          <Text style={[styles.detailLabel, styles.detailLabelText]}>
-            Sent:
-          </Text>
-          <Text style={[styles.detailValue, styles.detailValueText]}>
-            {formatDate(item.created_at)}
-          </Text>
-        </View>
-
-        <View style={styles.detailRow}>
-          <Ionicons name="time" size={16} color={colors.textSecondary} />
-          <Text style={[styles.detailLabel, styles.detailLabelText]}>
-            Expires:
-          </Text>
-          <Text style={[styles.detailValue, isExpired ? styles.detailValueTextError : styles.detailValueText]}>
-            {formatDate(item.expires_at)}
-          </Text>
-        </View>
-
-        {item.responded_at && (
-          <View style={styles.detailRow}>
-            <Ionicons name="checkmark-circle" size={16} color={statusInfo.color} />
-            <Text style={[styles.detailLabel, styles.detailLabelText]}>
-              Responded:
-            </Text>
-            <Text style={[styles.detailValue, styles.detailValueText]}>
-              {formatDate(item.responded_at)}
-            </Text>
+        {isPending && (
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            <Button
+              title="Resend"
+              variant="outline"
+              size="small"
+              onPress={() => onResend(item.id)}
+              style={{ flex: 1 }}
+              icon={<Ionicons name="refresh" size={16} color={colors.primary} />}
+            />
+            <Button
+              title="Cancel"
+              variant="outline"
+              size="small"
+              onPress={() => onCancel(item.id)}
+              style={[{ flex: 1, borderColor: colors.error }]}
+              textStyle={{ color: colors.error }}
+              icon={<Ionicons name="close" size={16} color={colors.error} />}
+            />
           </View>
         )}
       </View>
-
-      {item.message && (
-        <View style={styles.messageContainer}>
-          <Text style={[styles.messageLabel, styles.messageLabelText]}>
-            Message:
-          </Text>
-          <Text style={[styles.messageText, styles.messageTextText]} numberOfLines={2}>
-            {item.message}
-          </Text>
-        </View>
-      )}
-
-      {isPending && (
-        <View style={styles.invitationActions}>
-          <Button
-            title="Resend"
-            variant="outline"
-            size="small"
-            onPress={() => onResend(item.id)}
-            style={styles.actionButton}
-            icon={<Ionicons name="refresh" size={16} color={colors.primary} />}
-          />
-          <Button
-            title="Cancel"
-            variant="outline"
-            size="small"
-            onPress={() => onCancel(item.id)}
-            style={[styles.actionButton, styles.actionButtonError]}
-            textStyle={styles.errorButtonText}
-            icon={<Ionicons name="close" size={16} color={colors.error} />}
-          />
-        </View>
-      )}
     </Card>
   );
 };
@@ -239,7 +236,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
   },
   detailRow: {
     flexDirection: 'row',
@@ -266,7 +263,7 @@ const createStyles = (colors) => StyleSheet.create({
   messageContainer: {
     marginBottom: spacing.md,
     padding: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
   },
   messageLabel: {

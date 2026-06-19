@@ -492,10 +492,9 @@ const ContributeScreen = ({ route, navigation }) => {
         Alert.alert('Phone Number Required', 'Your account does not have a valid phone number. Please update your profile to use M-Pesa payments.');
         return;
       }
-    } else if (paymentMethod === 'cash' || paymentMethod === 'cheque') {
-      // Validate cash/cheque contribution requirements
+    } else if (paymentMethod === 'cash') {
       if (!selectedContributor) {
-        Alert.alert('Member Required', `Please select the member who made this ${paymentMethod} contribution.`);
+        Alert.alert('Member Required', 'Please select the member who made this cash contribution.');
         return;
       }
     }
@@ -518,11 +517,11 @@ const ContributeScreen = ({ route, navigation }) => {
 
       if (paymentMethod === 'mpesa') {
         await handleMpesaContribution(cleanChamaId);
-      } else if (paymentMethod === 'cash' || paymentMethod === 'cheque') {
+      } else if (paymentMethod === 'cash') {
         if (!selectedContributor) {
           Alert.alert(
             'Member Required',
-            'Please select the member who made this contribution before proceeding.',
+            'Please select the member who made this cash contribution before proceeding.',
             [{ text: 'OK' }]
           );
           return;
@@ -756,12 +755,15 @@ const handleMpesaContribution = async (cleanChamaId) => {
           return `Contribution to ${chama.name}`;
       }
     }
-    const mpesaResponse = await ApiService.initiateMpesaPayment(
-      formattedPhone,
-      parseFloat(amount),
-      accountReference,
-      transactionDesc
-    );
+    const mpesaResponse = await ApiService.makeContribution({
+      chamaId: cleanChamaId,
+      amount: parseFloat(amount),
+      description: transactionDesc,
+      type: contributionType,
+      paymentMethod: 'mpesa',
+      mpesaReference: accountReference,
+      status: 'pending',
+    });
 
     if (mpesaResponse.success) {
       Alert.alert(
@@ -915,11 +917,12 @@ const handleMpesaContribution = async (cleanChamaId) => {
         return false;
       }
 
-      // Backend assertion: No cheque payments for merry-go-round
-      if (method === 'cheque') {
+      // Assertion: Only wallet, mpesa, and cash are valid payment methods for contributions
+      const validMethods = ['wallet', 'mpesa', 'cash'];
+      if (!validMethods.includes(method)) {
         Alert.alert(
           'Invalid Payment Method',
-          'Cheque payments are not allowed for merry-go-round contributions. Only wallet and M-Pesa payments are permitted.',
+          `Only wallet, M-Pesa, and cash payments are permitted.`,
           [{ text: 'OK' }]
         );
         return false;
@@ -1452,77 +1455,11 @@ const handleMpesaContribution = async (cleanChamaId) => {
                   </Text>
                 )}
               </TouchableOpacity>
-
-              {/* Cheque Payment Method */}
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethodOption,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: paymentMethod === 'cheque' ? colors.info : colors.border,
-                    borderWidth: paymentMethod === 'cheque' ? 2 : 1,
-                    opacity: (userRole === 'treasurer' || userRole === 'chairperson') && contributionType !== 'merry-go-round' ? 1 : 0.6,
-                  }
-                ]}
-                onPress={() => {
-                  if (contributionType === 'merry-go-round') {
-                    Alert.alert(
-                      'Payment Method Not Allowed',
-                      'Cheque payments are not allowed for merry-go-round contributions. Only wallet and M-Pesa payments are permitted.',
-                      [{ text: 'OK' }]
-                    );
-                    return;
-                  }
-
-                  if (userRole === 'treasurer' || userRole === 'chairperson') {
-                    setPaymentMethod('cheque');
-                  } else {
-                    Alert.alert(
-                      'Access Restricted',
-                      'Only treasurers and chairpersons can record cheque contributions for members.',
-                      [{ text: 'OK' }]
-                    );
-                  }
-                }}
-              >
-                <Ionicons
-                  name="card"
-                  size={20}
-                  color={paymentMethod === 'cheque' ? colors.info : colors.text}
-                />
-                <Text
-                  style={[
-                    styles.paymentMethodText,
-                    { color: paymentMethod === 'cheque' ? colors.info : colors.text }
-                  ]}
-                >
-                  Cheque
-                </Text>
-                {(userRole === 'treasurer' || userRole === 'chairperson') ? (
-                  <Text
-                    style={[
-                      styles.paymentMethodSubtext,
-                      { color: colors.textSecondary }
-                    ]}
-                  >
-                    Record for member
-                  </Text>
-                ) : (
-                  <Text
-                    style={[
-                      styles.paymentMethodSubtext,
-                      { color: colors.textSecondary }
-                    ]}
-                  >
-                    Treasurer/Chair only
-                  </Text>
-                )}
-              </TouchableOpacity>
             </View>
             </View>
  
-            {/* Member Listing Section for Cash/Cheque Contributions */}
-            {(paymentMethod === 'cash' || paymentMethod === 'cheque') && (
+            {/* Member Listing Section for Cash Contributions */}
+            {paymentMethod === 'cash' && (
               <View style={styles.memberListingSection}>
                 <View style={styles.memberListingHeader}>
                   <Text style={[styles.memberListingTitle, { color: colors.text }]}>
@@ -1617,8 +1554,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
             </View>
           )}
 
-          {/* Cash/Cheque Contribution Form */}
-          {(paymentMethod === 'cash' || paymentMethod === 'cheque') && (
+          {/* Cash Contribution Form */}
+          {paymentMethod === 'cash' && (
             <View style={styles.cashContributionContainer}>
 
               <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
@@ -1844,8 +1781,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 <Text style={[styles.confirmationValue, { color: colors.text }]}>
                   {paymentMethod === 'wallet' ? 'VaultKe Wallet' :
                    paymentMethod === 'mpesa' ? 'M-Pesa' :
-                   paymentMethod === 'cash' ? 'Cash' :
-                   paymentMethod === 'cheque' ? 'Cheque' : 'Unknown'}
+                   paymentMethod === 'cash' ? 'Cash' : 'Unknown'}
                 </Text>
               </View>
 
@@ -1871,7 +1807,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 </View>
               )}
 
-              {(paymentMethod === 'cash' || paymentMethod === 'cheque') && (
+              {paymentMethod === 'cash' && (
                 <>
                   <View style={styles.confirmationRow}>
                     <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
@@ -1892,17 +1828,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
                     </Text>
                   </View>
                 </>
-              )}
-
-              {paymentMethod === 'cash' && (
-                  <View style={styles.confirmationRow}>
-                    <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                      Contributor:
-                    </Text>
-                    <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                      {selectedContributor?.fullName || 'Not selected'}
-                    </Text>
-                  </View>
               )}
 
               <View style={styles.confirmationRow}>
@@ -1926,8 +1851,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 title={
                   paymentMethod === 'wallet' ? 'Confirm Transfer' :
                   paymentMethod === 'mpesa' ? 'Pay with M-Pesa' :
-                  paymentMethod === 'cash' ? 'Record Contribution' :
-                  paymentMethod === 'cheque' ? 'Record Contribution' : 'Confirm'
+                  paymentMethod === 'cash' ? 'Record Contribution' : 'Confirm'
                 }
                 onPress={confirmContribution}
                 loading={loading}
@@ -1938,8 +1862,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
                     name={
                       paymentMethod === 'wallet' ? 'wallet' :
                       paymentMethod === 'mpesa' ? 'phone-portrait' :
-                      paymentMethod === 'cash' ? 'cash' :
-                      paymentMethod === 'cheque' ? 'card' : 'checkmark'
+                      paymentMethod === 'cash' ? 'cash' : 'checkmark'
                     }
                     size={20}
                     color={colors.primary}

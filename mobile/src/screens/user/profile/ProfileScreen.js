@@ -446,7 +446,6 @@ const ProfileScreen = ({ navigation }) => {
         const pm = (paymentMethod || '').toLowerCase();
         if (pm === 'wallet' || pm === 'cash') return colors.primary;
         if (pm === 'mpesa') return colors.success;
-        if (pm === 'cheque') return colors.warning;
         return colors.text;
     }
   };

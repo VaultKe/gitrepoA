@@ -25,6 +25,7 @@ const ChamaInvitationsList = ({
           item={item}
           onResend={onResendInvitation}
           onCancel={onCancelInvitation}
+          theme={theme}
         />
       )}
       keyExtractor={(item) => item.id}
