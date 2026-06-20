@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -43,26 +43,23 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     paddingHorizontal: spacing.xs,
   },
   nameCell: {
-    flex: 2.5,
+    flex: 3,
     alignItems: 'flex-start',
   },
   categoryCell: {
-    flex: 1.5,
-  },
-  membersCell: {
-    flex: 1,
+    flex: 2,
   },
   actionsCell: {
-    flex: 1.2,
+    flex: 1.5,
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
     color: colors.text,
-    fontSize: 9,
+    fontSize: 13,
     textAlign: 'center',
   },
   tableCellText: {
-    fontSize: 8.5,
+    fontSize: 12,
     color: colors.text,
     textAlign: 'center',
   },
@@ -83,7 +80,7 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     textAlign: 'left',
   },
   subText: {
-    fontSize: 7,
+    fontSize: 10,
     color: colors.textSecondary,
   },
   typeBadge: {
@@ -94,7 +91,7 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     borderRadius: borderRadius.sm,
   },
   typeBadgeText: {
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: typography.fontWeight.medium,
     marginLeft: spacing.xs / 2,
   },
@@ -104,7 +101,7 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     borderRadius: borderRadius.sm,
   },
   roleBadgeText: {
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: typography.fontWeight.bold,
     textTransform: 'capitalize',
   },
@@ -364,12 +361,6 @@ const MyChamasScreen = ({ navigation, route }) => {
            </View>
          </View>
 
-         <View style={[themedStyles.tableCell, themedStyles.membersCell]}>
-           <Text style={themedStyles.tableCellText}>
-             {(item.currentMembers || 0)}/{(item.maxMembers || 50)}
-           </Text>
-         </View>
-
          <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
            <View style={themedStyles.actionButtons}>
              <TouchableOpacity
@@ -533,7 +524,20 @@ const MyChamasScreen = ({ navigation, route }) => {
 
       {/* Table Container */}
       <View style={{ flex: 1, paddingHorizontal: spacing.md }}>
-        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+        <Card
+          variant="default"
+          style={{
+            borderRadius: 8,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: colors.border,
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 0,
+          }}
+        >
           {/* Table Header */}
           <View style={themedStyles.tableHeader}>
             <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
@@ -541,9 +545,6 @@ const MyChamasScreen = ({ navigation, route }) => {
             </View>
             <View style={[themedStyles.tableCell, themedStyles.categoryCell]}>
               <Text style={themedStyles.tableHeaderText}>Category</Text>
-            </View>
-            <View style={[themedStyles.tableCell, themedStyles.membersCell]}>
-              <Text style={themedStyles.tableHeaderText}>Members</Text>
             </View>
             <View style={[themedStyles.tableCell, themedStyles.actionsCell]}>
               <Text style={themedStyles.tableHeaderText}>Action</Text>
