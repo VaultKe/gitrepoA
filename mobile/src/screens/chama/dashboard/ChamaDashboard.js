@@ -513,7 +513,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       },
       {
         id: 'contributions',
-        title: isContributionGroup ? 'Contribute' : 'Contributions',
+        title: isContributionGroup ? 'Contribute' : 'Pay',
         icon: 'wallet',
         color: colors.primary,
         onPress: () => {

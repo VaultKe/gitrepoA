@@ -6,7 +6,11 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  Platform,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing } from '../../../utils/theme';
@@ -31,6 +35,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
   } = useChamaContext();
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
+  const canViewGroup = canViewGroupRecords();
 
   const [transactions, setTransactions] = useState([]);
   const [allRecords, setAllRecords] = useState([]);
@@ -46,25 +51,60 @@ const ChamaTransactionsScreen = ({ navigation }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
-  const applyRoleBasedFiltering = (allData) => {
-    const isLeader = canViewGroupRecords();
-    const shouldShowGroupData = isLeader && viewMode === 'group';
+  const isPrivateTransaction = (item) => {
+    return item?.privacy === 'private' ||
+           item?.isPrivate === true ||
+           item?.metadata?.privacy === 'private' ||
+           item?.metadata?.isPrivate === true;
+  };
 
-    if (shouldShowGroupData) {
+  const getUserRelatedIds = (item) => {
+    return new Set([
+      item?.id,
+      item?.user_id,
+      item?.userId,
+      item?.initiatedBy,
+      item?.initiated_by,
+      item?.initiatedById,
+      item?.initiated_by_id,
+      item?.contributed_by,
+      item?.contributedById,
+      item?.contributed_by_id,
+      item?.member_id,
+      item?.memberId,
+      item?.sender_id,
+      item?.recipient_id,
+      item?.createdBy,
+      item?.created_by,
+      item?.creator_id,
+      item?.createdById,
+      item?.user?.id,
+      item?.user?.userId,
+      item?.member?.user_id,
+      item?.member?.id,
+      item?.initiatedBy?.id,
+      item?.initiatedBy?.user_id,
+      item?.contributedBy?.id,
+      item?.contributedBy?.user_id,
+    ].filter(Boolean).map(String));
+  };
+
+  const isUserTransaction = (item) => {
+    if (!user?.id) return false;
+    return getUserRelatedIds(item).has(String(user.id));
+  };
+
+  const applyRoleBasedFiltering = (allData) => {
+    if (canViewGroup && viewMode === 'group') {
       return allData;
     }
 
     return allData.filter(item => {
-      const isUserRecord = item.initiatedBy === user.id ||
-                           item.initiated_by === user.id ||
-                           item.user_id === user.id ||
-                           item.userId === user.id ||
-                           item.contributed_by === user.id ||
-                           item.member_id === user.id ||
-                           item.memberId === user.id;
-      const isGroupVisible = ['welfare', 'merry-go-round'].includes(item.type?.toLowerCase());
+      if (isPrivateTransaction(item) && !isUserTransaction(item)) {
+        return false;
+      }
 
-      return isUserRecord || isGroupVisible;
+      return isUserTransaction(item);
     });
   };
 
@@ -78,7 +118,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
     if (currentChamaId) {
       loadTransactions();
     }
-  }, [currentChamaId, selectedFilter, viewMode, currentPage]);
+  }, [currentChamaId, selectedFilter, viewMode, currentPage, canViewGroup, user?.id]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -98,7 +138,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
 
       setTransactions(finalData);
     }
-  }, [viewMode, selectedFilter]);
+  }, [viewMode, selectedFilter, canViewGroup, user?.id]);
 
   const loadInitialData = async () => {
     try {
@@ -227,9 +267,9 @@ const ChamaTransactionsScreen = ({ navigation }) => {
 
       let dataToExport = [];
 
-      if (scope === 'all' && canViewGroupRecords()) {
+      if (scope === 'all' && canViewGroup) {
         dataToExport = allRecords || [];
-      } else if (scope === 'member' && canViewGroupRecords() && memberId) {
+      } else if (scope === 'member' && canViewGroup && memberId) {
         const member = chamaMembers.find(m => m.user_id === memberId || m.id === memberId);
         dataToExport = (allRecords || []).filter(record =>
           record.user_id === memberId ||
@@ -269,7 +309,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
   };
 
   const handleExport = async (format) => {
-    if (!canViewGroupRecords() && viewMode === 'group') {
+    if (!canViewGroup && viewMode === 'group') {
       Alert.alert('Access Denied', 'Only chairperson, secretary, and treasurer can export group records.');
       return;
     }
@@ -283,7 +323,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
         return;
       }
 
-      const scope = canViewGroupRecords() && viewMode === 'group' ? 'all' : 'personal';
+      const scope = canViewGroup && viewMode === 'group' ? 'all' : 'personal';
       const result = await handleDownload(format, scope);
 
       if (result !== false) {
@@ -297,77 +337,430 @@ const ChamaTransactionsScreen = ({ navigation }) => {
     }
   };
 
-  const openTransactionReceipt = (transaction) => {
-    const receiptId = `RCP-${String(transaction.id || Date.now()).substring(0, 8).toUpperCase()}`;
-    const fileName = `VaultKe_Receipt_${receiptId}_${new Date().toISOString().split('T')[0]}.html`;
-    const html = generatePDFOptimizedReceiptHTML(
+  const getReceiptId = (transaction) => {
+    return `RCP-${String(transaction?.id || transaction?.transaction_id || transaction?.reference || Date.now()).substring(0, 8).toUpperCase()}`;
+  };
+
+  const getReceiptFileName = (receiptId) => {
+    return `VaultKe_Receipt_${receiptId}_${new Date().toISOString().split('T')[0]}.html`;
+  };
+
+  const getReceiptBodyHTML = (html) => {
+    const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    return match ? match[1].trim() : html;
+  };
+
+  const openReceiptPrintWindow = (html, title, receiptId) => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.open) {
+      return { success: false, error: 'Print is not available on this device' };
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      return { success: false, error: 'Popup blocked. Allow popups to print receipts.' };
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            @page { size: A4; margin: 15mm; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif !important; color: #000 !important; background: white !important; }
+            section { page-break-after: always; }
+            section:last-child { page-break-after: auto; }
+          </style>
+        </head>
+        <body>${html}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+
+    return { success: true, fileName: getReceiptFileName(receiptId) };
+  };
+
+  const printReceiptHTML = async (html, title, receiptId) => {
+    if (Platform.OS === 'web') {
+      return openReceiptPrintWindow(getReceiptBodyHTML(html), title, receiptId);
+    }
+
+    if (!Print?.printAsync) {
+      return { success: false, error: 'Print is not available on this device' };
+    }
+
+    await Print.printAsync({ html, base64: false });
+    return { success: true, fileName: getReceiptFileName(receiptId) };
+  };
+
+  const shareReceiptHTML = async (html, fileName) => {
+    if (Platform.OS === 'web') {
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+
+      if (navigator.share && window.File) {
+        const file = new File([blob], fileName, { type: 'text/html' });
+        await navigator.share({
+          title: 'Transaction Reports',
+          text: 'Transaction reports from VaultKe',
+          files: [file],
+        });
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+      return { success: true, fileName };
+    }
+
+    if (!Sharing.isAvailableAsync || !FileSystem.documentDirectory) {
+      throw new Error('Sharing is not available on this device');
+    }
+
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      throw new Error('Sharing is not available on this device');
+    }
+
+    const uri = `${FileSystem.documentDirectory}${fileName}`;
+    await FileSystem.writeAsStringAsync(uri, html, { encoding: FileSystem.EncodingType.UTF8 });
+
+    await Sharing.shareAsync(uri, {
+      mimeType: 'text/html',
+      dialogTitle: 'Share transaction reports',
+      UTI: 'public.html',
+    });
+
+    return { success: true, fileName, uri };
+  };
+
+  const buildReceiptHTML = (transaction) => {
+    return generatePDFOptimizedReceiptHTML(
       transaction,
       selectedChama?.name || 'Chama',
       getMemberNameFromTransaction(transaction, chamaMembers),
       COMPANY_INFO
     );
+  };
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-      return { success: true, fileName };
-    }
+  const escapeReportHTML = (value) => {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    }[char]));
+  };
 
-    printWindow.document.write(`
+  const getReportValue = (...values) => {
+    return values.find(value => value !== undefined && value !== null && String(value).trim() !== '') ?? '';
+  };
+
+  const maskReportPhone = (phone) => {
+    const rawPhone = String(phone ?? '').trim();
+    if (!rawPhone || rawPhone === 'N/A') return '';
+    if (rawPhone.includes('*')) return rawPhone;
+
+    const digits = rawPhone.replace(/[^\d]/g, '');
+    if (digits.length < 5) return '***';
+
+    const visibleStart = Math.min(4, digits.length - 2);
+    return `${digits.slice(0, visibleStart)}***${digits.slice(-2)}`;
+  };
+
+  const getReportTransactionCode = (transaction) => getReportValue(
+    transaction.transactionCode,
+    transaction.transaction_code,
+    transaction.mpesaCode,
+    transaction.mpesa_code,
+    transaction.mPesaCode,
+    transaction.m_pesa_code,
+    transaction.mpesaReceiptNumber,
+    transaction.mpesa_receipt_number,
+    transaction.code,
+    transaction.reference,
+    transaction.ref,
+    transaction.transactionId,
+    transaction.transaction_id
+  );
+
+  const getReportSenderPhone = (transaction) => getReportValue(
+    transaction.senderPhone,
+    transaction.sender_phone,
+    transaction.fromPhone,
+    transaction.from_phone,
+    transaction.phoneNumber,
+    transaction.phone_number,
+    transaction.phone,
+    transaction.metadata?.senderPhone,
+    transaction.metadata?.sender_phone,
+    transaction.metadata?.fromPhone,
+    transaction.metadata?.from_phone,
+    transaction.metadata?.phoneNumber,
+    transaction.metadata?.phone_number,
+    transaction.metadata?.phone
+  );
+
+  const getReportDestinationAccount = (transaction) => getReportValue(
+    transaction.destinationAccount,
+    transaction.destination_account,
+    transaction.toAccount,
+    transaction.to_account,
+    transaction.accountNumber,
+    transaction.account_number,
+    transaction.account,
+    transaction.metadata?.destinationAccount,
+    transaction.metadata?.destination_account,
+    transaction.metadata?.toAccount,
+    transaction.metadata?.to_account,
+    transaction.metadata?.accountNumber,
+    transaction.metadata?.account_number,
+    transaction.metadata?.account
+  );
+
+  const formatReportDate = (transaction) => {
+    const dateValue = transaction.date || transaction.createdAt || transaction.created_at || transaction.timestamp;
+    if (!dateValue) return 'N/A';
+
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return 'N/A';
+
+    return date.toLocaleString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Africa/Nairobi',
+    });
+  };
+
+  const formatReportAmount = (transaction) => {
+    const type = (transaction.type || transaction.transaction_type || '').toLowerCase();
+    const rawAmount = getReportValue(
+      transaction.amount,
+      transaction.transaction_amount,
+      transaction.total_amount,
+      transaction.metadata?.amount,
+      transaction.metadata?.transaction_amount,
+      transaction.metadata?.total_amount
+    );
+    const numericAmount = parseFloat(String(rawAmount).replace(/[KES,\s]/g, '')) || 0;
+    const sign = ['contribution', 'deposit', 'welfare_contribution'].includes(type) ? '+' : '-';
+    const formattedAmount = new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 0,
+    }).format(Math.abs(numericAmount));
+
+    return `${sign} ${formattedAmount}`;
+  };
+
+  const formatReportType = (transaction) => {
+    const type = transaction.type || transaction.transaction_type || 'Transaction';
+    return String(type).replace(/_/g, ' ').toUpperCase();
+  };
+
+  const getReportDescription = (transaction) => {
+    return getReportValue(
+      transaction.description,
+      transaction.transaction_description,
+      transaction.memo,
+      transaction.purpose,
+      `${transaction.type || transaction.transaction_type || 'Transaction'} transaction`
+    );
+  };
+
+  const buildCombinedReceiptsHTML = (receiptTransactions) => {
+    const rows = receiptTransactions.map((transaction) => {
+      const senderPhone = maskReportPhone(getReportSenderPhone(transaction));
+      const transactionCode = getReportTransactionCode(transaction);
+      const destinationAccount = getReportDestinationAccount(transaction);
+
+      return `
+        <tr>
+          <td>${escapeReportHTML(formatReportDate(transaction))}</td>
+          <td>${escapeReportHTML(getMemberNameFromTransaction(transaction, chamaMembers))}</td>
+          <td>${escapeReportHTML(getReportDescription(transaction))}</td>
+          <td>${escapeReportHTML(formatReportType(transaction))}</td>
+          <td style="text-align: right; font-weight: bold;">${escapeReportHTML(formatReportAmount(transaction))}</td>
+          <td>${escapeReportHTML(transactionCode || 'N/A')}</td>
+          <td>${escapeReportHTML(senderPhone || 'N/A')}</td>
+          <td>${escapeReportHTML(destinationAccount || 'N/A')}</td>
+          <td>${escapeReportHTML(transaction.reference || transaction.ref || transaction.transaction_id || transaction.id || 'N/A')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const chamaName = selectedChama?.name || 'Chama';
+    const generatedAt = new Date().toLocaleString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Africa/Nairobi',
+    });
+
+    return `
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Transaction Receipt - ${receiptId}</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Transaction Report - ${escapeReportHTML(chamaName)}</title>
           <style>
-            @media print {
-              body { margin: 0; }
-              .no-print { display: none; }
-            }
+            @page { size: A4 landscape; margin: 10mm; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif !important; font-size: 8px !important; line-height: 1.2 !important; color: #000 !important; background: white !important; }
+            .container { width: 100% !important; }
+            .report-title { text-align: center; font-size: 16px !important; font-weight: bold; margin-bottom: 12px !important; text-transform: uppercase; }
+            .meta { display: flex; justify-content: space-between; margin-bottom: 12px !important; font-size: 9px !important; }
+            table { width: 100% !important; border-collapse: collapse; margin-bottom: 12px !important; }
+            th { background: #e8e8e8 !important; border: 1px solid #000 !important; padding: 5px 4px !important; text-align: center !important; font-weight: bold !important; text-transform: uppercase !important; font-size: 7px !important; }
+            td { border: 1px solid #000 !important; padding: 5px 4px !important; font-size: 7px !important; vertical-align: top !important; }
+            .footer { border-top: 1px solid #000 !important; padding-top: 8px !important; margin-top: 12px !important; text-align: center !important; font-size: 8px !important; }
           </style>
         </head>
         <body>
-          ${html}
-          <div class="no-print" style="position: fixed; top: 10px; right: 10px; background: #007bff; color: white; padding: 10px; border-radius: 5px; cursor: pointer;" onclick="window.print()">
-            Click here to save as PDF
+          <div class="container">
+            <div class="meta">
+              <div>
+                <div style="font-weight: bold; font-size: 12px !important;">${escapeReportHTML(chamaName)}</div>
+                <div>Transaction Report</div>
+              </div>
+              <div style="text-align: right;">
+                <div>Generated: ${escapeReportHTML(generatedAt)}</div>
+                <div>Total Records: ${receiptTransactions.length}</div>
+              </div>
+            </div>
+            <div class="report-title">All Transaction Records</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 13%;">Date</th>
+                  <th style="width: 12%;">User</th>
+                  <th style="width: 18%;">Description</th>
+                  <th style="width: 10%;">Type</th>
+                  <th style="width: 10%;">Amount</th>
+                  <th style="width: 10%;">M-Pesa Code</th>
+                  <th style="width: 9%;">Sender Phone</th>
+                  <th style="width: 10%;">Destination Account</th>
+                  <th style="width: 8%;">Reference</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div class="footer">
+              <div>This report was generated from VaultKe transaction records.</div>
+              <div>Sender phone numbers are masked for privacy.</div>
+            </div>
           </div>
-          <script>
-            window.onload = function() {
-              setTimeout(() => window.print(), 500);
-            };
-          </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
-
-    return { success: true, fileName };
+    `;
   };
 
-  const handleIndividualReceipt = async (transaction, format = 'pdf') => {
+  const getBulkReceiptTransactions = () => {
+    return (transactions.length > 0 ? transactions : allRecords).filter(Boolean);
+  };
+
+  const handleBulkPrintReceipts = async () => {
+    const receiptTransactions = getBulkReceiptTransactions();
+
+    if (receiptTransactions.length === 0) {
+      Alert.alert('No Data', 'No transaction reports found to print.', [{ text: 'OK' }]);
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const html = buildCombinedReceiptsHTML(receiptTransactions);
+      const result = await printReceiptHTML(
+        html,
+        `Transaction Reports - ${selectedChama?.name || 'Chama'}`,
+        'BULK'
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to print receipts');
+      }
+
+      Alert.alert(
+        'Reports Ready',
+        `${receiptTransactions.length} transaction report(s) opened for printing.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Bulk print error:', error);
+      Alert.alert('Print Failed', error.message || 'Failed to print transaction reports.', [{ text: 'OK' }]);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleBulkShareReceipts = async () => {
+    const receiptTransactions = getBulkReceiptTransactions();
+
+    if (receiptTransactions.length === 0) {
+      Alert.alert('No Data', 'No transaction reports found to share.', [{ text: 'OK' }]);
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const html = buildCombinedReceiptsHTML(receiptTransactions);
+      const fileName = `VaultKe_Transaction_Reports_${new Date().toISOString().split('T')[0]}.html`;
+      const result = await shareReceiptHTML(html, fileName);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to share receipts');
+      }
+
+      Alert.alert('Reports Shared', 'Transaction reports are ready to share.', [{ text: 'OK' }]);
+    } catch (error) {
+      console.error('Bulk share error:', error);
+      Alert.alert('Share Failed', error.message || 'Failed to share transaction reports.', [{ text: 'OK' }]);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleIndividualReceipt = async (transaction) => {
     try {
       setExportLoading(true);
-      const result = format === 'html'
-        ? openTransactionReceipt(transaction)
-        : openTransactionReceipt(transaction);
+      const receiptId = getReceiptId(transaction);
+      const html = buildReceiptHTML(transaction);
+      const result = await printReceiptHTML(
+        html,
+        `Transaction Receipt - ${receiptId}`,
+        receiptId
+      );
 
-      if (result.success) {
-        Alert.alert(
-          'Receipt Generated',
-          'Transaction receipt has been opened successfully.',
-          [{ text: 'OK' }]
-        );
-      } else {
+      if (!result.success) {
         throw new Error(result.error || 'Failed to generate receipt');
       }
+
+      Alert.alert(
+        'Receipt Generated',
+        'Transaction receipt has been opened successfully.',
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       console.error('Individual receipt error:', error);
       Alert.alert(
@@ -431,6 +824,8 @@ const ChamaTransactionsScreen = ({ navigation }) => {
           setCurrentPage={setCurrentPage}
           chamaMembers={chamaMembers}
           onReceiptPress={handleIndividualReceipt}
+          onBulkPrintReceipts={handleBulkPrintReceipts}
+          onBulkShareReceipts={handleBulkShareReceipts}
           exportLoading={exportLoading}
           selectedFilter={selectedFilter}
           theme={theme}

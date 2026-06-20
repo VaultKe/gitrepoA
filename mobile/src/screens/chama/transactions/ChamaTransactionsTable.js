@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../../components/common/Card';
-import { getThemeColors, spacing, typography } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import ChamaTransactionRow from './ChamaTransactionRow';
 import ChamaTransactionsEmptyState from './ChamaTransactionsEmptyState';
 
@@ -14,16 +14,60 @@ const ChamaTransactionsTable = ({
   setCurrentPage,
   chamaMembers,
   onReceiptPress,
+  onBulkPrintReceipts,
+  onBulkShareReceipts,
   exportLoading,
   selectedFilter,
   theme,
 }) => {
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
+  const [showTableMenu, setShowTableMenu] = useState(false);
 
   return (
     <View style={styles.tableContainer}>
       <Card variant="default" style={styles.tableCard}>
+        <View style={styles.tableToolbar}>
+          <View style={styles.tableToolbarTitle}>
+            <Text style={styles.tableToolbarTitleText}>Transactions</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.tableMenuButton, showTableMenu && styles.tableMenuButtonActive]}
+            onPress={() => setShowTableMenu(!showTableMenu)}
+            disabled={transactions.length === 0 || exportLoading}
+            accessibilityLabel="Transaction reports menu"
+            accessibilityHint="Tap to print or share all visible transaction reports"
+          >
+            <Text style={styles.tableMenuButtonText}>...</Text>
+          </TouchableOpacity>
+          {showTableMenu && (
+            <View style={styles.tableMenu}>
+              <TouchableOpacity
+                style={styles.tableMenuItem}
+                onPress={() => {
+                  setShowTableMenu(false);
+                  onBulkPrintReceipts?.();
+                }}
+                disabled={transactions.length === 0 || exportLoading}
+              >
+                <Ionicons name="print-outline" size={16} color={colors.text} />
+                <Text style={styles.tableMenuItemText}>Print All Reports</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.tableMenuItem}
+                onPress={() => {
+                  setShowTableMenu(false);
+                  onBulkShareReceipts?.();
+                }}
+                disabled={transactions.length === 0 || exportLoading}
+              >
+                <Ionicons name="share-outline" size={16} color={colors.text} />
+                <Text style={styles.tableMenuItemText}>Share All Reports</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -132,11 +176,28 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
   },
+  tableToolbar: {
+    position: 'relative',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    minHeight: 36,
+  },
+  tableToolbarTitle: {
+    flex: 1,
+  },
+  tableToolbarTitleText: {
+    color: colors.text,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
   tableScrollContent: {
     flexGrow: 1,
     width: '100%',
   },
   tableContent: {
+    position: 'relative',
     minWidth: 720,
     width: '100%',
   },
@@ -172,6 +233,55 @@ const createStyles = (colors) => StyleSheet.create({
   },
   actionsCell: {
     flex: 0.8,
+  },
+  tableMenuButton: {
+    minWidth: 28,
+    minHeight: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tableMenuButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  tableMenuButtonText: {
+    color: colors.text,
+    fontWeight: typography.fontWeight.bold,
+    fontSize: 16,
+    lineHeight: 18,
+  },
+  tableMenu: {
+    position: 'absolute',
+    top: 38,
+    right: 0,
+    minWidth: 190,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    zIndex: 1001,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  tableMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  tableMenuItemText: {
+    color: colors.text,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,

@@ -33,14 +33,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
 
-  // console.log('🏢 PhysicalMeetingScreen loaded with params:', {
-  //   meetingId,
-  //   meetingTitle,
-  //   userRole,
-  //   isPreview,
-  //   hasPreviewData: !!previewData,
-  //   hasInitialMeetingData: !!initialMeetingData
-  // });
   
   const [loading, setLoading] = useState(false);
   const [meetingData, setMeetingData] = useState(initialMeetingData);
