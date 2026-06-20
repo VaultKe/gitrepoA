@@ -26,6 +26,33 @@ const ChamaTransactionsTable = ({
 
   return (
     <View style={styles.tableContainer}>
+      {showTableMenu && (
+        <View style={styles.tableMenu}>
+          <TouchableOpacity
+            style={styles.tableMenuItem}
+            onPress={() => {
+              setShowTableMenu(false);
+              onBulkPrintReceipts?.();
+            }}
+            disabled={transactions.length === 0 || exportLoading}
+          >
+            <Ionicons name="print-outline" size={16} color={colors.text} />
+            <Text style={styles.tableMenuItemText}>Print All Reports</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tableMenuItem}
+            onPress={() => {
+              setShowTableMenu(false);
+              onBulkShareReceipts?.();
+            }}
+            disabled={transactions.length === 0 || exportLoading}
+          >
+            <Ionicons name="share-outline" size={16} color={colors.text} />
+            <Text style={styles.tableMenuItemText}>Share All Reports</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <Card variant="default" style={styles.tableCard}>
         <View style={styles.tableToolbar}>
           <View style={styles.tableToolbarTitle}>
@@ -40,32 +67,6 @@ const ChamaTransactionsTable = ({
           >
             <Text style={styles.tableMenuButtonText}>...</Text>
           </TouchableOpacity>
-          {showTableMenu && (
-            <View style={styles.tableMenu}>
-              <TouchableOpacity
-                style={styles.tableMenuItem}
-                onPress={() => {
-                  setShowTableMenu(false);
-                  onBulkPrintReceipts?.();
-                }}
-                disabled={transactions.length === 0 || exportLoading}
-              >
-                <Ionicons name="print-outline" size={16} color={colors.text} />
-                <Text style={styles.tableMenuItemText}>Print All Reports</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.tableMenuItem}
-                onPress={() => {
-                  setShowTableMenu(false);
-                  onBulkShareReceipts?.();
-                }}
-                disabled={transactions.length === 0 || exportLoading}
-              >
-                <Ionicons name="share-outline" size={16} color={colors.text} />
-                <Text style={styles.tableMenuItemText}>Share All Reports</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
         <ScrollView
@@ -160,6 +161,7 @@ const ChamaTransactionsTable = ({
 
 const createStyles = (colors) => StyleSheet.create({
   tableContainer: {
+    position: 'relative',
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
@@ -256,20 +258,20 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableMenu: {
     position: 'absolute',
-    top: 38,
-    right: 0,
+    top: 72,
+    right: spacing.md,
     minWidth: 190,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    zIndex: 1001,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    zIndex: 10000,
+    elevation: 20,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
   },
   tableMenuItem: {
     flexDirection: 'row',

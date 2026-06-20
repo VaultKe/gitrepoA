@@ -360,23 +360,28 @@ const ChamaTransactionsScreen = ({ navigation }) => {
       return { success: false, error: 'Popup blocked. Allow popups to print receipts.' };
     }
 
+    const isFullHTMLDocument = /<!DOCTYPE html>[\s\S]*<\/html>/i.test(html) || /<html[\s\S]*<\/html>/i.test(html);
+    const documentHTML = isFullHTMLDocument
+      ? html
+      : `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              @page { size: A4; margin: 15mm; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: Arial, sans-serif !important; color: #000 !important; background: white !important; }
+              section { page-break-after: always; }
+              section:last-child { page-break-after: auto; }
+            </style>
+          </head>
+          <body>${html}</body>
+        </html>
+      `;
+
     printWindow.document.open();
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${title}</title>
-          <style>
-            @page { size: A4; margin: 15mm; }
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif !important; color: #000 !important; background: white !important; }
-            section { page-break-after: always; }
-            section:last-child { page-break-after: auto; }
-          </style>
-        </head>
-        <body>${html}</body>
-      </html>
-    `);
+    printWindow.document.write(documentHTML);
     printWindow.document.close();
     printWindow.focus();
 
@@ -470,68 +475,6 @@ const ChamaTransactionsScreen = ({ navigation }) => {
     return values.find(value => value !== undefined && value !== null && String(value).trim() !== '') ?? '';
   };
 
-  const maskReportPhone = (phone) => {
-    const rawPhone = String(phone ?? '').trim();
-    if (!rawPhone || rawPhone === 'N/A') return '';
-    if (rawPhone.includes('*')) return rawPhone;
-
-    const digits = rawPhone.replace(/[^\d]/g, '');
-    if (digits.length < 5) return '***';
-
-    const visibleStart = Math.min(4, digits.length - 2);
-    return `${digits.slice(0, visibleStart)}***${digits.slice(-2)}`;
-  };
-
-  const getReportTransactionCode = (transaction) => getReportValue(
-    transaction.transactionCode,
-    transaction.transaction_code,
-    transaction.mpesaCode,
-    transaction.mpesa_code,
-    transaction.mPesaCode,
-    transaction.m_pesa_code,
-    transaction.mpesaReceiptNumber,
-    transaction.mpesa_receipt_number,
-    transaction.code,
-    transaction.reference,
-    transaction.ref,
-    transaction.transactionId,
-    transaction.transaction_id
-  );
-
-  const getReportSenderPhone = (transaction) => getReportValue(
-    transaction.senderPhone,
-    transaction.sender_phone,
-    transaction.fromPhone,
-    transaction.from_phone,
-    transaction.phoneNumber,
-    transaction.phone_number,
-    transaction.phone,
-    transaction.metadata?.senderPhone,
-    transaction.metadata?.sender_phone,
-    transaction.metadata?.fromPhone,
-    transaction.metadata?.from_phone,
-    transaction.metadata?.phoneNumber,
-    transaction.metadata?.phone_number,
-    transaction.metadata?.phone
-  );
-
-  const getReportDestinationAccount = (transaction) => getReportValue(
-    transaction.destinationAccount,
-    transaction.destination_account,
-    transaction.toAccount,
-    transaction.to_account,
-    transaction.accountNumber,
-    transaction.account_number,
-    transaction.account,
-    transaction.metadata?.destinationAccount,
-    transaction.metadata?.destination_account,
-    transaction.metadata?.toAccount,
-    transaction.metadata?.to_account,
-    transaction.metadata?.accountNumber,
-    transaction.metadata?.account_number,
-    transaction.metadata?.account
-  );
-
   const formatReportDate = (transaction) => {
     const dateValue = transaction.date || transaction.createdAt || transaction.created_at || transaction.timestamp;
     if (!dateValue) return 'N/A';
@@ -549,7 +492,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
     });
   };
 
-  const formatReportAmount = (transaction) => {
+  const formatReportAmount = (transaction, fractionDigits = 0) => {
     const type = (transaction.type || transaction.transaction_type || '').toLowerCase();
     const rawAmount = getReportValue(
       transaction.amount,
@@ -564,10 +507,49 @@ const ChamaTransactionsScreen = ({ navigation }) => {
     const formattedAmount = new Intl.NumberFormat('en-KE', {
       style: 'currency',
       currency: 'KES',
-      minimumFractionDigits: 0,
+      minimumFractionDigits: fractionDigits,
     }).format(Math.abs(numericAmount));
 
-    return `${sign} ${formattedAmount}`;
+    return fractionDigits > 0 ? formattedAmount : `${sign} ${formattedAmount}`;
+  };
+
+  const getReportNumericAmount = (transaction) => {
+    const rawAmount = getReportValue(
+      transaction.amount,
+      transaction.transaction_amount,
+      transaction.total_amount,
+      transaction.metadata?.amount,
+      transaction.metadata?.transaction_amount,
+      transaction.metadata?.total_amount
+    );
+
+    return Math.abs(parseFloat(String(rawAmount).replace(/[KES,\s]/g, '')) || 0);
+  };
+
+  const getReportNumericFees = (transaction) => {
+    const rawFees = getReportValue(
+      transaction.fees,
+      transaction.transaction_fees,
+      transaction.fee,
+      transaction.metadata?.fees,
+      transaction.metadata?.transaction_fees,
+      transaction.metadata?.fee
+    );
+
+    return Math.abs(parseFloat(String(rawFees).replace(/[KES,\s]/g, '')) || 0);
+  };
+
+  const isCompletedTransaction = (transaction) => {
+    const status = String(transaction.status || '').toLowerCase();
+    return ['completed', 'paid', 'success', 'successful', 'approved'].includes(status);
+  };
+
+  const formatSummaryAmount = (amount) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 2,
+    }).format(amount);
   };
 
   const formatReportType = (transaction) => {
@@ -587,24 +569,24 @@ const ChamaTransactionsScreen = ({ navigation }) => {
 
   const buildCombinedReceiptsHTML = (receiptTransactions) => {
     const rows = receiptTransactions.map((transaction) => {
-      const senderPhone = maskReportPhone(getReportSenderPhone(transaction));
-      const transactionCode = getReportTransactionCode(transaction);
-      const destinationAccount = getReportDestinationAccount(transaction);
-
       return `
         <tr>
           <td>${escapeReportHTML(formatReportDate(transaction))}</td>
           <td>${escapeReportHTML(getMemberNameFromTransaction(transaction, chamaMembers))}</td>
           <td>${escapeReportHTML(getReportDescription(transaction))}</td>
           <td>${escapeReportHTML(formatReportType(transaction))}</td>
-          <td style="text-align: right; font-weight: bold;">${escapeReportHTML(formatReportAmount(transaction))}</td>
-          <td>${escapeReportHTML(transactionCode || 'N/A')}</td>
-          <td>${escapeReportHTML(senderPhone || 'N/A')}</td>
-          <td>${escapeReportHTML(destinationAccount || 'N/A')}</td>
+          <td style="text-align: right; font-weight: bold;">${escapeReportHTML(formatReportAmount(transaction, 2))}</td>
+          <td style="text-align: right;">${escapeReportHTML(formatSummaryAmount(getReportNumericFees(transaction)))}</td>
+          <td style="text-align: center;">${escapeReportHTML(transaction.status || 'completed')}</td>
           <td>${escapeReportHTML(transaction.reference || transaction.ref || transaction.transaction_id || transaction.id || 'N/A')}</td>
         </tr>
       `;
     }).join('');
+
+    const completedTransactions = receiptTransactions.filter(isCompletedTransaction);
+    const totalAmount = completedTransactions.reduce((sum, transaction) => sum + getReportNumericAmount(transaction), 0);
+    const totalFees = completedTransactions.reduce((sum, transaction) => sum + getReportNumericFees(transaction), 0);
+    const grandTotal = totalAmount + totalFees;
 
     const chamaName = selectedChama?.name || 'Chama';
     const generatedAt = new Date().toLocaleString('en-KE', {
@@ -627,48 +609,76 @@ const ChamaTransactionsScreen = ({ navigation }) => {
           <style>
             @page { size: A4 landscape; margin: 10mm; }
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif !important; font-size: 8px !important; line-height: 1.2 !important; color: #000 !important; background: white !important; }
+            body { font-family: Arial, sans-serif !important; font-size: 9px !important; line-height: 1.2 !important; color: #000 !important; background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             .container { width: 100% !important; }
-            .report-title { text-align: center; font-size: 16px !important; font-weight: bold; margin-bottom: 12px !important; text-transform: uppercase; }
-            .meta { display: flex; justify-content: space-between; margin-bottom: 12px !important; font-size: 9px !important; }
-            table { width: 100% !important; border-collapse: collapse; margin-bottom: 12px !important; }
-            th { background: #e8e8e8 !important; border: 1px solid #000 !important; padding: 5px 4px !important; text-align: center !important; font-weight: bold !important; text-transform: uppercase !important; font-size: 7px !important; }
-            td { border: 1px solid #000 !important; padding: 5px 4px !important; font-size: 7px !important; vertical-align: top !important; }
-            .footer { border-top: 1px solid #000 !important; padding-top: 8px !important; margin-top: 12px !important; text-align: center !important; font-size: 8px !important; }
+            .report-title { text-align: center; font-size: 14px !important; font-weight: bold; margin: 15px 0 !important; text-transform: uppercase; letter-spacing: 1px; }
+            .meta { display: flex; justify-content: space-between; margin-bottom: 15px !important; font-size: 8px !important; line-height: 1.1; }
+            table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 15px !important; font-size: 9px !important; }
+            th { background: #e8e8e8 !important; border: 1px solid #000 !important; padding: 6px 4px !important; text-align: center !important; font-weight: bold !important; text-transform: uppercase !important; font-size: 8px !important; }
+            td { border: 1px solid #000 !important; padding: 6px 4px !important; font-size: 9px !important; vertical-align: top !important; }
+            .footer { border-top: 2px solid #000 !important; padding-top: 10px !important; margin-top: 15px !important; text-align: center !important; font-size: 8px !important; line-height: 1.2; }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="meta">
-              <div>
-                <div style="font-weight: bold; font-size: 12px !important;">${escapeReportHTML(chamaName)}</div>
-                <div>Transaction Report</div>
+            <div style="margin-bottom: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                  <div style="font-size: 14px; font-weight: bold; color: #000; margin-bottom: 2px;">${escapeReportHTML(COMPANY_INFO.name)}</div>
+                  <div style="font-size: 12px; font-weight: bold; color: #000; margin-bottom: 4px;">${escapeReportHTML(chamaName)}</div>
+                  <div style="font-size: 8px; color: #000; line-height: 1.1;">
+                    ${escapeReportHTML(COMPANY_INFO.address)}<br>
+                    Tel: ${escapeReportHTML(COMPANY_INFO.phone)} | Email: ${escapeReportHTML(COMPANY_INFO.email)}
+                  </div>
+                </div>
+                <div style="text-align: right; font-size: 8px; color: #000; line-height: 1.1;">
+                  Report No: BULK-${escapeReportHTML(new Date().toISOString().split('T')[0])}<br>
+                  Generated: ${escapeReportHTML(generatedAt)}
+                </div>
               </div>
-              <div style="text-align: right;">
-                <div>Generated: ${escapeReportHTML(generatedAt)}</div>
-                <div>Total Records: ${receiptTransactions.length}</div>
-              </div>
+              <div style="text-align: center; font-size: 14px; font-weight: bold; color: #000; margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;">TRANSACTION RECEIPT</div>
+              <div style="border-bottom: 2px solid #000; margin: 10px 0 15px 0;"></div>
             </div>
-            <div class="report-title">All Transaction Records</div>
-            <table>
+            <table border="1" cellpadding="6" cellspacing="0" style="width: 100% !important; border-collapse: collapse !important; border: 1px solid #000 !important; margin-bottom: 15px !important; font-size: 9px !important;">
               <thead>
                 <tr>
-                  <th style="width: 13%;">Date</th>
-                  <th style="width: 12%;">User</th>
-                  <th style="width: 18%;">Description</th>
-                  <th style="width: 10%;">Type</th>
-                  <th style="width: 10%;">Amount</th>
-                  <th style="width: 10%;">M-Pesa Code</th>
-                  <th style="width: 9%;">Sender Phone</th>
-                  <th style="width: 10%;">Destination Account</th>
-                  <th style="width: 8%;">Reference</th>
+                  <th style="width: 12%;">DATE</th>
+                  <th style="width: 14%;">NAME</th>
+                  <th style="width: 20%;">DESCRIPTION</th>
+                  <th style="width: 10%;">TYPE</th>
+                  <th style="width: 12%;">AMOUNT</th>
+                  <th style="width: 10%;">FEES</th>
+                  <th style="width: 10%;">STATUS</th>
+                  <th style="width: 12%;">REFERENCE</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
+            <table border="1" cellpadding="6" cellspacing="0" style="width: 100% !important; border-collapse: collapse !important; border: 1px solid #000 !important; margin: 15px 0 !important; font-size: 8px !important;">
+              <thead>
+                <tr>
+                  <th colspan="2" style="background: #e8e8e8 !important; border: 1px solid #000 !important; padding: 6px 4px !important; text-align: center !important; font-weight: bold !important; text-transform: uppercase !important; font-size: 7px !important;">SUMMARY</th>
+                  <th style="background: #e8e8e8 !important; border: 1px solid #000 !important; padding: 6px 4px !important; text-align: center !important; font-weight: bold !important; text-transform: uppercase !important; font-size: 7px !important;">AMOUNT (KES)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="2" style="border: 1px solid #000 !important; padding: 6px 4px !important; text-align: left !important; font-size: 8px !important;">Total Transaction Amount</td>
+                  <td style="border: 1px solid #000 !important; padding: 6px 4px !important; text-align: right !important; font-weight: bold !important; font-size: 8px !important;">${escapeReportHTML(formatSummaryAmount(totalAmount))}</td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="border: 1px solid #000 !important; padding: 6px 4px !important; text-align: left !important; font-size: 8px !important;">Total Transaction Fees</td>
+                  <td style="border: 1px solid #000 !important; padding: 6px 4px !important; text-align: right !important; font-weight: bold !important; font-size: 8px !important;">${escapeReportHTML(formatSummaryAmount(totalFees))}</td>
+                </tr>
+                <tr style="background: #f0f0f0 !important; font-weight: bold !important;">
+                  <td colspan="2" style="border: 1px solid #000 !important; border-top: 2px solid #000 !important; padding: 6px 4px !important; text-align: left !important; font-size: 8px !important;"><strong>GRAND TOTAL</strong></td>
+                  <td style="border: 1px solid #000 !important; border-top: 2px solid #000 !important; padding: 6px 4px !important; text-align: right !important; font-weight: bold !important; font-size: 8px !important;"><strong>${escapeReportHTML(formatSummaryAmount(grandTotal))}</strong></td>
+                </tr>
+              </tbody>
+            </table>
             <div class="footer">
               <div>This report was generated from VaultKe transaction records.</div>
-              <div>Sender phone numbers are masked for privacy.</div>
+              <div>Summary totals include completed transactions only.</div>
             </div>
           </div>
         </body>
