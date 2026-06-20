@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../../components/common/Card';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import ChamaTransactionRow from './ChamaTransactionRow';
 import ChamaTransactionsEmptyState from './ChamaTransactionsEmptyState';
+
+const { width } = Dimensions.get('window');
 
 const ChamaTransactionsTable = ({
   transactions,
@@ -172,10 +174,9 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 8,
     width: '100%',
     alignSelf: 'stretch',
-    padding: spacing.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(0,0,0,0.08)',
     overflow: 'hidden',
   },
   tableToolbar: {
@@ -185,6 +186,8 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
     minHeight: 36,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
   },
   tableToolbarTitle: {
     flex: 1,
@@ -200,16 +203,16 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableContent: {
     position: 'relative',
-    minWidth: 720,
+    minWidth: Math.max(width - 32, 760),
     width: '100%',
   },
   tableHeader: {
     flexDirection: 'row',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   tableCell: {
     flex: 1,
@@ -218,11 +221,11 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   nameCell: {
-    flex: 2.5,
+    flex: 1.8,
     alignItems: 'flex-start',
   },
   descriptionCell: {
-    flex: 2,
+    flex: 2.3,
   },
   amountCell: {
     flex: 1.2,
@@ -288,14 +291,13 @@ const createStyles = (colors) => StyleSheet.create({
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
     color: colors.text,
-    fontSize: 9,
+    fontSize: typography.fontSize.xs,
     textAlign: 'center',
   },
   tableHeaderTextLeft: {
     textAlign: 'left',
   },
   transactionsList: {
-    padding: spacing.md,
   },
   pagination: {
     flexDirection: 'row',

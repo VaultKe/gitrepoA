@@ -4,8 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import {
   formatCurrency,
-  formatUserName,
-  getShortDescription,
   getShortTypeLabel,
   getTransactionAmount,
   getTransactionColor,
@@ -41,56 +39,55 @@ const ChamaTransactionRow = ({
               color={transactionColor}
             />
           </View>
-          <Text style={[styles.tableCellText, styles.nameText]} numberOfLines={1}>
+          <Text style={[styles.tableCellText, styles.nameText]}>
             {(item.metadata?.isAnonymous || item.metadata?.displayName === 'Anonymous')
               ? 'Anonymous'
-              : formatUserName(getTransactionUserName(item, chamaMembers))
+              : getTransactionUserName(item, chamaMembers)
             }
           </Text>
         </View>
       </View>
 
-      <View style={[styles.tableCell, styles.descriptionCell]}>
-        <Text style={styles.tableCellText} numberOfLines={2}>
-          {getShortDescription(item)}
+      <Text style={[styles.tableCellText, styles.descriptionCellText, styles.descriptionText]}>
+        {getTransactionDescription(item)}
+      </Text>
+
+      <Text style={[styles.tableCellText, styles.amountCellText, styles.amountText, amountTextStyle]}>
+        {transactionType === 'contribution' ? '+' : '-'}{formatCurrency(getTransactionAmount(item))}
+      </Text>
+
+      <Text style={[styles.tableCellText, styles.dateCellText]}>
+        {item.createdAt || item.created_at}
+      </Text>
+
+      <View style={[styles.statusBadgeCell, typeBadgeStyle]}>
+        <Text style={[styles.statusText, typeTextStyle]}>
+          {getShortTypeLabel(transactionType)}
         </Text>
       </View>
 
-      <View style={[styles.tableCell, styles.amountCell]}>
-        <Text style={[styles.tableCellText, styles.amountText, amountTextStyle]}>
-          {transactionType === 'contribution' ? '+' : '-'}{formatCurrency(getTransactionAmount(item))}
-        </Text>
-      </View>
-
-      <View style={[styles.tableCell, styles.dateCell]}>
-        <Text style={styles.tableCellText}>
-          {item.createdAt || item.created_at}
-        </Text>
-      </View>
-
-      <View style={[styles.tableCell, styles.typeCell]}>
-        <View style={[styles.statusBadge, typeBadgeStyle]}>
-          <Text style={[styles.statusText, typeTextStyle]}>
-            {getShortTypeLabel(transactionType)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={[styles.tableCell, styles.actionsCell]}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionButtonPrimary]}
-          onPress={() => onReceiptPress(item)}
-          disabled={exportLoading}
-        >
-          <Ionicons
-            name="receipt-outline"
-            size={12}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[styles.actionButton, styles.actionButtonPrimary]}
+        onPress={() => onReceiptPress(item)}
+        disabled={exportLoading}
+      >
+        <Ionicons
+          name="receipt-outline"
+          size={12}
+          color={colors.primary}
+        />
+      </TouchableOpacity>
     </View>
   );
+};
+
+const getTransactionDescription = (item) => {
+  return item.description ||
+         item.transaction_description ||
+         item.memo ||
+         item.purpose ||
+         item.metadata?.description ||
+         `${item.type || item.transaction_type || 'Transaction'} transaction`;
 };
 
 const getTypeIconStyle = (type, styles) => {
@@ -172,14 +169,15 @@ const createStyles = (colors) => StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 0,
   },
   nameCell: {
-    flex: 2.5,
+    flex: 1.8,
     alignItems: 'flex-start',
+    paddingHorizontal: 0,
   },
   descriptionCell: {
-    flex: 2,
+    flex: 2.3,
   },
   amountCell: {
     flex: 1.2,
@@ -194,18 +192,20 @@ const createStyles = (colors) => StyleSheet.create({
     flex: 0.8,
   },
   tableCellText: {
-    fontSize: 8.5,
+    fontSize: typography.fontSize.sm,
     color: colors.text,
     textAlign: 'center',
+    paddingHorizontal: spacing.xs,
   },
   nameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: spacing.xs,
   },
   typeIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.xs,
@@ -228,6 +228,20 @@ const createStyles = (colors) => StyleSheet.create({
   nameText: {
     fontWeight: typography.fontWeight.medium,
     textAlign: 'left',
+    flex: 1,
+  },
+  descriptionCellText: {
+    flex: 2.3,
+    textAlign: 'left',
+  },
+  amountCellText: {
+    flex: 1.2,
+  },
+  dateCellText: {
+    flex: 1.5,
+  },
+  descriptionText: {
+    textAlign: 'left',
   },
   amountText: {
     fontWeight: typography.fontWeight.medium,
@@ -241,10 +255,13 @@ const createStyles = (colors) => StyleSheet.create({
   amountTextDefault: {
     color: colors.text,
   },
-  statusBadge: {
-    paddingHorizontal: spacing.xs,
+  statusBadgeCell: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs / 2,
     borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusBadgeSuccess: {
     backgroundColor: colors.success + '20',
@@ -262,7 +279,7 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.textSecondary + '20',
   },
   statusText: {
-    fontSize: 7,
+    fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.bold,
     textTransform: 'capitalize',
   },
@@ -282,9 +299,9 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   actionButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
