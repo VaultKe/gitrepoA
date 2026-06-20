@@ -19,6 +19,8 @@ yarn-error.*
 *.p12
 *.key
 *.mobileprovision
+.pgp
+.png
 
 .db-wall
 .db
