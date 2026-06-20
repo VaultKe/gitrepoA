@@ -107,7 +107,7 @@ out/
 *.dex
 *.class
 *.jar
-
+backend/upload/
 # TypeScript
 *.tsbuildinfo
 tsconfig.tsbuildinfo
