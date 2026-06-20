@@ -665,7 +665,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   );
 
   const renderMeetings = () => (
-    <Card style={styles.section} variant="default">
+    <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Recent Meetings ({meetings.length})
@@ -687,9 +687,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <View>
           {/* Table Header */}
           <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
-            <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date & Time</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date & Time</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
           </View>
 
           {/* Table Rows */}
@@ -715,9 +715,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
             return (
               <View key={meeting.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                <Text style={{ flex: 2, fontSize: 8, color: colors.text }} numberOfLines={1}>{meeting.title || 'Chama Meeting'}</Text>
-                <Text style={{ flex: 2, fontSize: 8, color: colors.textSecondary, textAlign: 'center' }}>{meetingDate} {meetingTime}</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: isCompleted ? colors.success : isPast ? colors.textSecondary : colors.info, textAlign: 'center' }}>
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{meeting.title || 'Chama Meeting'}</Text>
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{meetingDate} {meetingTime}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isCompleted ? colors.success : isPast ? colors.textSecondary : colors.info, textAlign: 'center' }}>
                   {isCompleted ? 'Completed' : isPast ? 'Past' : 'Scheduled'}
                 </Text>
               </View>
@@ -730,14 +730,17 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
  
 
   const renderTransactions = () => (
-    <Card style={styles.section} variant="default">
+    <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           My Transactions ({transactions.length})
         </Text>
         {transactions.length > 5 && (
           <TouchableOpacity onPress={() => {
-            switchToChamaDashboard(chama);
+            if (chama) {
+              setSelectedChama(chama);
+            }
+            navigation.navigate('ChamaTransactionsScreen', { chamaId, chama });
           }}>
             <Text style={[styles.viewMoreText, { color: colors.primary }]}>
               View All
@@ -754,9 +757,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <View>
           {/* Table Header */}
           <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Description</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Description</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
           </View>
 
           {/* Table Rows */}
@@ -785,9 +788,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
             return (
               <View key={transaction.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                <Text style={{ flex: 2, fontSize: 8, color: colors.text }} numberOfLines={1}>{transactionDescription}</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: colors.textSecondary, textAlign: 'center' }}>{contributionDate}</Text>
-                <Text style={{ flex: 1, fontSize: 8, fontWeight: typography.fontWeight.medium, color: isContribution ? colors.success : colors.primary, textAlign: 'right' }}>
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{transactionDescription}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{contributionDate}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.medium, color: isContribution ? colors.success : colors.primary, textAlign: 'right' }}>
                   {formatCurrency(transaction.amount)}
                 </Text>
               </View>
@@ -844,9 +847,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           <View>
             {/* Table Header */}
             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-              <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
-              <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
-              <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+              <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
+              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
+              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
             </View>
 
             {/* Table Rows */}
@@ -860,7 +863,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
               return (
                 <View key={poll.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                  <Text style={{ flex: 2, fontSize: 8, color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
+                  <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
                   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <Ionicons
                       name={hasUserVoted ? "checkmark-circle" : "close-circle"}
@@ -868,7 +871,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                       color={hasUserVoted ? colors.success : colors.error}
                     />
                   </View>
-                  <Text style={{ flex: 1, fontSize: 8, color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
+                  <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
                     {isActive ? 'Active' : 'Closed'}
                   </Text>
                 </View>
@@ -881,9 +884,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                 style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
                 onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}
               >
-                <Text style={{ flex: 2, fontSize: 8, color: colors.primary }} numberOfLines={1}>New Polls Available</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: colors.primary, textAlign: 'center' }}>{newPollsCount}</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: colors.primary, textAlign: 'center' }}>New</Text>
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.primary }} numberOfLines={1}>New Polls Available</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.primary, textAlign: 'center' }}>{newPollsCount}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.primary, textAlign: 'center' }}>New</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1315,10 +1318,23 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           {renderActivePolls()}
         </SmartResponsiveLayout>
 
-        {/* Always single column - Rules and Actions */}
-        {renderChamaRules()}
-        {renderGroupChat()}
-        {renderMembershipActions()}
+        {isLargeScreen ? (
+          <View style={styles.desktopBottomRow}>
+            <View style={styles.desktopRulesColumn}>
+              {renderChamaRules()}
+            </View>
+            <View style={styles.desktopSideColumn}>
+              {renderGroupChat()}
+              {renderMembershipActions()}
+            </View>
+          </View>
+        ) : (
+          <>
+            {renderChamaRules()}
+            {renderGroupChat()}
+            {renderMembershipActions()}
+          </>
+        )}
       </ScrollView>
 
       {/* Avatar Modal */}

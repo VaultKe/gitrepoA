@@ -41,6 +41,20 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
   fullWidthRow: {
     marginHorizontal: 0, // Full width cards manage their own margins
   },
+  desktopBottomRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginHorizontal: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  desktopRulesColumn: {
+    flex: 2,
+    minWidth: 0,
+  },
+  desktopSideColumn: {
+    flex: 1,
+    gap: spacing.md,
+  },
   sectionTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
@@ -235,7 +249,7 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
     marginBottom: spacing.xs,
   },
   memberRole: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
   },
   memberStatus: {
     paddingHorizontal: spacing.sm,
@@ -243,7 +257,7 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
     borderRadius: 12,
   },
   memberStatusText: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     textTransform: 'capitalize',
   },

@@ -41,6 +41,7 @@ import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import MyChamasScreen from '../screens/user/chamaandgroups/MyChamasScreen';
 import CreateChamaScreen from '../screens/user/chamaandgroups/CreateChamaScreen';
 import ChamaDetailsScreen from '../screens/user/chamaandgroups/ChamaDetailsScreen';
+import ChamaTransactionsScreen from '../screens/chama/transactions/ChamaTransactionsScreen';
 import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
 import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
@@ -61,6 +62,7 @@ import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryS
 // Demo Screens
 
 import { useApp } from '../context/AppContext';
+import { ChamaProvider } from '../context/ChamaContext';
 import { getThemeColors } from '../utils/theme';
 
 // Import the extracted UserTabBar and HOC
@@ -215,6 +217,19 @@ function UserTabNavigator() {
           title: 'Chama Details',
           tabBarButton: () => null, // Hide from tab bar
         }}
+      />
+      <Tab.Screen
+        name="ChamaTransactionsScreen"
+        component={(props) => (
+          <ChamaProvider chamaId={props.route.params?.chamaId} chama={props.route.params?.chama}>
+            <ChamaTransactionsScreen {...props} />
+          </ChamaProvider>
+        )}
+        options={{
+          title: 'Transactions',
+          tabBarButton: () => null,
+        }}
+        initialParams={{ fromUserDashboard: true }}
       />
       <Tab.Screen
         name="ChamaMembersScreen"
