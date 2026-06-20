@@ -57,7 +57,7 @@ const ChamaTransactionRow = ({
       </Text>
 
       <Text style={[styles.tableCellText, styles.dateCellText]}>
-        {item.createdAt || item.created_at}
+        {formatTransactionDate(item.createdAt || item.created_at)}
       </Text>
 
       <View style={[styles.statusBadgeCell, typeBadgeStyle]}>
@@ -79,6 +79,23 @@ const ChamaTransactionRow = ({
       </TouchableOpacity>
     </View>
   );
+};
+
+const formatTransactionDate = (dateValue) => {
+  if (!dateValue) return '';
+
+  const dateString = String(dateValue);
+  const datePart = dateString.slice(0, 10);
+  const timePart = dateString.slice(11, 16);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart) && /^\d{2}:\d{2}$/.test(timePart)) {
+    return `${datePart} ${timePart}`;
+  }
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+
+  return date.toISOString().slice(0, 16).replace('T', ' ');
 };
 
 const getTransactionDescription = (item) => {
