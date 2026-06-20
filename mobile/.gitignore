@@ -111,7 +111,7 @@ backend/upload/
 # TypeScript
 *.tsbuildinfo
 tsconfig.tsbuildinfo
-
+backend/uploads
 # Testing
 coverage/
 .nyc_output/
