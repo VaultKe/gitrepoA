@@ -225,7 +225,7 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.surface,
   },
   tableCellText: {
-    fontSize: 8.5,
+    fontSize: 12,
     color: colors.text,
     textAlign: 'center',
   },

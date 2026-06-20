@@ -63,7 +63,7 @@ const ChamaMemberRow = ({
   return (
     <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: rowBackground, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
       <View style={{ flex: 3, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
-        <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{getMemberName(item)}</Text>
+        <Text style={{ fontSize: 12, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{getMemberName(item)}</Text>
       </View>
 
       <View style={{ flex: 1.5, minWidth: 76, alignItems: 'center', justifyContent: 'center' }}>
@@ -81,7 +81,7 @@ const ChamaMemberRow = ({
               size={10}
               color={roleBadgeColor}
             />
-            <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: roleBadgeColor, marginLeft: spacing.xs }}>
+            <Text style={{ fontSize: 12, fontWeight: 'medium', color: roleBadgeColor, marginLeft: spacing.xs }}>
               {formatRoleLabel(item.role)}
             </Text>
           </TouchableOpacity>
@@ -89,14 +89,14 @@ const ChamaMemberRow = ({
       </View>
 
       <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: colors.text }}>
+        <Text style={{ fontSize: 12, fontWeight: 'medium', color: colors.text }}>
           {item.attendance_rate?.toFixed(1) || 0}%
         </Text>
       </View>
 
       <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}>
         <Ionicons name="star" size={12} color={colors.warning} />
-        <Text style={{ fontSize: 8.5, fontWeight: 'medium', color: colors.text }}>{item.reputation_score?.toFixed(1) || 0}</Text>
+        <Text style={{ fontSize: 12, fontWeight: 'medium', color: colors.text }}>{item.reputation_score?.toFixed(1) || 0}</Text>
       </View>
 
       <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>

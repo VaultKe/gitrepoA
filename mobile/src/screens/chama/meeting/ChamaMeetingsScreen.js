@@ -1677,7 +1677,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   statusText: {
-    fontSize: 8.5,
+    fontSize: 12,
     fontWeight: typography.fontWeight.bold,
   },
   timingBadge: {
@@ -2106,7 +2106,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tableCellText: {
-    fontSize: 8.5,
+    fontSize: 12,
     fontWeight: typography.fontWeight.medium,
   },
   tableCellSubText: {

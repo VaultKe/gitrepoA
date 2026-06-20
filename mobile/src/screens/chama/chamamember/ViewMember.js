@@ -956,7 +956,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableLabel: {
     flex: 1,
-    fontSize: 8.5,
+    fontSize: 12,
     fontWeight: '500',
     color: colors.textSecondary,
   },
@@ -966,22 +966,22 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
   },
   tableValueText: {
-    fontSize: 8.5,
+    fontSize: 12,
     flex: 1,
     color: colors.text,
   },
   tableValueTextPrimary: {
-    fontSize: 8.5,
+    fontSize: 12,
     flex: 1,
     color: colors.primary,
   },
   tableValueTextSuccess: {
-    fontSize: 8.5,
+    fontSize: 12,
     flex: 1,
     color: colors.success,
   },
   tableValueTextError: {
-    fontSize: 8.5,
+    fontSize: 12,
     flex: 1,
     color: colors.error,
   },

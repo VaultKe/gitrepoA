@@ -352,7 +352,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
                       color={row.contributed ? colors.success : colors.warning}
                     />
                     <Text style={{
-                      fontSize: 8.5,
+                      fontSize: 12,
                       fontWeight: 'medium',
                       color: row.contributed ? colors.success : colors.warning,
                       marginLeft: 2,

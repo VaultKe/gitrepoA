@@ -9,7 +9,6 @@ import {
   RefreshControl,
   Alert,
   Image,
-  Modal,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -151,8 +150,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedAvatarMember, setSelectedAvatarMember] = useState(null);
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [userMembership, setUserMembership] = useState(null);
 
   // Reset state and reload data when chamaId changes
@@ -493,15 +490,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     );
   };
 
-  // Helper function to handle avatar tap
   const handleAvatarPress = (member) => {
-    setSelectedAvatarMember(member);
-    setShowAvatarModal(true);
-  };
-
-  const closeAvatarModal = () => {
-    setShowAvatarModal(false);
-    setSelectedAvatarMember(null);
+    navigation.navigate('ViewMember', {
+      memberId: member?.user_id || member?.id,
+      chamaId,
+      userRole: userMembership?.role,
+    });
   };
 
   // Helper function to generate a consistent avatar URL from email
@@ -619,7 +613,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       ) : (
         <View style={styles.membersList}>
           {members.slice(0, 5).map((member, index) => {
-            // Get member name safely - check multiple possible data structures
             const firstName = member.first_name || member.user?.first_name || '';
             const lastName = member.last_name || member.user?.last_name || '';
             const fullName = `${firstName} ${lastName}`.trim() || 'Unknown Member';
@@ -1151,114 +1144,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     );
   };
 
-  // Render enlarged avatar modal
-  const renderAvatarModal = () => {
-    if (!selectedAvatarMember) return null;
-
-    const user = selectedAvatarMember?.user || {};
-    const firstName = user?.first_name || selectedAvatarMember?.first_name || '';
-    const lastName = user?.last_name || selectedAvatarMember?.last_name || '';
-    const fullName = `${firstName} ${lastName}`.trim() || 'Unknown Member';
-    const email = user?.email || selectedAvatarMember?.email;
-    const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || selectedAvatarMember?.avatar || selectedAvatarMember?.avatarUrl;
-    const initials = (firstName?.[0] || '') + (lastName?.[0] || '');
-
-    const screenWidth = Dimensions.get('window').width;
-    const avatarSize = screenWidth * 0.75; // Increased from 60% to 75% of screen width
-
-    let avatarSource = null;
-    let isInitials = false;
-
-    // Determine avatar source
-    if (avatarUrl && avatarUrl.trim()) {
-      let fullAvatarUrl;
-      if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
-        fullAvatarUrl = avatarUrl;
-      } else {
-        fullAvatarUrl = `${ApiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
-      }
-      avatarSource = { uri: fullAvatarUrl };
-    } else if (email && email.trim()) {
-      const generatedAvatarUrl = getAvatarFromEmail(email, Math.round(avatarSize));
-      avatarSource = { uri: generatedAvatarUrl };
-    } else {
-      isInitials = true;
-    }
-
-    return (
-      <Modal
-        visible={showAvatarModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeAvatarModal}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={closeAvatarModal}
-        >
-          <View style={styles.modalContent}>
-            <Card style={styles.avatarCard}>
-              {/* Close button positioned absolutely */}
-              <TouchableOpacity onPress={closeAvatarModal} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-
-              {/* Frameless Avatar - touches top, left, and right edges */}
-              <View style={styles.framelessAvatarContainer}>
-                {isInitials ? (
-                  <View style={[
-                    styles.framelessAvatar,
-                    {
-                      backgroundColor: colors.primary,
-                      width: '100%',
-                      height: avatarSize * 1.2,
-                    }
-                  ]}>
-                    <Text style={[
-                      styles.enlargedAvatarText,
-                      {
-                        color: colors.white,
-                        fontSize: avatarSize * 0.2,
-                      }
-                    ]}>
-                      {initials || '?'}
-                    </Text>
-                  </View>
-                ) : (
-                  <Image
-                    source={avatarSource}
-                    style={[
-                      styles.framelessAvatar,
-                      {
-                        width: '100%',
-                        height: avatarSize * 1.2,
-                      }
-                    ]}
-                    onError={(error) => {
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Name and Email in lower section */}
-              <View style={styles.avatarInfoSection}>
-                <Text style={[styles.avatarModalName, { color: colors.text }]}>
-                  {fullName}
-                </Text>
-                {email && (
-                  <Text style={[styles.avatarModalEmail, { color: colors.textSecondary }]}>
-                    {maskEmail(email)}
-                  </Text>
-                )}
-              </View>
-            </Card>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    );
-  };
-
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -1337,8 +1222,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         )}
       </ScrollView>
 
-      {/* Avatar Modal */}
-      {renderAvatarModal()}
     </SafeAreaView>
   );
 };

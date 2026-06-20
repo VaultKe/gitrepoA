@@ -3304,7 +3304,7 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    fontSize: 8.5,
+    fontSize: 12,
     paddingHorizontal: 8,
     paddingVertical: 12,
   },

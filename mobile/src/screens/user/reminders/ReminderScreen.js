@@ -21,6 +21,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import { formatDate } from '../../../utils/dateUtils';
 import Button from '../../../components/common/Button';
+import Card from '../../../components/common/Card';
 import ReminderService from '../../../services/reminderService';
 import ReminderItem from './components/ReminderItem';
 import EmptyRemindersState from './components/EmptyRemindersState';
@@ -280,25 +281,20 @@ const ReminderScreen = () => {
   };
 
   const handleAddReminder = async () => {
-    // console.log('🚀 handleAddReminder called!');
-    // console.log('📝 Current formData:', formData);
 
     if (!formData.title.trim()) {
-      // console.log('❌ Validation failed: No title');
       Alert.alert('Error', 'Please enter a reminder title');
       return;
     }
 
     // Validate date field
     if (!formData.date.trim()) {
-      // console.log('❌ Validation failed: No date selected');
       Alert.alert('Error', 'Please select a date');
       return;
     }
 
     // Validate time field
     if (!formData.time.trim()) {
-      // console.log('❌ Validation failed: No time selected');
       Alert.alert('Error', 'Please select a time');
       return;
     }
@@ -309,32 +305,19 @@ const ReminderScreen = () => {
     const currentDateTime = new Date();
 
     if (isNaN(selectedDateTime.getTime())) {
-      // console.log('❌ Validation failed: Invalid date/time combination');
       Alert.alert('Error', 'Please enter a valid date and time');
       return;
     }
 
     if (selectedDateTime <= currentDateTime) {
-      // console.log('❌ Validation failed: Date/time is in the past');
       Alert.alert('Error', 'Please select a future date and time');
       return;
     }
 
-    // console.log('✅ Validation passed, proceeding with reminder creation');
-
     try {
-      // console.log('🔔 Starting reminder creation process...');
-      // console.log('📝 Form data:', formData);
-
-      // Try to create reminder via backend first
-      // console.log('🔍 Checking backend availability...');
       const isBackendAvailable = await ReminderService.isServiceAvailable();
-      // console.log('🌐 Backend available:', isBackendAvailable);
 
       if (isBackendAvailable) {
-        // console.log('✅ Using backend to create reminder');
-
-        // Prepare data for backend (combine date and time)
         const backendData = {
           ...formData,
           dateTime: `${formData.date}T${formData.time}:00.000Z` // ISO format for backend
@@ -362,9 +345,6 @@ const ReminderScreen = () => {
           createdAt: new Date().toISOString(),
           notificationIds: [],
         };
-        // console.log('💾 Creating local reminder:', newReminder);
-
-        // Schedule notifications
         if (formData.isEnabled) {
           if (formData.type === 'once') {
             const notificationId = await scheduleNotification(newReminder);
@@ -638,31 +618,79 @@ const ReminderScreen = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
         >
-          {/* Table Header */}
-          <ReminderTableHeader
-            isDesktop={true}
-            searchValue={searchValue}
-            onSearchChange={setSearchValue}
-            filterValue={filterValue}
-            onFilterChange={setFilterValue}
-            onCreate={openAddModal}
-          />
+          <Card
+            variant="default"
+            style={{
+              borderRadius: 8,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: colors.border,
+              shadowColor: 'transparent',
+              shadowOpacity: 0,
+              shadowRadius: 0,
+              shadowOffset: { width: 0, height: 0 },
+              elevation: 0,
+              marginBottom: spacing.sm,
+            }}
+          >
+            <ReminderTableHeader
+              isDesktop={true}
+              searchValue={searchValue}
+              onSearchChange={setSearchValue}
+              filterValue={filterValue}
+              onFilterChange={setFilterValue}
+              onCreate={openAddModal}
+              showTableHeader={false}
+            />
+          </Card>
 
-          {/* Table Body */}
-          {filteredReminders.length > 0 ? (
-            filteredReminders.map((item, index) => (
-              <ReminderItem
-                key={item.id}
-                reminder={item}
-                onToggle={handleToggleReminder}
-                onEdit={openEditModal}
-                onDelete={handleDeleteReminder}
-                index={index}
-              />
-            ))
-          ) : (
-            <EmptyRemindersState onAddReminder={openAddModal} />
-          )}
+          <Card
+            variant="default"
+            style={{
+              borderRadius: 8,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: colors.border,
+              shadowColor: 'transparent',
+              shadowOpacity: 0,
+              shadowRadius: 0,
+              shadowOffset: { width: 0, height: 0 },
+              elevation: 0,
+            }}
+          >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ flexGrow: 1, minWidth: Math.max(width - 32, 760) }}
+            >
+              <View style={{ width: '100%' }}>
+                <ReminderTableHeader
+                  isDesktop={true}
+                  searchValue={searchValue}
+                  onSearchChange={setSearchValue}
+                  filterValue={filterValue}
+                  onFilterChange={setFilterValue}
+                  onCreate={openAddModal}
+                  showSearchFilter={false}
+                />
+
+                {filteredReminders.length > 0 ? (
+                  filteredReminders.map((item, index) => (
+                    <ReminderItem
+                      key={item.id}
+                      reminder={item}
+                      onToggle={handleToggleReminder}
+                      onEdit={openEditModal}
+                      onDelete={handleDeleteReminder}
+                      index={index}
+                    />
+                  ))
+                ) : (
+                  <EmptyRemindersState onAddReminder={openAddModal} />
+                )}
+              </View>
+            </ScrollView>
+          </Card>
         </ScrollView>
       )}
 

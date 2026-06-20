@@ -68,7 +68,7 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
     textAlign: "center",
   },
   tableCellText: {
-    fontSize: 8.5,
+    fontSize: 12,
     color: colors.text,
     textAlign: "center",
   },
