@@ -20,9 +20,9 @@ const getEnvironment = () => {
  * Resolve API base URL from environment variables
  */
 const resolveApiBaseUrl = () => {
-  // Priority 1: EXPO_PUBLIC_API_URL (Expo-managed public env var)
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, ''); // Remove trailing slashes
+  // Priority 1: BACKEND_API_URL (Expo-managed public env var)
+  if (process.env.BACKEND_API_URL) {
+    return process.env.BACKEND_API_URL.replace(/\/+$/, ''); // Remove trailing slashes
   }
 
   // Priority 2: REACT_APP_API_URL (fallback for non-Expo setups)

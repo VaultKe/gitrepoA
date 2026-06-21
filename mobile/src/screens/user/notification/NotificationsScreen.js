@@ -1065,26 +1065,26 @@ setLocalNotifications(prev =>
                   });
 
                   console.log('✅ Notification marked as read:', item.id);
-                } catch (error) {
-                  console.error('❌ Failed to mark notification as read:', error);
+} catch (error) {
+                   console.error('❌ Failed to mark notification as read:', error);
 
-// REVERT UI UPDATE on error
-                  setLocalNotifications(prev =>
-                    prev.map(notification =>
-                      notification.id === item.id
-                        ? { ...notification, isRead: true }
-                        : notification
-                    )
-                  );
+                   // REVERT UI UPDATE on error - restore original read state
+                   setLocalNotifications(prev =>
+                     prev.map(notification =>
+                       notification.id === item.id
+                         ? { ...notification, isRead: false }
+                         : notification
+                     )
+                   );
 
-                  Toast.show({
-                    type: 'error',
-                    text1: 'Update Failed',
-                    text2: 'Could not mark notification as read. Please try again.',
-                    position: 'bottom',
-                    visibilityTime: 3000,
-                  });
-                }
+                   Toast.show({
+                     type: 'error',
+                     text1: 'Update Failed',
+                     text2: 'Could not mark notification as read. Please try again.',
+                     position: 'bottom',
+                     visibilityTime: 3000,
+                   });
+                 }
               }}
             >
               <Ionicons name="checkmark" size={16} color="#2196F3" />

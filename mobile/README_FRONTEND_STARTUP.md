@@ -292,7 +292,7 @@ The frontend connects to the backend API. Ensure the backend is running:
 
 Create `.env` file in `apps/mobile/` (if needed):
 ```env
-EXPO_PUBLIC_API_URL=http://localhost:8085/api/v1
+BACKEND_API_URL=http://localhost:8085/api/v1
 EXPO_PUBLIC_WS_URL=ws://https://dqtl6f-ip-41-139-130-223.tunnelmole.net/ws
 EXPO_PUBLIC_ENV=development
 ```
