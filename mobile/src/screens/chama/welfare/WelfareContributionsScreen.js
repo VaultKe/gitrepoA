@@ -587,7 +587,7 @@ const WelfareContributionsScreen = ({ route, navigation }) => {
         >
           Contribution Details
         </Text>
-        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           {/* Table header */}
           <View style={tableStyles.tableHeader}>
             <View style={[tableStyles.tableCell, tableStyles.nameCell]}>

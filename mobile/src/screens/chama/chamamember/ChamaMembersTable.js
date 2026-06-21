@@ -28,7 +28,7 @@ const ChamaMembersTable = ({
 
   return (
     <View style={{ marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' }}>
-      <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+      <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, width: '100%' }}>
           <View style={{ minWidth: 520, width: '100%' }}>
             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>

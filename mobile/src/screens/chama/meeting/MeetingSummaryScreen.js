@@ -471,7 +471,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
         {/* Attendance Details Table */}
         <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.sm }]}>Attendance Details</Text>
         {totalAttendanceItems > 0 ? (
-          <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
             <View style={styles.attendanceTable}>
               {/* Table Header */}
               <View style={tableStyles.tableHeader}>

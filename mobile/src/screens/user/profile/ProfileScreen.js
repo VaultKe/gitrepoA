@@ -532,7 +532,7 @@ const ProfileScreen = ({ navigation }) => {
           Recent Activity
         </Text>
 
-        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           {/* Activity Table Header */}
           <View style={[styles.activityTableHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
             <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Date</Text>

@@ -619,7 +619,7 @@ const ReminderScreen = () => {
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
         >
           <Card
-            variant="default"
+            variant="outlined"
             style={{
               borderRadius: 8,
               overflow: 'hidden',
@@ -645,7 +645,7 @@ const ReminderScreen = () => {
           </Card>
 
           <Card
-            variant="default"
+            variant="outlined"
             style={{
               borderRadius: 8,
               overflow: 'hidden',

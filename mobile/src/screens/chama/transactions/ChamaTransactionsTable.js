@@ -55,7 +55,7 @@ const ChamaTransactionsTable = ({
         </View>
       )}
 
-      <Card variant="default" style={styles.tableCard}>
+      <Card variant="outlined" style={styles.tableCard}>
         <View style={styles.tableToolbar}>
           <View style={styles.tableToolbarTitle}>
             <Text style={styles.tableToolbarTitleText}>Transactions</Text>

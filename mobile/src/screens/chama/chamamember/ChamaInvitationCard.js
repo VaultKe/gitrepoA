@@ -27,7 +27,7 @@ const ChamaInvitationCard = ({
   }[statusInfo.status] || { color: colors.primary, bgColor: colors.primary + '20' };
 
   return (
-    <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden', marginBottom: spacing.md }}>
+    <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginBottom: spacing.md }}>
       <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: colors.surface }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md }}>
           <View style={{ flex: 1, marginRight: spacing.md }}>

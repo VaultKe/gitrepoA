@@ -43,6 +43,7 @@ import CreateChamaScreen from '../screens/user/chamaandgroups/CreateChamaScreen'
 import ChamaDetailsScreen from '../screens/user/chamaandgroups/ChamaDetailsScreen';
 import ChamaTransactionsScreen from '../screens/chama/transactions/ChamaTransactionsScreen';
 import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
+import ViewMember from '../screens/chama/chamamember/ViewMember';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
 import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';
@@ -236,6 +237,14 @@ function UserTabNavigator() {
         component={ChamaMembersScreen}
         options={{
           title: 'Chama Members',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+      />
+      <Tab.Screen
+        name="ViewMember"
+        component={ViewMember}
+        options={{
+          title: 'Member Details',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />

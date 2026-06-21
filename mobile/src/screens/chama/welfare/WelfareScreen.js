@@ -1501,7 +1501,7 @@ const WelfareScreen = ({ route, navigation }) => {
         <View style={styles.content}>
           {activeTab === 'requests' ? (
             <>
-              <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+              <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View>
                     <View style={[tableStyles.tableHeader, { backgroundColor: colors.surface, borderBottomColor: colors.primary }]}>
@@ -1586,7 +1586,7 @@ const WelfareScreen = ({ route, navigation }) => {
             </>
           ) : (
             <>
-              <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+              <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View>
                     <View style={[tableStyles.tableHeader, { backgroundColor: colors.surface, borderBottomColor: colors.primary }]}>

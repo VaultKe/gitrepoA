@@ -525,7 +525,7 @@ const MyChamasScreen = ({ navigation, route }) => {
       {/* Table Container */}
       <View style={{ flex: 1, paddingHorizontal: spacing.md }}>
         <Card
-          variant="default"
+          variant="outlined"
           style={{
             borderRadius: 8,
             overflow: 'hidden',

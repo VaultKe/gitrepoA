@@ -641,7 +641,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
 
   const renderHeader = () => (
     <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, backgroundColor: colors.background }}>
-      <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+      <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm }}>
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm }}>
             <Ionicons name="search" size={16} color={colors.textSecondary} />
@@ -700,7 +700,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
             />
           }
         >
-          <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
             {/* Subview tabs */}
             <View style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing.sm }}>
               <TouchableOpacity

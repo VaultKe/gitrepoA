@@ -799,7 +799,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
     return (
       <View style={{ flex: 1 }}>
-        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           {/* Table Header */}
           <View style={[styles.tableHeader, {
             backgroundColor: colors.primary + '15',

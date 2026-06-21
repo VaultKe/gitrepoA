@@ -695,7 +695,7 @@ export default function TransactionHistoryScreen() {
             />
           }
         >
-          <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}

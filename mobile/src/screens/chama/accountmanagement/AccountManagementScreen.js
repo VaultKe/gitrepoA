@@ -56,7 +56,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Stat Cards 2x2 Grid */}
-        <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           <View style={styles.statsContainer}>
             <View style={styles.statRow}>
               <Card variant="outlined" style={styles.statCard}>
@@ -105,7 +105,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
         </Card>
 
         {/* Management Modules */}
-        <View style={styles.navigationContainer}>
+        <Card variant="outlined" style={styles.navigationContainer}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Management Modules</Text>
 
           <View style={styles.navigationGrid}>
@@ -123,7 +123,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );

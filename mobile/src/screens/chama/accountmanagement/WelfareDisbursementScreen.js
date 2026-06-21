@@ -671,7 +671,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
           />
         )}
         <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-          <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
             <View style={tableStyles.tableHeader}>
               <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
                 <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member</Text>
@@ -776,6 +776,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
         transparent={true}
         animationType="slide"
         onRequestClose={() => setShowDisburseModal(false)}
+        variant="outlined"
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
@@ -847,6 +848,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       </Modal>
 
       <Modal
+        variant="outlined"
         visible={showBulkDisburseModal}
         transparent={true}
         animationType="slide"

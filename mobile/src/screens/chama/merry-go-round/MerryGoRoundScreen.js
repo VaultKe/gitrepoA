@@ -326,7 +326,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     };
 
     return (
-      <Card variant="default" style={{ borderRadius: 8, overflow: 'hidden' }}>
+      <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
         <View style={styles.tableSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ minWidth: width - 32 }}>
