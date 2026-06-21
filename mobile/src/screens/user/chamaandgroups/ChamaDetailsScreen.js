@@ -151,6 +151,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userMembership, setUserMembership] = useState(null);
+  const [chatRoomLoading, setChatRoomLoading] = useState(false);
 
   // Reset state and reload data when chamaId changes
   useEffect(() => {
@@ -201,7 +202,11 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
       if (membersResponse.success) {
         setMembers(membersResponse.data || []);
-        const membership = membersResponse.data?.find(m => m.user_id === user?.id);
+        const currentUserId = String(user?.id);
+        const membership = membersResponse.data?.find(member =>
+          String(member.user_id) === currentUserId ||
+          String(member.user?.id) === currentUserId
+        );
         setUserMembership(membership);
       }
 
@@ -333,6 +338,82 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to leave chama');
+    }
+  };
+
+  const getExistingChatRoomId = () => {
+    return chama?.chat_room_id || chama?.chatRoomId || chama?.chat_room?.id || chama?.chatRoom?.id;
+  };
+
+  const getGroupLabel = () => {
+    return chama?.category === 'contribution' ? 'Group' : 'Chama';
+  };
+
+  const navigateToChatRoom = (roomId) => {
+    navigation.navigate('ChatRoom', {
+      roomId,
+      roomName: `${chama?.name || getGroupLabel()} Group Chat`,
+      roomType: 'group',
+      chamaId,
+    });
+  };
+
+  const handleCreateChatRoom = () => {
+    const existingChatRoomId = getExistingChatRoomId();
+
+    if (existingChatRoomId) {
+      navigateToChatRoom(existingChatRoomId);
+      return;
+    }
+
+    const canCreateChatRoom = ['chairperson', 'treasurer'].includes(userMembership?.role?.toLowerCase());
+    if (!canCreateChatRoom) {
+      Alert.alert(
+        'Access Denied',
+        'Only chairperson and treasurer can create a chat room for this group.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Create Chat Room',
+      `This will create a chat room for this ${getGroupLabel().toLowerCase()}. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Create', style: 'default', onPress: confirmCreateChatRoom },
+      ]
+    );
+  };
+
+  const confirmCreateChatRoom = async () => {
+    try {
+      setChatRoomLoading(true);
+
+      const response = await ApiService.createChamaChatRoom(chamaId);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to create chat room');
+      }
+
+      const roomId = response.data?.roomId || response.data?.id || getExistingChatRoomId();
+      if (!roomId) {
+        throw new Error('Chat room was created but no room ID was returned');
+      }
+
+      setChama(prev => prev ? { ...prev, chat_room_id: roomId } : prev);
+      setSelectedChama(prev => prev && prev.id === chamaId ? { ...prev, chat_room_id: roomId } : prev);
+
+      Alert.alert(
+        'Chat Room Created',
+        'Chat room has been created for this group.'
+      );
+
+      navigateToChatRoom(roomId);
+    } catch (error) {
+      console.error('Error creating chat room:', error);
+      Alert.alert('Error', error.message || 'Failed to create chat room');
+    } finally {
+      setChatRoomLoading(false);
     }
   };
 
@@ -1038,50 +1119,64 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       </Card>
     );
   };
-  const renderGroupChat = () => (
-  <Card style={styles.section} variant="outlined">
-    <Text style={[styles.sectionTitle, { color: colors.text }]}>
-      Group Communication
-    </Text>
+  const renderGroupChat = () => {
+    const existingChatRoomId = getExistingChatRoomId();
+    const canCreateChatRoom = ['chairperson', 'treasurer'].includes(userMembership?.role?.toLowerCase());
+    const groupLabel = getGroupLabel();
 
-    <TouchableOpacity
-      style={[styles.chatButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-      onPress={async () => {
-        if (!chama?.chat_room_id) {
-          try {
-            const response = await ApiService.createChatRoom({
-              type: 'chama',
-              chamaId: chamaId,
-              name: `${chama?.name || 'Chama'} Group Chat`
-            });
+    return (
+      <Card style={styles.section} variant="outlined">
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Group Communication
+        </Text>
 
-            if (response.success) {
-              navigation.navigate('ChatRoom', {
-                roomId: response.data.id,
-                roomName: response.data.name || `${chama?.name || 'Chama'} Group Chat`,
-                roomType: 'group'
-              });
-            } else {
-              Alert.alert('Error', 'Failed to access group chat');
-            }
-          } catch (error) {
-          }
-        } else {
-          navigation.navigate('ChatRoom', {
-            roomId: chama.chat_room_id,
-            roomName: chama.name,
-            roomType: 'group'
-          });
-        }
-      }}
-    >
-      <Ionicons name="chatbubbles" size={24} color={colors.success} />
-      <Text style={[styles.chatButtonText, { color: colors.success }]}>
-        Open Group Chat
-      </Text>
-    </TouchableOpacity>
-  </Card>
-  );
+        {!userMembership ? (
+          <Text style={[styles.emptyText, { color: colors.textSecondary, paddingVertical: spacing.md }]}>
+            Join this {groupLabel.toLowerCase()} to access group chat.
+          </Text>
+        ) : (
+          <>
+            {!existingChatRoomId && !canCreateChatRoom && (
+              <Text style={[styles.emptyText, { color: colors.textSecondary, paddingVertical: spacing.md }]}>
+                Only chairperson and treasurer can create a chat room for this {groupLabel.toLowerCase()}.
+              </Text>
+            )}
+
+            <Button
+              title={
+                existingChatRoomId
+                  ? 'Open Group Chat'
+                  : chatRoomLoading
+                    ? 'Creating...'
+                    : `Create Chat Room for ${groupLabel}`
+              }
+              onPress={handleCreateChatRoom}
+              disabled={!userMembership || (!existingChatRoomId && !canCreateChatRoom) || chatRoomLoading}
+              loading={chatRoomLoading}
+              icon={
+                <Ionicons
+                  name={existingChatRoomId ? 'chatbubbles' : 'add-circle'}
+                  size={20}
+                  color={colors.white}
+                />
+              }
+              style={[
+                styles.chatButton,
+                { backgroundColor: colors.success, borderColor: colors.success }
+              ]}
+              textStyle={{ color: colors.white }}
+            />
+
+            {!existingChatRoomId && (
+              <Text style={[styles.sectionDescription, { color: colors.textSecondary, marginTop: spacing.sm }]}>
+                Creates a chat room only when one does not already exist.
+              </Text>
+            )}
+          </>
+        )}
+      </Card>
+    );
+  };
 
   const renderMembershipActions = () => {
     if (!userMembership) {

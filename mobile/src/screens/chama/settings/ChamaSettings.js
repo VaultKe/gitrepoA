@@ -85,8 +85,9 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
       // Fetch user's role in this chama
       const membersResponse = await api.makeRequest(`/chamas/${chamaId}/members`);
       if (membersResponse.success && membersResponse.data) {
+        const currentUserId = String(user?.id);
         const currentUserMember = membersResponse.data.find(member =>
-          member.user_id === user.id || member.id === user.id
+          String(member.user_id) === currentUserId || String(member.user?.id) === currentUserId
         );
         if (currentUserMember) {
           setUserRole(currentUserMember.role || 'member');
@@ -106,7 +107,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleSaveSettings = async () => {
-    if (userRole !== 'chairperson') {
+    if (userRole?.toLowerCase() !== 'chairperson') {
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -162,15 +163,41 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-const [chatRoomLoading, setChatRoomLoading] = useState(false);
+  const [chatRoomLoading, setChatRoomLoading] = useState(false);
 
-  const handleCreateChatRoom = async () => {
-    if (userRole !== 'chairperson' && userRole !== 'treasurer') {
+  const getExistingChatRoomId = () => {
+    return chamaData?.chat_room_id || chamaData?.chatRoomId || chamaData?.chat_room?.id || chamaData?.chatRoom?.id;
+  };
+
+  const navigateToChatRoom = (roomId) => {
+    const roomName = `${chamaData?.name || 'Chama'} Group Chat`;
+
+    if (onRouteChange) {
+      onRouteChange('chat', 'ChatRoom', { roomId, roomName, chamaId });
+    } else {
+      navigation.navigate('ChatRoom', {
+        roomId,
+        roomName,
+        roomType: 'group',
+        chamaId,
+      });
+    }
+  };
+
+  const handleCreateChatRoom = () => {
+    const role = userRole?.toLowerCase();
+    if (role !== 'chairperson' && role !== 'treasurer') {
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
         text2: 'Only chairperson and treasurer can create chat room',
       });
+      return;
+    }
+
+    const existingChatRoomId = getExistingChatRoomId();
+    if (existingChatRoomId) {
+      navigateToChatRoom(existingChatRoomId);
       return;
     }
 
@@ -188,22 +215,24 @@ const [chatRoomLoading, setChatRoomLoading] = useState(false);
     try {
       setChatRoomLoading(true);
 
-      const response = await api.makeRequest(`/chamas/${chamaId}/create-chat-room`, {
-        method: 'POST',
-      });
+      const response = await api.createChamaChatRoom(chamaId);
 
       if (response.success) {
+        const roomId = response.data?.roomId || response.data?.id || getExistingChatRoomId();
+
+        if (!roomId) {
+          throw new Error('Chat room was created but no room ID was returned');
+        }
+
+        setChamaData(prev => prev ? { ...prev, chat_room_id: roomId } : prev);
+
         Toast.show({
           type: 'success',
           text1: 'Chat Room Created',
           text2: 'Chat room has been created for this chama',
         });
-        // Refresh to show the chat room is now available
-        if (onRouteChange) {
-          onRouteChange('chat', 'ChamaChat');
-        } else {
-          navigation.navigate('ChamaChat', { chamaId });
-        }
+
+        navigateToChatRoom(roomId);
       } else {
         throw new Error(response.error || 'Failed to create chat room');
       }
@@ -221,7 +250,7 @@ const [chatRoomLoading, setChatRoomLoading] = useState(false);
 
   // Real-time setting update function
   const updateSettingRealTime = async (settingType, settingKey, value) => {
-    if (userRole !== 'chairperson') {
+    if (userRole?.toLowerCase() !== 'chairperson') {
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -464,8 +493,8 @@ const [chatRoomLoading, setChatRoomLoading] = useState(false);
     );
   }
 
-  const isAdmin = userRole === 'chairperson' || userRole === 'treasurer';
-  const isChairperson = userRole === 'chairperson';
+  const isAdmin = ['chairperson', 'treasurer'].includes(userRole?.toLowerCase());
+  const isChairperson = userRole?.toLowerCase() === 'chairperson';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>

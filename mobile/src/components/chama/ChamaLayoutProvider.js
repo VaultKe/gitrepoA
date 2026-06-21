@@ -15,7 +15,6 @@ import MerryGoRoundScreen from '../../screens/chama/merry-go-round/MerryGoRoundS
 import WelfareScreen from '../../screens/chama/welfare/WelfareScreen';
 import ChamaSettings from '../../screens/chama/settings/ChamaSettings';
 import ApplyForLoanScreen from '../../screens/chama/loans/ApplyForLoanScreen';
-import ApplyForLoanScreen from '../../screens/chama/loans/ApplyForLoanScreen';
 import CreateMeeting from '../../screens/chama/meeting/CreateMeeting';
 import CreateMerryGoRound from '../../screens/chama/merry-go-round/CreateMerryGoRound';
 import JitsiMeetScreen from '../../screens/chama/meeting/JitsiMeetScreen';
@@ -65,37 +64,39 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
     'physical-meeting': PhysicalMeetingScreen,
     'meeting-summary': MeetingSummaryScreen,
     'invite-members': InviteMembers,
-    chat: () => {
+    chat: (params = {}) => {
       // Get or create chama chat room
       const getChamaChatRoom = async () => {
         try {
-          const roomId = chamaId || chama?.id;
-          const roomTitle = chamaName || chama?.name || 'Group Chat';
+          const roomId = params.roomId || chamaId || chama?.id;
+          const roomTitle = params.roomName || chamaName || chama?.name || 'Group Chat';
 
           if (!roomId) {
             Alert.alert('Error', 'Unable to access chat room. Please try again.');
             return;
           }
 
-          console.log('Getting chama chat room for:', { roomId, roomTitle });
+          let chatRoomId = roomId;
 
-          // Try to create or get existing chama chat room
-          const response = await ApiService.createChatRoom({
-            type: 'chama',
-            chamaId: roomId,
-            name: `${roomTitle} Chat`,
-          });
+          if (!params.roomId) {
+            const response = await ApiService.createChamaChatRoom(roomId);
 
-          if (response.success) {
-            // Navigate to the actual chat room
-            navigation.navigate('ChatRoom', {
-              roomId: response.data.id, // Use the actual chat room ID
-              roomName: `${roomTitle} Group Chat`,
-              roomType: 'group'
-            });
-          } else {
-            Alert.alert('Error', 'Failed to access chat room. Please try again.');
+            if (!response.success) {
+              Alert.alert('Error', response.error || 'Failed to access chat room. Please try again.');
+              return;
+            }
+
+            chatRoomId = response.data?.roomId || response.data?.id || roomId;
           }
+
+          const cleanRoomTitle = roomTitle.replace(/ Group Chat$/, '') || roomTitle;
+
+          navigation.navigate('ChatRoom', {
+            roomId: chatRoomId,
+            roomName: `${cleanRoomTitle} Group Chat`,
+            roomType: 'group',
+            chamaId: roomId,
+          });
         } catch (error) {
           console.error('Failed to get chama chat room:', error);
           Alert.alert('Error', 'Failed to access chat room. Please try again.');
@@ -129,7 +130,7 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
 
     // Handle special routes that navigate away
     if (currentComponent === 'chat') {
-      return Component();
+      return Component(additionalParams);
     }
 
     // Render the component with proper props

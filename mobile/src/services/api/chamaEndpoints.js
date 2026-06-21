@@ -53,6 +53,12 @@ const updateChama = async (chamaId, updateData) => {
   });
 };
 
+const createChamaChatRoom = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/create-chat-room`, {
+    method: 'POST',
+  });
+};
+
 const joinChama = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/join`, {
     method: 'POST',
@@ -110,6 +116,7 @@ export {
   createMerryGoRound,
   createChama,
   updateChama,
+  createChamaChatRoom,
   joinChama,
   leaveChama,
   getMemberRole,
