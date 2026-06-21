@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -27,18 +27,10 @@ const NotificationsScreen = ({ navigation }) => {
   const { theme, notifications: contextNotifications, loadLocalData, getCachedData } = useApp();
   const colors = getThemeColors(theme);
 
-  // Debug navigation context
+  // Debug navigation context - only run once
   useEffect(() => {
-    const state = navigation.getState();
-    console.log('🔍NAVIGATION DEBUG: NotificationsScreen navigation context:', {
-      currentRoute: state?.routes?.[state?.index]?.name,
-      routeNames: navigation.getParent()?.getState()?.routeNames,
-      navigatorKey: navigation.getParent()?.getState()?.key,
-      canNavigateToSettings: navigation.getParent()?.getState()?.routeNames?.includes('Settings'),
-      canNavigateToReminders: navigation.getParent()?.getState()?.routeNames?.includes('Reminders'),
-      canNavigateToNotificationTone: navigation.getParent()?.getState()?.routeNames?.includes('NotificationTone'),
-    });
-  }, [navigation]);
+    // console.log('🔍 Navigation loaded for NotificationsScreen');
+  }, []);
 
   // Smart navigation helper that can handle cross-navigator navigation
   const smartNavigate = (screenName) => {
@@ -124,18 +116,18 @@ const NotificationsScreen = ({ navigation }) => {
   const displayNotifications = hasLocalState ? localNotifications : baseNotifications;
 
   // Track processed notifications to prevent duplicate tone playback
-  const [processedNotificationIds, setProcessedNotificationIds] = useState(new Set());
+const processedNotificationIds = useRef(new Set()).current;
 
-  // Update local notifications when base notifications change
-   useEffect(() => {
-      if (baseNotifications.length >= 0) {
-        const filteredNotifications = baseNotifications.filter(
-          notification => !deletedNotificationIds.has(notification.id)
-        );
-        setLocalNotifications(filteredNotifications);
-        setHasLocalState(true);
-      }
-    }, [baseNotifications, deletedNotificationIds]); // Keep only stable dependencies
+  // Update local notifications when base notifications change (only once, no loop)
+  useEffect(() => {
+    if (baseNotifications.length > 0 && !hasLocalState) {
+      const filteredNotifications = baseNotifications.filter(
+        notification => !deletedNotificationIds.has(notification.id)
+      );
+      setLocalNotifications(filteredNotifications);
+      setHasLocalState(true);
+    }
+  }, [baseNotifications, deletedNotificationIds, hasLocalState]);
 
   // Detect new notifications and play notification tone automatically
   useEffect(() => {
@@ -144,44 +136,35 @@ const NotificationsScreen = ({ navigation }) => {
       const trulyNewNotificationIds = [...currentIds].filter(id => !processedNotificationIds.has(id));
 
       if (trulyNewNotificationIds.length > 0) {
-        console.log('🔔 Truly new notifications detected:', trulyNewNotificationIds.length);
-
         // Play notification tone for new notifications (only if they haven't been read)
-        trulyNewNotificationIds.forEach(notificationId => {
-          const newNotification = baseNotifications.find(n => n.id === notificationId);
-          if (newNotification && !(newNotification.isRead || newNotification.is_read)) {
-            console.log('🎵 Playing notification tone for:', newNotification.title);
+        const newUnreadNotifications = baseNotifications.filter(
+          n => trulyNewNotificationIds.includes(n.id) && !n.isRead
+        );
 
-            // Use the notification service to handle sound and vibration
-            notificationService.handleNotificationAlert({
-              request: {
-                content: {
-                  title: newNotification.title,
-                  body: newNotification.message,
-                  data: newNotification.data || {}
-                }
+        if (newUnreadNotifications.length > 0) {
+          // Use the notification service to handle sound and vibration (fire and forget)
+          notificationService.handleNotificationAlert({
+            request: {
+              content: {
+                title: newUnreadNotifications[0].title,
+                body: newUnreadNotifications[0].message,
+                data: newUnreadNotifications[0].data || {}
               }
-            }).catch(error => {
-              console.warn('⚠️ Failed to play notification tone:', error);
-            });
-          }
-        });
+            }
+          }).catch(() => {});
+        }
 
         // Mark these notifications as processed to prevent duplicate playback
-        setProcessedNotificationIds(prev => new Set([...prev, ...trulyNewNotificationIds]));
+        trulyNewNotificationIds.forEach(id => processedNotificationIds.add(id));
       }
     }
-  }, [baseNotifications]); // Remove processedNotificationIds from dependencies to prevent loops
+  }, [baseNotifications]);
 
   // Removed artificial re-render trigger; counts derive from state/memo and will re-render naturally
 
   // Log when notifications change for debugging
   useEffect(() => {
-    // console.log('🔄 Notifications data changed:', {
-    //   lightningCount: notifications?.length || 0,
-    //   contextCount: contextNotifications?.length || 0,
-    //   unreadCount: unreadCount || 0
-    // });
+    // console.log('🔄 Notifications data changed:', notifications?.length || 0, contextNotifications?.length || 0, unreadCount || 0);
   }, [notifications, contextNotifications, unreadCount]);
 
   // Refresh data when screen comes into focus
@@ -206,24 +189,24 @@ const NotificationsScreen = ({ navigation }) => {
     }, [refreshNotifications, refreshUnreadCount])
   );
 
-  // Calculate filter counts - memoized to prevent recalculation on every render
- const filterCounts = useMemo(() => {
-   const all = displayNotifications.length;
-   const unread = displayNotifications.filter(n => !(n.isRead || n.is_read)).length;
-   const chama = displayNotifications.filter(n => n.type === 'chama' || n.type === 'chama_invitation' || n.type === 'member_joined').length;
-   const financial = displayNotifications.filter(n => n.type === 'financial' || n.type.includes('contribution') || n.type.includes('loan') || n.type.includes('welfare') || n.type === 'guarantor_request').length;
-   const support = displayNotifications.filter(n => n.type === 'support_update' || n.type === 'new_support_request').length;
-   const system = displayNotifications.filter(n => n.type === 'system').length;
+// Calculate filter counts - memoized to prevent recalculation on every render
+  const filterCounts = useMemo(() => {
+    const all = displayNotifications.length;
+    const unread = displayNotifications.filter(n => !n.isRead).length;
+    const chama = displayNotifications.filter(n =>
+      n.type === 'chama' || n.type === 'chama_invitation' || n.type === 'member_joined'
+    ).length;
+    const financial = displayNotifications.filter(n =>
+      n.type === 'financial' || n.type.includes('contribution') ||
+      n.type.includes('loan') || n.type.includes('welfare') || n.type === 'guarantor_request'
+    ).length;
+    const support = displayNotifications.filter(n =>
+      n.type === 'support_update' || n.type === 'new_support_request'
+    ).length;
+    const system = displayNotifications.filter(n => n.type === 'system').length;
 
-   return {
-     all,
-     unread,
-     chama,
-     financial,
-     support,
-     system
-   };
- }, [displayNotifications.length, displayNotifications.filter(n => !(n.isRead || n.is_read)).length]);
+    return { all, unread, chama, financial, support, system };
+  }, [displayNotifications]);
 
 
   const filters = [
@@ -239,15 +222,8 @@ const NotificationsScreen = ({ navigation }) => {
 
   // Debug filter counts
   useEffect(() => {
-    // console.log('🔢 Filter counts updated:', {
-    //   all: filters[0].count,
-    //   unread: filters[1].count,
-    //   chama: filters[2].count,
-    //   financial: filters[3].count,
-    //   support: filters[4].count,
-    //   system: filters[5].count,
-    // });
-  }, [displayNotifications.length, displayNotifications.filter(n => !(n.isRead || n.is_read)).length]);
+    // console.log('🔢 Filter counts updated:', filterCounts);
+  }, [displayNotifications]);
 
   useEffect(() => {
     loadNotifications();
@@ -334,25 +310,20 @@ const NotificationsScreen = ({ navigation }) => {
 
   const markAllAsRead = async () => {
     try {
-      console.log('📖 MARK ALL READ: Starting mark all notifications as read...');
-
       // Count unread notifications before marking as read
-      const unreadNotifications = displayNotifications.filter(n => !(n.isRead || n.is_read));
-      console.log('📊 MARK ALL READ: Marking', unreadNotifications.length, 'notifications as read');
+      const unreadNotifications = displayNotifications.filter(n => !n.isRead);
 
       // IMMEDIATE UI UPDATE - Mark all notifications as read in local state
       setLocalNotifications(prev =>
         prev.map(notification => ({
           ...notification,
-          isRead: true,
-          is_read: true
+          isRead: true
         }))
       );
       setHasLocalState(true);
 
       // Use optimistic update for backend sync
       const markAllResult = await markAllNotificationsAsRead();
-      console.log('📖 MARK ALL READ: Mark all result:', markAllResult);
 
       // Show success toast
       Toast.show({
@@ -362,17 +333,14 @@ const NotificationsScreen = ({ navigation }) => {
         position: 'bottom',
         visibilityTime: 2000,
       });
-
-      console.log('✅ All notifications marked as read successfully');
     } catch (error) {
-      console.error('❌ Mark all as read error:', error);
+      console.error('Mark all as read error:', error);
 
-      // REVERT UI UPDATE on error - restore original read status
+      // REVERT UI UPDATE on error
       setLocalNotifications(prev =>
         prev.map(notification => ({
           ...notification,
-          isRead: notification.isRead || notification.is_read,
-          is_read: notification.isRead || notification.is_read
+          isRead: false
         }))
       );
 
@@ -389,9 +357,8 @@ const NotificationsScreen = ({ navigation }) => {
 
 
   const handleNotificationPress = async (notification) => {
-    // Handle both old and new notification formats
-    const isRead = notification.isRead || notification.is_read;
-    if (!isRead) {
+    // Handle read status
+    if (!notification.isRead) {
       await markNotificationAsRead(notification.id);
     }
 
@@ -517,7 +484,7 @@ const NotificationsScreen = ({ navigation }) => {
 
     switch (selectedFilter) {
       case 'unread':
-        filtered = displayNotifications.filter(n => !(n.isRead || n.is_read));
+        filtered = displayNotifications.filter(n => !n.isRead);
         break;
       case 'chama':
         filtered = displayNotifications.filter(n =>
@@ -549,7 +516,7 @@ const NotificationsScreen = ({ navigation }) => {
     }
 
     return filtered.sort((a, b) =>
-      new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at)
+      new Date(b.createdAt) - new Date(a.createdAt)
     );
   };
 
@@ -878,8 +845,8 @@ const NotificationsScreen = ({ navigation }) => {
   );
 
   const renderNotification = ({ item }) => {
-    const isRead = item.isRead || item.is_read;
-    const createdAt = item.createdAt || item.created_at;
+    const isRead = item.isRead;
+    const createdAt = item.createdAt;
 
     return (
       <Card style={[
@@ -1077,13 +1044,13 @@ const NotificationsScreen = ({ navigation }) => {
                   console.log('📖 MARK READ: Starting mark as read for notification:', item.id);
 
                   // Update local state immediately for instant UI feedback
-                  setLocalNotifications(prev =>
-                    prev.map(notification =>
-                      notification.id === item.id
-                        ? { ...notification, isRead: true, is_read: true }
-                        : notification
-                    )
-                  );
+setLocalNotifications(prev =>
+                             prev.map(notification =>
+                               notification.id === item.id
+                                 ? { ...notification, isRead: true }
+                                 : notification
+                             )
+                           );
 
                   const markResult = await markNotificationAsRead(item.id);
                   console.log('📖 MARK READ: Mark result:', markResult);
@@ -1101,11 +1068,11 @@ const NotificationsScreen = ({ navigation }) => {
                 } catch (error) {
                   console.error('❌ Failed to mark notification as read:', error);
 
-                  // Revert local state on error
+// REVERT UI UPDATE on error
                   setLocalNotifications(prev =>
                     prev.map(notification =>
                       notification.id === item.id
-                        ? { ...notification, isRead: false, is_read: false }
+                        ? { ...notification, isRead: true }
                         : notification
                     )
                   );

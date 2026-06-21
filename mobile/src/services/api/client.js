@@ -44,13 +44,21 @@ const makeRequest = async (endpoint, options = {}) => {
       data = await response.json();
     } else {
       const textResponse = await response.text();
-      data = JSON.parse(textResponse);
+      // Handle non-JSON responses gracefully
+      if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
+        throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
+      }
+      try {
+        data = JSON.parse(textResponse);
+      } catch (jsonError) {
+        throw new Error(`Invalid JSON response from server. Status: ${response.status}`);
+      }
     }
   } catch (parseError) {
     if (!response.ok) {
       throw new Error(`Server error: ${response.statusText}`);
     }
-    throw new Error('Invalid response format from server');
+    throw parseError;
   }
 
   if (!response.ok) {

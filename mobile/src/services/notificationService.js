@@ -33,6 +33,26 @@ class NotificationService {
     });
   }
 
+  async handleNotificationAlert(request) {
+    try {
+      if (Platform.OS !== 'web') {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: request.request.content.title,
+            body: request.request.content.body,
+            data: request.request.content.data,
+            sound: true,
+          },
+          trigger: null,
+        });
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to handle notification alert:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   async setupNotificationChannels() {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
