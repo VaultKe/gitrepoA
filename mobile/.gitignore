@@ -96,8 +96,9 @@ Thumbs.db
 logs/
 Log
 
-# Build outpu
-out
+# Build outputs
+
+out/
 .gradle/
 *.apk
 *.aab
