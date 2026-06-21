@@ -20,26 +20,18 @@ const getEnvironment = () => {
  * Resolve API base URL from environment variables
  */
 const resolveApiBaseUrl = () => {
-  // Priority 1: BACKEND_API_URL (Expo-managed public env var)
+  // Priority 1: BACKEND_API_URL (from .env file)
   if (process.env.BACKEND_API_URL) {
-    return process.env.BACKEND_API_URL.replace(/\/+$/, ''); // Remove trailing slashes
+    return process.env.BACKEND_API_URL.replace(/\/+$/, '');
   }
 
-  // Priority 2: REACT_APP_API_URL (fallback for non-Expo setups)
+  // Priority 2: REACT_APP_API_URL (fallback)
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL.replace(/\/+$/, '');
   }
 
-  // Priority 3: Local development fallback
-  if (__DEV__ || process.env.NODE_ENV === 'development') {
-    // Check if we're running on localhost (web) or need a dev server
-    if (typeof window !== 'undefined' && window.location?.hostname?.includes('localhost')) {
-      return 'http://localhost:5000/api';
-    }
-  }
-
-  // No fallback - environment variable must be explicitly set
-  return null;
+  // Fallback: localhost:8085 (matches backend default)
+  return 'http://localhost:8085/api/v1';
 };
 
 /**
@@ -108,7 +100,7 @@ const serviceUrls = {
  * External service credentials from environment
  */
 const credentials = {
-  GOOGLE_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_ID: process.env.BACKEND_PUBLIC_GOOGLE_CLIENT_ID || '',
 };
 
 /**
