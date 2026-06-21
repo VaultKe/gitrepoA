@@ -863,7 +863,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           )}
 
           {completedPolls.length === 0 && (
-            <View style={styles.emptyState}>
+            <View style={[styles.emptyState, { alignItems: 'center' }]}>
               <Ionicons name="checkmark-done" size={64} color={colors.textTertiary} />
               <Text style={styles.emptyText}>
                 No completed polls yet
