@@ -1337,7 +1337,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               {/* Voted Indicator - Compact */}
               {item.userVoted && (
                 <View style={[styles.actionIndicator, { backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2 }]}>
-                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 9 }]}>
+                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
                     VOTED
                   </Text>
                 </View>
@@ -1346,7 +1346,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               {/* Completed Indicator - Compact */}
               {item.status === 'completed' && !item.userVoted && (
                 <View style={[styles.actionIndicator, { backgroundColor: colors.textSecondary, paddingHorizontal: 6, paddingVertical: 2 }]}>
-                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 9 }]}>
+                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
                     ENDED
                   </Text>
                 </View>
@@ -1437,7 +1437,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           {item.userVoted && (
             <View style={[styles.votedBadge, { backgroundColor: colors.success + '15', borderColor: colors.success, borderWidth: 1 }]}>
               <Ionicons name="checkmark-circle" size={10} color={colors.success} />
-              <Text style={[styles.votedText, { color: colors.success, fontSize: 9 }]}>
+              <Text style={[styles.votedText, { color: colors.success, fontSize: 12 }]}>
                 VOTED
               </Text>
             </View>
@@ -1446,7 +1446,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           {item.status === 'active' && !item.userVoted && (
             <View style={[styles.canVoteBadge, { backgroundColor: colors.primary + '15', borderColor: colors.primary, borderWidth: 1 }]}>
               <Ionicons name="radio-button-off" size={10} color={colors.primary} />
-              <Text style={[styles.canVoteText, { color: colors.primary, fontSize: 9 }]}>
+              <Text style={[styles.canVoteText, { color: colors.primary, fontSize: 12 }]}>
                 CAN VOTE
               </Text>
             </View>
@@ -1455,7 +1455,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           {item.status === 'completed' && (
             <View style={[styles.completedBadge, { backgroundColor: colors.textSecondary + '15', borderColor: colors.textSecondary, borderWidth: 1 }]}>
               <Ionicons name="time" size={10} color={colors.textSecondary} />
-              <Text style={[styles.completedText, { color: colors.textSecondary, fontSize: 9 }]}>
+              <Text style={[styles.completedText, { color: colors.textSecondary, fontSize: 12 }]}>
                 ENDED
               </Text>
             </View>
@@ -3290,7 +3290,7 @@ const styles = StyleSheet.create({
   },
   tableHeaderText: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     textTransform: 'uppercase',
     textAlign: 'center',

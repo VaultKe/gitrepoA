@@ -506,19 +506,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&size=${size}&backgroundColor=random`;
   };
 
-  // Helper function to mask email for privacy
-  const maskEmail = (email) => {
-    if (!email || !email.includes('@')) return email;
-
-    const [localPart, domain] = email.split('@');
-    if (localPart.length <= 1) return email;
-
-    // Show first letter, then *** , then last 3 characters of domain
-    const firstChar = localPart.charAt(0);
-    const domainLast3 = domain.slice(-3);
-    return `${firstChar}***${domainLast3}`;
-  };
-
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (member) => {
     if (!member) {
@@ -563,6 +550,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       );
     }
 
+    
     // Try generated avatar as fallback if email is available
     if (email && email.trim()) {
       const generatedAvatarUrl = getAvatarFromEmail(email, 60);

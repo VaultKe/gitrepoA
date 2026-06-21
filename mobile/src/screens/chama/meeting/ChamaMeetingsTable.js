@@ -253,7 +253,7 @@ const createStyles = (colors) => StyleSheet.create({
     gap: 4,
   },
   tableHeaderText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: typography.fontWeight.bold,
     textTransform: 'uppercase',
   },

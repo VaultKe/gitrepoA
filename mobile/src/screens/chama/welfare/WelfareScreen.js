@@ -85,7 +85,7 @@ const WelfareScreen = ({ route, navigation }) => {
     textAlign: 'center',
   },
   tableCellText: {
-    fontSize: 9,
+    fontSize: 12,
     color: colors.text,
     textAlign: 'center',
   },
@@ -111,7 +111,7 @@ const WelfareScreen = ({ route, navigation }) => {
       borderRadius: borderRadius.sm,
     },
     statusText: {
-      fontSize: 7,
+      fontSize: 11,
       fontWeight: typography.fontWeight.bold,
       textTransform: 'capitalize',
     },

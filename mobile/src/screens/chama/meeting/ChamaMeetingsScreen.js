@@ -2093,7 +2093,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0, 0, 0, 0.1)',
   },
   tableHeaderText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: typography.fontWeight.bold,
     textTransform: 'uppercase',
   },

@@ -928,7 +928,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   detailsTableHeaderText: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     textAlign: 'left',
     color: colors.primary,

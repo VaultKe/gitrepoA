@@ -53,7 +53,7 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
     color: colors.text,
-    fontSize: 9,
+    fontSize: 12,
     textAlign: 'center',
   },
   tableCellText: {
