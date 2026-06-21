@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../utils/theme';
@@ -57,6 +58,7 @@ const Tab = createBottomTabNavigator();
 function AdminTabBar({ state, descriptors, navigation }) {
   const { theme, switchToUserDashboard } = useApp();
   const colors = getThemeColors(theme);
+  const insets = useSafeAreaInsets();
 
   // Smart shortcuts for admin dashboard - exactly 6 icons
   const quickShortcuts = [
@@ -86,7 +88,7 @@ function AdminTabBar({ state, descriptors, navigation }) {
   const currentIndex = getCurrentIndex();
 
   return (
-    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 70 + insets.bottom, paddingBottom: spacing.sm + insets.bottom }]}>
       {/* Smart Footer Icons - Always show exactly 6 */}
       {quickShortcuts.map((item, index) => {
         const isUser = item.name === 'User';

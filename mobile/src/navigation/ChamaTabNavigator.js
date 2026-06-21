@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { ChamaProvider } from '../context/ChamaContext';
@@ -68,6 +69,7 @@ const Tab = createBottomTabNavigator();
 function ChamaTabBar({ state, descriptors, navigation }) {
   const { theme, switchToUserDashboard, selectedChama } = useApp();
   const colors = getThemeColors(theme);
+  const insets = useSafeAreaInsets();
 
   // Smart shortcuts for chama dashboard - exactly 6 icons
   const quickShortcuts = [
@@ -97,7 +99,7 @@ function ChamaTabBar({ state, descriptors, navigation }) {
   const currentIndex = getCurrentIndex();
 
   return (
-    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 70 + insets.bottom, paddingBottom: spacing.sm + insets.bottom }]}>
       {/* Smart Footer Icons - Always show exactly 6 */}
       {quickShortcuts.map((item, index) => {
         const isExit = item.name === 'Exit';

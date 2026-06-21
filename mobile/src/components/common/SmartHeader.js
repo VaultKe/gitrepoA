@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography } from '../../utils/theme';
@@ -30,6 +31,7 @@ const SmartHeader = ({
   onProfilePress,
 }) => {
   const { theme, user, getCachedAvatarData } = useApp();
+  const insets = useSafeAreaInsets();
   const colors = getThemeColors(theme);
   const { navigateTo, getCurrentContext } = useSmartNavigation();
   const [avatarData, setAvatarData] = useState(null);
@@ -84,7 +86,7 @@ const SmartHeader = ({
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: headerBackgroundColor }]}>
+    <View style={[styles.safeArea, { backgroundColor: headerBackgroundColor, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: headerBackgroundColor }, style]}>
         {/* Left Section: Home Icon + Back Button */}
         <View style={styles.leftSection}>
@@ -161,7 +163,7 @@ const SmartHeader = ({
           )}
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

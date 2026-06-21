@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   ScrollView,
   Dimensions,
   TextInput,
   Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
@@ -28,6 +28,7 @@ const ChamaLayout = ({
   onRouteChange
 }) => {
   const { theme, user } = useApp();
+  const insets = useSafeAreaInsets();
   const colors = getThemeColors(theme);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -256,7 +257,7 @@ const ChamaLayout = ({
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
 
@@ -359,7 +360,7 @@ const ChamaLayout = ({
       </View>
 
       {/* Bottom Navigation */}
-      <View style={[styles.bottomNav, { backgroundColor: colors.surface }]}>
+      <View style={[styles.bottomNav, { backgroundColor: colors.surface, height: 70 + insets.bottom, paddingBottom: spacing.sm + insets.bottom }]}>
         {bottomNavItems.map(renderBottomNavItem)}
       </View>
 
@@ -442,7 +443,7 @@ const ChamaLayout = ({
           </View>
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
