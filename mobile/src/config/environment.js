@@ -30,6 +30,14 @@ const resolveApiBaseUrl = () => {
     return process.env.REACT_APP_API_URL.replace(/\/+$/, '');
   }
 
+  // Priority 3: Local development fallback
+  if (__DEV__ || process.env.NODE_ENV === 'development') {
+    // Check if we're running on localhost (web) or need a dev server
+    if (typeof window !== 'undefined' && window.location?.hostname?.includes('localhost')) {
+      return 'http://localhost:5000/api';
+    }
+  }
+
   // No fallback - environment variable must be explicitly set
   return null;
 };

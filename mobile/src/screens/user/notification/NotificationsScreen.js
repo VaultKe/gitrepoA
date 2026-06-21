@@ -93,8 +93,11 @@ const NotificationsScreen = ({ navigation }) => {
 
   // Local state for immediate UI updates (optimistic updates)
   const [localNotifications, setLocalNotifications] = useState([]);
-  const [deletedNotificationIds, setDeletedNotificationIds] = useState(new Set());
+  const [deletedNotificationIds, setDeletedNotificationIds] = useState(() => new Set());
   const [hasLocalState, setHasLocalState] = useState(false);
+
+  // Track processed notifications to prevent duplicate tone playback (persisted across renders)
+  const processedNotificationIds = useRef(new Set());
 
   // Debounce mechanism to prevent rapid re-renders
   const [updateTimeout, setUpdateTimeout] = useState(null);
@@ -111,12 +114,9 @@ const NotificationsScreen = ({ navigation }) => {
     setUpdateTimeout(timeout);
   }, [updateTimeout]);
 
-  // Use local notifications if available, otherwise fall back to lightning data
+// Use local notifications if available, otherwise fall back to lightning data
   const baseNotifications = notifications || contextNotifications || [];
   const displayNotifications = hasLocalState ? localNotifications : baseNotifications;
-
-  // Track processed notifications to prevent duplicate tone playback
-const processedNotificationIds = useRef(new Set()).current;
 
   // Update local notifications when base notifications change (only once, no loop)
   useEffect(() => {

@@ -78,7 +78,8 @@ const makeRequest = async (endpoint, options = {}) => {
     throw new Error(data.error || `HTTP error! status: ${response.status}`);
   }
 
-  return data;
+  // Wrap successful response in standard format
+  return data?.success !== undefined ? data : { success: true, data };
 };
 
 const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {

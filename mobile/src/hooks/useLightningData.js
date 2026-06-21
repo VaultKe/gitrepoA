@@ -14,13 +14,15 @@ export const useLightningData = (dataType, options = {}) => {
   const [source, setSource] = useState(null);
   const [loadTime, setLoadTime] = useState(0);
   const mountedRef = useRef(true);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const {
     autoRefresh = true,
     refreshInterval = 60000, // 1 minute
     enableOptimistic = true,
     prefetchRelated = true,
-  } = options;
+  } = optionsRef.current;
 
   // Load data function
   const loadData = useCallback(async (forceRefresh = false, customOptions = {}) => {
@@ -31,7 +33,7 @@ export const useLightningData = (dataType, options = {}) => {
       setError(null);
 
       const result = await cacheDataService.getData(dataType, {
-        ...options,
+        ...optionsRef.current,
         ...customOptions,
         forceRefresh,
       });
@@ -66,7 +68,7 @@ export const useLightningData = (dataType, options = {}) => {
         setLoading(false);
       }
     }
-  }, [dataType, options]);
+  }, [dataType]);
 
   // Initial load with real-time setup
   useEffect(() => {
@@ -89,18 +91,18 @@ export const useLightningData = (dataType, options = {}) => {
         cacheDataService.removeDataChangeListener(dataType, handleDataChange);
       };
     }
-  }, [loadData, dataType]);
+  }, []); // Empty deps - run once on mount
 
   // Auto refresh
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!optionsRef.current.autoRefresh) return;
 
     const interval = setInterval(() => {
       loadData();
-    }, refreshInterval);
+    }, optionsRef.current.refreshInterval || 60000);
 
     return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval, loadData]);
+  }, []); // Empty deps - use ref values inside
 
   // Real-time updates
   useEffect(() => {
@@ -168,9 +170,9 @@ export const useLightningData = (dataType, options = {}) => {
 
   // Refresh function with options support
   const refresh = useCallback((refreshOptions = {}) => {
-    const mergedOptions = { ...options, ...refreshOptions, forceRefresh: true };
+    const mergedOptions = { ...optionsRef.current, ...refreshOptions, forceRefresh: true };
     return loadData(true, mergedOptions);
-  }, [loadData, options]);
+  }, [loadData]);
 
   return {
     data,
