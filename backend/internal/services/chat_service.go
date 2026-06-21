@@ -1290,3 +1290,77 @@ func (s *ChatService) ClearChatRoom(roomID, userID string) error {
 
 	return nil
 }
+
+// CreateChamaChatWithTx creates a chat room for a chama within an existing transaction (for use during chama creation)
+func (s *ChatService) CreateChamaChatWithTx(tx *sql.Tx, chamaID, createdBy string) (*ChatRoom, error) {
+	// Get chama details
+	var chamaName string
+	chamaQuery := "SELECT name FROM chamas WHERE id = $1"
+	err := tx.QueryRow(chamaQuery, chamaID).Scan(&chamaName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chama: %w", err)
+	}
+
+	room := &ChatRoom{
+		ID:        uuid.New().String(),
+		Name:      &chamaName,
+		Type:      ChatRoomTypeChama,
+		ChamaID:   &chamaID,
+		CreatedBy: createdBy,
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Insert chat room
+	roomQuery := `
+		INSERT INTO chat_rooms (id, name, type, chama_id, created_by, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`
+
+	_, err = tx.Exec(roomQuery, room.ID, *room.Name, room.Type, *room.ChamaID, room.CreatedBy, room.IsActive, room.CreatedAt, room.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chat room: %w", err)
+	}
+
+	// Add all chama members to the chat (creator was already added in chama creation)
+	membersQuery := "SELECT user_id FROM chama_members WHERE chama_id = $1 AND is_active = true"
+	rows, err := tx.Query(membersQuery, chamaID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chama members: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, fmt.Errorf("failed to scan member: %w", err)
+		}
+
+		member := &ChatRoomMember{
+			ID:       uuid.New().String(),
+			RoomID:   room.ID,
+			UserID:   userID,
+			Role:     "member",
+			JoinedAt: time.Now(),
+			IsActive: true,
+			IsMuted:  false,
+		}
+
+		memberQuery := `
+			INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active, is_muted)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`
+		_, err = tx.Exec(memberQuery, member.ID, member.RoomID, member.UserID, member.Role, member.JoinedAt, member.IsActive, member.IsMuted)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add room member: %w", err)
+		}
+	}
+
+	return room, nil
+}
+
+// GetChatRoomByChamaID returns the chat room ID for a chama (public wrapper)
+func (s *ChatService) GetChatRoomByChamaID(chamaID string) (*ChatRoom, error) {
+	return s.getChamaChatRoom(chamaID)
+}

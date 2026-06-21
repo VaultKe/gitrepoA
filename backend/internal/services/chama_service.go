@@ -161,6 +161,13 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		return nil, fmt.Errorf("failed to add creator as member: %w", err)
 	}
 
+	// Create chat room for the chama within the same transaction
+	chatService := NewChatService(s.db)
+	_, err = chatService.CreateChamaChatWithTx(tx, chama.ID, createdBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chat room for chama: %w", err)
+	}
+
 	// Create chama wallet within the same transaction
 	walletService := NewWalletService(s.db)
 	_, err = walletService.CreateWalletWithTx(tx, chama.ID, models.WalletTypeChama)

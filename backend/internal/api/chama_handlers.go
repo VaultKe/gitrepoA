@@ -2689,3 +2689,85 @@ func CreateBulkDisbursement(c *gin.Context) {
 
 
 
+
+// CreateChamaChatRoom creates a chat room for a chama that doesn't have one
+func CreateChamaChatRoom(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	chamaService := services.NewChamaService(db.(*sql.DB))
+
+	// Check if user is a member of this chama
+	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "You are not a member of this chama",
+		})
+		return
+	}
+
+	if userRole != "chairperson" && userRole != "treasurer" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Only chairperson and treasurer can create chat room",
+		})
+		return
+	}
+
+	// Check if chama chat room already exists
+	chatService := services.NewChatService(db.(*sql.DB))
+	existingRoom, _ := chatService.GetChatRoomByChamaID(chamaID)
+	if existingRoom != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Chat room already exists for this chama",
+			"data": map[string]interface{}{
+				"roomId": existingRoom.ID,
+			},
+		})
+		return
+	}
+
+	// Create chat room for chama
+	chatRoom, err := chatService.CreateChamaChat(chamaID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create chat room: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Chat room created successfully",
+		"data": map[string]interface{}{
+			"roomId": chatRoom.ID,
+		},
+	})
+}

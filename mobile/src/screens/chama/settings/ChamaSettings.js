@@ -162,6 +162,63 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     }
   };
 
+const [chatRoomLoading, setChatRoomLoading] = useState(false);
+
+  const handleCreateChatRoom = async () => {
+    if (userRole !== 'chairperson' && userRole !== 'treasurer') {
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Only chairperson and treasurer can create chat room',
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Create Chat Room',
+      'This will create a chat room for this chama. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Create', style: 'default', onPress: confirmCreateChatRoom },
+      ]
+    );
+  };
+
+  const confirmCreateChatRoom = async () => {
+    try {
+      setChatRoomLoading(true);
+
+      const response = await api.makeRequest(`/chamas/${chamaId}/create-chat-room`, {
+        method: 'POST',
+      });
+
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Chat Room Created',
+          text2: 'Chat room has been created for this chama',
+        });
+        // Refresh to show the chat room is now available
+        if (onRouteChange) {
+          onRouteChange('chat', 'ChamaChat');
+        } else {
+          navigation.navigate('ChamaChat', { chamaId });
+        }
+      } else {
+        throw new Error(response.error || 'Failed to create chat room');
+      }
+    } catch (error) {
+      console.error('Error creating chat room:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed',
+        text2: error.message || 'Failed to create chat room',
+      });
+    } finally {
+      setChatRoomLoading(false);
+    }
+  };
+
   // Real-time setting update function
   const updateSettingRealTime = async (settingType, settingKey, value) => {
     if (userRole !== 'chairperson') {
@@ -536,6 +593,33 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
           </>
         ))}
 
+        {/* Chat Room */}
+        {isAdmin && renderSection('Chat Room', (
+          <>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.createChatButton,
+                { backgroundColor: colors.success, opacity: chatRoomLoading ? 0.7 : 1 }
+              ]}
+              onPress={handleCreateChatRoom}
+              disabled={chatRoomLoading}
+            >
+              {chatRoomLoading ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Ionicons name="chatbubbles" size={20} color={colors.white} />
+              )}
+              <Text style={[styles.actionButtonText, { color: colors.white }]}>
+                {chatRoomLoading ? 'Creating...' : 'Create Chat Room for Chama'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
+              If this chama doesn't have a chat room, create one to enable group messaging.
+            </Text>
+          </>
+        ))}
+
         {/* Notifications */}
         {renderSection('Notifications', (
           <>
@@ -756,6 +840,14 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     borderWidth: 1,
+  },
+  createChatButton: {
+    marginBottom: spacing.sm,
+  },
+  sectionDescription: {
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   actionButtonText: {
     fontSize: typography.fontSize.base,

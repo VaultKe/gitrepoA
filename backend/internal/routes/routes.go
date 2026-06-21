@@ -257,6 +257,7 @@ func SetupRoutes(
 				chamas.GET("/:id/eligible-other-members", api.GetEligibleOtherMembers)
 				chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
 				chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
+				chamas.POST("/:id/create-chat-room", api.CreateChamaChatRoom)
 			}
 
 			wallets := protected.Group("/wallets")
