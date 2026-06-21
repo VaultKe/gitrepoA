@@ -9,12 +9,12 @@ import {
   SafeAreaView,
   Dimensions,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius, getShadowStyle, breakpoints } from '../../utils/theme';
 import { useApp } from '../../context/AppContext';
 import ApiService from '../../services/api';
-import AppIcon from '../../components/AppIcon';
 import FormField from '../../components/FormField';
 import LoadingButton from '../../components/LoadingButton';
 import Card from '../../components/common/Card';
@@ -123,7 +123,11 @@ export default function ForgotPasswordScreen({ navigation }) {
     ]}>
       {/* Logo Section */}
       <View style={styles.logoContainer}>
-        <AppIcon size={isDesktop ? 100 : 80} circular={true} />
+        <Image
+          source={require('../../../assets/chama_logo.png')}
+          style={{ width: isDesktop ? 100 : 80, height: isDesktop ? 100 : 80, borderRadius: isDesktop ? 50 : 40 }}
+          resizeMode="cover"
+        />
         <Text style={[
           styles.logoText,
           { color: colors.text },
@@ -226,7 +230,11 @@ export default function ForgotPasswordScreen({ navigation }) {
     ]}>
       {/* Logo Section */}
       <View style={styles.logoContainer}>
-        <AppIcon size={isDesktop ? 100 : 80} circular={true} />
+        <Image
+          source={require('../../../assets/chama_logo.png')}
+          style={{ width: isDesktop ? 100 : 80, height: isDesktop ? 100 : 80, borderRadius: isDesktop ? 50 : 40 }}
+          resizeMode="cover"
+        />
         <Text style={[
           styles.logoText,
           { color: colors.text },

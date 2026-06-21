@@ -940,12 +940,6 @@ const SettingsScreen = ({ navigation }) => {
         Security
       </Text>
 
-      {renderSettingItem(
-        'Biometric Login',
-        'Use fingerprint or face recognition',
-        settings.security.biometric_login,
-        (value) => updateSecuritySetting('biometric_login', value)
-      )}
 
       {renderSettingItem(
         'Two-Factor Authentication',

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   SafeAreaView,
   Dimensions,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
@@ -16,7 +17,6 @@ import apiService from '../../services/api';
 import MessageBanner from '../../components/MessageBanner';
 import FormField from '../../components/FormField';
 import LoadingButton from '../../components/LoadingButton';
-import AppIcon from '../../components/AppIcon';
 import Card from '../../components/common/Card';
 
 export default function LoginScreen({ navigation }) {
@@ -236,7 +236,11 @@ export default function LoginScreen({ navigation }) {
           ]}>
             {/* Logo Section */}
             <View style={styles.logoContainer}>
-              <AppIcon size={isDesktop ? 100 : 80} circular={true} />
+              <Image
+                source={require('../../../assets/chama_logo.png')}
+                style={{ width: isDesktop ? 100 : 80, height: isDesktop ? 100 : 80, borderRadius: isDesktop ? 50 : 40 }}
+                resizeMode="cover"
+              />
               <Text style={[
                 styles.logoText,
                 { color: colors.text },
