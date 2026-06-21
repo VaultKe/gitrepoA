@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
 import ApiService from '../../services/api';
+import ThemeToggle from '../common/ThemeToggle';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.75; // 75% of screen width
@@ -298,6 +299,8 @@ const ChamaLayout = ({
             />
           </TouchableOpacity>
 
+          <ThemeToggle size={22} style={styles.themeToggle} />
+
           <TouchableOpacity
             style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
@@ -482,6 +485,9 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: spacing.sm,
     marginHorizontal: spacing.xs,
+  },
+  themeToggle: {
+    marginRight: spacing.xs,
   },
   profileAvatar: {
     width: 32,

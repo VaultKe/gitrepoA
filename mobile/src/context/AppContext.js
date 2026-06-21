@@ -1058,8 +1058,15 @@ export function AppProvider({ children }) {
 
   // Theme and language actions
   const setTheme = async (theme) => {
-    dispatch({ type: ActionTypes.SET_THEME, payload: theme });
-    await AsyncStorage.setItem('theme', theme);
+    const nextTheme = theme === 'light' ? 'light' : 'dark';
+    dispatch({ type: ActionTypes.SET_THEME, payload: nextTheme });
+    await AsyncStorage.setItem('theme', nextTheme);
+  };
+
+  const toggleTheme = async () => {
+    const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
+    dispatch({ type: ActionTypes.SET_THEME, payload: nextTheme });
+    await AsyncStorage.setItem('theme', nextTheme);
   };
 
   const setLanguage = async (language) => {
@@ -1185,6 +1192,7 @@ export function AppProvider({ children }) {
     refreshSpecificData,
     loadUserChamas,
     setTheme,
+    toggleTheme,
     setLanguage,
     setCurrentDashboard,
     setSelectedChama,

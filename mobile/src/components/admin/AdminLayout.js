@@ -15,6 +15,7 @@ import { useApp } from '../../context/AppContext';
 import { getThemeColors } from '../../utils/theme';
 import AdminHeader from './AdminHeader';
 import AdminSidebar from './AdminSidebar';
+import ThemeToggle from '../common/ThemeToggle';
 
 const { width } = Dimensions.get('window');
 
@@ -207,10 +208,11 @@ export default function AdminLayout({
             <Ionicons name="menu" size={24} color={colors.text} />
           </TouchableOpacity>
         )}
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
           {title || 'Admin Dashboard'}
         </Text>
         <View style={styles.headerSpacer} />
+        <ThemeToggle size={22} style={styles.themeToggle} />
         {rightComponent && (
           <View style={styles.rightComponent}>
             {rightComponent}
@@ -323,9 +325,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 12,
+    minWidth: 0,
   },
   headerSpacer: {
     flex: 1,
+  },
+  themeToggle: {
+    marginRight: 8,
   },
   rightComponent: {
     marginLeft: 8,

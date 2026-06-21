@@ -6,6 +6,7 @@ import { getThemeColors, spacing, typography } from '../../utils/theme';
 import SmartBackButton from './SmartBackButton';
 import useSmartNavigation from '../../hooks/useSmartNavigation';
 import NotificationBell from './NotificationBell';
+import ThemeToggle from './ThemeToggle';
 
 /**
  * Enhanced Smart Header Component
@@ -85,8 +86,8 @@ const SmartHeader = ({
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: headerBackgroundColor }]}>
       <View style={[styles.header, { backgroundColor: headerBackgroundColor }, style]}>
-        {/* Left Section: Home Icon + Back Button */}
-        <View style={styles.leftSection}>
+        {/* Left Section: Back/Home Button + Title */}
+        <View style={[styles.leftSection, styles.leftSectionWithTitle]}>
           {leftComponent || (
             <View style={styles.leftButtons}>
               {/* Smart Back Button */}
@@ -99,25 +100,26 @@ const SmartHeader = ({
               )}
             </View>
           )}
-        </View>
 
-        {/* Center Section: Title */}
-        <View style={styles.centerSection}>
-          <Text style={[styles.title, { color: colors.text }, titleStyle]} numberOfLines={1}>
-            {title}
-          </Text>
-          {subtitle && (
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {subtitle}
+          <View style={styles.titleBlock}>
+            <Text style={[styles.title, { color: colors.text }, titleStyle]} numberOfLines={1} ellipsizeMode="tail">
+              {title}
             </Text>
-          )}
+            {subtitle && (
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
+                {subtitle}
+              </Text>
+            )}
+          </View>
         </View>
 
-        {/* Right Section: Notification Bell & Profile Pic */}
+        {/* Right Section: Theme Toggle, Notification Bell & Profile Pic */}
         <View style={styles.rightSection}>
           {rightComponent || (
             <View style={styles.rightComponents}>
               {/* Notification Bell */}
+              <ThemeToggle size={22} />
+
               {showNotificationBell && (
                 <NotificationBell
                   navigation={navigateTo}
@@ -185,21 +187,30 @@ const styles = StyleSheet.create({
   },
   leftSection: {
     flex: 1,
-    alignItems: 'flex-start',
+    minWidth: 0,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  leftSectionWithTitle: {
+    flexDirection: 'row',
   },
   leftButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: spacing.sm,
   },
   centerSection: {
-    flex: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    flex: 0,
+    minWidth: 0,
   },
   rightSection: {
-    flex: 1,
+    flex: 0,
+    minWidth: 128,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
@@ -223,13 +234,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
-    textAlign: 'center',
+    textAlign: 'left',
     maxWidth: '100%',
   },
   subtitle: {
     fontSize: typography.fontSize.sm,
     marginTop: spacing.xs,
-    textAlign: 'center',
+    textAlign: 'left',
     maxWidth: '100%',
   },
   profileContainer: {
