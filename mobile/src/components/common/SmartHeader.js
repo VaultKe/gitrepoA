@@ -86,8 +86,8 @@ const SmartHeader = ({
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: headerBackgroundColor }]}>
       <View style={[styles.header, { backgroundColor: headerBackgroundColor }, style]}>
-        {/* Left Section: Back/Home Button + Title */}
-        <View style={[styles.leftSection, styles.leftSectionWithTitle]}>
+        {/* Left Section: Home Icon + Back Button */}
+        <View style={styles.leftSection}>
           {leftComponent || (
             <View style={styles.leftButtons}>
               {/* Smart Back Button */}
@@ -100,17 +100,18 @@ const SmartHeader = ({
               )}
             </View>
           )}
+        </View>
 
-          <View style={styles.titleBlock}>
-            <Text style={[styles.title, { color: colors.text }, titleStyle]} numberOfLines={1} ellipsizeMode="tail">
-              {title}
+        {/* Center Section: Title */}
+        <View style={styles.centerSection}>
+          <Text style={[styles.title, { color: colors.text }, titleStyle]} numberOfLines={1} ellipsizeMode="tail">
+            {title}
+          </Text>
+          {subtitle && (
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
+              {subtitle}
             </Text>
-            {subtitle && (
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
-                {subtitle}
-              </Text>
-            )}
-          </View>
+          )}
         </View>
 
         {/* Right Section: Theme Toggle, Notification Bell & Profile Pic */}
@@ -186,8 +187,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   leftSection: {
-    flex: 1,
-    minWidth: 0,
+    flex: 0,
+    minWidth: 96,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -205,19 +206,22 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   centerSection: {
-    flex: 0,
+    flex: 1,
     minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
   },
   rightSection: {
     flex: 0,
-    minWidth: 128,
+    minWidth: 152,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
   rightComponents: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm, // Space between notification bell and profile pic
+    gap: spacing.sm,
   },
   iconButton: {
     padding: spacing.xs,
@@ -234,13 +238,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
-    textAlign: 'left',
+    textAlign: 'center',
     maxWidth: '100%',
   },
   subtitle: {
     fontSize: typography.fontSize.sm,
     marginTop: spacing.xs,
-    textAlign: 'left',
+    textAlign: 'center',
     maxWidth: '100%',
   },
   profileContainer: {
