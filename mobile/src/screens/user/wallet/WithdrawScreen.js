@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   Alert,
@@ -9,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import ResponsiveForm from '../../../components/common/ResponsiveForm';
+import Card from '../../../components/common/Card';
 import ApiService from '../../../services/api';
 import { formatCurrency } from '../../../utils/formatters';
 
@@ -20,28 +21,27 @@ export default function WithdrawScreen({ navigation }) {
   const [amount, setAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const availableBalance = 15750.50; // Mock balance - should be replaced with real balance
+  const [selectedMethod, setSelectedMethod] = useState('mpesa');
 
   const handleWithdraw = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      Alert.alert('Invalid Amount', 'Please enter a valid amount');
       return;
     }
 
-    if (parseFloat(amount) > availableBalance) {
-      Alert.alert('Error', 'Insufficient balance');
+    if (parseFloat(amount) > 15750.50) {
+      Alert.alert('Insufficient Balance', 'You do not have enough funds to complete this withdrawal.');
       return;
     }
 
-    if (!phoneNumber) {
-      Alert.alert('Error', 'Please enter your M-Pesa phone number');
+    if (!phoneNumber || phoneNumber.length < 10) {
+      Alert.alert('Invalid Phone', 'Please enter a valid M-Pesa phone number');
       return;
     }
 
     Alert.alert(
-      'Withdraw Confirmation',
-      `Withdraw ${formatCurrency(parseFloat(amount))} to M-Pesa (${phoneNumber})?`,
+      'Confirm Withdrawal',
+      `Withdraw ${formatCurrency(parseFloat(amount))} to ${phoneNumber} via M-Pesa?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -49,29 +49,23 @@ export default function WithdrawScreen({ navigation }) {
           onPress: async () => {
             try {
               setLoading(true);
-
-              // Call the withdrawal API for M-Pesa
               const response = await ApiService.initiateWithdrawal(
                 parseFloat(amount),
                 'mpesa',
                 phoneNumber,
-                null, // No account number for M-Pesa
-                null, // No bank code for M-Pesa
+                null,
+                null,
                 'Withdrawal via M-Pesa'
               );
 
               if (response.success) {
-                // Show success message for M-Pesa withdrawal
-                const successMessage = `Withdrawal of ${formatCurrency(parseFloat(amount))} has been initiated to M-Pesa number ${phoneNumber}. You will receive the money shortly.`;
-
                 Alert.alert(
-                  'Withdrawal Initiated!',
-                  successMessage,
+                  'Withdrawal Initiated',
+                  `${formatCurrency(parseFloat(amount))} will be sent to ${phoneNumber} shortly.`,
                   [
                     {
                       text: 'View Transactions',
                       onPress: () => {
-                        // Reset form and navigate to transaction history
                         setAmount('');
                         setPhoneNumber('');
                         navigation.navigate('TransactionHistory');
@@ -81,7 +75,6 @@ export default function WithdrawScreen({ navigation }) {
                       text: 'OK',
                       style: 'default',
                       onPress: () => {
-                        // Reset form and navigate back
                         setAmount('');
                         setPhoneNumber('');
                         navigation.goBack();
@@ -97,61 +90,109 @@ export default function WithdrawScreen({ navigation }) {
             } finally {
               setLoading(false);
             }
-          }
+          },
         },
       ]
     );
   };
 
-  //M-Pesa withdrawal is supported
-
   return (
-    <ScrollView
-      style={[{ flex: 1, backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: 20 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Scrollable Content */}
-      <ResponsiveForm>
-        <ResponsiveForm.Section title="Withdrawal Details">
-          <ResponsiveForm.Row>
-            <ResponsiveForm.Field
-              label="Amount (KES)"
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0.00"
-              keyboardType="numeric"
-              icon="cash"
-              fullWidth
-            />
-          </ResponsiveForm.Row>
-        </ResponsiveForm.Section>
+    <View style={[{ flex: 1, backgroundColor: colors.background }]}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <View style={{ padding: spacing.xl }}>
+          <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm, marginTop: spacing.md, color: colors.text }]}>
+            Amount (KES)
+          </Text>
+          <TextInput
+            style={[{
+              borderRadius: borderRadius.lg,
+              padding: spacing.md,
+              fontSize: typography.fontSize['2xl'],
+              fontWeight: typography.fontWeight.bold,
+              textAlign: 'center',
+              borderWidth: 2,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              color: colors.text,
+            }]}
+            value={amount}
+            onChangeText={setAmount}
+            placeholder="0.00"
+            keyboardType="numeric"
+            placeholderTextColor={colors.textTertiary}
+          />
 
-        <ResponsiveForm.Section title="M-Pesa Details">
-          <ResponsiveForm.Row>
-            <ResponsiveForm.Field
-              label="M-Pesa Phone Number"
+          <Card style={{ marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border }}>
+            <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md, color: colors.text }]}>
+              Withdraw To
+            </Text>
+            <TouchableOpacity
+              style={[{
+                flexDirection: 'row',
+                alignItems: 'center',
+                borderRadius: borderRadius.lg,
+                padding: spacing.md,
+                borderWidth: 2,
+                backgroundColor: colors.surface,
+                borderColor: selectedMethod === 'mpesa' ? colors.primary : colors.border,
+              }, selectedMethod === 'mpesa' && { backgroundColor: colors.primary + '20' }]}
+              onPress={() => setSelectedMethod('mpesa')}
+            >
+              <Ionicons name="phone-portrait" size={24} color={selectedMethod === 'mpesa' ? colors.primary : colors.textSecondary} />
+              <Text style={[{
+                flex: 1,
+                fontSize: typography.fontSize.base,
+                marginLeft: spacing.sm,
+                color: selectedMethod === 'mpesa' ? colors.text : colors.textSecondary,
+              }, selectedMethod === 'mpesa' && { fontWeight: '600' }]}>
+                M-Pesa
+              </Text>
+              <Ionicons
+                name={selectedMethod === 'mpesa' ? 'radio-button-on' : 'radio-button-off'}
+                size={20}
+                color={selectedMethod === 'mpesa' ? colors.primary : colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </Card>
+
+          <Card style={{ marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border }}>
+            <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md, color: colors.text }]}>
+              Phone Number
+            </Text>
+            <TextInput
+              style={[{
+                borderRadius: borderRadius.lg,
+                padding: spacing.md,
+                fontSize: typography.fontSize.base,
+                borderWidth: 1,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text,
+              }]}
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               placeholder="254712345678"
               keyboardType="phone-pad"
-              icon="phone-portrait"
-              fullWidth
+              placeholderTextColor={colors.textTertiary}
             />
-          </ResponsiveForm.Row>
-        </ResponsiveForm.Section>
+          </Card>
 
-        <ResponsiveForm.Button
-          title={loading ? 'Processing...' : `Withdraw ${formatCurrency(parseFloat(amount) || 0)}`}
-          onPress={handleWithdraw}
-          disabled={loading}
-          loading={loading}
-          variant="primary"
-          icon="arrow-up-circle"
-        />
-      </ResponsiveForm>
-    </ScrollView>
+          <TouchableOpacity
+            style={[{ borderRadius: borderRadius.lg, padding: spacing.md, alignItems: 'center', marginTop: spacing.xl, backgroundColor: colors.primary }]}
+            onPress={handleWithdraw}
+            disabled={loading}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              {loading && (
+                <Ionicons name="refresh" size={20} color={colors.white} style={{ marginRight: spacing.sm }} />
+              )}
+              <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.white }]}>
+                {loading ? 'Processing...' : `Withdraw ${formatCurrency(parseFloat(amount) || 0)}`}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
-
-

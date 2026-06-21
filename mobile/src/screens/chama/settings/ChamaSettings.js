@@ -367,7 +367,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   );
 
   const renderSection = (title, children) => (
-    <View style={[styles.section, { backgroundColor: colors.surface }]}>
+    <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         {title}
       </Text>
@@ -570,7 +570,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         ))}
 
         {/* Actions */}
-        <View style={[styles.section, { backgroundColor: colors.surface }]}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {isChairperson && (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
@@ -687,7 +687,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
     ...shadows.sm,
   },
   sectionTitle: {

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography } from '../../utils/theme';
 import SmartBackButton from './SmartBackButton';
 import useSmartNavigation from '../../hooks/useSmartNavigation';
 import NotificationBell from './NotificationBell';
+import ThemeToggle from './ThemeToggle';
 
 /**
  * Enhanced Smart Header Component
@@ -29,6 +31,7 @@ const SmartHeader = ({
   onProfilePress,
 }) => {
   const { theme, user, getCachedAvatarData } = useApp();
+  const insets = useSafeAreaInsets();
   const colors = getThemeColors(theme);
   const { navigateTo, getCurrentContext } = useSmartNavigation();
   const [avatarData, setAvatarData] = useState(null);
@@ -83,7 +86,7 @@ const SmartHeader = ({
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: headerBackgroundColor }]}>
+    <View style={[styles.safeArea, { backgroundColor: headerBackgroundColor, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: headerBackgroundColor }, style]}>
         {/* Left Section: Home Icon + Back Button */}
         <View style={styles.leftSection}>
@@ -103,21 +106,23 @@ const SmartHeader = ({
 
         {/* Center Section: Title */}
         <View style={styles.centerSection}>
-          <Text style={[styles.title, { color: colors.text }, titleStyle]} numberOfLines={1}>
+          <Text style={[styles.title, { color: colors.text }, titleStyle]} numberOfLines={1} ellipsizeMode="tail">
             {title}
           </Text>
           {subtitle && (
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
               {subtitle}
             </Text>
           )}
         </View>
 
-        {/* Right Section: Notification Bell & Profile Pic */}
+        {/* Right Section: Theme Toggle, Notification Bell & Profile Pic */}
         <View style={styles.rightSection}>
           {rightComponent || (
             <View style={styles.rightComponents}>
               {/* Notification Bell */}
+              <ThemeToggle size={22} />
+
               {showNotificationBell && (
                 <NotificationBell
                   navigation={navigateTo}
@@ -158,7 +163,7 @@ const SmartHeader = ({
           )}
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -184,29 +189,41 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   leftSection: {
-    flex: 1,
-    alignItems: 'flex-start',
+    flex: 0,
+    minWidth: 96,
+    alignItems: 'center',
     justifyContent: 'center',
+  },
+  leftSectionWithTitle: {
+    flexDirection: 'row',
   },
   leftButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: spacing.sm,
   },
   centerSection: {
-    flex: 2,
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
   },
   rightSection: {
-    flex: 1,
+    flex: 0,
+    minWidth: 152,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
   rightComponents: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm, // Space between notification bell and profile pic
+    gap: spacing.sm,
   },
   iconButton: {
     padding: spacing.xs,

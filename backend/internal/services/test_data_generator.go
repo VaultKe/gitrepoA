@@ -292,13 +292,13 @@ func (g *TestDataGenerator) createRandomTransaction(users, chamas []string) {
 	query := `
 		INSERT INTO transactions (
 			id, from_wallet_id, to_wallet_id, type, status, amount, currency,
-			description, payment_method, initiated_by, recipient_id, created_at
-		) VALUES ($1, $2, $3, $4, 'completed', $5, 'KES', $6, $7, $8, $9, NOW())
+			description, payment_method, initiated_by, chama_id, recipient_id, created_at
+		) VALUES ($1, $2, $3, $4, 'completed', $5, 'KES', $6, $7, $8, $9, $10, NOW())
 		ON CONFLICT (id) DO NOTHING
 	`
 	desc := fmt.Sprintf("Auto-generated %s", txType)
 	_, _ = g.db.Exec(query,
-		txID, fromWallet, toWallet, txType, amount, desc, paymentMethod, userID, recipientID,
+		txID, fromWallet, toWallet, txType, amount, desc, paymentMethod, userID, &chamaID, recipientID,
 	)
 }
 

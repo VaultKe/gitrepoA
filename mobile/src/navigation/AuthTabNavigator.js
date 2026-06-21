@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -22,6 +23,7 @@ const Tab = createBottomTabNavigator();
 const AuthTabBar = ({ state, descriptors, navigation }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
+  const insets = useSafeAreaInsets();
 
   // Smart shortcuts for auth screens - exactly 3 icons
   const quickShortcuts = [
@@ -31,7 +33,7 @@ const AuthTabBar = ({ state, descriptors, navigation }) => {
   ];
 
   return (
-    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 70 + insets.bottom, paddingBottom: spacing.sm + insets.bottom }]}>
       {/* Smart Footer Icons - Always show exactly 3 */}
       {quickShortcuts.map((item, index) => {
         const isActive = state.routeNames[state.index] === item.name;

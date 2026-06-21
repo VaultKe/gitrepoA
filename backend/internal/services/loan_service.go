@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+	"log"
 
 	"github.com/google/uuid"
 
@@ -534,12 +535,10 @@ func (s *LoanService) disburseLoan(tx *sql.Tx, loan *models.Loan, _ float64) err
 }
 
 func (s *LoanService) notifyLoanReadyForApproval(loan *models.Loan) {
-	// Get chama leaders
 	query := `
 		SELECT user_id FROM chama_members
 		WHERE chama_id = $1 AND role IN ($2, $3) AND is_active = true
 	`
-
 	rows, err := s.db.Query(query, loan.ChamaID, models.ChamaRoleChairperson, models.ChamaRoleTreasurer)
 	if err != nil {
 		return
@@ -564,4 +563,224 @@ func (s *LoanService) notifyLoanReadyForApproval(loan *models.Loan) {
 			notificationService.CreateNotification(uid, "loan", title, message, data, true, true, false)
 		}(userID)
 	}
+}
+
+// canManageLoanTypes checks whether a user may administer loan types in a chama
+func (s *LoanService) canManageLoanTypes(userID, chamaID string) bool {
+	query := `
+		SELECT role FROM chama_members
+		WHERE user_id = $1 AND chama_id = $2 AND is_active = true
+	`
+	var role string
+	err := s.db.QueryRow(query, userID, chamaID).Scan(&role)
+	if err != nil {
+		log.Printf("Loan type permission denied for user %s in chama %s: %v", userID, chamaID, err)
+		return false
+	}
+	if role != "chairperson" && role != "secretary" && role != "treasurer" {
+		log.Printf("Loan type permission denied: user %s has role '%s' in chama %s (requires chairperson/secretary/treasurer)", userID, role, chamaID)
+		return false
+	}
+	return true
+}
+
+// CreateLoanType inserts a new chama loan type
+func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.LoanProductRequest) (*models.LoanProduct, error) {
+	if !s.canManageLoanTypes(createdBy, chamaID) {
+		return nil, fmt.Errorf("user does not have permission to create loan types")
+	}
+
+	id := uuid.New().String()
+	now := time.Now()
+
+	approvalRequired := true
+	if req.ApprovalRequired != nil {
+		approvalRequired = *req.ApprovalRequired
+	}
+	requiresCollateral := false
+	if req.RequiresCollateral != nil {
+		requiresCollateral = *req.RequiresCollateral
+	}
+	status := "active"
+	if req.Status != "" {
+		status = req.Status
+	}
+
+	query := `
+		INSERT INTO loan_types (
+			id, chama_id, name, description, max_amount, min_amount,
+			interest_rate, term_months, eligibility_criteria, approval_required,
+			grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
+			collateral_description, status, created_by, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+	`
+	_, err := s.db.Exec(query,
+		id, chamaID, req.Name, req.Description, req.MaxAmount, req.MinAmount,
+		req.InterestRate, req.TermMonths, req.EligibilityCriteria, approvalRequired,
+		req.GracePeriodDays, req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral,
+		req.CollateralDesc, status, createdBy, now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create loan type: %w", err)
+	}
+
+	return &models.LoanProduct{
+		ID:                  id,
+		ChamaID:             chamaID,
+		Name:                req.Name,
+		Description:         req.Description,
+		MaxAmount:           req.MaxAmount,
+		MinAmount:           req.MinAmount,
+		InterestRate:        req.InterestRate,
+		TermMonths:          req.TermMonths,
+		EligibilityCriteria: req.EligibilityCriteria,
+		ApprovalRequired:    approvalRequired,
+		GracePeriodDays:     req.GracePeriodDays,
+		PenaltyRate:         req.PenaltyRate,
+		MaxLoansPerMember:   req.MaxLoansPerMember,
+		RequiresCollateral:  requiresCollateral,
+		CollateralDesc:      req.CollateralDesc,
+		Status:              status,
+		CreatedBy:           createdBy,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}, nil
+}
+
+// GetChamaLoanTypes retrieves loan types for a chama, optionally filtered by status
+func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models.LoanProduct, error) {
+	query := `
+		SELECT id, chama_id, name, description, max_amount, min_amount,
+		       interest_rate, term_months, eligibility_criteria, approval_required,
+		       grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
+		       collateral_description, status, created_by, created_at, updated_at
+		FROM loan_types
+		WHERE chama_id = $1
+	`
+	args := []interface{}{chamaID}
+	if status != "" {
+		query += " AND status = $2"
+		args = append(args, status)
+	}
+	query += " ORDER BY created_at DESC"
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query loan types: %w", err)
+	}
+	defer rows.Close()
+
+	var out []models.LoanProduct
+	for rows.Next() {
+		var lt models.LoanProduct
+		err := rows.Scan(
+			&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.MaxAmount, &lt.MinAmount,
+			&lt.InterestRate, &lt.TermMonths, &lt.EligibilityCriteria, &lt.ApprovalRequired,
+			&lt.GracePeriodDays, &lt.PenaltyRate, &lt.MaxLoansPerMember, &lt.RequiresCollateral,
+			&lt.CollateralDesc, &lt.Status, &lt.CreatedBy, &lt.CreatedAt, &lt.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan loan type: %w", err)
+		}
+		out = append(out, lt)
+	}
+	return out, nil
+}
+
+// GetLoanTypeByID fetches a single loan type
+func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, error) {
+	query := `
+		SELECT id, chama_id, name, description, max_amount, min_amount,
+		       interest_rate, term_months, eligibility_criteria, approval_required,
+		       grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
+		       collateral_description, status, created_by, created_at, updated_at
+		FROM loan_types WHERE id = $1
+	`
+	var lt models.LoanProduct
+	err := s.db.QueryRow(query, loanTypeID).Scan(
+		&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.MaxAmount, &lt.MinAmount,
+		&lt.InterestRate, &lt.TermMonths, &lt.EligibilityCriteria, &lt.ApprovalRequired,
+		&lt.GracePeriodDays, &lt.PenaltyRate, &lt.MaxLoansPerMember, &lt.RequiresCollateral,
+		&lt.CollateralDesc, &lt.Status, &lt.CreatedBy, &lt.CreatedAt, &lt.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("loan type not found: %w", err)
+	}
+	return &lt, nil
+}
+
+// UpdateLoanType updates an existing loan type
+func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductRequest) (*models.LoanProduct, error) {
+	existing, err := s.GetLoanTypeByID(loanTypeID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.canManageLoanTypes(existing.CreatedBy, existing.ChamaID) {
+		return nil, fmt.Errorf("user does not have permission to update loan types")
+	}
+
+	approvalRequired := existing.ApprovalRequired
+	if req.ApprovalRequired != nil {
+		approvalRequired = *req.ApprovalRequired
+	}
+	requiresCollateral := existing.RequiresCollateral
+	if req.RequiresCollateral != nil {
+		requiresCollateral = *req.RequiresCollateral
+	}
+	status := existing.Status
+	if req.Status != "" {
+		status = req.Status
+	}
+	now := time.Now()
+
+	query := `
+		UPDATE loan_types SET
+			name = $1, description = $2, max_amount = $3, min_amount = $4,
+			interest_rate = $5, term_months = $6, eligibility_criteria = $7,
+			approval_required = $8, grace_period_days = $9, penalty_rate = $10,
+			max_loans_per_member = $11, requires_collateral = $12, collateral_description = $13,
+			status = $14, updated_at = $15
+		WHERE id = $16
+	`
+	_, err = s.db.Exec(query,
+		req.Name, req.Description, req.MaxAmount, req.MinAmount, req.InterestRate,
+		req.TermMonths, req.EligibilityCriteria, approvalRequired, req.GracePeriodDays,
+		req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral, req.CollateralDesc,
+		status, now, loanTypeID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update loan type: %w", err)
+	}
+	existing.Name = req.Name
+	existing.Description = req.Description
+	existing.MaxAmount = req.MaxAmount
+	existing.MinAmount = req.MinAmount
+	existing.InterestRate = req.InterestRate
+	existing.TermMonths = req.TermMonths
+	existing.EligibilityCriteria = req.EligibilityCriteria
+	existing.ApprovalRequired = approvalRequired
+	existing.GracePeriodDays = req.GracePeriodDays
+	existing.PenaltyRate = req.PenaltyRate
+	existing.MaxLoansPerMember = req.MaxLoansPerMember
+	existing.RequiresCollateral = requiresCollateral
+	existing.CollateralDesc = req.CollateralDesc
+	existing.Status = status
+	existing.UpdatedAt = now
+	return existing, nil
+}
+
+// DeleteLoanType removes a loan type
+func (s *LoanService) DeleteLoanType(loanTypeID string) error {
+	lt, err := s.GetLoanTypeByID(loanTypeID)
+	if err != nil {
+		return err
+	}
+	if !s.canManageLoanTypes(lt.CreatedBy, lt.ChamaID) {
+		return fmt.Errorf("user does not have permission to delete loan types")
+	}
+	_, err = s.db.Exec(`DELETE FROM loan_types WHERE id = $1`, loanTypeID)
+	if err != nil {
+		return fmt.Errorf("failed to delete loan type: %w", err)
+	}
+	return nil
 }

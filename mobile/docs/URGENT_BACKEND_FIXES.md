@@ -124,21 +124,21 @@ c := cors.New(cors.Options{
 })
 
 handler := c.Handler(router)
-log.Fatal(http.ListenAndServe(":8080", handler))
+log.Fatal(http.ListenAndServe(":8085", handler))
 ```
 
 ## Testing the Fix
 
 ### 1. Test Attendance Endpoint
 ```bash
-curl "http://localhost:8080/api/v1/meetings/meeting-1753546745491881159/attendance"
+curl "http://localhost:8085/api/v1/meetings/meeting-1753546745491881159/attendance"
 ```
 
 Should return JSON without the scanning error.
 
 ### 2. Test PATCH Endpoint
 ```bash
-curl -X PATCH "http://localhost:8080/api/v1/meetings/meeting-1753546745491881159" \
+curl -X PATCH "http://localhost:8085/api/v1/meetings/meeting-1753546745491881159" \
      -H "Content-Type: application/json" \
      -d '{"status":"completed","conductedAt":"2024-01-15T14:30:00Z","attendeeCount":5}'
 ```

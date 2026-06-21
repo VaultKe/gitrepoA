@@ -8,7 +8,7 @@ The app is now configured to work with **real backend data only**. Mock data has
 
 ### API Configuration
 
-- **Development**: `http://localhost:8080/api/v1`
+- **Development**: `http://localhost:8085/api/v1`
 - **Production**: `https://api.vaultke.com/api/v1`
 
 ## 📋 Backend Requirements
@@ -109,7 +109,7 @@ func main() {
         }
     }
 
-    r.Run(":8080")
+    r.Run(":8085")
 }
 ```
 
@@ -158,8 +158,8 @@ app.post('/api/v1/marketplace/products', (req, res) => {
     });
 });
 
-app.listen(8080, () => {
-    console.log('Server running on port 8080');
+app.listen(8085, () => {
+    console.log('Server running on port 8085');
 });
 ```
 
@@ -247,17 +247,17 @@ All API responses should follow this format:
 
 ## 🚀 Running the Backend
 
-1. **Start your backend server on port 8080**
+1. **Start your backend server on port 8085**
 2. **Ensure CORS is properly configured**
 3. **Test the endpoints using curl or Postman**
 
 ### Test Commands
 ```bash
 # Test products endpoint
-curl -X GET http://localhost:8080/api/v1/marketplace/products
+curl -X GET http://localhost:8085/api/v1/marketplace/products
 
 # Test product creation
-curl -X POST http://localhost:8080/api/v1/marketplace/products \
+curl -X POST http://localhost:8085/api/v1/marketplace/products \
   -H "Content-Type: application/json" \
   -d '{"name":"Test Product","price":100,"category":"Test"}'
 ```
@@ -265,7 +265,7 @@ curl -X POST http://localhost:8080/api/v1/marketplace/products \
 ## 🔧 Frontend Configuration
 
 The app will automatically connect to:
-- `http://localhost:8080/api/v1` in development
+- `http://localhost:8085/api/v1` in development
 - `https://api.vaultke.com/api/v1` in production
 
 To change the API URL, update the `API_BASE_URL` in `src/services/api.js`.
@@ -279,7 +279,7 @@ To change the API URL, update the `API_BASE_URL` in `src/services/api.js`.
    - Check that the frontend URL is in the allowed origins
 
 2. **Connection Refused**
-   - Verify the backend is running on port 8080
+   - Verify the backend is running on port 8085
    - Check firewall settings
 
 3. **404 Errors**

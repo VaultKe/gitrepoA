@@ -1,4 +1,4 @@
-package main
+package main1
 
 import (
 	"database/sql"
@@ -39,7 +39,7 @@ const (
 	chamaCategories = "chama,contribution"
 )
 
-func main() {
+func main1() {
 	log.Println("🚀 Starting comprehensive database seeding...")
 
 	// Load .env from project root (backend directory)

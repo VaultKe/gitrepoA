@@ -34,7 +34,7 @@ class WebSocketService {
       if (!token) return false;
 
       if (!API_BASE_URL) return false;
-      const wsUrl = `${WS_URL}/api/v1/ws?token=${encodeURIComponent(token)}`;
+      const wsUrl = `${WS_URL}/ws?token=${encodeURIComponent(token)}`;
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = this.onOpen.bind(this);

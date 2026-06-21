@@ -6,7 +6,7 @@ import { useApp } from '../../context/AppContext';
 
 // Import all chama screens
 import ChamaDashboard from '../../screens/chama/dashboard/ChamaDashboard';
-import ChamaMembersScreen from '../../screens/chama/meeting/ChamaMembersScreen';
+import ChamaMembersScreen from '../../screens/chama/chamamember/ChamaMembersScreen';
 import ContributeScreen from '../../screens/chama/contribute/ContributeScreen';
 import ChamaTransactionsScreen from '../../screens/chama/transactions/ChamaTransactionsScreen';
 import ChamaLoansScreen from '../../screens/chama/loans/ChamaLoansScreen';
@@ -14,13 +14,14 @@ import ChamaMeetingsScreen from '../../screens/chama/meeting/ChamaMeetingsScreen
 import MerryGoRoundScreen from '../../screens/chama/merry-go-round/MerryGoRoundScreen';
 import WelfareScreen from '../../screens/chama/welfare/WelfareScreen';
 import ChamaSettings from '../../screens/chama/settings/ChamaSettings';
-import LoanApplication from '../../screens/chama/loans/LoanApplication';
+import ApplyForLoanScreen from '../../screens/chama/loans/ApplyForLoanScreen';
+import ApplyForLoanScreen from '../../screens/chama/loans/ApplyForLoanScreen';
 import CreateMeeting from '../../screens/chama/meeting/CreateMeeting';
 import CreateMerryGoRound from '../../screens/chama/merry-go-round/CreateMerryGoRound';
 import JitsiMeetScreen from '../../screens/chama/meeting/JitsiMeetScreen';
-import PhysicalMeetingScreen from '../../screens/chama/chamamember/PhysicalMeetingScreen';
+import PhysicalMeetingScreen from '../../screens/chama/meeting/PhysicalMeetingScreen';
 import MeetingSummaryScreen from '../../screens/chama/meeting/MeetingSummaryScreen';
-import InviteMembers from '../../screens/chama/chamamember/InviteMembers';
+import InviteMembers from '../../screens/chama/meeting/InviteMembers';
 
 const ChamaLayoutProvider = ({ route, navigation }) => {
   const { chamaId, chamaName, chama, initialRoute = 'overview' } = route.params || {};
@@ -57,7 +58,7 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
     welfare: WelfareScreen,
     
     // Forms and additional screens
-    'loan-application': LoanApplication,
+    'loan-application': ApplyForLoanScreen,
     'create-meeting': CreateMeeting,
     'create-merry-go-round': CreateMerryGoRound,
     'online-meeting': JitsiMeetScreen,

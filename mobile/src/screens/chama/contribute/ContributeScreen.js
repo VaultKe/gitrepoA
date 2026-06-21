@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -56,11 +57,11 @@ const ContributeScreen = ({ route, navigation }) => {
   const [contributionStatus, setContributionStatus] = useState(null);
   const [statusCheckInterval, setStatusCheckInterval] = useState(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
 
   useEffect(() => {
     // For merry-go-round contributions, set amount immediately from route params
     if (contributionType === 'merry-go-round' && amountPerRound && amountPerRound > 0) {
-      // console.log('🎯 Setting merry-go-round amount from route params:', amountPerRound);
       setAmount(amountPerRound.toString());
     }
 
@@ -94,7 +95,6 @@ const ContributeScreen = ({ route, navigation }) => {
     try {
       // For merry-go-round contributions, load members from the merry-go-round circle
       if (contributionType === 'merry-go-round' && roundId) {
-        // console.log('🎯 Loading merry-go-round participants for circle:', roundId);
         const response = await ApiService.makeRequest(`/merry-go-rounds/${roundId}`);
 
         if (response.success && response.data) {
@@ -120,16 +120,12 @@ const ContributeScreen = ({ route, navigation }) => {
               position: participant.position || (participants.indexOf(participant) + 1)
             };
           });
-
-          // console.log('🎯 Filtered to', eligibleMembers.length, 'merry-go-round participants');
-          // console.log('🎯 Participants:', eligibleMembers.map(p => ({ id: p.id, name: p.fullName, position: p.position })));
           setChamaMembers(eligibleMembers);
           return;
         }
       }
 
       // For regular contributions, load all chama members (treasurer only)
-      // console.log('👥 Loading all chama members for regular contributions');
       const response = await ApiService.makeRequest(`/contributions/chamas/${chamaId}/members`);
       if (response.success) {
         setChamaMembers(response.data);
@@ -314,8 +310,6 @@ const ContributeScreen = ({ route, navigation }) => {
       setChamaLoading(true);
       const response = await ApiService.getChamaById(chamaId);
 
-      console.log('Chama details response:', response); // Debug log
-
       // Handle different response structures
       let chamaData = null;
 
@@ -351,16 +345,12 @@ const ContributeScreen = ({ route, navigation }) => {
 
   const loadWalletBalance = async () => {
     try {
-      console.log('🔄 Loading wallet balance...');
       const response = await ApiService.getWalletBalance();
-      console.log('💰 Wallet balance response:', response);
 
       if (response.success && response.data) {
         const balance = response.data.balance || 0;
         setWalletBalance(balance);
-        console.log('✅ Wallet balance loaded:', balance);
       } else {
-        console.log('⚠️ Wallet balance response not successful:', response);
         setWalletBalance(0);
       }
     } catch (error) {
@@ -382,8 +372,6 @@ const ContributeScreen = ({ route, navigation }) => {
 
     // For merry-go-round, check real-time contribution status with backend assertions
     if (contributionType === 'merry-go-round') {
-      console.log('🎪 Validating merry-go-round contribution...');
-
       // Refresh status before proceeding
       await checkContributionStatus();
 
@@ -413,7 +401,6 @@ const ContributeScreen = ({ route, navigation }) => {
         return;
       }
 
-      console.log('✅ Merry-go-round validation passed');
     }
 
     // Validate payment method for merry-go-round
@@ -505,10 +492,9 @@ const ContributeScreen = ({ route, navigation }) => {
         Alert.alert('Phone Number Required', 'Your account does not have a valid phone number. Please update your profile to use M-Pesa payments.');
         return;
       }
-    } else if (paymentMethod === 'cash' || paymentMethod === 'cheque') {
-      // Validate cash/cheque contribution requirements
+    } else if (paymentMethod === 'cash') {
       if (!selectedContributor) {
-        Alert.alert('Member Required', `Please select the member who made this ${paymentMethod} contribution.`);
+        Alert.alert('Member Required', 'Please select the member who made this cash contribution.');
         return;
       }
     }
@@ -530,25 +516,24 @@ const ContributeScreen = ({ route, navigation }) => {
       }
 
       if (paymentMethod === 'mpesa') {
-        // Handle M-Pesa payment
         await handleMpesaContribution(cleanChamaId);
-      } else if (paymentMethod === 'cash' || paymentMethod === 'cheque') {
-        // Handle cash/cheque contribution
+      } else if (paymentMethod === 'cash') {
+        if (!selectedContributor) {
+          Alert.alert(
+            'Member Required',
+            'Please select the member who made this cash contribution before proceeding.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
         await handleCashContribution(cleanChamaId);
       } else {
-        // Handle wallet contribution
         await handleWalletContribution(cleanChamaId);
       }
     } catch (error) {
       console.error('Contribution failed:', error);
-
-      // Handle merry-go-round specific errors
       if (contributionType === 'merry-go-round') {
-        console.log('🎪 Handling merry-go-round specific error...');
-
-        // Check for specific backend validation error messages
         const errorMessage = error.message || '';
-
         if (errorMessage.includes('already contributed')) {
           Toast.show({
             type: 'error',
@@ -558,11 +543,9 @@ const ContributeScreen = ({ route, navigation }) => {
             visibilityTime: 4000,
             topOffset: 60,
           });
-          // Refresh status to update UI
           await checkContributionStatus();
           return;
         }
-
         if (errorMessage.includes('Invalid merry-go-round contribution amount')) {
           Toast.show({
             type: 'error',
@@ -574,7 +557,6 @@ const ContributeScreen = ({ route, navigation }) => {
           });
           return;
         }
-
         if (errorMessage.includes('not allowed for merry-go-round')) {
           Toast.show({
             type: 'error',
@@ -587,8 +569,6 @@ const ContributeScreen = ({ route, navigation }) => {
           return;
         }
       }
-
-      // Generic error handling
       Toast.show({
         type: 'error',
         text1: 'Contribution Failed',
@@ -603,116 +583,36 @@ const ContributeScreen = ({ route, navigation }) => {
   };
 
   const handleWalletContribution = async (cleanChamaId) => {
+    const validContributionType = (() => {
+      const validTypes = ['regular', 'penalty', 'special', 'merry-go-round', 'welfare'];
+      return validTypes.includes(contributionType) ? contributionType : 'regular';
+    })();
+
     const contributionData = {
       chamaId: cleanChamaId,
       amount: parseFloat(amount),
-      description: description || getDefaultDescription(),
-      type: contributionType,
+      description: description || getContributionDescription(),
+      type: validContributionType,
       paymentMethod: 'wallet',
-      isAnonymous: chama?.category === 'contribution' ? isAnonymous : false, // Only for contribution groups
-      ...(roundId && { roundId }), // Include roundId if it exists
-      ...(proposalId && { proposalId }), // Include proposalId for welfare contributions
+      isAnonymous: chama?.category === 'contribution' ? isAnonymous : false,
+      ...(roundId ? { roundId } : {}),
+      ...(proposalId ? { proposalId } : {}),
     };
 
-    function getDefaultDescription() {
-        switch (contributionType) {
-          case 'merry-go-round':
-            return `Merry-Go-Round contribution to ${roundName || 'round'}`;
-          case 'welfare':
-            return proposalTitle
-              ? `Welfare support for: ${proposalTitle}`
-              : `Welfare contribution to ${chama.name}`;
-          default:
-            return `Contribution to ${chama.name}`;
-        }
-      }
-
-    console.log('🔄 Making contribution with data:', contributionData);
-    console.log('🔄 Clean chamaId:', cleanChamaId);
-
-    // Debug log for merry-go-round contributions
-    if (contributionType === 'merry-go-round') {
-      console.log('🎪 MERRY-GO-ROUND CONTRIBUTION DEBUG:', {
-        roundId: roundId,
-        roundName: roundName,
-        amount: parseFloat(amount),
-        expectedAmount: contributionStatus?.amountPerRound || currentRecipient?.amountPerRound,
-        contributor: user?.id,
-        chamaId: cleanChamaId,
-        currentRecipient: currentRecipient?.fullName,
-        currentRound: contributionStatus?.currentRound,
-        hasContributed: contributionStatus?.hasContributed,
-        isParticipant: contributionStatus?.isParticipant,
-        paymentMethod: paymentMethod,
-        isAnonymous: isAnonymous
-      });
-    }
-
-    const response = await ApiService.makeContribution(contributionData);
-
-    console.log('🔍 Contribution response:', response);
+    const response = await ApiService.makeRequest('/contributions', {
+      method: 'POST',
+      body: JSON.stringify(contributionData),
+    });
 
     if (response.success) {
-      console.log('🎉 Contribution successful! Preparing success notification...');
-      console.log('💰 Contribution successful, refreshing wallet balance...');
-
-      // Refresh wallet balance after successful contribution
-      const oldBalance = walletBalance;
       await loadWalletBalance();
-      console.log(`💰 Wallet balance updated: ${oldBalance} → ${walletBalance}`);
-
-      // Also refresh the global wallet data in AppContext
       try {
         await refreshSpecificData('wallet');
-        console.log('✅ Global wallet data refreshed');
-      } catch (error) {
-        console.warn('⚠️ Failed to refresh global wallet data:', error);
-      }
+      } catch {}
 
       const successTitle = contributionType === 'regular'
         ? 'Contribution Successful!'
         : `${getContributionTitle()} Successful!`;
-
-      const getSuccessMessage = () => {
-        const amountText = formatCurrency(parseFloat(amount));
-        const chamaName = chama?.name || 'the group';
-
-        console.log('🔍 Success message data:', {
-          amountText,
-          contributionType,
-          chamaName,
-          roundName,
-          isAnonymous
-        });
-
-        let baseMessage;
-        switch (contributionType) {
-          case 'merry-go-round':
-            baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to ${roundName || 'the merry-go-round'}`;
-            break;
-          case 'welfare':
-            baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to the welfare fund`;
-            break;
-          case 'loan':
-            baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to the loan fund`;
-            break;
-          case 'emergency':
-            baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to the emergency fund`;
-            break;
-          default:
-            baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to ${chamaName}`;
-        }
-
-        // Add anonymous note if applicable
-        if (isAnonymous) {
-          baseMessage += '\n\n🔒 This contribution was made anonymously and will appear as "Anonymous" in transaction records.';
-        }
-
-        return baseMessage;
-      };
-
-      // Show success toast notification
-      console.log('🎉 Showing success toast:', successTitle, getSuccessMessage());
 
       Toast.show({
         type: 'success',
@@ -723,8 +623,102 @@ const ContributeScreen = ({ route, navigation }) => {
         topOffset: 60,
       });
 
-      console.log('🎉 Success toast should be displayed now');
+      setTimeout(() => {
+        setAmount('');
+        setDescription('');
+        setIsAnonymous(false);
+        setShowPaymentModal(false);
+        navigation.goBack();
+      }, 2000);
+    } else {
+      throw new Error(response.error || 'Wallet contribution failed');
+    }
+  };
 
+  const getContributionDescription = () => {
+    switch (contributionType) {
+      case 'merry-go-round':
+        return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+      case 'welfare':
+        return proposalTitle
+          ? `Welfare support for: ${proposalTitle}`
+          : `Welfare contribution to ${chama?.name}`;
+      default:
+        return `Contribution to ${chama?.name}`;
+    }
+  };
+
+  const getSuccessMessage = () => {
+    const amountText = formatCurrency(parseFloat(amount));
+    const chamaName = chama?.name || 'the group';
+    let baseMessage;
+    switch (contributionType) {
+      case 'merry-go-round':
+        baseMessage = `You have successfully contributed KES ${amountText} to ${roundName || 'the merry-go-round'} from your VaultKe wallet.`;
+        break;
+      case 'welfare':
+        baseMessage = `You have successfully contributed KES ${amountText} from your VaultKe wallet to the welfare fund.`;
+        break;
+      default:
+        baseMessage = `You have successfully contributed KES ${amountText} from your VaultKe wallet to ${chamaName}.`;
+    }
+    if (isAnonymous) {
+      baseMessage += '\n\nThis contribution was made anonymously and will appear as "Anonymous" in records.';
+    }
+    return baseMessage;
+  };
+
+const handleMpesaContribution = async (cleanChamaId) => {
+  // For welfare contributions, use the welfare endpoint
+  if (contributionType === 'welfare') {
+    // Use welfare contribute endpoint for welfare contributions
+    const welfareData = {
+      welfareRequestId: proposalId,
+      amount: parseFloat(amount),
+      message: description || getDefaultDescription(),
+      chamaId: cleanChamaId,
+    };
+
+    const mpesaResponse = await ApiService.contributeToWelfare(welfareData);
+
+    if (mpesaResponse.success) {
+      // Refresh wallet balance after successful contribution
+      const oldBalance = walletBalance;
+      await loadWalletBalance();
+      // Also refresh the global wallet data in AppContext
+      try {
+        await refreshSpecificData('wallet');
+      } catch (error) {
+        console.warn('⚠️ Failed to refresh global wallet data:', error);
+      }
+
+      const getSuccessMessage = () => {
+        const amountText = formatCurrency(parseFloat(amount));
+        const chamaName = chama?.name || 'the group';
+        let baseMessage;
+        switch (contributionType) {
+          case 'welfare':
+            baseMessage = `You have successfully contributed ${amountText} via M-Pesa to the welfare fund`;
+            break;
+          default:
+            baseMessage = `You have successfully contributed ${amountText} via M-Pesa to ${chamaName}`;
+        }
+
+        // Add anonymous note if applicable
+        if (isAnonymous) {
+          baseMessage += '\n\n🔒 This contribution was made anonymously and will appear as "Anonymous" in transaction records.';
+        }
+
+        return baseMessage;
+      };
+      Toast.show({
+        type: 'success',
+        text1: 'Welfare Contribution Successful!',
+        text2: getSuccessMessage(),
+        position: 'top',
+        visibilityTime: 4000,
+        topOffset: 60,
+      });
       // Reset form and navigate back after a short delay
       setTimeout(() => {
         setAmount('');
@@ -733,11 +727,9 @@ const ContributeScreen = ({ route, navigation }) => {
         navigation.goBack();
       }, 2000); // Give user time to see the toast
     } else {
-      throw new Error(response.error || 'Wallet contribution failed');
+      throw new Error(mpesaResponse.error || 'Welfare contribution failed');
     }
-  };
-
-  const handleMpesaContribution = async (cleanChamaId) => {
+  } else {
     // Format user's registered phone number for M-Pesa
     let formattedPhone = user.phone.replace(/\s+/g, '');
     if (formattedPhone.startsWith('0')) {
@@ -763,20 +755,15 @@ const ContributeScreen = ({ route, navigation }) => {
           return `Contribution to ${chama.name}`;
       }
     }
-
-    console.log('🔄 Initiating M-Pesa payment:', {
-      phone: formattedPhone,
+    const mpesaResponse = await ApiService.makeContribution({
+      chamaId: cleanChamaId,
       amount: parseFloat(amount),
-      reference: accountReference,
-      description: transactionDesc
+      description: transactionDesc,
+      type: contributionType,
+      paymentMethod: 'mpesa',
+      mpesaReference: accountReference,
+      status: 'pending',
     });
-
-    const mpesaResponse = await ApiService.initiateMpesaPayment(
-      formattedPhone,
-      parseFloat(amount),
-      accountReference,
-      transactionDesc
-    );
 
     if (mpesaResponse.success) {
       Alert.alert(
@@ -807,26 +794,42 @@ const ContributeScreen = ({ route, navigation }) => {
     } else {
       throw new Error(mpesaResponse.error || 'Failed to initiate M-Pesa payment');
     }
+  }
+};
+
+  const getDefaultDescription = () => {
+    switch (contributionType) {
+      case 'merry-go-round':
+        return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+      case 'welfare':
+        return proposalTitle
+          ? `Welfare support for: ${proposalTitle}`
+          : `Welfare contribution to ${chama?.name}`;
+      default:
+        return `${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)} contribution to ${chama?.name}`;
+    }
   };
 
   const handleCashContribution = async (cleanChamaId) => {
-    // Validate cash contribution requirements
     if (!selectedContributor) {
       throw new Error('Please select the member who made this contribution');
     }
+
+    const validContributionType = (() => {
+      const validTypes = ['regular', 'penalty', 'special', 'merry-go-round', 'welfare'];
+      return validTypes.includes(contributionType) ? contributionType : 'regular';
+    })();
 
     const contributionData = {
       chamaId: cleanChamaId,
       amount: parseFloat(amount),
       description: description || getDefaultDescription(),
-      type: contributionType || 'regular',
-      paymentMethod: paymentMethod, // 'cash' or 'cheque'
+      type: validContributionType,
+      paymentMethod: paymentMethod,
       contributorId: selectedContributor.id,
-      cashType: paymentMethod, // 'cash' or 'cheque'
-      isAnonymous: false, // Cash/cheque contributions can't be anonymous
+      cashType: paymentMethod,
+      isAnonymous: false,
     };
-
-    console.log('🔄 Making cash contribution:', contributionData);
 
     const response = await ApiService.makeRequest('/contributions', {
       method: 'POST',
@@ -834,15 +837,7 @@ const ContributeScreen = ({ route, navigation }) => {
     });
 
     if (response.success) {
-      // Refresh data
-      if (refreshSpecificData) {
-        refreshSpecificData('chamas');
-        refreshSpecificData('wallets');
-        refreshSpecificData('transactions');
-      }
-
       const contributorName = selectedContributor.fullName;
-
       const paymentTypeText = paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1);
 
       Toast.show({
@@ -854,7 +849,6 @@ const ContributeScreen = ({ route, navigation }) => {
         topOffset: 60,
       });
 
-      // Show success alert with details
       Alert.alert(
         'Contribution Recorded Successfully',
         `${contributorName}'s ${paymentMethod} contribution of ${formatCurrency(parseFloat(amount))} has been recorded.`,
@@ -869,19 +863,6 @@ const ContributeScreen = ({ route, navigation }) => {
       );
     } else {
       throw new Error(response.error || 'Failed to record cash contribution');
-    }
-
-    function getDefaultDescription() {
-      switch (contributionType) {
-        case 'merry-go-round':
-          return `Merry-Go-Round contribution to ${roundName || 'round'}`;
-        case 'welfare':
-          return proposalTitle
-            ? `Welfare support for: ${proposalTitle}`
-            : `Welfare contribution to ${chama.name}`;
-        default:
-          return `${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)} contribution to ${chama.name}`;
-      }
     }
   };
 
@@ -926,8 +907,6 @@ const ContributeScreen = ({ route, navigation }) => {
   // Validate payment method for merry-go-round contributions (matches backend assertions)
   const validatePaymentMethod = (method) => {
     if (contributionType === 'merry-go-round') {
-      console.log('💳 Validating payment method for merry-go-round...');
-
       // Backend assertion: No anonymous contributions for merry-go-round
       if (isAnonymous) {
         Alert.alert(
@@ -938,11 +917,12 @@ const ContributeScreen = ({ route, navigation }) => {
         return false;
       }
 
-      // Backend assertion: No cheque payments for merry-go-round
-      if (method === 'cheque') {
+      // Assertion: Only wallet, mpesa, and cash are valid payment methods for contributions
+      const validMethods = ['wallet', 'mpesa', 'cash'];
+      if (!validMethods.includes(method)) {
         Alert.alert(
           'Invalid Payment Method',
-          'Cheque payments are not allowed for merry-go-round contributions. Only wallet and M-Pesa payments are permitted.',
+          `Only wallet, M-Pesa, and cash payments are permitted.`,
           [{ text: 'OK' }]
         );
         return false;
@@ -958,7 +938,6 @@ const ContributeScreen = ({ route, navigation }) => {
         return false;
       }
 
-      console.log('✅ Payment method validation passed:', method);
     }
     return true;
   };
@@ -966,8 +945,6 @@ const ContributeScreen = ({ route, navigation }) => {
   // Validate amount for merry-go-round contributions (matches backend assertions)
   const validateContributionAmount = (amount) => {
     if (contributionType === 'merry-go-round') {
-      console.log('💰 Validating merry-go-round contribution amount...');
-
       // Get expected amount from contribution status, current recipient, or route params
       const expectedAmount = contributionStatus?.amountPerRound || currentRecipient?.amountPerRound || amountPerRound || 0;
 
@@ -984,7 +961,6 @@ const ContributeScreen = ({ route, navigation }) => {
           return false;
         }
 
-        console.log('✅ Amount validation passed:', inputAmount, 'KES');
       } else {
         console.warn('⚠️ No expected amount available for validation');
       }
@@ -1067,41 +1043,40 @@ const ContributeScreen = ({ route, navigation }) => {
   };
 
   // Render member card for the listing section
-  const renderMemberCard = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.memberListCard, { backgroundColor: colors.surface }]}
-      onPress={() => {
-        if (validateMemberSelection(item)) {
-          setSelectedContributor(item);
-        }
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.memberListContent}>
-        <View style={styles.memberListAvatar}>
-          {renderMemberAvatar(item)}
-        </View>
-
-        <View style={styles.memberListInfo}>
-          <Text style={[styles.memberListName, { color: colors.text }]}>
+  const renderMemberCard = ({ item }) => {
+    const isSelected = selectedContributor?.id === item.id;
+    return (
+      <TouchableOpacity
+        style={[
+          styles.memberChip,
+          {
+            backgroundColor: isSelected ? colors.primary + '20' : colors.surface,
+            borderColor: isSelected ? colors.primary : colors.border,
+          },
+        ]}
+        onPress={() => {
+          if (validateMemberSelection(item)) {
+            setSelectedContributor(item);
+          }
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.memberChipContent}>
+          <View style={[styles.memberChipAvatar, { backgroundColor: isSelected ? colors.primary : colors.backgroundSecondary }]}>
+            {renderMemberAvatar(item)}
+          </View>
+          <Text style={[styles.memberChipName, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>
             {getMemberName(item)}
           </Text>
-          <Text style={[styles.memberListRole, { color: colors.textSecondary }]}>
-            {item.role?.charAt(0).toUpperCase() + item.role?.slice(1) || 'Member'}
-          </Text>
-          <Text style={[styles.memberListContributions, { color: colors.textTertiary }]}>
-            Total: {formatCurrency(item.total_contributions || 0)}
-          </Text>
         </View>
-
-        {selectedContributor?.id === item.id && (
-          <View style={[styles.selectedIndicator, { backgroundColor: colors.primary, borderColor: colors.white }]}>
-            <Ionicons name="checkmark" size={16} color={colors.white} />
+        {isSelected && (
+          <View style={[styles.memberChipCheck, { backgroundColor: colors.primary }]}>
+            <Ionicons name="checkmark" size={14} color={colors.white} />
           </View>
         )}
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const getContributionTitle = () => {
     switch (contributionType) {
@@ -1480,77 +1455,11 @@ const ContributeScreen = ({ route, navigation }) => {
                   </Text>
                 )}
               </TouchableOpacity>
-
-              {/* Cheque Payment Method */}
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethodOption,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: paymentMethod === 'cheque' ? colors.info : colors.border,
-                    borderWidth: paymentMethod === 'cheque' ? 2 : 1,
-                    opacity: (userRole === 'treasurer' || userRole === 'chairperson') && contributionType !== 'merry-go-round' ? 1 : 0.6,
-                  }
-                ]}
-                onPress={() => {
-                  if (contributionType === 'merry-go-round') {
-                    Alert.alert(
-                      'Payment Method Not Allowed',
-                      'Cheque payments are not allowed for merry-go-round contributions. Only wallet and M-Pesa payments are permitted.',
-                      [{ text: 'OK' }]
-                    );
-                    return;
-                  }
-
-                  if (userRole === 'treasurer' || userRole === 'chairperson') {
-                    setPaymentMethod('cheque');
-                  } else {
-                    Alert.alert(
-                      'Access Restricted',
-                      'Only treasurers and chairpersons can record cheque contributions for members.',
-                      [{ text: 'OK' }]
-                    );
-                  }
-                }}
-              >
-                <Ionicons
-                  name="card"
-                  size={20}
-                  color={paymentMethod === 'cheque' ? colors.info : colors.text}
-                />
-                <Text
-                  style={[
-                    styles.paymentMethodText,
-                    { color: paymentMethod === 'cheque' ? colors.info : colors.text }
-                  ]}
-                >
-                  Cheque
-                </Text>
-                {(userRole === 'treasurer' || userRole === 'chairperson') ? (
-                  <Text
-                    style={[
-                      styles.paymentMethodSubtext,
-                      { color: colors.textSecondary }
-                    ]}
-                  >
-                    Record for member
-                  </Text>
-                ) : (
-                  <Text
-                    style={[
-                      styles.paymentMethodSubtext,
-                      { color: colors.textSecondary }
-                    ]}
-                  >
-                    Treasurer/Chair only
-                  </Text>
-                )}
-              </TouchableOpacity>
             </View>
             </View>
  
-            {/* Member Listing Section for Cash/Cheque Contributions */}
-            {(paymentMethod === 'cash' || paymentMethod === 'cheque') && (
+            {/* Member Listing Section for Cash Contributions */}
+            {paymentMethod === 'cash' && (
               <View style={styles.memberListingSection}>
                 <View style={styles.memberListingHeader}>
                   <Text style={[styles.memberListingTitle, { color: colors.text }]}>
@@ -1567,15 +1476,42 @@ const ContributeScreen = ({ route, navigation }) => {
                   </Text>
                 </View>
  
-                {chamaMembers.length > 0 ? (
-                  <View style={styles.memberListContainer}>
-                    {chamaMembers.map((member) => (
-                      <View key={member.id}>
-                        {renderMemberCard({ item: member })}
-                      </View>
-                    ))}
-                  </View>
-                ) : (
+                 {chamaMembers.length > 0 ? (
+                   <View style={styles.memberPickerContainer}>
+                     <View style={styles.memberSearchContainer}>
+                       <Ionicons name="search" size={16} color={colors.textSecondary} />
+                       <TextInput
+                         style={styles.memberSearchInput}
+                         placeholder="Search members..."
+                         placeholderTextColor={colors.textSecondary}
+                         value={memberSearchQuery}
+                         onChangeText={setMemberSearchQuery}
+                       />
+                       {memberSearchQuery ? (
+                         <TouchableOpacity onPress={() => setMemberSearchQuery('')}>
+                           <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+                         </TouchableOpacity>
+                       ) : null}
+                     </View>
+                     <ScrollView
+                       nestedScrollEnabled
+                       showsVerticalScrollIndicator={false}
+                       style={styles.memberGridScroll}
+                       contentContainerStyle={styles.memberGridContent}
+                     >
+                       {chamaMembers
+                         .filter(member => {
+                           const name = getMemberName(member).toLowerCase();
+                           return !memberSearchQuery || name.includes(memberSearchQuery.toLowerCase());
+                         })
+                         .map((member) => (
+                           <View key={member.id} style={styles.memberChipWrapper}>
+                             {renderMemberCard({ item: member })}
+                           </View>
+                         ))}
+                     </ScrollView>
+                   </View>
+                 ) : (
                   <View style={[styles.noMembersContainer, { backgroundColor: colors.surface }]}>
                     <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
                     <Text style={[styles.noMembersText, { color: colors.textSecondary }]}>
@@ -1618,8 +1554,8 @@ const ContributeScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {/* Cash/Cheque Contribution Form */}
-          {(paymentMethod === 'cash' || paymentMethod === 'cheque') && (
+          {/* Cash Contribution Form */}
+          {paymentMethod === 'cash' && (
             <View style={styles.cashContributionContainer}>
 
               <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
@@ -1845,8 +1781,7 @@ const ContributeScreen = ({ route, navigation }) => {
                 <Text style={[styles.confirmationValue, { color: colors.text }]}>
                   {paymentMethod === 'wallet' ? 'VaultKe Wallet' :
                    paymentMethod === 'mpesa' ? 'M-Pesa' :
-                   paymentMethod === 'cash' ? 'Cash' :
-                   paymentMethod === 'cheque' ? 'Cheque' : 'Unknown'}
+                   paymentMethod === 'cash' ? 'Cash' : 'Unknown'}
                 </Text>
               </View>
 
@@ -1872,7 +1807,7 @@ const ContributeScreen = ({ route, navigation }) => {
                 </View>
               )}
 
-              {(paymentMethod === 'cash' || paymentMethod === 'cheque') && (
+              {paymentMethod === 'cash' && (
                 <>
                   <View style={styles.confirmationRow}>
                     <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
@@ -1892,21 +1827,6 @@ const ContributeScreen = ({ route, navigation }) => {
                       }
                     </Text>
                   </View>
-                </>
-              )}
-
-              {paymentMethod === 'cash' && (
-                <>
-                  <View style={styles.confirmationRow}>
-                    <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                      Contributor:
-                    </Text>
-                    <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                      {selectedContributor?.fullName || 'Not selected'}
-                    </Text>
-                  </View>
-
-
                 </>
               )}
 
@@ -1931,8 +1851,7 @@ const ContributeScreen = ({ route, navigation }) => {
                 title={
                   paymentMethod === 'wallet' ? 'Confirm Transfer' :
                   paymentMethod === 'mpesa' ? 'Pay with M-Pesa' :
-                  paymentMethod === 'cash' ? 'Record Contribution' :
-                  paymentMethod === 'cheque' ? 'Record Contribution' : 'Confirm'
+                  paymentMethod === 'cash' ? 'Record Contribution' : 'Confirm'
                 }
                 onPress={confirmContribution}
                 loading={loading}
@@ -1943,8 +1862,7 @@ const ContributeScreen = ({ route, navigation }) => {
                     name={
                       paymentMethod === 'wallet' ? 'wallet' :
                       paymentMethod === 'mpesa' ? 'phone-portrait' :
-                      paymentMethod === 'cash' ? 'cash' :
-                      paymentMethod === 'cheque' ? 'card' : 'checkmark'
+                      paymentMethod === 'cash' ? 'cash' : 'checkmark'
                     }
                     size={20}
                     color={colors.primary}
@@ -2538,9 +2456,8 @@ const styles = StyleSheet.create({
   },
   // Member Listing Section Styles
   memberListingSection: {
-    marginHorizontal: spacing.xs, // Close to screen edges
-    marginVertical: spacing.md,
-    maxHeight: Dimensions.get('window').height * 0.5, // Half screen height
+    marginTop: spacing.xxxl,
+    marginBottom: spacing.lg,
   },
   memberListingHeader: {
     marginBottom: spacing.md,
@@ -2555,7 +2472,80 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   memberListContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  memberPickerContainer: {
+    maxHeight: 320,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  memberSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  memberSearchInput: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+  },
+  memberGridScroll: {
+    flex: 1,
+  },
+  memberGridContent: {
+    padding: spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  memberChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+    minWidth: 100,
+    flexShrink: 1,
+    overflow: 'hidden',
+  },
+  memberChipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 1,
+  },
+  memberChipAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  memberChipName: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    flexShrink: 1,
+    numberOfLines: 1,
+  },
+  memberChipCheck: {
+    marginLeft: spacing.xs,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   memberListCard: {
     borderRadius: borderRadius.lg,
@@ -2580,15 +2570,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     backgroundColor: '#f0f0f0',
-    // Add subtle shadow for better visual appeal
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3, // For Android shadow
   },
   memberInitials: {
     fontSize: typography.fontSize.base,

@@ -32,6 +32,13 @@ const getMerryGoRounds = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/merry-go-rounds`);
 };
 
+const createMerryGoRound = async (data) => {
+  return await makeRequest('/merry-go-rounds/', {
+    method: 'POST',
+    body: data,
+  });
+};
+
 const createChama = async (chamaData) => {
   return await makeRequest('/chamas/', {
     method: 'POST',
@@ -58,6 +65,39 @@ const leaveChama = async (chamaId) => {
   });
 };
 
+const getMemberRole = async (chamaId, userId) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${userId}/role`);
+};
+
+const getActiveVotes = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/votes/active`);
+};
+
+const getVoteResults = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/votes/results`);
+};
+
+const createVote = async (chamaId, data) => {
+  return await makeRequest(`/chamas/${chamaId}/votes`, {
+    method: 'POST',
+    body: data,
+  });
+};
+
+const castVote = async (chamaId, voteId, optionId) => {
+  return await makeRequest(`/chamas/${chamaId}/votes/${voteId}/vote`, {
+    method: 'POST',
+    body: { optionId },
+  });
+};
+
+const createRoleEscalationPoll = async (chamaId, data) => {
+  return await makeRequest(`/chamas/${chamaId}/votes/role-escalation`, {
+    method: 'POST',
+    body: data,
+  });
+};
+
 export {
   getChamas,
   getAllChamasForAdmin,
@@ -67,8 +107,15 @@ export {
   getChamaMembers,
   getChamaTransactions,
   getMerryGoRounds,
+  createMerryGoRound,
   createChama,
   updateChama,
   joinChama,
   leaveChama,
+  getMemberRole,
+  getActiveVotes,
+  getVoteResults,
+  createVote,
+  castVote,
+  createRoleEscalationPoll,
 };

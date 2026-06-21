@@ -803,7 +803,7 @@ func (s *ChatService) AddUserToRoom(roomID, userID string) error {
 	memberID := uuid.New().String()
 	insertQuery := `
 		INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active)
-		VALUES ($1, $2, $3, 'member', datetime('now'), true)
+		VALUES ($1, $2, $3, 'member', NOW(), true)
 	`
 
 	_, err = s.db.Exec(insertQuery, memberID, roomID, userID)

@@ -19,6 +19,8 @@ yarn-error.*
 *.p12
 *.key
 *.mobileprovision
+.pgp
+.png
 
 .db-wall
 .db
@@ -105,11 +107,11 @@ out/
 *.dex
 *.class
 *.jar
-
+backend/upload/
 # TypeScript
 *.tsbuildinfo
 tsconfig.tsbuildinfo
-
+backend/uploads
 # Testing
 coverage/
 .nyc_output/

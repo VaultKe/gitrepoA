@@ -11,7 +11,9 @@ const ReminderTableHeader = ({
   filterValue,
   onFilterChange,
   onCreate,
-  filterOptions = ['all', 'once', 'daily', 'weekly', 'monthly']
+  filterOptions = ['all', 'once', 'daily', 'weekly', 'monthly'],
+  showSearchFilter = true,
+  showTableHeader = true,
 }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
@@ -31,8 +33,10 @@ const ReminderTableHeader = ({
 
   return (
     <View>
-      {/* Search and Filter Row */}
-      <View style={{
+    {showSearchFilter && (
+      <>
+        {/* Search and Filter Row */}
+        <View style={{
         flexDirection: 'row',
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -123,8 +127,10 @@ const ReminderTableHeader = ({
           </TouchableOpacity>
         )}
       </View>
+      </>
+    )}
 
-      {/* Table Header Row */}
+    {showTableHeader && (
       <View style={{
         flexDirection: 'row',
         paddingHorizontal: 12,
@@ -136,39 +142,40 @@ const ReminderTableHeader = ({
       }}>
         <Text style={{
           flex: 3,
-          fontSize: 8,
+          fontSize: 14,
           fontWeight: '600',
           color: colors.textSecondary,
         }}>Title & Description</Text>
         <Text style={{
           flex: 1,
-          fontSize: 8,
+          fontSize: 14,
           fontWeight: '600',
           color: colors.textSecondary,
           textAlign: 'center',
         }}>Type</Text>
         <Text style={{
           flex: 2,
-          fontSize: 8,
+          fontSize: 14,
           fontWeight: '600',
           color: colors.textSecondary,
           textAlign: 'center',
         }}>Date & Time</Text>
         <Text style={{
           flex: 1,
-          fontSize: 8,
+          fontSize: 14,
           fontWeight: '600',
           color: colors.textSecondary,
           textAlign: 'center',
         }}>Status</Text>
         <Text style={{
           flex: 1.5,
-          fontSize: 8,
+          fontSize: 14,
           fontWeight: '600',
           color: colors.textSecondary,
           textAlign: 'center',
         }}>Actions</Text>
       </View>
+    )}
     </View>
   );
 };

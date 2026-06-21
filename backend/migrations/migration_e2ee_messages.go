@@ -2,11 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )

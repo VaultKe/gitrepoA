@@ -213,26 +213,14 @@ export function AppProvider({ children }) {
     try {
       dispatch({ type: ActionTypes.SET_LOADING, payload: true });
 
-      // Minimal, efficient app initialization
-      try {
-        const lightningDataService = (await import('../services/lightningDataService')).default;
-
-        // Light cleanup on app start (no aggressive operations)
-        lightningDataService.clearOldCacheData().catch(() => {
-          // Silent failure - not critical
-        });
-      } catch (error) {
-        console.warn('⚠️ App initialization failed:', error);
-      }
-
       // Set a much shorter timeout to prevent long loading screens
       const timeoutId = setTimeout(() => {
         console.warn('App initialization timeout, proceeding without database');
         dispatch({ type: ActionTypes.SET_LOADING, payload: false });
       }, 1500); // Reduced from 10s to 1.5s
 
-       // Database service removed per requirement - app works without SQLite DB in frontend
-       console.log('Database service disabled - app running in memory-only mode');
+      // Database service removed per requirement - app works without SQLite DB in frontend
+      console.log('Database service disabled - app running in memory-only mode');
 
       // Check for existing auth token (parallel for speed)
       const [authToken, userData, theme, language] = await Promise.all([
@@ -1070,8 +1058,15 @@ export function AppProvider({ children }) {
 
   // Theme and language actions
   const setTheme = async (theme) => {
-    dispatch({ type: ActionTypes.SET_THEME, payload: theme });
-    await AsyncStorage.setItem('theme', theme);
+    const nextTheme = theme === 'light' ? 'light' : 'dark';
+    dispatch({ type: ActionTypes.SET_THEME, payload: nextTheme });
+    await AsyncStorage.setItem('theme', nextTheme);
+  };
+
+  const toggleTheme = async () => {
+    const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
+    dispatch({ type: ActionTypes.SET_THEME, payload: nextTheme });
+    await AsyncStorage.setItem('theme', nextTheme);
   };
 
   const setLanguage = async (language) => {
@@ -1197,6 +1192,7 @@ export function AppProvider({ children }) {
     refreshSpecificData,
     loadUserChamas,
     setTheme,
+    toggleTheme,
     setLanguage,
     setCurrentDashboard,
     setSelectedChama,

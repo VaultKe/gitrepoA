@@ -18,6 +18,37 @@ const AccountManagementScreen = ({ route, navigation }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
 
+  const modules = [
+    {
+      title: 'Loans',
+      icon: 'card',
+      color: colors.primary,
+      route: 'LoanManagement',
+      bg: colors.primary + '20',
+    },
+    {
+      title: 'Welfare',
+      icon: 'heart',
+      color: colors.warning,
+      route: 'WelfareDisbursement',
+      bg: colors.warning + '20',
+    },
+    {
+      title: 'Savings',
+      icon: 'wallet',
+      color: colors.secondary,
+      route: 'SavingsWithdrawal',
+      bg: colors.secondary + '20',
+    },
+    {
+      title: 'Merry-go-round',
+      icon: 'refresh-circle',
+      color: colors.primary,
+      route: 'MaryGoRoundDisbursement',
+      bg: colors.primary + '20',
+    },
+  ];
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -25,86 +56,74 @@ const AccountManagementScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Stat Cards 2x2 Grid */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statRow}>
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="card" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Loans</Text>
-              </View>
-            </Card>
+        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          <View style={styles.statsContainer}>
+            <View style={styles.statRow}>
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="card" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Loans</Text>
+                </View>
+              </Card>
 
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="heart" size={24} color={colors.warning} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Welfare Funds</Text>
-              </View>
-            </Card>
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="heart" size={24} color={colors.warning} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Welfare Funds</Text>
+                </View>
+              </Card>
+            </View>
+
+            <View style={styles.statRow}>
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="wallet" size={24} color={colors.secondary} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>KES 0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Savings</Text>
+                </View>
+              </Card>
+
+              <Card variant="outlined" style={styles.statCard}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="refresh-circle" size={24} color={colors.info} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MGR Cycles</Text>
+                </View>
+              </Card>
+            </View>
           </View>
+        </Card>
 
-          <View style={styles.statRow}>
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="wallet" size={24} color={colors.secondary} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>KES 0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Savings</Text>
-              </View>
-            </Card>
-
-            <Card variant="outlined" style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Ionicons name="refresh-circle" size={24} color={colors.info} />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={[styles.statValue, { color: colors.text }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>MGR Cycles</Text>
-              </View>
-            </Card>
-          </View>
-        </View>
-
-        {/* Navigation Icons */}
-        <View style={styles.navigationContainer}>
+        {/* Management Modules */}
+        <Card variant="outlined" style={styles.navigationContainer}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Management Modules</Text>
 
           <View style={styles.navigationGrid}>
-            <TouchableOpacity style={[styles.navIcon, { backgroundColor: colors.primary + '20' }]} onPress={() => navigation.navigate('LoanManagement', { chamaId })}>
-              <Card style={styles.navIcon}>
-                  <Ionicons name="card" size={32} color={colors.primary} />
-              </Card>
-                <Text style={[styles.navTitle, { color: colors.text }]}>Loans</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.navIcon, { backgroundColor: colors.primary + '20' }]} onPress={() => navigation.navigate('WelfareDisbursement', { chamaId })}>
-              <Card style={styles.navIcon}>
-                  <Ionicons name="heart" size={32} color={colors.warning} />
-              </Card>
-                <Text style={[styles.navTitle, { color: colors.text }]}>Welfare</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.navIcon, { backgroundColor: colors.primary + '20' }]} onPress={() => navigation.navigate('SavingsWithdrawal', { chamaId })}>
-              <Card style={styles.navIcon}>
-                  <Ionicons name="wallet" size={32} color={colors.secondary} />
-              </Card>
-               <Text style={[styles.navTitle, { color: colors.text }]}>Savings</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.navIcon, { backgroundColor: colors.primary + '20' }]} onPress={() => navigation.navigate('MaryGoRoundDisbursement', { chamaId })}>
-              <Card style={styles.navIcon}>
-                  <Ionicons name="refresh-circle" size={32} color={colors.primary} />
-              </Card>
-                <Text style={[styles.navTitle, { color: colors.text }]}>Merry-go-round</Text>
-            </TouchableOpacity>
+            {modules.map((mod, idx) => (
+              <TouchableOpacity
+                key={mod.title}
+                style={styles.navCard}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate(mod.route, { chamaId })}
+              >
+                <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
+                  <Ionicons name={mod.icon} size={32} color={mod.color} />
+                </View>
+                <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -128,7 +147,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: borderRadius.lg,
-    backgroundColor: 'white',
   },
   statRow: {
     flexDirection: 'row',
@@ -167,35 +185,28 @@ const styles = StyleSheet.create({
   },
   navigationGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
+    alignItems: 'center',
   },
   navCard: {
-    flex: 0.48,
-    margin: spacing.sm,
-  },
-  navCardContent: {
-    padding: spacing.lg,
     alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    flex: 1,
   },
   navIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 40,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   navTitle: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs,
     textAlign: 'center',
-  },
-  navSubtitle: {
-    fontSize: typography.fontSize.sm,
-    textAlign: 'center',
-    lineHeight: 16,
   },
 });
 

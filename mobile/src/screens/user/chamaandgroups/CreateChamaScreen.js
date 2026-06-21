@@ -368,14 +368,6 @@ const CreateChamaScreen = ({ navigation }) => {
             errors.contribution_amount = 'Maximum contribution amount is KES 1,000,000';
           }
         } else if (chamaData.group_type === 'contribution') {
-          // Debug: This should NOT be validating for contributions
-          console.log('🚨 ERROR: contribution_amount being validated for contribution group!');
-          console.log('📊 Debug info:', {
-            group_type: chamaData.group_type,
-            field: field,
-            value: value,
-            contribution_amount: chamaData.contribution_amount
-          });
         }
         break;
 
@@ -432,20 +424,47 @@ const CreateChamaScreen = ({ navigation }) => {
         break;
 
       case 'till_number':
-        if (chamaData.payment_method === 'till' && (!value || value.trim().length < 5)) {
-          errors.till_number = 'Till number is required and must be at least 5 digits';
+        // Only required/checked when TILL is the selected payment method
+        if (chamaData.payment_method === 'till') {
+          if (!value || value.trim().length === 0) {
+            errors.till_number = 'Till number is required';
+          } else if (!/^[0-9]+$/.test(value)) {
+            errors.till_number = 'Till number must contain digits only';
+          } else if (value.trim().length < 5) {
+            errors.till_number = 'Till number must be at least 5 digits';
+          } else if (value.trim().length > 10) {
+            errors.till_number = 'Till number must be at most 10 digits';
+          }
         }
         break;
 
       case 'paybill_business_number':
-        if (chamaData.payment_method === 'paybill' && (!value || value.trim().length < 5)) {
-          errors.paybill_business_number = 'Business number is required and must be at least 5 digits';
+        // Only required/checked when PAYBILL is the selected payment method
+        if (chamaData.payment_method === 'paybill') {
+          if (!value || value.trim().length === 0) {
+            errors.paybill_business_number = 'Business number is required';
+          } else if (!/^[0-9]+$/.test(value)) {
+            errors.paybill_business_number = 'Business number must contain digits only';
+          } else if (value.trim().length < 5) {
+            errors.paybill_business_number = 'Business number must be at least 5 digits';
+          } else if (value.trim().length > 10) {
+            errors.paybill_business_number = 'Business number must be at most 10 digits';
+          }
         }
         break;
 
       case 'paybill_account_number':
-        if (chamaData.payment_method === 'paybill' && (!value || value.trim().length < 2)) {
-          errors.paybill_account_number = 'Account number is required';
+        // Only required/checked when PAYBILL is the selected payment method
+        if (chamaData.payment_method === 'paybill') {
+          if (!value || value.trim().length === 0) {
+            errors.paybill_account_number = 'Account number is required';
+          } else if (!/^[a-zA-Z0-9]+$/.test(value)) {
+            errors.paybill_account_number = 'Account number must be letters and numbers only';
+          } else if (value.trim().length < 2) {
+            errors.paybill_account_number = 'Account number must be at least 2 characters';
+          } else if (value.trim().length > 50) {
+            errors.paybill_account_number = 'Account number is too long';
+          }
         }
         break;
 
@@ -551,6 +570,9 @@ const CreateChamaScreen = ({ navigation }) => {
         break;
       case 'till_number':
       case 'paybill_business_number':
+        // TILL and PAYBILL business numbers are digits only
+        sanitizedValue = sanitizeInput(value, 'number').replace(/\./g, '');
+        break;
       case 'paybill_account_number':
         // Allow alphanumeric while typing
         sanitizedValue = sanitizeInput(value, 'alphanumeric');
@@ -601,9 +623,7 @@ const CreateChamaScreen = ({ navigation }) => {
 
        // Check against all public chamas
        const response = await ApiService.getChamas(20, 0);
-
-      console.log('Chama name check response:', response); // Debug log
-
+       
       // Handle different response structures
       let chamasData = [];
 
@@ -645,7 +665,6 @@ const CreateChamaScreen = ({ navigation }) => {
         setNameValidation({ isValid: true, message: 'Name is available!' });
       }
     } catch (error) {
-      console.error('Error checking chama name:', error);
       // Don't block user if check fails - allow them to proceed
       setNameValidation({ isValid: true, message: '' });
     } finally {
@@ -672,7 +691,6 @@ const CreateChamaScreen = ({ navigation }) => {
         setSearchResults(filteredResults);
       }
     } catch (error) {
-      console.error('User search failed:', error);
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
@@ -730,21 +748,25 @@ const CreateChamaScreen = ({ navigation }) => {
 
         // Conditional validation based on group type
         let financialErrors = {};
-        console.log(`🔍 Step 2 validation for group_type: ${chamaData.group_type}`);
 
         if (chamaData.group_type === 'chama') {
-          console.log('💰 Validating chama fields: contribution_amount');
           financialErrors = validateField('contribution_amount', chamaData.contribution_amount);
         } else if (chamaData.group_type === 'contribution') {
-          console.log('🎯 Validating contribution fields: target_amount, contribution_rules');
           const targetAmountErrors = validateField('target_amount', chamaData.target_amount);
           const contributionRulesErrors = validateField('contribution_rules', chamaData.contribution_rules);
           Object.assign(financialErrors, targetAmountErrors, contributionRulesErrors);
         }
-
-        console.log('📊 Step 2 financial errors:', financialErrors);
-
         Object.assign(errors, countyErrors, townErrors, membersErrors, financialErrors);
+
+        // Payment method fields - only checked when a payment method is actually selected
+        if (chamaData.payment_method === 'till') {
+          Object.assign(errors, validateField('till_number', chamaData.till_number));
+          Object.assign(errors, validateField('payment_recipient_name', chamaData.payment_recipient_name));
+        } else if (chamaData.payment_method === 'paybill') {
+          Object.assign(errors, validateField('paybill_business_number', chamaData.paybill_business_number));
+          Object.assign(errors, validateField('paybill_account_number', chamaData.paybill_account_number));
+          Object.assign(errors, validateField('payment_recipient_name', chamaData.payment_recipient_name));
+        }
 
         isValid = Object.keys(errors).length === 0;
         break;
@@ -807,26 +829,19 @@ const CreateChamaScreen = ({ navigation }) => {
       }
     });
 
+    // Payment method fields - only checked when a payment method is actually selected
+    if (chamaData.payment_method === 'till') {
+      Object.assign(allErrors, validateField('till_number', chamaData.till_number));
+      Object.assign(allErrors, validateField('payment_recipient_name', chamaData.payment_recipient_name));
+    } else if (chamaData.payment_method === 'paybill') {
+      Object.assign(allErrors, validateField('paybill_business_number', chamaData.paybill_business_number));
+      Object.assign(allErrors, validateField('paybill_account_number', chamaData.paybill_account_number));
+      Object.assign(allErrors, validateField('payment_recipient_name', chamaData.payment_recipient_name));
+    }
+
     // Add name validation error if exists
     if (!nameValidation.isValid) {
       allErrors.name = nameValidation.message;
-    }
-
-    // Debug logging for contribution groups
-    if (chamaData.group_type === 'contribution') {
-      console.log('🔍 Contribution Group Validation Debug:');
-      console.log('📋 Fields validated:', fieldsToValidate);
-      console.log('❌ Validation errors:', allErrors);
-      console.log('📊 Current data:', {
-        group_type: chamaData.group_type,
-        name: chamaData.name,
-        description: chamaData.description,
-        type: chamaData.type,
-        target_amount: chamaData.target_amount,
-        county: chamaData.county,
-        town: chamaData.town,
-        max_members: chamaData.max_members
-      });
     }
 
     setFormErrors(allErrors);
@@ -836,22 +851,10 @@ const CreateChamaScreen = ({ navigation }) => {
   };
 
   const handleNext = () => {
-    console.log(`🔍 Validating Step ${currentStep} for group_type: ${chamaData.group_type}`);
-
     if (validateStep(currentStep, true)) {
-      console.log(`✅ Step ${currentStep} validation passed`);
       setCurrentStep(currentStep + 1);
       setShowErrors(false); // Hide errors when moving to next step
     } else {
-      console.log(`❌ Step ${currentStep} validation failed`);
-      console.log('📊 Current form errors:', formErrors);
-      console.log('📋 Current data:', {
-        group_type: chamaData.group_type,
-        contribution_amount: chamaData.contribution_amount,
-        target_amount: chamaData.target_amount
-      });
-
-      // Show toast with error summary
       Toast.show({
         type: 'error',
         text1: 'Form Validation Failed',
@@ -1211,9 +1214,14 @@ const CreateChamaScreen = ({ navigation }) => {
               setShowErrors(false);
             }}
           >
+            {chamaData.group_type === option.id && (
+              <View style={[styles.checkBadge, { backgroundColor: option.color }]}>
+                <Ionicons name="checkmark" size={10} color={colors.white} />
+              </View>
+            )}
             <Ionicons
               name={option.icon}
-              size={32}
+              size={22}
               color={chamaData.group_type === option.id ? option.color : colors.textSecondary}
             />
             <Text style={[
@@ -1221,12 +1229,11 @@ const CreateChamaScreen = ({ navigation }) => {
               {
                 color: chamaData.group_type === option.id ? option.color : colors.text,
                 fontWeight: chamaData.group_type === option.id ? 'bold' : 'normal',
-                fontSize: 18
               }
-            ]}>
+            ]} numberOfLines={1}>
               {option.name}
             </Text>
-            <Text style={[styles.typeDescription, { color: colors.textSecondary, textAlign: 'center' }]}>
+            <Text style={[styles.typeDescription, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={2}>
               {option.description}
             </Text>
           </TouchableOpacity>
@@ -1288,18 +1295,23 @@ const CreateChamaScreen = ({ navigation }) => {
                 ]}
                 onPress={() => handleInputChange('type', type.id)}
               >
+                {chamaData.type === type.id && (
+                  <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
+                    <Ionicons name="checkmark" size={10} color={colors.white} />
+                  </View>
+                )}
                 <Ionicons
                   name={type.icon}
-                  size={24}
+                  size={18}
                   color={chamaData.type === type.id ? colors.primary : colors.textSecondary}
                 />
                 <Text style={[
                   styles.typeName,
                   { color: chamaData.type === type.id ? colors.primary : colors.text }
-                ]}>
+                ]} numberOfLines={1}>
                   {type.name}
                 </Text>
-                <Text style={[styles.typeDescription, { color: colors.textSecondary }]}>
+                <Text style={[styles.typeDescription, { color: colors.textSecondary }]} numberOfLines={2}>
                   {type.description}
                 </Text>
               </TouchableOpacity>
@@ -1437,6 +1449,11 @@ const CreateChamaScreen = ({ navigation }) => {
           ]}
           onPress={() => handleInputChange('payment_method', chamaData.payment_method === 'till' ? '' : 'till')}
         >
+          {chamaData.payment_method === 'till' && (
+            <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
+              <Ionicons name="checkmark" size={10} color={colors.white} />
+            </View>
+          )}
           <Ionicons
             name="card"
             size={24}
@@ -1461,6 +1478,11 @@ const CreateChamaScreen = ({ navigation }) => {
           ]}
           onPress={() => handleInputChange('payment_method', chamaData.payment_method === 'paybill' ? '' : 'paybill')}
         >
+          {chamaData.payment_method === 'paybill' && (
+            <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
+              <Ionicons name="checkmark" size={10} color={colors.white} />
+            </View>
+          )}
           <Ionicons
             name="business"
             size={24}
@@ -1484,6 +1506,7 @@ const CreateChamaScreen = ({ navigation }) => {
             onChangeText={(text) => handleInputChange('till_number', text)}
             placeholder="e.g., 123456"
             keyboardType="numeric"
+            maxLength={10}
             error={showErrors && formErrors.till_number}
           />
           <Input
@@ -1505,6 +1528,7 @@ const CreateChamaScreen = ({ navigation }) => {
             onChangeText={(text) => handleInputChange('paybill_business_number', text)}
             placeholder="e.g., 123456"
             keyboardType="numeric"
+            maxLength={10}
             error={showErrors && formErrors.paybill_business_number}
           />
           <Input
@@ -1916,25 +1940,45 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     marginLeft: spacing.sm,
   },
+  // Compact 2-column grid for type selection cards (was a full-width stacked list)
   typeContainer: {
-    gap: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
   typeCard: {
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    width: '48%',
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 90,
+    marginBottom: spacing.sm,
+    position: 'relative',
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   typeName: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+    marginBottom: 2,
+    textAlign: 'center',
   },
   typeDescription: {
-    fontSize: typography.fontSize.sm,
+    fontSize: 10,
     textAlign: 'center',
+    lineHeight: 13,
   },
   row: {
     flexDirection: 'row',
@@ -2113,6 +2157,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 90,
     marginBottom: spacing.sm,
+    position: 'relative',
   },
   paymentMethodText: {
     fontSize: typography.fontSize.sm,

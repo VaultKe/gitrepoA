@@ -7,7 +7,8 @@ import Toast from 'react-native-toast-message';
 import DevHelper from './src/utils/DevHelper';
 
 // Context Provider
-import { AppProvider } from './src/context/AppContext';
+import { AppProvider, useApp } from './src/context/AppContext';
+import { getThemeColors } from './src/utils/theme';
 
 // New Independent Navigation
 import RootNavigator from './src/navigation/RootNavigator';
@@ -24,6 +25,9 @@ LogBox.ignoreLogs([
 
 // Main App Component
 function AppContent() {
+  const { theme } = useApp();
+  const colors = getThemeColors(theme);
+
   // Initialize notification service
   useEffect(() => {
     // Initialize the enhanced notification service
@@ -47,7 +51,7 @@ function AppContent() {
 
   return (
     <>
-      <StatusBar style="auto" />
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.background} />
       <RootNavigator />
       <Toast />
     </>

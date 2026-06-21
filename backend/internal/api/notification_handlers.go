@@ -515,9 +515,9 @@ func getMeetingNotifications(db *sql.DB, userID string) ([]map[string]interface{
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
 		WHERE cm.user_id = $1 AND cm.is_active = true
 		AND (
-			(m.status = 'scheduled' AND m.scheduled_at > datetime('now', '-1 day'))
+			(m.status = 'scheduled' AND m.scheduled_at > NOW() - INTERVAL '1 day')
 			OR (m.status = 'active')
-			OR (m.created_at > datetime('now', '-7 days'))
+			OR (m.created_at > NOW() - INTERVAL '7 days')
 		)
 		ORDER BY m.scheduled_at DESC
 	`
@@ -630,7 +630,7 @@ func getLoanNotifications(db *sql.DB, userID string) ([]map[string]interface{}, 
 		INNER JOIN users u ON l.applicant_id = u.id
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
 		WHERE (cm.user_id = $1 OR l.applicant_id = $2) AND cm.is_active = true
-		AND l.created_at > datetime('now', '-30 days')
+		AND l.created_at > NOW() - INTERVAL '30 days'
 		ORDER BY l.created_at DESC
 	`
 
@@ -743,7 +743,7 @@ func getWelfareNotifications(db *sql.DB, userID string) ([]map[string]interface{
 		INNER JOIN users creator ON wr.created_by = creator.id
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
 		WHERE (cm.user_id = $1 OR wr.beneficiary_id = $2 OR wr.created_by = $3) AND cm.is_active = true
-		AND wr.created_at > datetime('now', '-30 days')
+		AND wr.created_at > NOW() - INTERVAL '30 days'
 		ORDER BY wr.created_at DESC
 	`
 
@@ -853,7 +853,7 @@ func getTransactionNotifications(db *sql.DB, userID string) ([]map[string]interf
 		INNER JOIN users u ON t.user_id = u.id
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
 		WHERE cm.user_id = $1 AND cm.is_active = true
-		AND t.created_at > datetime('now', '-7 days')
+		AND t.created_at > NOW() - INTERVAL '7 days'
 		AND t.type IN ('contribution', 'welfare_contribution', 'loan_payment')
 		ORDER BY t.created_at DESC
 	`
@@ -964,7 +964,7 @@ func getChamaActivityNotifications(db *sql.DB, userID string) ([]map[string]inte
 		INNER JOIN chama_members my_membership ON c.id = my_membership.chama_id
 		WHERE my_membership.user_id = $1 AND my_membership.is_active = true
 		AND cm.user_id != $2 -- Don't notify about own activities
-		AND cm.joined_at > datetime('now', '-7 days')
+		AND cm.joined_at > NOW() - INTERVAL '7 days'
 		AND cm.is_active = true
 		ORDER BY cm.joined_at DESC
 	`
@@ -1201,11 +1201,11 @@ func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notifi
 	// Create a table to track deleted virtual notifications if it doesn't exist
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS deleted_virtual_notifications (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			id SERIAL PRIMARY KEY,
 			user_id TEXT NOT NULL,
 			notification_id TEXT NOT NULL,
 			notification_type TEXT NOT NULL,
-			deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, notification_id)
 		)
 	`
@@ -1217,11 +1217,13 @@ func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notifi
 		return true
 	}
 
-	// Insert deletion record
+	// Insert deletion record (PostgreSQL uses ON CONFLICT for upsert)
 	insertQuery := `
-		INSERT OR REPLACE INTO deleted_virtual_notifications
+		INSERT INTO deleted_virtual_notifications
 		(user_id, notification_id, notification_type)
 		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, notification_id) DO UPDATE
+		SET notification_type = EXCLUDED.notification_type, deleted_at = CURRENT_TIMESTAMP
 	`
 
 	_, err = db.Exec(insertQuery, userID, notificationID, notificationType)
@@ -1242,11 +1244,11 @@ func getDeletedVirtualNotificationIDs(db *sql.DB, userID string) map[string]bool
 	// Create the table if it doesn't exist
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS deleted_virtual_notifications (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			id SERIAL PRIMARY KEY,
 			user_id TEXT NOT NULL,
 			notification_id TEXT NOT NULL,
 			notification_type TEXT NOT NULL,
-			deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, notification_id)
 		)
 	`
@@ -1299,7 +1301,7 @@ func getSupportRequestNotifications(db *sql.DB, userID string) ([]map[string]int
 				u.first_name, u.last_name, u.email
 			FROM support_requests sr
 			LEFT JOIN users u ON sr.user_id = u.id
-			WHERE sr.created_at >= datetime('now', '-7 days')
+			WHERE sr.created_at >= NOW() - INTERVAL '7 days'
 			AND sr.status = 'open'
 			ORDER BY sr.created_at DESC
 		`
@@ -1351,7 +1353,7 @@ func getSupportRequestNotifications(db *sql.DB, userID string) ([]map[string]int
 				sr.updated_at, sr.admin_notes, sr.created_at
 			FROM support_requests sr
 			WHERE sr.user_id = $1
-			AND sr.updated_at >= datetime('now', '-30 days')
+			AND sr.updated_at >= NOW() - INTERVAL '30 days'
 			AND sr.status != 'open'
 			ORDER BY sr.updated_at DESC
 		`

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import Card from '../../../components/common/Card';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing } from '../../../utils/theme';
 import api from '../../../services/api';
@@ -20,13 +21,12 @@ const ViewMember = ({ route, navigation }) => {
   const { memberId, chamaId, userRole } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
+  const styles = createStyles(colors);
 
   const [loading, setLoading] = useState(true);
   const [memberData, setMemberData] = useState(null);
   const [memberStats, setMemberStats] = useState(null);
   const [imageExpanded, setImageExpanded] = useState(false);
-  const [activityPage, setActivityPage] = useState(1);
-  const activityItemsPerPage = 10;
 
   useEffect(() => {
     loadMemberDetails();
@@ -142,15 +142,10 @@ const ViewMember = ({ route, navigation }) => {
 
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (isExpanded = false) => {
-    console.log('🔍 ViewMember memberData:', memberData);
-
-    // Access avatar from nested user object (correct structure)
     const user = memberData?.user || {};
     const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || memberData?.avatar_url || memberData?.avatar;
     const firstName = user?.first_name || memberData?.first_name;
     const lastName = user?.last_name || memberData?.last_name;
-
-    // console.log('🖼️ ViewMember avatar data:', { avatarUrl, firstName, lastName });
 
     const avatarStyle = isExpanded ? styles.expandedAvatar : styles.avatar;
     const placeholderStyle = isExpanded ? styles.expandedAvatarPlaceholder : styles.avatarPlaceholder;
@@ -179,8 +174,8 @@ const ViewMember = ({ route, navigation }) => {
 
     // Fallback to initials if no avatar
     return (
-      <View style={[placeholderStyle, { backgroundColor: colors.primary }]}>
-        <Text style={[textStyle, { color: colors.white }]}>
+      <View style={[placeholderStyle, styles.avatarPlaceholderPrimary]}>
+        <Text style={[textStyle, styles.avatarText]}>
           {firstName?.[0]?.toUpperCase() || 'M'}{lastName?.[0]?.toUpperCase() || ''}
         </Text>
       </View>
@@ -213,32 +208,17 @@ const ViewMember = ({ route, navigation }) => {
     }
   };
 
-  const getActivityColor = (type) => {
-    switch (type?.toLowerCase()) {
-      case 'contribution':
-      case 'deposit':
-        return colors.success;
-      case 'withdrawal':
-      case 'loan':
-        return colors.error;
-      case 'transfer':
-        return colors.primary;
-      default:
-        return colors.text;
-    }
-  };
-
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <SafeAreaView style={[styles.container, styles.containerBackground]}>
+        <View style={[styles.header, styles.headerSurface]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
+          <Text style={[styles.headerTitle, styles.headerTitleText]}>
             Member Details
           </Text>
           <View style={styles.headerRight} />
@@ -246,7 +226,7 @@ const ViewMember = ({ route, navigation }) => {
 
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          <Text style={[styles.loadingText, styles.loadingTextSecondary]}>
             Loading member details...
           </Text>
         </View>
@@ -256,15 +236,15 @@ const ViewMember = ({ route, navigation }) => {
 
   if (!memberData) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <SafeAreaView style={[styles.container, styles.containerBackground]}>
+        <View style={[styles.header, styles.headerSurface]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
+          <Text style={[styles.headerTitle, styles.headerTitleText]}>
             Member Details
           </Text>
           <View style={styles.headerRight} />
@@ -272,14 +252,14 @@ const ViewMember = ({ route, navigation }) => {
 
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={64} color={colors.error} />
-          <Text style={[styles.errorTitle, { color: colors.text }]}>
+          <Text style={[styles.errorTitle, styles.errorTitleText]}>
             Member Not Found
           </Text>
-          <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+          <Text style={[styles.errorText, styles.errorTextSecondary]}>
             The member you're looking for could not be found.
           </Text>
           <TouchableOpacity
-            style={[styles.backButton, { backgroundColor: colors.primary }]}
+            style={[styles.backButton, styles.goBackButton]}
             onPress={() => navigation.goBack()}
           >
             <Text style={styles.backButtonText}>Go Back</Text>
@@ -290,10 +270,14 @@ const ViewMember = ({ route, navigation }) => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, styles.containerBackground]}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Member Profile Card */}
-        <View style={[styles.profileCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, imageExpanded && styles.framelessCard]}>
+        <Card
+          variant="outlined"
+          padding="none"
+          style={[styles.profileCard, imageExpanded && styles.framelessCard]}
+        >
           {imageExpanded ? (
             // Expanded layout: Frameless image at top, then info below
             <View style={styles.framelessProfileLayout}>
@@ -309,25 +293,31 @@ const ViewMember = ({ route, navigation }) => {
 
               {/* Profile Info Section - Below the image */}
               <View style={styles.framelessProfileInfo}>
-                <Text style={[styles.memberName, { color: colors.text }]}>
+                <Text style={[styles.memberName, styles.memberNameText]}>
                   {memberData.user?.first_name || memberData.first_name} {memberData.user?.last_name || memberData.last_name}
                 </Text>
-                <Text style={[styles.memberEmail, { color: colors.textSecondary }]}>
+                <Text style={[styles.memberEmail, styles.memberEmailSecondary]}>
                   {memberData.user?.email || memberData.email}
                 </Text>
 
-                <View style={[styles.roleBadge, { backgroundColor: getRoleColor(memberData.role) + '20' }]}>
+                <View style={[
+                  styles.roleBadge,
+                  ['chairperson', 'secretary', 'treasurer'].includes(memberData.role) ? styles.roleBadgeWarning : styles.roleBadgeMuted,
+                ]}>
                   <Ionicons
                     name={getRoleIcon(memberData.role)}
                     size={16}
                     color={getRoleColor(memberData.role)}
                   />
-                  <Text style={[styles.roleText, { color: getRoleColor(memberData.role) }]}>
+                  <Text style={[
+                    styles.roleText,
+                    ['chairperson', 'secretary', 'treasurer'].includes(memberData.role) ? styles.roleTextWarning : styles.roleTextMuted,
+                  ]}>
                     {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
                   </Text>
                 </View>
 
-                <Text style={[styles.minimizeHint, { color: colors.textSecondary }]}>
+                <Text style={[styles.minimizeHint, styles.minimizeHintSecondary]}>
                   Tap the × to minimize
                 </Text>
               </View>
@@ -342,298 +332,233 @@ const ViewMember = ({ route, navigation }) => {
                 {renderMemberAvatar()}
 
                 {/* Expand icon overlay */}
-                <View style={[styles.expandImageOverlay, { backgroundColor: colors.info + '90' }]}>
+                <View style={styles.expandImageOverlay}>
                   <Ionicons name="expand" size={16} color={colors.white} />
                 </View>
               </TouchableOpacity>
 
               <View style={styles.profileInfo}>
-                <Text style={[styles.memberName, { color: colors.text }]}>
+                <Text style={[styles.memberName, styles.memberNameText]}>
                   {memberData.user?.first_name || memberData.first_name} {memberData.user?.last_name || memberData.last_name}
                 </Text>
-                <Text style={[styles.memberEmail, { color: colors.textSecondary }]}>
+                <Text style={[styles.memberEmail, styles.memberEmailSecondary]}>
                   {memberData.user?.email || memberData.email}
                 </Text>
               </View>
             </View>
           )}
-        </View>
+        </Card>
+        {memberStats && (
+          <Card variant="outlined" padding="none" style={styles.statsCard}>
+            <View style={styles.statsContent}>
+              <Text style={styles.statsTitle}>
+                Member Statistics
+              </Text>
+
+              <View style={styles.statsGrid}>
+                <View style={styles.statItem}>
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconRow}>
+                      <View style={styles.statIconBoxPrimary}>
+                        <Ionicons name="wallet" size={20} color={colors.primary} />
+                      </View>
+                      <Text style={styles.statLabel}>Total Contributions</Text>
+                    </View>
+                    <Text style={styles.statValue}>{formatCurrency(memberStats.total_contributions)}</Text>
+                  </View>
+                </View>
+                <View style={styles.statItem}>
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconRow}>
+                      <View style={styles.statIconBoxSuccess}>
+                        <Ionicons name="card" size={20} color={colors.success} />
+                      </View>
+                      <Text style={styles.statLabel}>Loans Taken</Text>
+                    </View>
+                    <Text style={styles.statValue}>{memberStats.loans_count || 0}</Text>
+                  </View>
+                </View>
+                <View style={styles.statItem}>
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconRow}>
+                      <View style={styles.statIconBoxWarning}>
+                        <Ionicons name="calendar" size={20} color={colors.warning} />
+                      </View>
+                      <Text style={styles.statLabel}>Meetings Attended</Text>
+                    </View>
+                    <Text style={styles.statValue}>{memberStats.meetings_attended || 0}</Text>
+                  </View>
+                </View>
+                <View style={styles.statItem}>
+                  <View style={styles.statCard}>
+                    <View style={styles.statIconRow}>
+                      <View style={styles.statIconBoxInfo}>
+                        <Ionicons name="star" size={20} color={colors.info} />
+                      </View>
+                      <Text style={styles.statLabel}>Member Rating</Text>
+                    </View>
+                    <Text style={styles.statValue}>{memberStats.rating || 0}/5</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Card>
+        )}
 
         {/* Member Details Table */}
-        <View style={{ marginTop: 32 }}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12, fontSize: 16 }]}>
-            Member Details
-          </Text>
-
-          {/* Table Header */}
-          <View style={[styles.tableHeader, { backgroundColor: colors.primary + '10' }]}>
-            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Item</Text>
-            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Details</Text>
-          </View>
-
-          {/* Table Body */}
-          <View style={styles.detailsTable}>
-            {/* Row 1: Role */}
-            <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Role</Text>
-              <View style={styles.tableValue}>
-                <Ionicons
-                  name={getRoleIcon(memberData.role)}
-                  size={12}
-                  color={getRoleColor(memberData.role)}
-                />
-                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 6, fontSize: 8.5 }]}>
-                  {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Row 2: Join Date */}
-            <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Join Date</Text>
-              <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
-                {formatDate(memberData.joined_at)}
-              </Text>
-            </View>
-
-            {/* Row 3: Attendance Rate */}
-            <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Attendance Rate</Text>
-              <Text style={[styles.tableValueText, { color: colors.primary, fontSize: 8.5 }]}>
-                {memberData.attendance_rate?.toFixed(1) || 0}%
-              </Text>
-            </View>
-
-            {/* Row 4: Reputation Score */}
-            <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Reputation</Text>
-              <View style={styles.tableValue}>
-                <Ionicons name="star" size={12} color={colors.warning} />
-                <Text style={[styles.tableValueText, { color: colors.text, marginLeft: 4, fontSize: 8.5 }]}>
-                  {memberData.reputation_score?.toFixed(1) || 0}
-                </Text>
-              </View>
-            </View>
-
-            {/* Row 5: Total Contributions */}
-            <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Total Contributions</Text>
-              <Text style={[styles.tableValueText, { color: colors.success, fontSize: 8.5 }]}>
-                {formatCurrency(memberData.total_contributions || 0)}
-              </Text>
-            </View>
-
-            {/* Row 6: Savings Balance */}
-            <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Savings Balance</Text>
-              <Text style={[styles.tableValueText, { color: colors.primary, fontSize: 8.5 }]}>
-                {formatCurrency(memberData.savings_balance || 0)}
-              </Text>
-            </View>
-
-            {/* Row 7: Loan Balance */}
-            {memberData.loan_balance > 0 && (
-              <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Loan Balance</Text>
-                <Text style={[styles.tableValueText, { color: colors.error, fontSize: 8.5 }]}>
-                  {formatCurrency(memberData.loan_balance)}
-                </Text>
-              </View>
-            )}
-
-            {/* Row 8: Business Type */}
-            {memberData.business_type && (
-              <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Business Type</Text>
-                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
-                  {memberData.business_type}
-                </Text>
-              </View>
-            )}
-
-            {/* Row 9: Location */}
-            {memberData.location && (
-              <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Location</Text>
-                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
-                  {memberData.location}
-                </Text>
-              </View>
-            )}
-
-            {/* Row 10: Phone Number */}
-            {(memberData.user?.phone || memberData.phone_number) && (
-              <View style={[styles.tableRow, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>Phone</Text>
-                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
-                  {memberData.user?.phone || memberData.phone_number}
-                </Text>
-              </View>
-            )}
-
-            {/* Row 11: Bio/Occupation */}
-            {(memberData.user?.bio || memberData.user?.occupation) && (
-              <View style={[styles.tableRow, { backgroundColor: colors.background }]}>
-                <Text style={[styles.tableLabel, { color: colors.textSecondary, fontSize: 8.5 }]}>
-                  {memberData.user?.occupation ? 'Occupation' : 'Bio'}
-                </Text>
-                <Text style={[styles.tableValueText, { color: colors.text, fontSize: 8.5 }]}>
-                  {memberData.user?.occupation || memberData.user?.bio}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Recent Activity Table - Private View */}
-        {memberData.user_id === user?.id && (
-          <View style={{ marginTop: 32 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 12, fontSize: 16 }]}>
-              Recent Activity
+        <Card variant="outlined" padding="none" style={styles.detailsCard}>
+          <View style={styles.detailsCardContent}>
+            <Text style={styles.detailsTitle}>
+              Member Details
             </Text>
 
-            {/* Activity Table Header */}
-            <View style={[styles.tableHeader, { backgroundColor: colors.primary + '10' }]}>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Date</Text>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Type</Text>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Amount</Text>
-              <Text style={[styles.activityHeaderText, { color: colors.primary }]}>Description</Text>
-            </View>
-
-            {/* Activity Table Body */}
-            <View style={styles.activityTable}>
-              {((memberStats && memberStats.recent_activity) || [
-                { id: 1, date: new Date().toISOString(), type: 'contribution', amount: 5000, description: 'Monthly contribution' },
-                { id: 2, date: new Date(Date.now() - 86400000).toISOString(), type: 'loan', amount: 15000, description: 'Emergency loan' },
-                { id: 3, date: new Date(Date.now() - 172800000).toISOString(), type: 'contribution', amount: 5000, description: 'Monthly contribution' }
-              ]).slice(0, activityItemsPerPage).map((activity, index) => (
-                <View
-                  key={activity.id || index}
-                  style={[styles.activityRow, {
-                    backgroundColor: index % 2 === 0 ? colors.background : colors.surface
-                  }]}
-                >
-                  <Text style={[styles.activityCellText, { color: colors.textSecondary, fontSize: 8.5 }]}>
-                    {new Date(activity.date).toLocaleDateString()}
-                  </Text>
-                  <Text style={[styles.activityCellText, { color: getActivityColor(activity.type), fontSize: 8.5 }]}>
-                    {activity.type}
-                  </Text>
-                  <Text style={[styles.activityCellText, { color: colors.text, fontSize: 8.5 }]}>
-                    {formatCurrency(activity.amount)}
-                  </Text>
-                  <Text style={[styles.activityCellText, { color: colors.text, fontSize: 8.5 }]}>
-                    {activity.description || 'N/A'}
-                  </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.detailsTableScrollContent}
+            >
+              <View style={styles.detailsTableInner}>
+                <View style={styles.detailsTableHeader}>
+                  <Text style={styles.detailsTableHeaderText}>Item</Text>
+                  <Text style={styles.detailsTableHeaderText}>Details</Text>
                 </View>
-              ))}
-            </View>
 
-            {/* Pagination for Activity */}
-            {memberStats && memberStats.recent_activity && memberStats.recent_activity.length > 10 && (
-              <View style={styles.paginationContainer}>
-                <TouchableOpacity
-                  style={[styles.paginationButton, { backgroundColor: colors.primary }]}
-                  onPress={() => setActivityPage(Math.max(1, activityPage - 1))}
-                  disabled={activityPage === 1}
-                >
-                  <Ionicons name="chevron-back" size={16} color={colors.white} />
-                </TouchableOpacity>
+                <View style={styles.detailsTable}>
+                  <View style={styles.tableRowEven}>
+                    <Text style={styles.tableLabel}>Role</Text>
+                    <View style={styles.tableValue}>
+                      <Ionicons
+                        name={getRoleIcon(memberData.role)}
+                        size={12}
+                        color={getRoleColor(memberData.role)}
+                      />
+                      <Text style={styles.tableValueText}>
+                        {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
+                      </Text>
+                    </View>
+                  </View>
 
-              <Text style={[styles.paginationText, { color: colors.text }]}>
-                Page {activityPage} of {Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage)}
-              </Text>
+                  <View style={styles.tableRowOdd}>
+                    <Text style={styles.tableLabel}>Join Date</Text>
+                    <Text style={styles.tableValueText}>
+                      {formatDate(memberData.joined_at)}
+                    </Text>
+                  </View>
 
-              <TouchableOpacity
-                style={[styles.paginationButton, { backgroundColor: colors.primary }]}
-                onPress={() => setActivityPage(Math.min(Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage), activityPage + 1))}
-                disabled={activityPage === Math.ceil((memberStats?.recent_activity?.length || 3) / activityItemsPerPage)}
-              >
-                  <Ionicons name="chevron-forward" size={16} color={colors.white} />
-                </TouchableOpacity>
+                  <View style={styles.tableRowEven}>
+                    <Text style={styles.tableLabel}>Attendance Rate</Text>
+                    <Text style={styles.tableValueTextPrimary}>
+                      {memberData.attendance_rate?.toFixed(1) || 0}%
+                    </Text>
+                  </View>
+
+                  <View style={styles.tableRowOdd}>
+                    <Text style={styles.tableLabel}>Reputation</Text>
+                    <View style={styles.tableValue}>
+                      <Ionicons name="star" size={12} color={colors.warning} />
+                      <Text style={styles.tableValueText}>
+                        {memberData.reputation_score?.toFixed(1) || 0}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.tableRowEven}>
+                    <Text style={styles.tableLabel}>Total Contributions</Text>
+                    <Text style={styles.tableValueTextSuccess}>
+                      {formatCurrency(memberData.total_contributions || 0)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.tableRowOdd}>
+                    <Text style={styles.tableLabel}>Savings Balance</Text>
+                    <Text style={styles.tableValueTextPrimary}>
+                      {formatCurrency(memberData.savings_balance || 0)}
+                    </Text>
+                  </View>
+
+                  {memberData.loan_balance > 0 && (
+                    <View style={styles.tableRowEven}>
+                      <Text style={styles.tableLabel}>Loan Balance</Text>
+                      <Text style={styles.tableValueTextError}>
+                        {formatCurrency(memberData.loan_balance)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {memberData.business_type && (
+                    <View style={styles.tableRowOdd}>
+                      <Text style={styles.tableLabel}>Business Type</Text>
+                      <Text style={styles.tableValueText}>
+                        {memberData.business_type}
+                      </Text>
+                    </View>
+                  )}
+
+                  {memberData.location && (
+                    <View style={styles.tableRowEven}>
+                      <Text style={styles.tableLabel}>Location</Text>
+                      <Text style={styles.tableValueText}>
+                        {memberData.location}
+                      </Text>
+                    </View>
+                  )}
+
+                  {(memberData.user?.phone || memberData.phone_number) && (
+                    <View style={styles.tableRowOdd}>
+                      <Text style={styles.tableLabel}>Phone</Text>
+                      <Text style={styles.tableValueText}>
+                        {memberData.user?.phone || memberData.phone_number}
+                      </Text>
+                    </View>
+                  )}
+
+                  {(memberData.user?.bio || memberData.user?.occupation) && (
+                    <View style={styles.tableRowEven}>
+                      <Text style={styles.tableLabel}>
+                        {memberData.user?.occupation ? 'Occupation' : 'Bio'}
+                      </Text>
+                      <Text style={styles.tableValueText}>
+                        {memberData.user?.occupation || memberData.user?.bio}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
-            )}
+            </ScrollView>
           </View>
-        )}
-
-        {/* Member Statistics */}
-        {memberStats && (
-          <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Member Statistics
-            </Text>
-
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.primary }]}>
-                  {formatCurrency(memberStats.total_contributions)}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Total Contributions
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.success }]}>
-                  {memberStats.loans_count || 0}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Loans Taken
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.warning }]}>
-                  {memberStats.meetings_attended || 0}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Meetings Attended
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.text }]}>
-                  {memberStats.rating || 0}/5
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                  Member Rating
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
+        </Card>
 
         {/* Actions */}
         {userRole === 'chairperson' && memberData.user_id !== user.id && (
-          <View style={[styles.actionsCard, {
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            marginTop: 32
-          }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Actions
-            </Text>
-
-            <TouchableOpacity
-              style={[styles.actionButton, styles.removeButton, { borderColor: colors.error }]}
-              onPress={handleRemoveMember}
-            >
-              <Ionicons name="person-remove" size={20} color={colors.error} />
-              <Text style={[styles.actionButtonText, { color: colors.error }]}>
-                Remove from Chama
+          <Card variant="outlined" padding="none" style={styles.actionsCard}>
+            <View style={styles.actionsCardContent}>
+              <Text style={[styles.sectionTitle, styles.sectionTitleText]}>
+                Actions
               </Text>
-            </TouchableOpacity>
-          </View>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.removeButton, styles.removeButtonOutline]}
+                onPress={handleRemoveMember}
+              >
+                <Ionicons name="person-remove" size={20} color={colors.error} />
+                <Text style={[styles.actionButtonText, styles.actionButtonTextError]}>
+                  Remove from Chama
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  containerBackground: {
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -642,15 +567,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  backButton: {
-    padding: 8,
-    marginRight: 8,
+  headerSurface: {
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     flex: 1,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  headerTitleText: {
+    color: colors.text,
   },
   headerRight: {
     width: 40,
@@ -668,6 +596,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 12,
   },
+  loadingTextSecondary: {
+    color: colors.textSecondary,
+  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -680,11 +611,29 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 12,
   },
+  errorTitleText: {
+    color: colors.text,
+  },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 30,
+  },
+  errorTextSecondary: {
+    color: colors.textSecondary,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  goBackButton: {
+    backgroundColor: colors.primary,
+  },
+  backButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
   profileCard: {
     padding: 20,
@@ -692,8 +641,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   framelessCard: {
-    padding: 0, // Remove padding for frameless design
-    overflow: 'hidden', // Ensure image touches edges
+    padding: 0,
+    overflow: 'hidden',
   },
   profileHeader: {
     flexDirection: 'row',
@@ -715,8 +664,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatarPlaceholderPrimary: {
+    backgroundColor: colors.primary,
+  },
   avatarText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 32,
     fontWeight: '600',
   },
@@ -729,8 +681,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.info + '90',
   },
-  // Expanded layout styles - within the same card
   framelessProfileLayout: {
     position: 'relative',
     overflow: 'hidden',
@@ -780,17 +732,9 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 12,
   },
-  expandImageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  minimizeHintSecondary: {
+    color: colors.textSecondary,
   },
-  // Note: Frameless styles are defined above - these old expanded styles are removed to avoid conflicts
   profileInfo: {
     flex: 1,
   },
@@ -799,9 +743,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
+  memberNameText: {
+    color: colors.text,
+  },
   memberEmail: {
     fontSize: 14,
     marginBottom: 8,
+  },
+  memberEmailSecondary: {
+    color: colors.textSecondary,
   },
   roleBadge: {
     flexDirection: 'row',
@@ -811,41 +761,36 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignSelf: 'flex-start',
   },
+  roleBadgeWarning: {
+    backgroundColor: colors.warning + '20',
+  },
+  roleBadgeMuted: {
+    backgroundColor: colors.textSecondary + '20',
+  },
   roleText: {
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
   },
-  memberDetails: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    paddingTop: 16,
+  roleTextWarning: {
+    color: colors.warning,
   },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  detailLabel: {
-    fontSize: 14,
-    marginLeft: 8,
-    marginRight: 8,
-    minWidth: 60,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 1,
+  roleTextMuted: {
+    color: colors.textSecondary,
   },
   statsCard: {
-    padding: 20,
     borderRadius: 12,
     marginBottom: 16,
   },
-  sectionTitle: {
+  statsContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  statsTitle: {
+    color: colors.text,
+    marginBottom: 12,
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 16,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -857,21 +802,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 4,
+  statCard: {
+    padding: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statIconBoxPrimary: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  statIconBoxSuccess: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.success + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  statIconBoxWarning: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.warning + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  statIconBoxInfo: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.info + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   statLabel: {
-    fontSize: 12,
-    textAlign: 'center',
+    fontSize: 14,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  sectionTitleText: {
+    color: colors.text,
   },
   actionsCard: {
-    padding: 20,
     borderRadius: 12,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
+    marginTop: 32,
+  },
+  actionsCardContent: {
+    padding: 20,
   },
   actionButton: {
     flexDirection: 'row',
@@ -885,68 +888,77 @@ const styles = StyleSheet.create({
   removeButton: {
     marginBottom: 8,
   },
+  removeButtonOutline: {
+    borderColor: colors.error,
+  },
   actionButtonText: {
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
   },
-  backButtonText: {
-    color: 'white',
+  actionButtonTextError: {
+    color: colors.error,
+  },
+  detailsCard: {
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  detailsCardContent: {
+    padding: 16,
+  },
+  detailsTitle: {
+    color: colors.text,
+    marginBottom: 12,
     fontSize: 16,
     fontWeight: '600',
   },
-  verificationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  detailsTableScrollContent: {
+    flexGrow: 1,
   },
-  verificationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  detailsTableInner: {
+    minWidth: 320,
   },
-  verificationText: {
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  // Details Table Styles
-  detailsCard: {
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  tableHeader: {
+  detailsTableHeader: {
     flexDirection: 'row',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 2,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary + '10',
   },
-  tableHeaderText: {
+  detailsTableHeaderText: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     textAlign: 'left',
+    color: colors.primary,
   },
   detailsTable: {
     marginTop: 8,
   },
-  tableRow: {
+  tableRowEven: {
     flexDirection: 'row',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
     alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  tableRowOdd: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
   },
   tableLabel: {
     flex: 1,
-    fontSize: 8.5,
+    fontSize: 12,
     fontWeight: '500',
+    color: colors.textSecondary,
   },
   tableValue: {
     flex: 1,
@@ -954,49 +966,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tableValueText: {
-    fontSize: 8.5,
-    flex: 1,
-  },
-  // Activity Table Styles
-  activityTable: {
-    marginTop: 8,
-  },
-  activityRow: {
-    flexDirection: 'row',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
-    alignItems: 'center',
-  },
-  activityHeaderText: {
-    flex: 1,
-    fontSize: 9,
-    fontWeight: 'bold',
-    textAlign: 'left',
-  },
-  activityCellText: {
-    flex: 1,
-    fontSize: 8.5,
-    textAlign: 'left',
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 16,
-  },
-  paginationButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paginationText: {
     fontSize: 12,
-    fontWeight: '500',
+    flex: 1,
+    color: colors.text,
+  },
+  tableValueTextPrimary: {
+    fontSize: 12,
+    flex: 1,
+    color: colors.primary,
+  },
+  tableValueTextSuccess: {
+    fontSize: 12,
+    flex: 1,
+    color: colors.success,
+  },
+  tableValueTextError: {
+    fontSize: 12,
+    flex: 1,
+    color: colors.error,
   },
 });
 

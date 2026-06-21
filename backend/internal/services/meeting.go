@@ -479,17 +479,33 @@ func (s *MeetingService) GetMeetingPreviewInfo(meetingID, userID, userRole strin
 
 // MarkAttendance marks a user's attendance for a meeting
 func (s *MeetingService) MarkAttendance(meetingID, userID, attendanceType string, isPresent bool) error {
-	attendanceID := uuid.New().String()
 	now := time.Now()
 
+	// Try to get existing attendance to preserve ID if it exists
+	var existingID string
+	err := s.db.QueryRow("SELECT id FROM meeting_attendance WHERE meeting_id = $1 AND user_id = $2", meetingID, userID).Scan(&existingID)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to check existing attendance: %w", err)
+	}
+
+	attendanceID := existingID
+	if attendanceID == "" {
+		attendanceID = uuid.New().String()
+	}
+
 	query := `
-		INSERT OR REPLACE INTO meeting_attendance (
+		INSERT INTO meeting_attendance (
 			id, meeting_id, user_id, attendance_type, joined_at, is_present,
 			created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT (meeting_id, user_id) DO UPDATE SET
+			attendance_type = $4,
+			joined_at = $5,
+			is_present = $6,
+			updated_at = CURRENT_TIMESTAMP
 	`
 
-	_, err := s.db.Exec(query, attendanceID, meetingID, userID, attendanceType, now, isPresent)
+	_, err = s.db.Exec(query, attendanceID, meetingID, userID, attendanceType, now, isPresent)
 	if err != nil {
 		return fmt.Errorf("failed to mark attendance: %w", err)
 	}

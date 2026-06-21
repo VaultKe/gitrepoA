@@ -146,7 +146,7 @@ func (s *SchedulerService) checkMeetingAutoEnd() {
 		FROM meetings 
 		WHERE status = 'active' 
 		AND started_at IS NOT NULL
-		AND datetime(started_at, '+' || (duration + 30) || ' minutes') <= $1
+		AND started_at + (duration + 30) * INTERVAL '1 minute' <= $1
 	`
 	
 	rows, err := s.db.Query(query, now)

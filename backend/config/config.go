@@ -93,7 +93,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Environment:   getEnv("ENVIRONMENT", "development"),
-		Port:          getEnv("PORT", "8080"),
+		Port:          getEnv("PORT", "8085"),
 		DatabaseURL:   getEnv("DATABASE_URL", "postgres://postgres:password@localhost/vaultke?sslmode=disable"),
 		JWTSecret:     getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
 		JWTExpiration: getEnvAsInt("JWT_EXPIRATION", 24*60*60), // 24 hours in seconds
@@ -271,7 +271,7 @@ func (c *Config) SetDefaults() {
 		c.Environment = "development"
 	}
 	if c.Port == "" {
-		c.Port = "8080"
+		c.Port = "8085"
 	}
 }
 

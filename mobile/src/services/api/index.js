@@ -9,6 +9,7 @@ import * as learningEndpoints from './learningEndpoints';
 import * as settingsEndpoints from './settingsEndpoints';
 import * as invitationEndpoints from './invitationEndpoints';
 import * as contributionEndpoints from './contributionEndpoints';
+import * as welfareEndpoints from './welfareEndpoints';
 import * as meetingEndpoints from './meetingEndpoints';
 import { makeRequest, makeRequestWithRetry, checkBackendConnectivity, checkHealth, API_BASE_URL, REQUEST_TIMEOUT } from './client';
 import { getAuthToken, setAuthToken, removeAuthToken, storeUserData, getDeviceInfo } from './auth';
@@ -25,6 +26,7 @@ const ApiService = {
   ...settingsEndpoints,
   ...invitationEndpoints,
   ...contributionEndpoints,
+  ...welfareEndpoints,
   ...meetingEndpoints,
   makeRequest,
   makeRequestWithRetry,

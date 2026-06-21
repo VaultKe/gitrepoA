@@ -57,7 +57,7 @@ const ReminderItem = ({
       {/* Title & Description */}
       <View style={{ flex: 3 }}>
         <Text style={{
-          fontSize: 7,
+          fontSize: 14,
           fontWeight: '600',
           color: colors.text,
         }} numberOfLines={1}>
@@ -65,7 +65,7 @@ const ReminderItem = ({
         </Text>
         {reminder.description && (
           <Text style={{
-            fontSize: 7,
+            fontSize: 14,
             color: colors.textSecondary,
             marginTop: 1,
           }} numberOfLines={1}>
@@ -89,11 +89,11 @@ const ReminderItem = ({
         }}>
           <Ionicons
             name={getTypeIcon(reminder.type)}
-            size={7}
+            size={12}
             color={colors.primary}
           />
             <Text style={{
-              fontSize: 7,
+              fontSize: 14,
               fontWeight: '500',
               marginLeft: 2,
               color: colors.primary,
@@ -109,7 +109,7 @@ const ReminderItem = ({
         alignItems: 'center',
       }}>
           <Text style={{
-            fontSize: 7,
+            fontSize: 14,
             color: colors.text,
           }}>
             {formatDate(reminderDate, 'datetime')}
@@ -130,9 +130,9 @@ const ReminderItem = ({
             borderRadius: 8,
             backgroundColor: colors.error + '15',
           }}>
-            <Ionicons name="time" size={7} color={colors.error} />
+            <Ionicons name="time" size={12} color={colors.error} />
               <Text style={{
-                fontSize: 7,
+                fontSize: 14,
                 fontWeight: '500',
                 marginLeft: 2,
                 color: colors.error,
@@ -160,23 +160,23 @@ const ReminderItem = ({
       }}>
         <TouchableOpacity
           style={{
-            width: 18,
-            height: 18,
-            borderRadius: 9,
+            width: 28,
+            height: 28,
+            borderRadius: 14,
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: colors.primary + '15',
           }}
           onPress={() => onEdit(reminder)}
         >
-          <Ionicons name="pencil" size={8} color={colors.primary} />
+          <Ionicons name="pencil" size={12} color={colors.primary} />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={{
-            width: 18,
-            height: 18,
-            borderRadius: 9,
+            width: 28,
+            height: 28,
+            borderRadius: 14,
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: colors.error + '15',
@@ -184,7 +184,7 @@ const ReminderItem = ({
           onPress={() => onDelete(reminder)}
           activeOpacity={0.7}
         >
-          <Ionicons name="trash" size={8} color={colors.error} />
+          <Ionicons name="trash" size={12} color={colors.error} />
         </TouchableOpacity>
       </View>
     </View>

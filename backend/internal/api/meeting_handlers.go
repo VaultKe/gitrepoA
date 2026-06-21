@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
-	// "strings"
 	"vaultke-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -1526,6 +1525,7 @@ func UploadMeetingDocument(c *gin.Context) {
 
 	// Create uploads directory
 	uploadsDir := "./uploads/meetings"
+	tempDir := "./uploads/temp"
 	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1533,27 +1533,66 @@ func UploadMeetingDocument(c *gin.Context) {
 		})
 		return
 	}
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create temp directory: " + err.Error(),
+		})
+		return
+	}
 
 	// Generate unique filename
 	fileExt := filepath.Ext(header.Filename)
 	fileName := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), fileExt)
-	filePath := filepath.Join(uploadsDir, fileName)
+	tempFilePath := filepath.Join(tempDir, fileName)
+	finalFilePath := filepath.Join(uploadsDir, fileName)
 
-	// Save file
-	dst, err := os.Create(filePath)
+	// Save file to temp location first
+	dst, err := os.Create(tempFilePath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to create file: " + err.Error(),
+			"error":   "Failed to create temp file: " + err.Error(),
 		})
 		return
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
+		os.Remove(tempFilePath)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save file: " + err.Error(),
+		})
+		return
+	}
+	dst.Close()
+
+	// ClamAV scan before persisting (optional if ClamAV is not installed)
+	scanResult := services.ScanFileWithClamAV(tempFilePath)
+	if !services.IsClamAVAvailable() {
+		log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tempFilePath)
+	} else if scanResult.ScanError != nil || scanResult.Infected || !scanResult.IsClean {
+		os.Remove(tempFilePath)
+		reason := "unknown error"
+		if scanResult.Infected {
+			reason = "malware detected"
+		} else if scanResult.ScanError != nil {
+			reason = scanResult.ScanError.Error()
+		}
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "File rejected by security policy: " + reason,
+		})
+		return
+	}
+
+	// Move file from temp to final location after clean scan
+	if err := os.Rename(tempFilePath, finalFilePath); err != nil {
+		os.Remove(tempFilePath)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to move file to storage: " + err.Error(),
 		})
 		return
 	}
@@ -1585,11 +1624,11 @@ func UploadMeetingDocument(c *gin.Context) {
 			id, meeting_id, uploaded_by, file_name, file_path, file_url,
 			file_size, file_type, document_type, description, created_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
-	`, documentID, meetingID, userID, header.Filename, filePath, fileURL,
+	`, documentID, meetingID, userID, header.Filename, finalFilePath, fileURL,
 		header.Size, header.Header.Get("Content-Type"), documentType, description)
 	if err != nil {
 		// Clean up uploaded file if database insert fails
-		os.Remove(filePath)
+		os.Remove(finalFilePath)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save document info: " + err.Error(),

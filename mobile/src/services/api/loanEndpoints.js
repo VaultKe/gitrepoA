@@ -123,6 +123,35 @@ const disburseLoan = async (loanId) => {
   });
 };
 
+const getLoanTypes = async (chamaId, status = '') => {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  return await makeRequest(`/loans/${chamaId}/loan-types${qs}`);
+};
+
+const getLoanType = async (loanTypeId) => {
+  return await makeRequest(`/loans/loan-types/${loanTypeId}`);
+};
+
+const createLoanType = async (chamaId, data) => {
+  return await makeRequest(`/loans/${chamaId}/loan-types`, {
+    method: 'POST',
+    body: data,
+  });
+};
+
+const updateLoanType = async (loanTypeId, data) => {
+  return await makeRequest(`/loans/loan-types/${loanTypeId}`, {
+    method: 'PUT',
+    body: data,
+  });
+};
+
+const deleteLoanType = async (loanTypeId) => {
+  return await makeRequest(`/loans/loan-types/${loanTypeId}`, {
+    method: 'DELETE',
+  });
+};
+
 export {
   getLoans,
   applyForLoan,
@@ -132,4 +161,9 @@ export {
   getGuarantorRequests,
   rejectLoan,
   disburseLoan,
+  getLoanTypes,
+  getLoanType,
+  createLoanType,
+  updateLoanType,
+  deleteLoanType,
 };

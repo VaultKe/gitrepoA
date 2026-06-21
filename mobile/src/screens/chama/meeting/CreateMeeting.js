@@ -437,6 +437,9 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
         ref={scrollViewRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.content}>
           {/* General error message */}
@@ -638,16 +641,13 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
             </TouchableOpacity>
           </Card>
 
-          <Button
-            title="Schedule Meeting"
-            onPress={() => {
-              console.log('🖱️ Schedule Meeting button pressed!');
-              handleSubmit();
-            }}
-            loading={loading}
-            style={styles.submitButton}
-            icon={<Ionicons name="calendar-outline" size={20} color={colors.white} />}
-          />
+          <View style={styles.submitButton}>
+            <Button
+              title={loading ? 'Creating Meeting...' : 'Create Meeting'}
+              onPress={handleSubmit}
+              disabled={loading}
+            />
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -678,6 +678,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xxxl,
   },
   content: {
     padding: spacing.md,

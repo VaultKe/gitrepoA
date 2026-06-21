@@ -2,19 +2,20 @@ import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  SafeAreaView,
   Modal,
   TouchableOpacity,
   ScrollView,
   Text,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors } from '../../utils/theme';
+import { getThemeColors, spacing } from '../../utils/theme';
 import AdminHeader from './AdminHeader';
 import AdminSidebar from './AdminSidebar';
+import ThemeToggle from '../common/ThemeToggle';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ export default function AdminLayout({
   rightComponent
 }) {
   const { theme } = useApp();
+  const insets = useSafeAreaInsets();
   const colors = getThemeColors(theme);
   const nav = navigation || useNavigation();
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -189,7 +191,7 @@ export default function AdminLayout({
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       {/* Admin Header */}
       <View style={[styles.adminHeader, { backgroundColor: colors.surface }]}>
         {showBackButton ? (
@@ -207,10 +209,11 @@ export default function AdminLayout({
             <Ionicons name="menu" size={24} color={colors.text} />
           </TouchableOpacity>
         )}
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
           {title || 'Admin Dashboard'}
         </Text>
         <View style={styles.headerSpacer} />
+        <ThemeToggle size={22} style={styles.themeToggle} />
         {rightComponent && (
           <View style={styles.rightComponent}>
             {rightComponent}
@@ -224,7 +227,7 @@ export default function AdminLayout({
       </View>
 
       {/* Bottom Navigation */}
-      <View style={[styles.bottomNav, { backgroundColor: colors.surface }]}>
+      <View style={[styles.bottomNav, { backgroundColor: colors.surface, height: 70 + insets.bottom, paddingBottom: spacing.sm + insets.bottom }]}>
         {bottomNavItems.map(renderBottomNavItem)}
       </View>
 
@@ -251,7 +254,7 @@ export default function AdminLayout({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -323,9 +326,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 12,
+    minWidth: 0,
   },
   headerSpacer: {
     flex: 1,
+  },
+  themeToggle: {
+    marginRight: 8,
   },
   rightComponent: {
     marginLeft: 8,

@@ -279,20 +279,20 @@ The frontend connects to the backend API. Ensure the backend is running:
 
 2. **Verify Backend**:
    ```bash
-   curl http://localhost:8080/health
+   curl http://localhost:8085/health
    ```
 
 3. **Update API URL** (if needed):
    ```javascript
    // In src/services/api.js
-   const BASE_URL = 'http://localhost:8080/api/v1';
+   const BASE_URL = 'http://localhost:8085/api/v1';
    ```
 
 ### Environment Variables
 
 Create `.env` file in `apps/mobile/` (if needed):
 ```env
-EXPO_PUBLIC_API_URL=http://localhost:8080/api/v1
+EXPO_PUBLIC_API_URL=http://localhost:8085/api/v1
 EXPO_PUBLIC_WS_URL=ws://https://dqtl6f-ip-41-139-130-223.tunnelmole.net/ws
 EXPO_PUBLIC_ENV=development
 ```

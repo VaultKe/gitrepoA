@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors } from '../../utils/theme';
+import ThemeToggle from '../common/ThemeToggle';
 
 export default function AdminHeader({ onMenuPress, currentPage = 'home' }) {
   const { theme, user, setCurrentDashboard } = useApp();
@@ -66,7 +67,7 @@ export default function AdminHeader({ onMenuPress, currentPage = 'home' }) {
         </TouchableOpacity>
 
         <View style={styles.titleSection}>
-          <Text style={[styles.title, { color: colors.text }]}>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
             {getPageTitle()}
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -76,7 +77,8 @@ export default function AdminHeader({ onMenuPress, currentPage = 'home' }) {
       </View>
 
       <View style={styles.rightSection}>
-        {/* Dashboard Switcher */}
+        <ThemeToggle size={22} style={styles.themeToggle} />
+
         <TouchableOpacity
           style={[styles.switchButton, { backgroundColor: colors.primary }]}
           onPress={handleDashboardSwitch}
@@ -132,6 +134,7 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: 18,
@@ -144,11 +147,15 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 168,
   },
   switchButton: {
     padding: 8,
     borderRadius: 20,
     marginRight: 12,
+  },
+  themeToggle: {
+    marginRight: 8,
   },
   profileButton: {
     flexDirection: 'row',

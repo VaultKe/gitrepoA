@@ -309,7 +309,7 @@ func GetGoogleDriveStatus(c *gin.Context) {
 
 		// Check for expired tokens
 		var expiredCount int
-		expiredQuery := "SELECT COUNT(*) FROM google_drive_tokens WHERE user_id = $1 AND expires_at <= datetime('now')"
+		expiredQuery := "SELECT COUNT(*) FROM google_drive_tokens WHERE user_id = $1 AND expires_at <= NOW()"
 		err = db.(*sql.DB).QueryRow(expiredQuery, userID).Scan(&expiredCount)
 		if err == nil {
 			debugInfo["expired_tokens"] = expiredCount
@@ -465,12 +465,12 @@ func GetBackupHistory(c *gin.Context) {
 			status TEXT NOT NULL,
 			size TEXT DEFAULT '0 MB',
 			duration TEXT DEFAULT '0 minutes',
-			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			location TEXT DEFAULT 'Local Storage',
 			error TEXT,
 			user_id TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
@@ -680,8 +680,8 @@ func UpdateBackupSettings(c *gin.Context) {
 			cloud_backup BOOLEAN DEFAULT 1,
 			encrypt_backups BOOLEAN DEFAULT 1,
 			retention_days INTEGER DEFAULT 30,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
@@ -692,13 +692,21 @@ func UpdateBackupSettings(c *gin.Context) {
 		return
 	}
 
-	// Update or insert backup settings
+	// Update or insert backup settings (PostgreSQL uses ON CONFLICT for upsert)
 	_, err = db.(*sql.DB).Exec(`
-		INSERT OR REPLACE INTO backup_settings
-		(user_id, auto_backup, daily_backup, weekly_backup, cloud_backup, encrypt_backups, retention_days, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO backup_settings
+		(user_id, auto_backup, daily_backup, weekly_backup, cloud_backup, encrypt_backups, retention_days, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (user_id) DO UPDATE SET
+			auto_backup = EXCLUDED.auto_backup,
+			daily_backup = EXCLUDED.daily_backup,
+			weekly_backup = EXCLUDED.weekly_backup,
+			cloud_backup = EXCLUDED.cloud_backup,
+			encrypt_backups = EXCLUDED.encrypt_backups,
+			retention_days = EXCLUDED.retention_days,
+			updated_at = EXCLUDED.updated_at
 	`, userID, settings.AutoBackup, settings.DailyBackup, settings.WeeklyBackup,
-	   settings.CloudBackup, settings.EncryptBackups, settings.RetentionDays, time.Now())
+	   settings.CloudBackup, settings.EncryptBackups, settings.RetentionDays, time.Now(), time.Now())
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

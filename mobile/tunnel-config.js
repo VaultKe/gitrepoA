@@ -2,8 +2,8 @@
 // Update this file when you restart your tunnels
 
 export const TUNNEL_CONFIG = {
-  // Backend tunnel URL (update when you restart tmole 8080)
-  BACKEND_TUNNEL_URL: 'http://localhost:8080',
+  // Backend tunnel URL (update when you restart tmole 8085)
+  BACKEND_TUNNEL_URL: 'http://localhost:8085',
 
   // Frontend tunnel URL (update when you restart tmole 8082)
   FRONTEND_TUNNEL_URL: 'http:localhost:8081',
@@ -16,6 +16,6 @@ export const TUNNEL_CONFIG = {
 };
 
 // Instructions:
-// 1. When you restart tmole 8080, update BACKEND_TUNNEL_URL
+// 1. When you restart tmole 8085, update BACKEND_TUNNEL_URL
 // 2. When you restart tmole 8082, update FRONTEND_TUNNEL_URL  
 // 3. Save this file and refresh your browser

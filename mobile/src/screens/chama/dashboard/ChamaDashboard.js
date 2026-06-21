@@ -513,7 +513,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       },
       {
         id: 'contributions',
-        title: isContributionGroup ? 'Contribute' : 'Contributions',
+        title: isContributionGroup ? 'Contribute' : 'Pay',
         icon: 'wallet',
         color: colors.primary,
         onPress: () => {
@@ -747,8 +747,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       }
     });
 
-    const mainActions = filteredActions.slice(0, -1);
-    const lastAction = filteredActions[filteredActions.length - 1];
+    const mainActions = filteredActions;
 
     return (
       <Card style={[styles.actionsCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginVertical: spacing.xs }]}>
@@ -773,21 +772,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-        <View style={styles.lastActionContainer}>
-          <TouchableOpacity
-            onPress={lastAction.onPress}
-            disabled={!selectedChama}
-            activeOpacity={0.7}
-            style={styles.lastActionTouchable}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
-              <Ionicons name={lastAction.icon} size={24} color={lastAction.color} />
-            </View>
-            <Text style={[styles.actionText, { color: colors.text }]}>
-              {lastAction.title}
-            </Text>
-          </TouchableOpacity>
         </View>
       </Card>
     );
@@ -1055,13 +1039,6 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: typography.fontSize.sm,
     textAlign: 'center',
-  },
-  lastActionContainer: {
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  lastActionTouchable: {
-    alignItems: 'center',
   },
   // Contribution group specific styles (2x2 grid for 4 actions)
   actionsGridContribution: {

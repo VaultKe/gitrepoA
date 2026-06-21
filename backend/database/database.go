@@ -61,24 +61,11 @@ func Migrate(db *sql.DB) error {
 		createWelfareTable,
 		createWelfareContributionsTable,
 		createWelfareRequestsTable,
-		addWelfareRequestBeneficiaryField,
-		addUserProfileFields,
-		addChatMessageFields,
-		addWelfareContributionFields,
-		addMeetingDocumentFileUrl,
 		createChamaInvitationsTable,
-		addChamaPermissionsColumn,
-		addInvitationRoleColumns,
 		createLearningTables,
 		createRemindersTable,
 		createSharesAndDividendsTables,
-		// createPollsAndVotingTables, // DISABLED: Conflicts with existing vote system
 		createDisbursementTables,
-		addEnhancedLearningContentFields,
-		createQuizResultsTable,
-		addChamaCategoryColumn,
-		addRecipientIDToTransactionsMigration,
-		addDividendTypeColumnMigration,
 		createDevicesTable,
 		createSignalIdentityKeysTable,
 		createSignalPreKeysTable,
@@ -90,69 +77,38 @@ func Migrate(db *sql.DB) error {
 	}
 
 	for i, migration := range migrations {
-		// Handle special migrations that need custom logic
-		if i == len(migrations)-10 { // Tenth to last migration is addWelfareRequestBeneficiaryField
-			if err := addMissingWelfareRequestBeneficiaryField(db); err != nil {
-				return fmt.Errorf("failed to add welfare request beneficiary field: %w", err)
-			}
-		} else if i == len(migrations)-9 { // Ninth to last migration is addUserProfileFields
-			if err := addMissingUserProfileFields(db); err != nil {
-				return fmt.Errorf("failed to add user profile fields: %w", err)
-			}
-		} else if i == len(migrations)-8 { // Eighth to last migration is addChatMessageFields
-			if err := addMissingChatMessageFields(db); err != nil {
-				return fmt.Errorf("failed to add chat message fields: %w", err)
-			}
-		} else if i == len(migrations)-7 { // Seventh to last migration is addWelfareContributionFields
-			if err := addMissingWelfareContributionFields(db); err != nil {
-				return fmt.Errorf("failed to add welfare contribution fields: %w", err)
-			}
-		} else if i == len(migrations)-6 { // Sixth to last migration is addMeetingDocumentFileUrl
-			if err := addMissingMeetingDocumentFileUrl(db); err != nil {
-				return fmt.Errorf("failed to add meeting document file_url field: %w", err)
-			}
-		} else if i == len(migrations)-5 { // Fifth to last migration is addChamaPermissionsColumn
-			if err := addMissingChamaPermissionsColumn(db); err != nil {
-				return fmt.Errorf("failed to add chama permissions column: %w", err)
-			}
-		} else if i == len(migrations)-4 { // Fourth to last migration is addInvitationRoleColumns
-			if err := addMissingInvitationRoleColumns(db); err != nil {
-				return fmt.Errorf("failed to add invitation role columns: %w", err)
-			}
-		} else if i == len(migrations)-3 { // Third to last migration is addEnhancedLearningContentFields
-			if err := addMissingEnhancedLearningContentFields(db); err != nil {
-				return fmt.Errorf("failed to add enhanced learning content fields: %w", err)
-			}
-		} else if i == len(migrations)-2 { // Second to last migration is createQuizResultsTable
-			if _, err := db.Exec(migration); err != nil {
-				return fmt.Errorf("failed to create quiz results table: %w", err)
-			}
-		} else if i == len(migrations)-1 { // Last migration is addDividendTypeColumn
-			if err := addDividendTypeColumn(db); err != nil {
-				return fmt.Errorf("failed to add dividend_type column to dividend_declarations table: %w", err)
-			}
-		} else if i == len(migrations)-2 { // Second to last migration is addRecipientIDToTransactionsMigration
-			if err := addRecipientIDToTransactions(db); err != nil {
-				return fmt.Errorf("failed to add recipient_id to transactions table: %w", err)
-			}
-		} else if i == len(migrations)-2 { // Third to last migration is addChamaCategoryColumn
-			if err := addCategoryColumnToChamasTable(db); err != nil {
-				return fmt.Errorf("failed to add chama category column: %w", err)
-			}
-		} else if i == len(migrations) { // Last migration is chat_message_refactor
-			if err := updateChatMessageStorage(db); err != nil {
-				return fmt.Errorf("failed to update chat message storage: %w", err)
-			}
-		} else if i == len(migrations)+1 { // New migration for chat message content refactor
-			if err := refactorChatMessageContent(db); err != nil {
-				return fmt.Errorf("failed to refactor chat message content: %w", err)
-			}
-		} else {
-			// Regular migrations
-			if _, err := db.Exec(migration); err != nil {
-				return fmt.Errorf("failed to run migration %d: %w", i+1, err)
-			}
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("failed to run migration %d: %w", i+1, err)
 		}
+	}
+
+	customMigrations := []struct {
+		name string
+		fn   func(*sql.DB) error
+	}{
+		{"addWelfareRequestBeneficiaryField", addMissingWelfareRequestBeneficiaryField},
+		{"addUserProfileFields", addMissingUserProfileFields},
+		{"addChatMessageFields", addMissingChatMessageFields},
+		{"addWelfareContributionFields", addMissingWelfareContributionFields},
+		{"addMeetingDocumentFileUrl", addMissingMeetingDocumentFileUrl},
+		{"addChamaPermissionsColumn", addMissingChamaPermissionsColumn},
+		{"addInvitationRoleColumns", addMissingInvitationRoleColumns},
+		{"addEnhancedLearningContentFields", addMissingEnhancedLearningContentFields},
+		{"createQuizResultsTable", createQuizResultsTableFunc},
+		{"addChamaCategoryColumn", addCategoryColumnToChamasTable},
+		{"addRecipientIDToTransactions", addRecipientIDToTransactions},
+		{"addDividendTypeColumn", addDividendTypeColumn},
+		{"addLoanTypeIdToLoans", addLoanTypeIdColumn},
+	}
+
+	for _, m := range customMigrations {
+		if err := m.fn(db); err != nil {
+			return fmt.Errorf("failed to run migration %s: %w", m.name, err)
+		}
+	}
+
+	if err := addMissingTransactionFields(db); err != nil {
+		return fmt.Errorf("failed to ensure transaction fields: %w", err)
 	}
 
 	log.Println("Database migrations completed successfully")
@@ -193,6 +149,63 @@ func addRecipientIDToTransactions(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func addMissingChamaIDColumnToTransactions(db *sql.DB) error {
+	var exists bool
+	query := `SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'chama_id'`
+	err := db.QueryRow(query).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check if chama_id column exists: %w", err)
+	}
+
+	if !exists {
+		alterQuery := `ALTER TABLE transactions ADD COLUMN chama_id TEXT`
+		if _, err := db.Exec(alterQuery); err != nil {
+			return fmt.Errorf("failed to add chama_id column: %w", err)
+		}
+		log.Printf("Added chama_id column to transactions table")
+
+		indexQuery := `CREATE INDEX IF NOT EXISTS idx_transactions_chama_id ON transactions(chama_id)`
+		if _, err := db.Exec(indexQuery); err != nil {
+			log.Printf("Warning: failed to create index for chama_id: %v", err)
+		} else {
+			log.Printf("Created index for chama_id on transactions table")
+		}
+  } else {
+    log.Printf("Column chama_id already exists in transactions table")
+  }
+
+  return nil
+}
+
+// addMissingRecipientIDColumnToTransactions adds recipient_id column to transactions table if missing
+func addMissingRecipientIDColumnToTransactions(db *sql.DB) error {
+  var exists bool
+  query := `SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'recipient_id'`
+  err := db.QueryRow(query).Scan(&exists)
+  if err != nil {
+    return fmt.Errorf("failed to check if recipient_id column exists: %w", err)
+  }
+
+  if !exists {
+    alterQuery := `ALTER TABLE transactions ADD COLUMN recipient_id TEXT`
+    if _, err := db.Exec(alterQuery); err != nil {
+      return fmt.Errorf("failed to add recipient_id column: %w", err)
+    }
+    log.Printf("Added recipient_id column to transactions table")
+
+    indexQuery := `CREATE INDEX IF NOT EXISTS idx_transactions_recipient_id ON transactions(recipient_id)`
+    if _, err := db.Exec(indexQuery); err != nil {
+      log.Printf("Warning: failed to create index for recipient_id: %v", err)
+    } else {
+      log.Printf("Created index for recipient_id on transactions table")
+    }
+  } else {
+    log.Printf("Column recipient_id already exists in transactions table")
+  }
+
+  return nil
 }
 
 // addDividendTypeColumn adds dividend_type column to dividend_declarations table
@@ -266,6 +279,29 @@ func addDividendTypeColumn(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func addLoanTypeIdColumn(db *sql.DB) error {
+	var exists bool
+	query := `SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'loans' AND column_name = 'loan_type_id'`
+	err := db.QueryRow(query).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check if loan_type_id column exists: %w", err)
+	}
+	if !exists {
+		if _, err := db.Exec("ALTER TABLE loans ADD COLUMN loan_type_id TEXT REFERENCES loan_types(id)"); err != nil {
+			return fmt.Errorf("failed to add loan_type_id column: %w", err)
+		}
+		log.Println("Added loan_type_id column to loans table")
+	} else {
+		log.Println("Column loan_type_id already exists in loans table")
+	}
+	return nil
+}
+
+func createQuizResultsTableFunc(db *sql.DB) error {
+	_, err := db.Exec(createQuizResultsTable)
+	return err
 }
 
 // SQL migration statements
@@ -484,6 +520,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,
     from_wallet_id TEXT,
     to_wallet_id TEXT,
+    chama_id TEXT,
     type TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     amount REAL NOT NULL,
@@ -494,6 +531,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     metadata TEXT, -- JSON metadata
     fees REAL DEFAULT 0,
     initiated_by TEXT NOT NULL,
+    recipient_id TEXT,
     approved_by TEXT,
     requires_approval BOOLEAN DEFAULT FALSE,
     approval_deadline TIMESTAMP,
@@ -501,7 +539,9 @@ CREATE TABLE IF NOT EXISTS transactions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (from_wallet_id) REFERENCES wallets(id),
     FOREIGN KEY (to_wallet_id) REFERENCES wallets(id),
+    FOREIGN KEY (chama_id) REFERENCES chamas(id),
     FOREIGN KEY (initiated_by) REFERENCES users(id),
+    FOREIGN KEY (recipient_id) REFERENCES users(id),
     FOREIGN KEY (approved_by) REFERENCES users(id)
 );`
 
@@ -1325,19 +1365,19 @@ func addMissingInvitationRoleColumns(db *sql.DB) error {
 
 	for _, col := range columns {
 		// Check if column exists
-		var count int
+		var exists bool
 		err := db.QueryRow(`
-			SELECT COUNT(*) > 0 FROM information_schema.columns
+			SELECT EXISTS(SELECT 1 FROM information_schema.columns
 			WHERE table_name = 'chama_invitations'
-			AND column_name = $1
-		`, col.name).Scan(&count)
+			AND column_name = $1)
+		`, col.name).Scan(&exists)
 		if err != nil {
 			log.Printf("Error checking for column %s: %v", col.name, err)
 			continue
 		}
 
 		// Add column if it doesn't exist
-		if count == 0 {
+		if !exists {
 			query := fmt.Sprintf("ALTER TABLE chama_invitations ADD COLUMN %s %s", col.name, col.dataType)
 			if col.defaultValue != "" {
 				query += fmt.Sprintf(" DEFAULT '%s'", col.defaultValue)
@@ -2680,5 +2720,20 @@ func refactorChatMessageContent(db *sql.DB) error {
 	}
 
 	log.Printf("Refactored chat message content to store only ciphertext")
+	return nil
+}
+
+func EnsureLoanTypesTable(db *sql.DB) error {
+	queries := []string{
+		"CREATE TABLE IF NOT EXISTS loan_types (id TEXT PRIMARY KEY, chama_id TEXT NOT NULL REFERENCES chamas(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT, max_amount NUMERIC NOT NULL, min_amount NUMERIC DEFAULT 0, interest_rate NUMERIC NOT NULL, term_months INTEGER NOT NULL, eligibility_criteria TEXT DEFAULT 'active_members', approval_required BOOLEAN DEFAULT TRUE, grace_period_days INTEGER DEFAULT 0, penalty_rate NUMERIC DEFAULT 0, max_loans_per_member INTEGER DEFAULT 1, requires_collateral BOOLEAN DEFAULT FALSE, collateral_description TEXT, status TEXT DEFAULT 'active', created_by TEXT NOT NULL REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_chama ON loan_types(chama_id)",
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_status ON loan_types(status)",
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to create loan_types table/index: %w", err)
+		}
+	}
+	log.Println("✅ loan_types schema ready")
 	return nil
 }

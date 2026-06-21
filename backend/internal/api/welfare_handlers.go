@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -490,7 +491,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 		voteID = fmt.Sprintf("vote-%d", time.Now().UnixNano())
 		_, err = db.(*sql.DB).Exec(`
 			INSERT INTO votes (id, chama_id, title, description, type, status, ends_at, created_by, created_at)
-			VALUES ($1, $2, $3, $4, 'welfare', 'active', datetime('now', '+7 days'), $5, CURRENT_TIMESTAMP)
+			VALUES ($1, $2, $3, $4, 'welfare', 'active', NOW() + INTERVAL '7 days', $5, CURRENT_TIMESTAMP)
 		`, voteID, welfareRequest.ChamaID, "Welfare Request: "+welfareID, "Vote on welfare request", userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -854,9 +855,9 @@ func ContributeToWelfare(c *gin.Context) {
 	// Insert contribution into database
 	_, err = db.(*sql.DB).Exec(`
 		INSERT INTO welfare_contributions (
-			id, welfare_fund_id, user_id, amount, payment_method, contributed_at
-		) VALUES ($1, $2, $3, $4, 'mobile_money', CURRENT_TIMESTAMP)
-	`, contributionID, welfareRequestFundID, userID, req.Amount)
+			id, welfare_fund_id, user_id, amount, payment_method, message, status, welfare_request_id, contributed_at
+		) VALUES ($1, $2, $3, $4, 'mobile_money', $5, 'completed', $6, CURRENT_TIMESTAMP)
+	`, contributionID, welfareRequestFundID, userID, req.Amount, req.Message, req.WelfareRequestID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -942,12 +943,17 @@ func GetWelfareContributions(c *gin.Context) {
 	}
 
 	// Query contributions for the welfare request
+	// Normalize IDs that were passed as a fund identifier instead of a request identifier.
+	if strings.HasPrefix(welfareRequestID, "fund-") {
+		welfareRequestID = strings.TrimPrefix(welfareRequestID, "fund-")
+	}
+
 	// Get welfare fund ID for this request
 	welfareRequestFundID := fmt.Sprintf("fund-%s", welfareRequestID)
 
 	rows, err := db.(*sql.DB).Query(`
 		SELECT
-			wc.id, wc.amount, COALESCE(wc.message, '') as message, 'completed' as status, wc.contributed_at,
+			wc.id, wc.amount, COALESCE(wc.message, '') as message, COALESCE(wc.status, 'completed') as status, wc.contributed_at,
 			u.first_name, u.last_name, u.email
 		FROM welfare_contributions wc
 		JOIN users u ON wc.user_id = u.id
@@ -1003,6 +1009,62 @@ func GetWelfareContributions(c *gin.Context) {
 		}
 
 		contributions = append(contributions, contribution)
+	}
+
+	if len(contributions) == 0 {
+		txRows, txErr := db.(*sql.DB).Query(`
+			SELECT
+				t.id, t.amount, COALESCE(t.description, '') as message, t.status, t.created_at,
+				u.first_name, u.last_name, u.email
+			FROM transactions t
+			LEFT JOIN users u ON t.initiated_by = u.id
+			WHERE t.type IN ('contribution', 'welfare_contribution')
+			AND COALESCE(t.metadata, '') != ''
+			AND (
+				(t.metadata::jsonb->>'welfare_request_id' = $1)
+				OR (t.metadata::jsonb->>'welfareRequestId' = $1)
+			)
+			ORDER BY t.created_at DESC
+		`, welfareRequestID)
+		if txErr == nil {
+			defer txRows.Close()
+			for txRows.Next() {
+				var contrib struct {
+					ID                   string    `json:"id"`
+					Amount               float64   `json:"amount"`
+					Message              string    `json:"message"`
+					Status               string    `json:"status"`
+					CreatedAt            time.Time `json:"createdAt"`
+					ContributorFirstName string    `json:"contributorFirstName"`
+					ContributorLastName  string    `json:"contributorLastName"`
+					ContributorEmail     string    `json:"contributorEmail"`
+				}
+
+				err := txRows.Scan(
+					&contrib.ID, &contrib.Amount, &contrib.Message, &contrib.Status, &contrib.CreatedAt,
+					&contrib.ContributorFirstName, &contrib.ContributorLastName, &contrib.ContributorEmail,
+				)
+				if err != nil {
+					continue
+				}
+
+				totalAmount += contrib.Amount
+				contribution := map[string]interface{}{
+					"id":        contrib.ID,
+					"amount":    contrib.Amount,
+					"message":   contrib.Message,
+					"status":    contrib.Status,
+					"createdAt": contrib.CreatedAt.Format(time.RFC3339),
+					"contributor": map[string]interface{}{
+						"firstName": contrib.ContributorFirstName,
+						"lastName":  contrib.ContributorLastName,
+						"email":     contrib.ContributorEmail,
+						"fullName":  contrib.ContributorFirstName + " " + contrib.ContributorLastName,
+					},
+				}
+				contributions = append(contributions, contribution)
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

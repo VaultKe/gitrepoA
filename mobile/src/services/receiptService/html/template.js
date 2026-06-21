@@ -5,6 +5,82 @@ export const generatePDFOptimizedReceiptHTML = (transaction, chamaName, performe
 
   const receiptId = `RCP-${Date.now().toString().substring(-8)}`;
 
+  const escapeHTML = (value) => {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    }[char]));
+  };
+
+  const getValue = (...values) => {
+    return values.find(value => value !== undefined && value !== null && String(value).trim() !== '') ?? '';
+  };
+
+  const maskPhoneNumber = (phone) => {
+    const rawPhone = String(phone ?? '').trim();
+    if (!rawPhone || rawPhone === 'N/A') return '';
+    if (rawPhone.includes('*')) return rawPhone;
+
+    const digits = rawPhone.replace(/[^\d]/g, '');
+    if (digits.length < 5) return '***';
+
+    const visibleStart = Math.min(4, digits.length - 2);
+    return `${digits.slice(0, visibleStart)}***${digits.slice(-2)}`;
+  };
+
+  const getTransactionCode = () => getValue(
+    transaction.transactionCode,
+    transaction.transaction_code,
+    transaction.mpesaCode,
+    transaction.mpesa_code,
+    transaction.mPesaCode,
+    transaction.m_pesa_code,
+    transaction.mpesaReceiptNumber,
+    transaction.mpesa_receipt_number,
+    transaction.code,
+    transaction.reference,
+    transaction.ref,
+    transaction.transactionId,
+    transaction.transaction_id
+  );
+
+  const getSenderPhone = () => getValue(
+    transaction.senderPhone,
+    transaction.sender_phone,
+    transaction.fromPhone,
+    transaction.from_phone,
+    transaction.phoneNumber,
+    transaction.phone_number,
+    transaction.phone,
+    transaction.metadata?.senderPhone,
+    transaction.metadata?.sender_phone,
+    transaction.metadata?.fromPhone,
+    transaction.metadata?.from_phone,
+    transaction.metadata?.phoneNumber,
+    transaction.metadata?.phone_number,
+    transaction.metadata?.phone
+  );
+
+  const getDestinationAccount = () => getValue(
+    transaction.destinationAccount,
+    transaction.destination_account,
+    transaction.toAccount,
+    transaction.to_account,
+    transaction.accountNumber,
+    transaction.account_number,
+    transaction.account,
+    transaction.metadata?.destinationAccount,
+    transaction.metadata?.destination_account,
+    transaction.metadata?.toAccount,
+    transaction.metadata?.to_account,
+    transaction.metadata?.accountNumber,
+    transaction.metadata?.account_number,
+    transaction.metadata?.account
+  );
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -109,7 +185,7 @@ export const generatePDFOptimizedReceiptHTML = (transaction, chamaName, performe
               <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-size: 9px;">${transactionDate}</td>
               <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-size: 9px; font-weight: bold; color: #2563eb;">${performedBy}</td>
               <td style="border: 1px solid #000; padding: 6px 4px; text-align: left; font-size: 9px;">${description}</td>
-              <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-size: 9px;">${getTransactionTypeLabel(transaction.type)}</td>
+              <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-size: 9px;">${getTransactionTypeLabel(transaction.type || transaction.transaction_type)}</td>
               <td style="border: 1px solid #000; padding: 6px 4px; text-align: right; font-weight: bold; font-size: 9px;">${amount}</td>
               <td style="border: 1px solid #000; padding: 6px 4px; text-align: right; font-weight: bold; font-size: 9px;">${fees}</td>
               <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-size: 9px;">
@@ -118,6 +194,29 @@ export const generatePDFOptimizedReceiptHTML = (transaction, chamaName, performe
                 </span>
               </td>
               <td style="border: 1px solid #000; padding: 6px 4px; text-align: center; font-size: 9px;">${transaction.reference || '-'}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Payment Details -->
+        <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9px;">
+          <thead>
+            <tr>
+              <th colspan="2" style="background: #e8e8e8; border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; text-transform: uppercase; font-size: 8px;">MPESA / PAYMENT DETAILS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="border: 1px solid #000; padding: 6px 4px; text-align: left; font-weight: bold; width: 35%;">M-Pesa Transaction Code</td>
+              <td style="border: 1px solid #000; padding: 6px 4px; text-align: left; font-size: 9px;">${escapeHTML(getTransactionCode()) || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 6px 4px; text-align: left; font-weight: bold;">Sender Phone</td>
+              <td style="border: 1px solid #000; padding: 6px 4px; text-align: left; font-size: 9px;">${escapeHTML(maskPhoneNumber(getSenderPhone())) || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 6px 4px; text-align: left; font-weight: bold;">Destination Account</td>
+              <td style="border: 1px solid #000; padding: 6px 4px; text-align: left; font-size: 9px;">${escapeHTML(getDestinationAccount()) || 'N/A'}</td>
             </tr>
           </tbody>
         </table>

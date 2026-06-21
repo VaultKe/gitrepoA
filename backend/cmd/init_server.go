@@ -159,7 +159,7 @@ func initializeExistingUsers(db *sql.DB) error {
 		 quiet_hours_start, quiet_hours_end, timezone, notification_frequency,
 		 priority_only_during_quiet, created_at, updated_at)
 		VALUES (?, ?, 1, 1, 80, 1, 1, 1, 1, 0, 0, '22:00:00', '07:00:00', 
-		        'Africa/Nairobi', 'immediate', 1, datetime('now'), datetime('now'))
+		        'Africa/Nairobi', 'immediate', 1, NOW(), NOW())
 	`
 
 	stmt, err := db.Prepare(insertQuery)

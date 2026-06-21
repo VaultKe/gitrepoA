@@ -172,7 +172,7 @@ export default function LoginScreen({ navigation }) {
           }
         }
 
-        showMessage('No internet connection and no offline credentials found. Please check your connection and try again.', 'warning', 0);
+        showMessage('No internet connection.Please check your connection and try again.', 'warning', 0);
       }
 
     } catch (error) {

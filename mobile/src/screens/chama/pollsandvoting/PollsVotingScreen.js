@@ -29,6 +29,14 @@ const PollsVotingScreen = ({ route, navigation }) => {
   const { chamaId } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
+  const formInputStyle = {
+    backgroundColor: colors.backgroundSecondary,
+    borderColor: colors.border,
+    shadowColor: colors.shadowDark,
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  };
 
   // Responsive layout detection
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
@@ -187,13 +195,11 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
   const loadVotes = async () => {
     try {
-      // Security: Verify chamaId is valid and user has access
       if (!chamaId || typeof chamaId !== 'string') {
         Alert.alert('Error', 'Invalid chama access. Please try again.');
         return;
       }
 
-          // Always fetch both active and completed polls to ensure we have all data for processing
       const [activeResponse, completedResponse] = await Promise.all([
         ApiService.getActiveVotes(chamaId),
         ApiService.getVoteResults(chamaId)
@@ -201,42 +207,35 @@ const PollsVotingScreen = ({ route, navigation }) => {
       const allPolls = [];
       const pollMap = new Map();
 
-      // Add active polls first
       if (activeResponse.success && activeResponse.data) {
         activeResponse.data.forEach(poll => pollMap.set(poll.id, poll));
       }
 
-      // Add completed polls (these will override active ones if they exist)
       if (completedResponse.success && completedResponse.data) {
         completedResponse.data.forEach(poll => pollMap.set(poll.id, poll));
       }
 
-      allPolls.push(...pollMap.values());
-      if (allPolls.length > 0) {
-      }
-      response = { success: true, data: allPolls };
+      const response = { success: true, data: [...pollMap.values()] };
 
       if (response.success) {
         const validVotes = (response.data || []).filter(vote => {
-          if (!vote.id || !vote.id.includes('vote-')) {
+          if (!vote.id) {
             return false;
           }
           return true;
         });
 
-        // Process polls for completion status
         const processedVotes = validVotes.map(vote => {
           const totalVotesCast = getTotalVotesCast(vote);
           const totalEligibleVoters = getTotalEligibleVoters(vote);
           const isFullyVoted = totalVotesCast >= totalEligibleVoters;
 
-          // If fully voted and still active, mark as completed and adjust end time
           if (isFullyVoted && vote.status === 'active') {
             return {
               ...vote,
               status: 'completed',
               result: 'completed_early',
-              endsAt: new Date().toISOString(), // Set end time to now
+              endsAt: new Date().toISOString(),
               isFullyVoted: true,
               completionStatus: 'Completed (100% participation)'
             };
@@ -249,34 +248,31 @@ const PollsVotingScreen = ({ route, navigation }) => {
           };
         });
 
-        // Separate completed polls for table view
         const allCompletedPolls = processedVotes.filter(vote => vote.status === 'completed');
         setCompletedPolls(allCompletedPolls);
 
-        // Filter polls based on current tab after processing completion status
         let filteredVotes;
         if (activeTab === 'active') {
           filteredVotes = processedVotes.filter(vote => vote.status === 'active');
         } else if (activeTab === 'completed') {
           filteredVotes = processedVotes.filter(vote => vote.status === 'completed');
         } else {
-          // For role escalation tab, show all
           filteredVotes = processedVotes;
         }
 
         setVotes(filteredVotes);
-        setPolls(filteredVotes); // Keep setPolls for backward compatibility
+        setPolls(filteredVotes);
       } else {
         setVotes([]);
         setPolls([]);
 
-        // Check if it's an access denied error
         if (response.error?.includes('Access denied') || response.error?.includes('not a member')) {
           Alert.alert('Access Denied', 'You do not have permission to view votes for this chama.');
         }
       }
     } catch (error) {
       setPolls([]);
+      setVotes([]);
     }
   };
 
@@ -543,103 +539,104 @@ const PollsVotingScreen = ({ route, navigation }) => {
     }
 
     try {
-              // Immediately update UI to show vote was cast (optimistic update)
-              setVotes(prevVotes =>
-                prevVotes.map(vote =>
-                  vote.id === pollId
-                    ? { ...vote, userVoted: true }
-                    : vote
-                )
-              );
+      // Immediately update UI to show vote was cast (optimistic update)
+      setVotes(prevVotes =>
+        prevVotes.map(vote =>
+          vote.id === pollId
+            ? { ...vote, userVoted: true }
+            : vote
+        )
+      );
 
-              const response = await ApiService.castVote(chamaId, pollId, voteData);
-              if (response.success) {
-                // Check if this vote completed the poll and it's a role escalation
-                if (poll.type === 'Election / Voting' && response.data?.pollCompleted) {
-                  if (response.data?.result === 'passed') {
-                    // Get the winning candidate info
-                    const candidateName = response.data?.candidateName || 'the candidate';
-                    const newRole = response.data?.newRole || 'new role';
+      const response = await ApiService.castVote(chamaId, pollId, optionId);
 
-                    Alert.alert(
-                      '🎉 Congratulations!',
-                      `${candidateName} has been successfully elected to the ${newRole} position! The role change has taken effect immediately.`,
-                      [{ text: 'OK', onPress: () => loadPolls() }]
-                    );
-                  } else {
-                    Alert.alert(
-                      'Vote Complete',
-                      'The role escalation vote has been completed. The role change was not approved.',
-                      [{ text: 'OK', onPress: () => loadVotes() }]
-                    );
-                  }
-                } else {
-                  // Vote state already updated optimistically above
+      if (response.success) {
+        // Check if this vote completed the poll and it's a role escalation
+        if (poll.type === 'Election / Voting' && response.data?.pollCompleted) {
+          if (response.data?.result === 'passed') {
+            // Get the winning candidate info
+            const candidateName = response.data?.candidateName || 'the candidate';
+            const newRole = response.data?.newRole || 'new role';
 
-                  // Update vote counts in local state
-                  setVotes(prevVotes =>
-                    prevVotes.map(vote => {
-                      if (vote.id === pollId) {
-                        return {
-                          ...vote,
-                          options: vote.options.map(opt =>
-                            opt.id === optionId
-                              ? { ...opt, voteCount: opt.voteCount + 1 }
-                              : opt
-                          ),
-                          totalVotes: (vote.totalVotes || 0) + 1
-                        };
-                      }
-                      return vote;
-                    })
-                  );
+            Alert.alert(
+              '🎉 Congratulations!',
+              `${candidateName} has been successfully elected to the ${newRole} position! The role change has taken effect immediately.`,
+              [{ text: 'OK', onPress: () => loadPolls() }]
+            );
+          } else {
+            Alert.alert(
+              'Vote Complete',
+              'The role escalation vote has been completed. The role change was not approved.',
+              [{ text: 'OK', onPress: () => loadVotes() }]
+            );
+          }
+        } else {
+          // Vote state already updated optimistically above
 
-                  // Also update polls state for backward compatibility
-                  setPolls(prevPolls =>
-                    prevPolls.map(poll => {
-                      if (poll.id === pollId) {
-                        return {
-                          ...poll,
-                          options: poll.options.map(opt =>
-                            opt.id === optionId
-                              ? { ...opt, voteCount: opt.voteCount + 1 }
-                              : opt
-                          ),
-                          totalVotes: (poll.totalVotes || 0) + 1
-                        };
-                      }
-                      return poll;
-                    })
-                  );
-
-                  Alert.alert(
-                    'Vote Cast Successfully! 🎉',
-                    'Your vote has been recorded and vote counts updated!',
-                    [{ text: 'OK' }]
-                  );
-                }
-              } else {
-                // Revert optimistic update on failure
-                setVotes(prevVotes =>
-                  prevVotes.map(vote =>
-                    vote.id === pollId
-                      ? { ...vote, userVoted: false }
-                      : vote
-                  )
-                );
-                Alert.alert('Error', response.error || 'Failed to cast vote');
+          // Update vote counts in local state
+          setVotes(prevVotes =>
+            prevVotes.map(vote => {
+              if (vote.id === pollId) {
+                return {
+                  ...vote,
+                  options: vote.options.map(opt =>
+                    opt.id === optionId
+                      ? { ...opt, voteCount: opt.voteCount + 1 }
+                      : opt
+                  ),
+                  totalVotes: (vote.totalVotes || 0) + 1
+                };
               }
-            } catch (error) {
-              // Revert optimistic update on error
-              setVotes(prevVotes =>
-                prevVotes.map(vote =>
-                  vote.id === pollId
-                    ? { ...vote, userVoted: false }
-                    : vote
-                )
-              );
-              Alert.alert('Error', 'Failed to cast vote');
-            }
+              return vote;
+            })
+          );
+
+          // Also update polls state for backward compatibility
+          setPolls(prevPolls =>
+            prevPolls.map(poll => {
+              if (poll.id === pollId) {
+                return {
+                  ...poll,
+                  options: poll.options.map(opt =>
+                    opt.id === optionId
+                      ? { ...opt, voteCount: opt.voteCount + 1 }
+                      : opt
+                  ),
+                  totalVotes: (poll.totalVotes || 0) + 1
+                };
+              }
+              return poll;
+            })
+          );
+
+          Alert.alert(
+            'Vote Cast Successfully! 🎉',
+            'Your vote has been recorded and vote counts updated!',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        // Revert optimistic update on failure
+        setVotes(prevVotes =>
+          prevVotes.map(vote =>
+            vote.id === pollId
+              ? { ...vote, userVoted: false }
+              : vote
+          )
+        );
+        Alert.alert('Error', response.error || 'Failed to cast vote');
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      setVotes(prevVotes =>
+        prevVotes.map(vote =>
+          vote.id === pollId
+            ? { ...vote, userVoted: false }
+            : vote
+        )
+      );
+      Alert.alert('Error', 'Failed to cast vote');
+    }
   };
 
   const resetPollForm = () => {
@@ -802,79 +799,81 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
     return (
       <View style={{ flex: 1 }}>
-        {/* Table Header */}
-        <View style={[styles.tableHeader, {
-          backgroundColor: colors.primary + '15',
-          borderBottomWidth: 2,
-          borderBottomColor: colors.primary
-        }]}>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Title</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Type</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Total</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Ended</Text>
-          <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Action</Text>
-        </View>
-
-        {/* Table Rows */}
-        {paginatedPolls.map((poll, index) => (
-          <View key={poll.id} style={[styles.tableRow, { borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-            <Text style={[styles.tableCell, { color: colors.text }]} numberOfLines={2}>{(poll.title || '').length > 10 ? (poll.title || '').substring(0, 10) + '...' : (poll.title || '')}</Text>
-            <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{(poll.type || 'General').length > 7 ? (poll.type || 'General').substring(0, 7) + '...' : (poll.type || 'General')}</Text>
-            <Text style={[styles.tableCell, { color: colors.textSecondary }]}>
-              {getTotalVotesCast(poll)}/{getTotalEligibleVoters(poll)}
-            </Text>
-            <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{formatTableDate(poll.endsAt)}</Text>
-            <TouchableOpacity
-              style={[styles.actionCell, { backgroundColor: colors.primary + '15' }]}
-              onPress={() => openVisualizationModal(poll)}
-            >
-              <Ionicons name="eye" size={16} color={colors.primary} />
-            </TouchableOpacity>
+        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          {/* Table Header */}
+          <View style={[styles.tableHeader, {
+            backgroundColor: colors.primary + '15',
+            borderBottomWidth: 2,
+            borderBottomColor: colors.primary
+          }]}>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Title</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Type</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Total</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Ended</Text>
+            <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Action</Text>
           </View>
-        ))}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <View style={styles.paginationContainer}>
-            <TouchableOpacity
-              style={[styles.paginationButton, {
-                backgroundColor: colors.surface,
-                borderColor: colors.border
-              }, currentPage === 1 && styles.paginationButtonDisabled]}
-              onPress={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? colors.textSecondary : colors.primary} />
-            </TouchableOpacity>
+          {/* Table Rows */}
+          {paginatedPolls.map((poll, index) => (
+            <View key={poll.id} style={[styles.tableRow, { borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+              <Text style={[styles.tableCell, { color: colors.text }]} numberOfLines={2}>{(poll.title || '').length > 10 ? (poll.title || '').substring(0, 10) + '...' : (poll.title || '')}</Text>
+              <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{(poll.type || 'General').length > 7 ? (poll.type || 'General').substring(0, 7) + '...' : (poll.type || 'General')}</Text>
+              <Text style={[styles.tableCell, { color: colors.textSecondary }]}>
+                {getTotalVotesCast(poll)}/{getTotalEligibleVoters(poll)}
+              </Text>
+              <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{formatTableDate(poll.endsAt)}</Text>
+              <TouchableOpacity
+                style={[styles.actionCell, { backgroundColor: colors.primary + '15' }]}
+                onPress={() => openVisualizationModal(poll)}
+              >
+                <Ionicons name="eye" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          ))}
 
-            <Text style={[styles.paginationText, { color: colors.textSecondary }]}>
-              Page {currentPage} of {totalPages}
-            </Text>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                style={[styles.paginationButton, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border
+                }, currentPage === 1 && styles.paginationButtonDisabled]}
+                onPress={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? colors.textSecondary : colors.primary} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.paginationButton, {
-                backgroundColor: colors.surface,
-                borderColor: colors.border
-              }, currentPage === totalPages && styles.paginationButtonDisabled]}
-              onPress={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? colors.textSecondary : colors.primary} />
-            </TouchableOpacity>
-          </View>
-        )}
+              <Text style={[styles.paginationText, { color: colors.textSecondary }]}>
+                Page {currentPage} of {totalPages}
+              </Text>
 
-        {completedPolls.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="checkmark-done" size={64} color={colors.textTertiary} />
-            <Text style={styles.emptyText}>
-              No completed polls yet
-            </Text>
-            <Text style={[styles.emptyText, { fontSize: 14, marginTop: 8 }]}>
-              Completed polls will appear here
-            </Text>
-          </View>
-        )}
+              <TouchableOpacity
+                style={[styles.paginationButton, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border
+                }, currentPage === totalPages && styles.paginationButtonDisabled]}
+                onPress={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? colors.textSecondary : colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {completedPolls.length === 0 && (
+            <View style={[styles.emptyState, { alignItems: 'center' }]}>
+              <Ionicons name="checkmark-done" size={64} color={colors.textTertiary} />
+              <Text style={styles.emptyText}>
+                No completed polls yet
+              </Text>
+              <Text style={[styles.emptyText, { fontSize: 14, marginTop: 8 }]}>
+                Completed polls will appear here
+              </Text>
+            </View>
+          )}
+        </Card>
       </View>
     );
   };
@@ -1104,10 +1103,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
     ];
 
     return (
-      <Card
-        style={cardStyle}
+      <View style={cardStyle}
         accessibilityLabel={`${item.title} poll. ${item.status} status. ${getTotalVotesCast(item)} out of ${getTotalEligibleVoters(item)} votes cast.`}
-        accessibilityRole="button"
       >
       <View style={styles.pollHeader}>
         <View style={styles.pollInfo}>
@@ -1340,7 +1337,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               {/* Voted Indicator - Compact */}
               {item.userVoted && (
                 <View style={[styles.actionIndicator, { backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2 }]}>
-                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 9 }]}>
+                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
                     VOTED
                   </Text>
                 </View>
@@ -1349,7 +1346,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               {/* Completed Indicator - Compact */}
               {item.status === 'completed' && !item.userVoted && (
                 <View style={[styles.actionIndicator, { backgroundColor: colors.textSecondary, paddingHorizontal: 6, paddingVertical: 2 }]}>
-                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 9 }]}>
+                  <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
                     ENDED
                   </Text>
                 </View>
@@ -1383,7 +1380,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
             </View>
           );
         })}
-      </View>
+        </View>
 
       {/* Only show "You have voted" badge for active polls */}
       {item.userVoted && item.status === 'active' && (
@@ -1440,7 +1437,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           {item.userVoted && (
             <View style={[styles.votedBadge, { backgroundColor: colors.success + '15', borderColor: colors.success, borderWidth: 1 }]}>
               <Ionicons name="checkmark-circle" size={10} color={colors.success} />
-              <Text style={[styles.votedText, { color: colors.success, fontSize: 9 }]}>
+              <Text style={[styles.votedText, { color: colors.success, fontSize: 12 }]}>
                 VOTED
               </Text>
             </View>
@@ -1449,7 +1446,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           {item.status === 'active' && !item.userVoted && (
             <View style={[styles.canVoteBadge, { backgroundColor: colors.primary + '15', borderColor: colors.primary, borderWidth: 1 }]}>
               <Ionicons name="radio-button-off" size={10} color={colors.primary} />
-              <Text style={[styles.canVoteText, { color: colors.primary, fontSize: 9 }]}>
+              <Text style={[styles.canVoteText, { color: colors.primary, fontSize: 12 }]}>
                 CAN VOTE
               </Text>
             </View>
@@ -1458,14 +1455,14 @@ const PollsVotingScreen = ({ route, navigation }) => {
           {item.status === 'completed' && (
             <View style={[styles.completedBadge, { backgroundColor: colors.textSecondary + '15', borderColor: colors.textSecondary, borderWidth: 1 }]}>
               <Ionicons name="time" size={10} color={colors.textSecondary} />
-              <Text style={[styles.completedText, { color: colors.textSecondary, fontSize: 9 }]}>
+              <Text style={[styles.completedText, { color: colors.textSecondary, fontSize: 12 }]}>
                 ENDED
               </Text>
             </View>
           )}
         </View>
       </View>
-    </Card>
+    </View>
     );
   };
 
@@ -1766,7 +1763,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 <TextInput
                   style={[
                     styles.formInput,
-                    { backgroundColor: colors.surface, color: colors.text },
+                    formInputStyle,
+                    { color: colors.text },
                     isDesktop && styles.formInputDesktop
                   ]}
                   value={pollForm.title}
@@ -1788,7 +1786,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 style={[
                   styles.formInput,
                   styles.textArea,
-                  { backgroundColor: colors.surface, color: colors.text },
+                  formInputStyle,
+                  { color: colors.text },
                   isDesktop && styles.formInputDesktop
                 ]}
                 value={pollForm.description}
@@ -1877,7 +1876,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                   <TextInput
                     style={[
                       styles.formInput,
-                      { backgroundColor: colors.surface, color: colors.text },
+                      formInputStyle,
+                      { color: colors.text },
                       isDesktop && styles.formInputDesktop
                     ]}
                     value={memberSearchQuery}
@@ -2009,7 +2009,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                     Justification
                   </Text>
                   <TextInput
-                    style={[styles.formInput, styles.textArea, { backgroundColor: colors.surface, color: colors.text }]}
+                    style={[styles.formInput, styles.textArea, formInputStyle, { color: colors.text }]}
                     value={roleForm.justification}
                     onChangeText={(text) => setRoleForm(prev => ({ ...prev, justification: text }))}
                     placeholder="Explain why this role change is needed"
@@ -2041,7 +2041,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
                         style={[
                           styles.formInput,
                           styles.optionInput,
-                          { backgroundColor: colors.surface, color: colors.text },
+                          formInputStyle,
+                          { color: colors.text },
                           isDesktop && styles.formInputDesktop
                         ]}
                         value={option}
@@ -2127,7 +2128,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 Select Candidate Member *
               </Text>
               <TextInput
-                style={[styles.formInput, { backgroundColor: colors.surface, color: colors.text }]}
+                style={[styles.formInput, formInputStyle, { color: colors.text }]}
                 value={memberSearchQuery}
                 onChangeText={handleMemberSearch}
                 placeholder="Search members by name, email, or role"
@@ -2213,7 +2214,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                 Justification
               </Text>
               <TextInput
-                style={[styles.formInput, styles.textArea, { backgroundColor: colors.surface, color: colors.text }]}
+                style={[styles.formInput, styles.textArea, formInputStyle, { color: colors.text }]}
                 value={roleForm.justification}
                 onChangeText={(text) => setRoleForm(prev => ({ ...prev, justification: text }))}
                 placeholder="Explain why this role change is needed"
@@ -3289,7 +3290,7 @@ const styles = StyleSheet.create({
   },
   tableHeaderText: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     textTransform: 'uppercase',
     textAlign: 'center',
@@ -3303,7 +3304,7 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    fontSize: 8.5,
+    fontSize: 12,
     paddingHorizontal: 8,
     paddingVertical: 12,
   },

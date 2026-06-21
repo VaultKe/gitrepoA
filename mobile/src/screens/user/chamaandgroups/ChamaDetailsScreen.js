@@ -9,7 +9,6 @@ import {
   RefreshControl,
   Alert,
   Image,
-  Modal,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,7 +57,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   // Create responsive styles
-  const styles = getResponsiveStyles(screenType, screenWidth);
+  const styles = getResponsiveStyles(screenType, screenWidth, colors);
 
   // Smart responsive layout component
   const SmartResponsiveLayout = ({ children }) => {
@@ -151,8 +150,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedAvatarMember, setSelectedAvatarMember] = useState(null);
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [userMembership, setUserMembership] = useState(null);
 
   // Reset state and reload data when chamaId changes
@@ -493,15 +490,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     );
   };
 
-  // Helper function to handle avatar tap
   const handleAvatarPress = (member) => {
-    setSelectedAvatarMember(member);
-    setShowAvatarModal(true);
-  };
-
-  const closeAvatarModal = () => {
-    setShowAvatarModal(false);
-    setSelectedAvatarMember(null);
+    navigation.navigate('ViewMember', {
+      memberId: member?.user_id || member?.id,
+      chamaId,
+      userRole: userMembership?.role,
+    });
   };
 
   // Helper function to generate a consistent avatar URL from email
@@ -510,19 +504,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     // Use DiceBear API for consistent avatars based on email
     const seed = encodeURIComponent(email.toLowerCase().trim());
     return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&size=${size}&backgroundColor=random`;
-  };
-
-  // Helper function to mask email for privacy
-  const maskEmail = (email) => {
-    if (!email || !email.includes('@')) return email;
-
-    const [localPart, domain] = email.split('@');
-    if (localPart.length <= 1) return email;
-
-    // Show first letter, then *** , then last 3 characters of domain
-    const firstChar = localPart.charAt(0);
-    const domainLast3 = domain.slice(-3);
-    return `${firstChar}***${domainLast3}`;
   };
 
   // Helper function to render member avatar with real profile photo
@@ -569,6 +550,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       );
     }
 
+    
     // Try generated avatar as fallback if email is available
     if (email && email.trim()) {
       const generatedAvatarUrl = getAvatarFromEmail(email, 60);
@@ -619,7 +601,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       ) : (
         <View style={styles.membersList}>
           {members.slice(0, 5).map((member, index) => {
-            // Get member name safely - check multiple possible data structures
             const firstName = member.first_name || member.user?.first_name || '';
             const lastName = member.last_name || member.user?.last_name || '';
             const fullName = `${firstName} ${lastName}`.trim() || 'Unknown Member';
@@ -665,7 +646,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   );
 
   const renderMeetings = () => (
-    <Card style={styles.section} variant="outlined">
+    <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Recent Meetings ({meetings.length})
@@ -687,14 +668,13 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <View>
           {/* Table Header */}
           <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
-            <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date & Time</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date & Time</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
           </View>
 
           {/* Table Rows */}
           {meetings.slice(0, 5).map((meeting, index) => {
-            // Parse meeting date safely (using ChamaMeetingsScreen structure)
             let meetingDate = 'Unknown Date';
             let meetingTime = '';
 
@@ -710,16 +690,15 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             } catch (error) {
             }
 
-            // Determine meeting status and icon
             const meetingStatus = meeting.status || 'scheduled';
             const isCompleted = meetingStatus === 'completed' || meetingStatus === 'ended';
             const isPast = new Date(meeting.scheduledAt || meeting.scheduled_date || meeting.date) < new Date();
 
             return (
               <View key={meeting.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                <Text style={{ flex: 2, fontSize: 8, color: colors.text }} numberOfLines={1}>{meeting.title || 'Chama Meeting'}</Text>
-                <Text style={{ flex: 2, fontSize: 8, color: colors.textSecondary, textAlign: 'center' }}>{meetingDate} {meetingTime}</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: isCompleted ? colors.success : isPast ? colors.textSecondary : colors.info, textAlign: 'center' }}>
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{meeting.title || 'Chama Meeting'}</Text>
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{meetingDate} {meetingTime}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isCompleted ? colors.success : isPast ? colors.textSecondary : colors.info, textAlign: 'center' }}>
                   {isCompleted ? 'Completed' : isPast ? 'Past' : 'Scheduled'}
                 </Text>
               </View>
@@ -729,16 +708,20 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       )}
     </Card>
   );
+ 
 
   const renderTransactions = () => (
-    <Card style={styles.section} variant="outlined">
+    <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           My Transactions ({transactions.length})
         </Text>
         {transactions.length > 5 && (
           <TouchableOpacity onPress={() => {
-            switchToChamaDashboard(chama);
+            if (chama) {
+              setSelectedChama(chama);
+            }
+            navigation.navigate('ChamaTransactionsScreen', { chamaId, chama });
           }}>
             <Text style={[styles.viewMoreText, { color: colors.primary }]}>
               View All
@@ -755,18 +738,16 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <View>
           {/* Table Header */}
           <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Description</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
-            <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Description</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
           </View>
 
           {/* Table Rows */}
           {transactions.slice(0, 5).map((transaction, index) => {
-            // Parse contribution date - simplified approach like TransactionHistoryScreen
             let contributionDate = 'Unknown Date';
 
             try {
-              // Try the most common date fields first, similar to TransactionHistoryScreen
               const dateValue = transaction.createdAt || transaction.created_at || transaction.date || transaction.transaction_date;
 
               if (dateValue) {
@@ -782,21 +763,16 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             } catch (error) {
             }
 
-            // Determine transaction type and description
             const transactionType = transaction.type || 'transaction';
             const isContribution = transactionType === 'contribution' || transactionType === 'deposit' || transaction.description?.toLowerCase().includes('contribution');
             const transactionDescription = transaction.description || (isContribution ? 'Chama Contribution' : 'Transaction') || transactionType;
 
-            // Debug: log transaction fields to understand date structure
-            if (contributionDate === 'Unknown Date') {
-            }
-
             return (
               <View key={transaction.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                <Text style={{ flex: 2, fontSize: 8, color: colors.text }} numberOfLines={1}>{transactionDescription}</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: colors.textSecondary, textAlign: 'center' }}>{contributionDate}</Text>
-                <Text style={{ flex: 1, fontSize: 8, fontWeight: typography.fontWeight.medium, color: isContribution ? colors.success : colors.primary, textAlign: 'right' }}>
-                  {isContribution ? '+' : '-'}{formatCurrency(transaction.amount || 0)}
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{transactionDescription}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{contributionDate}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.medium, color: isContribution ? colors.success : colors.primary, textAlign: 'right' }}>
+                  {formatCurrency(transaction.amount)}
                 </Text>
               </View>
             );
@@ -852,25 +828,23 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           <View>
             {/* Table Header */}
             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-              <Text style={{ flex: 2, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
-              <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
-              <Text style={{ flex: 1, fontSize: 9, fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+              <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
+              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
+              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
             </View>
 
             {/* Table Rows */}
             {recentVotedPolls.map((poll, index) => {
-              // Check if user has voted on this poll
               const hasUserVoted = poll.userVoted || poll.user_has_voted;
               const pollStatus = poll.status || 'active';
 
-              // Determine if poll is still active - any poll with a past end date is closed
               const endDate = poll.endDate || poll.end_date || poll.endsAt;
               const hasEnded = endDate && new Date(endDate) < new Date();
               const isActive = pollStatus === 'active' && !hasEnded;
 
               return (
                 <View key={poll.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                  <Text style={{ flex: 2, fontSize: 8, color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
+                  <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
                   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <Ionicons
                       name={hasUserVoted ? "checkmark-circle" : "close-circle"}
@@ -878,7 +852,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                       color={hasUserVoted ? colors.success : colors.error}
                     />
                   </View>
-                  <Text style={{ flex: 1, fontSize: 8, color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
+                  <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
                     {isActive ? 'Active' : 'Closed'}
                   </Text>
                 </View>
@@ -891,9 +865,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                 style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
                 onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}
               >
-                <Text style={{ flex: 2, fontSize: 8, color: colors.primary }} numberOfLines={1}>New Polls Available</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: colors.primary, textAlign: 'center' }}>{newPollsCount}</Text>
-                <Text style={{ flex: 1, fontSize: 8, color: colors.primary, textAlign: 'center' }}>New</Text>
+                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.primary }} numberOfLines={1}>New Polls Available</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.primary, textAlign: 'center' }}>{newPollsCount}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.primary, textAlign: 'center' }}>New</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1158,114 +1132,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     );
   };
 
-  // Render enlarged avatar modal
-  const renderAvatarModal = () => {
-    if (!selectedAvatarMember) return null;
-
-    const user = selectedAvatarMember?.user || {};
-    const firstName = user?.first_name || selectedAvatarMember?.first_name || '';
-    const lastName = user?.last_name || selectedAvatarMember?.last_name || '';
-    const fullName = `${firstName} ${lastName}`.trim() || 'Unknown Member';
-    const email = user?.email || selectedAvatarMember?.email;
-    const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || selectedAvatarMember?.avatar || selectedAvatarMember?.avatarUrl;
-    const initials = (firstName?.[0] || '') + (lastName?.[0] || '');
-
-    const screenWidth = Dimensions.get('window').width;
-    const avatarSize = screenWidth * 0.75; // Increased from 60% to 75% of screen width
-
-    let avatarSource = null;
-    let isInitials = false;
-
-    // Determine avatar source
-    if (avatarUrl && avatarUrl.trim()) {
-      let fullAvatarUrl;
-      if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
-        fullAvatarUrl = avatarUrl;
-      } else {
-        fullAvatarUrl = `${ApiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
-      }
-      avatarSource = { uri: fullAvatarUrl };
-    } else if (email && email.trim()) {
-      const generatedAvatarUrl = getAvatarFromEmail(email, Math.round(avatarSize));
-      avatarSource = { uri: generatedAvatarUrl };
-    } else {
-      isInitials = true;
-    }
-
-    return (
-      <Modal
-        visible={showAvatarModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeAvatarModal}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={closeAvatarModal}
-        >
-          <View style={styles.modalContent}>
-            <Card style={styles.avatarCard}>
-              {/* Close button positioned absolutely */}
-              <TouchableOpacity onPress={closeAvatarModal} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-
-              {/* Frameless Avatar - touches top, left, and right edges */}
-              <View style={styles.framelessAvatarContainer}>
-                {isInitials ? (
-                  <View style={[
-                    styles.framelessAvatar,
-                    {
-                      backgroundColor: colors.primary,
-                      width: '100%',
-                      height: avatarSize * 1.2,
-                    }
-                  ]}>
-                    <Text style={[
-                      styles.enlargedAvatarText,
-                      {
-                        color: colors.white,
-                        fontSize: avatarSize * 0.2,
-                      }
-                    ]}>
-                      {initials || '?'}
-                    </Text>
-                  </View>
-                ) : (
-                  <Image
-                    source={avatarSource}
-                    style={[
-                      styles.framelessAvatar,
-                      {
-                        width: '100%',
-                        height: avatarSize * 1.2,
-                      }
-                    ]}
-                    onError={(error) => {
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Name and Email in lower section */}
-              <View style={styles.avatarInfoSection}>
-                <Text style={[styles.avatarModalName, { color: colors.text }]}>
-                  {fullName}
-                </Text>
-                {email && (
-                  <Text style={[styles.avatarModalEmail, { color: colors.textSecondary }]}>
-                    {maskEmail(email)}
-                  </Text>
-                )}
-              </View>
-            </Card>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    );
-  };
-
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -1325,14 +1191,25 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           {renderActivePolls()}
         </SmartResponsiveLayout>
 
-        {/* Always single column - Rules and Actions */}
-        {renderChamaRules()}
-        {renderGroupChat()}
-        {renderMembershipActions()}
+        {isLargeScreen ? (
+          <View style={styles.desktopBottomRow}>
+            <View style={styles.desktopRulesColumn}>
+              {renderChamaRules()}
+            </View>
+            <View style={styles.desktopSideColumn}>
+              {renderGroupChat()}
+              {renderMembershipActions()}
+            </View>
+          </View>
+        ) : (
+          <>
+            {renderChamaRules()}
+            {renderGroupChat()}
+            {renderMembershipActions()}
+          </>
+        )}
       </ScrollView>
 
-      {/* Avatar Modal */}
-      {renderAvatarModal()}
     </SafeAreaView>
   );
 };

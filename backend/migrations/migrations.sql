@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     type TEXT NOT NULL,
     data TEXT, -- JSON data
     is_read BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -21,12 +21,12 @@ ALTER TABLE notifications ADD COLUMN category TEXT NULL;
 ALTER TABLE notifications ADD COLUMN reference_type TEXT NULL;
 ALTER TABLE notifications ADD COLUMN reference_id INTEGER NULL;
 ALTER TABLE notifications ADD COLUMN status TEXT DEFAULT 'pending';
-ALTER TABLE notifications ADD COLUMN scheduled_for DATETIME DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE notifications ADD COLUMN sent_at DATETIME NULL;
-ALTER TABLE notifications ADD COLUMN delivered_at DATETIME NULL;
+ALTER TABLE notifications ADD COLUMN scheduled_for TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE notifications ADD COLUMN sent_at TIMESTAMP NULL;
+ALTER TABLE notifications ADD COLUMN delivered_at TIMESTAMP NULL;
 ALTER TABLE notifications ADD COLUMN sound_played INTEGER DEFAULT 0;
 ALTER TABLE notifications ADD COLUMN retry_count INTEGER DEFAULT 0;
-ALTER TABLE notifications ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE notifications ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Columns for old notification service (internal/services/notification_service.go)
 ALTER TABLE notifications ADD COLUMN is_push INTEGER DEFAULT 0;
@@ -35,7 +35,7 @@ ALTER TABLE notifications ADD COLUMN is_sms INTEGER DEFAULT 0;
 
 -- Create additional tables for complete notification system
 CREATE TABLE IF NOT EXISTS user_notification_preferences (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL UNIQUE,
     notification_sound_id INTEGER NULL,
     sound_enabled INTEGER DEFAULT 1,
@@ -52,26 +52,26 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
     timezone TEXT DEFAULT 'Africa/Nairobi',
     notification_frequency TEXT DEFAULT 'immediate',
     priority_only_during_quiet INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS notification_sounds (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     file_path TEXT NOT NULL,
     file_size INTEGER NOT NULL,
     duration_seconds REAL DEFAULT 0,
     is_default INTEGER DEFAULT 0,
     is_active INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS notification_templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     type TEXT NOT NULL,
     category TEXT NOT NULL,
@@ -82,43 +82,72 @@ CREATE TABLE IF NOT EXISTS notification_templates (
     requires_vibration INTEGER DEFAULT 0,
     variables TEXT NULL,
     is_active INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS notification_delivery_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     notification_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     delivery_method TEXT NOT NULL,
     status TEXT NOT NULL,
-    attempted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    delivered_at DATETIME NULL,
+    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    delivered_at TIMESTAMP NULL,
     error_message TEXT NULL,
     retry_count INTEGER DEFAULT 0,
     device_info TEXT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Insert default notification sounds
-INSERT OR IGNORE INTO notification_sounds (name, file_path, file_size, duration_seconds, is_default, is_active) VALUES
-('Alert', '/notification_sound/alert.mp3', 102400, 2.5, 0, 1),
-('Bell', '/notification_sound/bell.mp3', 153600, 3.2, 1, 1),
-('Chime', '/notification_sound/chime.mp3', 204800, 4.1, 0, 1),
-('Ring', '/notification_sound/ring.mp3', 256000, 5.0, 0, 1),
-('Vibrate', '/notification_sound/vibrate.mp3', 51200, 1.8, 0, 1);
+INSERT INTO notification_sounds (name, file_path, file_size, duration_seconds, is_default, is_active) 
+SELECT 'Alert', '/notification_sound/alert.mp3', 102400, 2.5, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_sounds WHERE name = 'Alert');
+
+INSERT INTO notification_sounds (name, file_path, file_size, duration_seconds, is_default, is_active) 
+SELECT 'Bell', '/notification_sound/bell.mp3', 153600, 3.2, 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_sounds WHERE name = 'Bell');
+
+INSERT INTO notification_sounds (name, file_path, file_size, duration_seconds, is_default, is_active) 
+SELECT 'Chime', '/notification_sound/chime.mp3', 204800, 4.1, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_sounds WHERE name = 'Chime');
+
+INSERT INTO notification_sounds (name, file_path, file_size, duration_seconds, is_default, is_active) 
+SELECT 'Ring', '/notification_sound/ring.mp3', 256000, 5.0, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_sounds WHERE name = 'Ring');
+
+INSERT INTO notification_sounds (name, file_path, file_size, duration_seconds, is_default, is_active) 
+SELECT 'Vibrate', '/notification_sound/vibrate.mp3', 51200, 1.8, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_sounds WHERE name = 'Vibrate');
 
 -- Insert default notification templates
-INSERT OR IGNORE INTO notification_templates (name, type, category, title_template, message_template, default_priority, requires_sound, requires_vibration) VALUES
-('chama_invitation', 'chama', 'invitation', 'Chama Invitation', 'You have been invited to join {chamaName} chama', 'normal', 1, 1),
-('chama_member_joined', 'chama', 'member', 'New Member Joined', '{memberName} has joined {chamaName}', 'normal', 1, 0),
-('contribution_received', 'transaction', 'contribution', 'Contribution Received', 'Your contribution of KES {amount} has been received', 'normal', 1, 1),
-('loan_application', 'transaction', 'loan', 'Loan Application Submitted', 'Your loan application for KES {amount} has been submitted', 'high', 1, 1),
-('meeting_reminder', 'reminder', 'meeting', 'Meeting Reminder', 'You have a meeting scheduled for {meetingTime}', 'high', 1, 1),
-('system_maintenance', 'system', 'maintenance', 'System Maintenance', 'Scheduled maintenance will begin at {startTime}', 'normal', 0, 0);
+INSERT INTO notification_templates (name, type, category, title_template, message_template, default_priority, requires_sound, requires_vibration) 
+SELECT 'chama_invitation', 'chama', 'invitation', 'Chama Invitation', 'You have been invited to join {chamaName} chama', 'normal', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_templates WHERE name = 'chama_invitation');
+
+INSERT INTO notification_templates (name, type, category, title_template, message_template, default_priority, requires_sound, requires_vibration) 
+SELECT 'chama_member_joined', 'chama', 'member', 'New Member Joined', '{memberName} has joined {chamaName}', 'normal', 1, 0
+WHERE NOT EXISTS (SELECT 1 FROM notification_templates WHERE name = 'chama_member_joined');
+
+INSERT INTO notification_templates (name, type, category, title_template, message_template, default_priority, requires_sound, requires_vibration) 
+SELECT 'contribution_received', 'transaction', 'contribution', 'Contribution Received', 'Your contribution of KES {amount} has been received', 'normal', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_templates WHERE name = 'contribution_received');
+
+INSERT INTO notification_templates (name, type, category, title_template, message_template, default_priority, requires_sound, requires_vibration) 
+SELECT 'loan_application', 'transaction', 'loan', 'Loan Application Submitted', 'Your loan application for KES {amount} has been submitted', 'high', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_templates WHERE name = 'loan_application');
+
+INSERT INTO notification_templates (name, type, category, title_template, message_template, default_priority, requires_sound, requires_vibration) 
+SELECT 'meeting_reminder', 'reminder', 'meeting', 'Meeting Reminder', 'You have a meeting scheduled for {meetingTime}', 'high', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM notification_templates WHERE name = 'meeting_reminder');
+
+INSERT INTO notification_templates (name, type, category, title_template, message_template, default_priority, requires_sound, requires_vibration) 
+SELECT 'system_maintenance', 'system', 'maintenance', 'System Maintenance', 'Scheduled maintenance will begin at {startTime}', 'normal', 0, 0
+WHERE NOT EXISTS (SELECT 1 FROM notification_templates WHERE name = 'system_maintenance');
 
 
 -- Migration: Add name column to shares table (2025-09-25)
@@ -141,7 +170,7 @@ CREATE TABLE IF NOT EXISTS e2ee_key_bundles (
     pre_key_signature TEXT NOT NULL,
     one_time_pre_keys TEXT NOT NULL, -- JSON array
     registration_id INTEGER NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS e2ee_sessions (
@@ -152,8 +181,8 @@ CREATE TABLE IF NOT EXISTS e2ee_sessions (
     sending_chain TEXT NOT NULL,
     receiving_chain TEXT NOT NULL,
     message_number INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_used DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_a_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_b_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -178,12 +207,12 @@ CREATE TABLE IF NOT EXISTS reminders (
     title TEXT NOT NULL,
     description TEXT NULL,
     reminder_type TEXT NOT NULL CHECK (reminder_type IN ('once', 'daily', 'weekly', 'monthly')),
-    scheduled_at DATETIME NOT NULL,
+    scheduled_at TIMESTAMP NOT NULL,
     is_enabled BOOLEAN DEFAULT TRUE,
     is_completed BOOLEAN DEFAULT FALSE,
     notification_sent BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 

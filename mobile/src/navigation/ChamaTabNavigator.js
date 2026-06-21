@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { ChamaProvider } from '../context/ChamaContext';
@@ -8,7 +9,7 @@ import { getThemeColors, spacing, typography, borderRadius } from '../utils/them
 
 // Import Chama Screens
 import ChamaDashboard from '../screens/chama/dashboard/ChamaDashboard';
-import ChamaMembersScreen from '../screens/chama/meeting/ChamaMembersScreen';
+import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
 import ContributeScreen from '../screens/chama/contribute/ContributeScreen';
 import ChamaLoansScreen from '../screens/chama/loans/ChamaLoansScreen';
 import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
@@ -17,10 +18,10 @@ import MerryGoRoundScreen from '../screens/chama/merry-go-round/MerryGoRoundScre
 import MerryGoRoundRulesScreen from '../screens/chama/merry-go-round/MerryGoRoundRulesScreen';
 import WelfareScreen from '../screens/chama/welfare/WelfareScreen';
 import ChamaSettings from '../screens/chama/settings/ChamaSettings';
-import LoanApplication from '../screens/chama/loans/LoanApplication';
+import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import CreateMeeting from '../screens/chama/meeting/CreateMeeting';
 import CreateMerryGoRound from '../screens/chama/merry-go-round/CreateMerryGoRound';
-import InviteMembers from '../screens/chama/chamamember/InviteMembers';
+import InviteMembers from '../screens/chama/meeting/InviteMembers';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
 
@@ -36,7 +37,7 @@ import MaryGoRoundDetails from '../screens/chama/merry-go-round/MaryGoRoundDetai
 import WelfareDetails from '../screens/chama/welfare/WelfareDetails';
 import LoanDetails from '../screens/chama/loans/LoanDetails';
 import ViewMember from '../screens/chama/chamamember/ViewMember';
-import PhysicalMeetingScreen from '../screens/chama/chamamember/PhysicalMeetingScreen';
+import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
 import JitsiMeetScreen from '../screens/chama/meeting/JitsiMeetScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
 import WelfareContributionsScreen from '../screens/chama/welfare/WelfareContributionsScreen';
@@ -48,7 +49,7 @@ import SettingsScreen from '../screens/user/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/user/settings/SecuritySettingsScreen';
 import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
 import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryScreen';
-import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
+import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
 import ChangePasswordScreen from '../screens/security/ChangePasswordScreen';
 import LoginHistoryScreen from '../screens/security/LoginHistoryScreen';
@@ -68,13 +69,14 @@ const Tab = createBottomTabNavigator();
 function ChamaTabBar({ state, descriptors, navigation }) {
   const { theme, switchToUserDashboard, selectedChama } = useApp();
   const colors = getThemeColors(theme);
+  const insets = useSafeAreaInsets();
 
   // Smart shortcuts for chama dashboard - exactly 6 icons
   const quickShortcuts = [
     { name: 'Home', label: 'Home', icon: 'home', onPress: () => navigation.navigate('Home') },
     { name: 'Members', label: 'Members', icon: 'people', onPress: () => navigation.navigate('ChamaMembersScreen') },
-    { name: 'Contribute', label: 'Contribute', icon: 'wallet', onPress: () => navigation.navigate('ContributeScreen') },
-    { name: 'Contributions', label: 'Contributions', icon: 'heart', onPress: () => navigation.navigate('ContributionsScreen') },
+    { name: 'Contribute', label: 'Pay', icon: 'wallet', onPress: () => navigation.navigate('ContributeScreen') },
+    { name: 'Contributions', label: 'Welfare', icon: 'heart', onPress: () => navigation.navigate('ContributionsScreen') },
     { name: 'Loans', label: 'Loans', icon: 'card', onPress: () => navigation.navigate('ChamaLoansScreen') },
     { name: 'Exit', label: 'Exit', icon: 'exit', onPress: () => switchToUserDashboard() },
   ];
@@ -97,7 +99,7 @@ function ChamaTabBar({ state, descriptors, navigation }) {
   const currentIndex = getCurrentIndex();
 
   return (
-    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 70 + insets.bottom, paddingBottom: spacing.sm + insets.bottom }]}>
       {/* Smart Footer Icons - Always show exactly 6 */}
       {quickShortcuts.map((item, index) => {
         const isExit = item.name === 'Exit';
@@ -293,8 +295,8 @@ function ChamaTabNavigator({ route }) {
         initialParams={{ chamaId, chamaName, chama }}
       />
       <Tab.Screen
-        name="LoanApplication"
-        component={LoanApplication}
+        name="ApplyForLoanScreen"
+        component={ApplyForLoanScreen}
         options={{
           title: 'Apply for Loan',
           tabBarButton: () => null, // Hide from tab bar

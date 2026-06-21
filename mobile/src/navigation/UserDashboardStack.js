@@ -14,7 +14,7 @@ import ArticleReaderScreen from '../screens/user/learning/ArticleReaderScreen';
 import CourseNavigationScreen from '../screens/user/learning/CourseNavigationScreen';
 import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
-import PhysicalMeetingScreen from '../screens/chama/chamamember/PhysicalMeetingScreen';
+import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
 import JitsiMeetScreen from '../screens/chama/meeting/JitsiMeetScreen';
 
 // Other User Screens
@@ -37,13 +37,15 @@ import NotificationsScreen from '../screens/user/notification/NotificationsScree
 import ReminderScreen from '../screens/user/reminders/ReminderScreen';
 
 // Chama Screens
-import InvitationsScreen from '../screens/chama/chamamember/InvitationsScreen';
+import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import MyChamasScreen from '../screens/user/chamaandgroups/MyChamasScreen';
 import CreateChamaScreen from '../screens/user/chamaandgroups/CreateChamaScreen';
 import ChamaDetailsScreen from '../screens/user/chamaandgroups/ChamaDetailsScreen';
-import ChamaMembersScreen from '../screens/chama/meeting/ChamaMembersScreen';
+import ChamaTransactionsScreen from '../screens/chama/transactions/ChamaTransactionsScreen';
+import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
+import ViewMember from '../screens/chama/chamamember/ViewMember';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
-import LoanApplication from '../screens/chama/loans/LoanApplication';
+import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
@@ -61,6 +63,7 @@ import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryS
 // Demo Screens
 
 import { useApp } from '../context/AppContext';
+import { ChamaProvider } from '../context/ChamaContext';
 import { getThemeColors } from '../utils/theme';
 
 // Import the extracted UserTabBar and HOC
@@ -217,10 +220,31 @@ function UserTabNavigator() {
         }}
       />
       <Tab.Screen
+        name="ChamaTransactionsScreen"
+        component={(props) => (
+          <ChamaProvider chamaId={props.route.params?.chamaId} chama={props.route.params?.chama}>
+            <ChamaTransactionsScreen {...props} />
+          </ChamaProvider>
+        )}
+        options={{
+          title: 'Transactions',
+          tabBarButton: () => null,
+        }}
+        initialParams={{ fromUserDashboard: true }}
+      />
+      <Tab.Screen
         name="ChamaMembersScreen"
         component={ChamaMembersScreen}
         options={{
           title: 'Chama Members',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+      />
+      <Tab.Screen
+        name="ViewMember"
+        component={ViewMember}
+        options={{
+          title: 'Member Details',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />
@@ -233,11 +257,11 @@ function UserTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="LoanApplication"
-        component={LoanApplication}
+        name="ApplyForLoanScreen"
+        component={ApplyForLoanScreen}
         options={{
-          title: 'Loan Application',
-          tabBarButton: () => null, // Hide from tab bar
+          title: 'Apply for Loan',
+          tabBarButton: () => null,
         }}
       />
 

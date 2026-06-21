@@ -140,12 +140,12 @@ func UpdatePrivacySettings(c *gin.Context) {
 	// Update or insert privacy settings
 	query := `
 		INSERT INTO user_privacy_settings (user_id, profile_visibility, transaction_privacy, location_sharing, updated_at)
-		VALUES ($1, $2, $3, $4, datetime('now'))
+		VALUES ($1, $2, $3, $4, NOW())
 		ON CONFLICT(user_id) DO UPDATE SET
 		profile_visibility = excluded.profile_visibility,
 		transaction_privacy = excluded.transaction_privacy,
 		location_sharing = excluded.location_sharing,
-		updated_at = datetime('now')
+		updated_at = NOW()
 	`
 
 	_, err := db.(*sql.DB).Exec(query, userID, settings.ProfileVisibility, settings.TransactionPrivacy, settings.LocationSharing)
@@ -280,7 +280,7 @@ func UpdateSecuritySettings(c *gin.Context) {
 	query := `
 		INSERT INTO user_security_settings (user_id, biometric_login, two_factor_auth, auto_logout, 
 		                                   login_notifications, suspicious_activity_alerts, device_management, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, datetime('now'))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
 		ON CONFLICT(user_id) DO UPDATE SET
 		biometric_login = excluded.biometric_login,
 		two_factor_auth = excluded.two_factor_auth,
@@ -288,7 +288,7 @@ func UpdateSecuritySettings(c *gin.Context) {
 		login_notifications = excluded.login_notifications,
 		suspicious_activity_alerts = excluded.suspicious_activity_alerts,
 		device_management = excluded.device_management,
-		updated_at = datetime('now')
+		updated_at = NOW()
 	`
 
 	_, err := db.(*sql.DB).Exec(query, userID, settings.BiometricLogin, settings.TwoFactorAuth, 
@@ -416,12 +416,12 @@ func UpdateUserPreferences(c *gin.Context) {
 	// Update or insert user preferences
 	query := `
 		INSERT INTO user_preferences (user_id, language, currency, date_format, updated_at)
-		VALUES ($1, $2, $3, $4, datetime('now'))
+		VALUES ($1, $2, $3, $4, NOW())
 		ON CONFLICT(user_id) DO UPDATE SET
 		language = excluded.language,
 		currency = excluded.currency,
 		date_format = excluded.date_format,
-		updated_at = datetime('now')
+		updated_at = NOW()
 	`
 
 	_, err := db.(*sql.DB).Exec(query, userID, preferences.Language, preferences.Currency, preferences.DateFormat)
@@ -449,8 +449,8 @@ func ensurePrivacySettingsTable(db *sql.DB) error {
 			profile_visibility TEXT NOT NULL DEFAULT 'chama_members',
 			transaction_privacy BOOLEAN NOT NULL DEFAULT true,
 			location_sharing BOOLEAN NOT NULL DEFAULT false,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 		)
 	`
@@ -469,8 +469,8 @@ func ensureSecuritySettingsTable(db *sql.DB) error {
 			login_notifications BOOLEAN NOT NULL DEFAULT true,
 			suspicious_activity_alerts BOOLEAN NOT NULL DEFAULT true,
 			device_management BOOLEAN NOT NULL DEFAULT true,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 		)
 	`
@@ -486,8 +486,8 @@ func ensureUserPreferencesTable(db *sql.DB) error {
 			language TEXT NOT NULL DEFAULT 'en',
 			currency TEXT NOT NULL DEFAULT 'KES',
 			date_format TEXT NOT NULL DEFAULT 'dd/mm/yyyy',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 		)
 	`

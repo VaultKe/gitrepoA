@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
@@ -13,6 +14,7 @@ import { getThemeColors, spacing, typography, borderRadius } from '../../utils/t
 const UserTabBar = ({ state, descriptors, navigation: navProp }) => {
   const { theme, switchToAdminDashboard, switchToChamaDashboard, user } = useApp();
   const colors = getThemeColors(theme);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const userRole = user?.role || 'user';
 
@@ -127,7 +129,7 @@ const UserTabBar = ({ state, descriptors, navigation: navProp }) => {
   const currentIndex = getCurrentIndex();
 
   return (
-    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border, height: 70 + insets.bottom, paddingBottom: spacing.sm + insets.bottom }]}>
       {items.map((item, index) => {
         const routeName = item.name;
         const label = item.label || (descriptors?.[item.key]?.options?.tabBarLabel) || routeName;

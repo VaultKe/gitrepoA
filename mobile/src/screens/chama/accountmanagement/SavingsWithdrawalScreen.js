@@ -66,11 +66,11 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
     color: colors.text,
-    fontSize: 9,
+    fontSize: 12,
     textAlign: 'center',
   },
   tableCellText: {
-    fontSize: 8.5,
+    fontSize: 12,
     color: colors.text,
     textAlign: 'center',
   },
@@ -750,81 +750,83 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
 
         {/* Table Container */}
         <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-          {/* Table Header */}
-          <View style={tableStyles.tableHeader}>
-            <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-              <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member & Account</Text>
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
+            {/* Table Header */}
+            <View style={tableStyles.tableHeader}>
+              <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+                <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member & Account</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                <Text style={tableStyles.tableHeaderText}>Balance</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+                <Text style={tableStyles.tableHeaderText}>Last Activity</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                <Text style={tableStyles.tableHeaderText}>Status</Text>
+              </View>
+              <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
+                <Text style={tableStyles.tableHeaderText}>Actions</Text>
+              </View>
             </View>
-            <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-              <Text style={tableStyles.tableHeaderText}>Balance</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-              <Text style={tableStyles.tableHeaderText}>Last Activity</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-              <Text style={tableStyles.tableHeaderText}>Status</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-              <Text style={tableStyles.tableHeaderText}>Actions</Text>
-            </View>
-          </View>
 
-          {/* Table Body */}
-          <FlatList
-            data={savingsAccounts}
-            renderItem={renderTableRow}
-            keyExtractor={(item) => item.id?.toString()}
-            style={{ flex: 1, zIndex: 1 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            ListEmptyComponent={!loading && renderEmptyState()}
-          />
+            {/* Table Body */}
+            <FlatList
+              data={savingsAccounts}
+              renderItem={renderTableRow}
+              keyExtractor={(item) => item.id?.toString()}
+              style={{ flex: 1, zIndex: 1 }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                />
+              }
+              ListEmptyComponent={!loading && renderEmptyState()}
+            />
 
-          {/* Pagination */}
-          {totalItems > pageSize && (
-            <View style={styles.pagination}>
-              <TouchableOpacity
-                style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
-                onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? colors.textTertiary : colors.primary} />
-                <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>Previous</Text>
-              </TouchableOpacity>
+            {/* Pagination */}
+            {totalItems > pageSize && (
+              <View style={[styles.pagination, { borderTopColor: colors.border }]}>
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+                  onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  <Ionicons name="chevron-back" size={16} color={currentPage === 1 ? colors.textTertiary : colors.primary} />
+                  <Text style={[styles.paginationText, currentPage === 1 && styles.paginationTextDisabled]}>Previous</Text>
+                </TouchableOpacity>
 
-              <Text style={styles.paginationInfo}>
-                Page {currentPage} of {totalPages} ({totalItems} total)
-              </Text>
+                <Text style={[styles.paginationInfo, { color: colors.text }]}>
+                  Page {currentPage} of {totalPages} ({totalItems} total)
+                </Text>
 
-              <TouchableOpacity
-                style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
-                onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                <Text style={[styles.paginationText, currentPage === totalPages && styles.paginationTextDisabled]}>Next</Text>
-                <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? colors.textTertiary : colors.primary} />
-              </TouchableOpacity>
-            </View>
-          )}
+                <TouchableOpacity
+                  style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
+                  onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  <Text style={[styles.paginationText, currentPage === totalPages && styles.paginationTextDisabled]}>Next</Text>
+                  <Ionicons name="chevron-forward" size={16} color={currentPage === totalPages ? colors.textTertiary : colors.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
 
-          {/* Bulk Actions */}
-          {canWithdrawSavings() && savingsAccounts.filter(account => account.status === 'eligible').length > 0 && (
-            <View style={styles.bulkActions}>
-              <Button
-                title={`Bulk Withdraw (${savingsAccounts.filter(account => account.status === 'eligible').length} eligible accounts)`}
-                onPress={handleBulkWithdraw}
-                style={{ backgroundColor: colors.warning }}
-                icon={<Ionicons name="cash" size={16} color={colors.white} />}
-              />
-            </View>
-          )}
+            {/* Bulk Actions */}
+            {canWithdrawSavings() && savingsAccounts.filter(account => account.status === 'eligible').length > 0 && (
+              <View style={[styles.bulkActions, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                <Button
+                  title={`Bulk Withdraw (${savingsAccounts.filter(account => account.status === 'eligible').length} eligible accounts)`}
+                  onPress={handleBulkWithdraw}
+                  style={{ backgroundColor: colors.warning }}
+                  icon={<Ionicons name="cash" size={16} color={colors.white} />}
+                />
+              </View>
+            )}
+          </Card>
         </View>
 
         {loading && <LoadingSpinner />}

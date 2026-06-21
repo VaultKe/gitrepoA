@@ -157,8 +157,8 @@ func InitiateMpesaSTK(c *gin.Context) {
 	}
 
 	// Update transaction with checkout request ID in both fields for better lookup
-	updateTransactionReference(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
-	updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
+  updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
+
 
 	// Return success response
 	c.JSON(http.StatusOK, gin.H{
