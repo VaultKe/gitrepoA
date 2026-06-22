@@ -190,13 +190,14 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 			   latitude, longitude, contribution_amount, contribution_frequency,
 			   max_members, current_members, total_funds, is_public, requires_approval,
 			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
-			   meeting_time, permissions, created_by, created_at, updated_at
+			   meeting_time, permissions, created_by, created_at, updated_at, chat_room_id
 		FROM chamas WHERE id = $1
 	`
 
 	chama := &models.Chama{}
 	var rulesJSON, permissionsJSON string
 	var meetingFreq, meetingTime *string
+	var chatRoomID *string
 	var meetingDayOfWeek, meetingDayOfMonth *int
 
 	err := s.db.QueryRow(query, chamaID).Scan(
@@ -205,8 +206,9 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 		&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
 		&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
 		&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-		&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+		&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt, &chatRoomID,
 	)
+	chama.ChatRoomID = chatRoomID
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("chama not found")

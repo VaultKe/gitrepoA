@@ -2731,10 +2731,10 @@ func CreateChamaChatRoom(c *gin.Context) {
 		return
 	}
 
-	if userRole != "chairperson" && userRole != "treasurer" {
+	if userRole != "chairperson" && userRole != "treasurer" && userRole != "secretary" {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
-			"error":   "Only chairperson and treasurer can create chat room",
+			"error":   "Only chairperson, secretary, and treasurer can create chat room",
 		})
 		return
 	}
@@ -2743,6 +2743,8 @@ func CreateChamaChatRoom(c *gin.Context) {
 	chatService := services.NewChatService(db.(*sql.DB))
 	existingRoom, _ := chatService.GetChatRoomByChamaID(chamaID)
 	if existingRoom != nil {
+		updateQuery := `UPDATE chamas SET chat_room_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
+		_, _ = db.(*sql.DB).Exec(updateQuery, existingRoom.ID, chamaID)
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "Chat room already exists for this chama",
@@ -2762,6 +2764,9 @@ func CreateChamaChatRoom(c *gin.Context) {
 		})
 		return
 	}
+
+	updateQuery := `UPDATE chamas SET chat_room_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
+	_, _ = db.(*sql.DB).Exec(updateQuery, chatRoom.ID, chamaID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

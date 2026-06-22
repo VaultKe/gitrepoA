@@ -373,14 +373,14 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       return;
     }
 
-    const canCreateChatRoom = ['chairperson', 'treasurer'].includes(userMembership?.role?.toLowerCase());
+    const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
     console.log('[ChamaDetails] canCreateChatRoom:', canCreateChatRoom, 'role:', userMembership?.role);
     if (!canCreateChatRoom) {
       console.log('[ChamaDetails] Create blocked: insufficient permissions');
-      Alert.alert(
-        'Access Denied',
-        'Only chairperson and treasurer can create a chat room for this group.'
-      );
+        Alert.alert(
+          'Access Denied',
+          'Only chairperson, secretary, and treasurer can create a chat room for this group.'
+        );
       return;
     }
 
@@ -1128,7 +1128,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
   const renderGroupChat = () => {
     const existingChatRoomId = getExistingChatRoomId();
-    const canCreateChatRoom = ['chairperson', 'treasurer'].includes(userMembership?.role?.toLowerCase());
+    const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
     const groupLabel = getGroupLabel();
 
     return (
@@ -1143,42 +1143,45 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           </Text>
         ) : (
           <>
-            {!existingChatRoomId && !canCreateChatRoom && (
-              <Text style={[styles.emptyText, { color: colors.textSecondary, paddingVertical: spacing.md }]}>
-                Only chairperson and treasurer can create a chat room for this {groupLabel.toLowerCase()}.
-              </Text>
-            )}
-
-            <Button
-              title={
-                existingChatRoomId
-                  ? 'Open Group Chat'
-                  : chatRoomLoading
-                    ? 'Creating...'
-                    : `Create Chat Room for ${groupLabel}`
-              }
-              onPress={handleCreateChatRoom}
-              disabled={!userMembership || (!existingChatRoomId && !canCreateChatRoom) || chatRoomLoading}
-              loading={chatRoomLoading}
-              icon={
-                <Ionicons
-                  name={existingChatRoomId ? 'chatbubbles' : 'add-circle'}
-                  size={20}
-                  color={colors.white}
-                />
-              }
-              style={[
-                styles.chatButton,
-                { backgroundColor: colors.success, borderColor: colors.success }
-              ]}
-              textStyle={{ color: colors.white }}
-            />
-
-            {!existingChatRoomId && (
-              <Text style={[styles.sectionDescription, { color: colors.textSecondary, marginTop: spacing.sm }]}>
-                Creates a chat room only when one does not already exist.
-              </Text>
-            )}
+            {existingChatRoomId ? (
+              <Button
+                title="Open Group Chat"
+                onPress={() => navigateToChatRoom(existingChatRoomId)}
+                disabled={chatRoomLoading}
+                loading={chatRoomLoading}
+                icon={
+                  <Ionicons
+                    name="chatbubbles"
+                    size={20}
+                    color={colors.white}
+                  />
+                }
+                style={[
+                  styles.chatButton,
+                  { backgroundColor: colors.success, borderColor: colors.success }
+                ]}
+                textStyle={{ color: colors.white }}
+              />
+            ) : canCreateChatRoom ? (
+              <Button
+                title={`Create Chat Room for ${groupLabel}`}
+                onPress={handleCreateChatRoom}
+                disabled={chatRoomLoading}
+                loading={chatRoomLoading}
+                icon={
+                  <Ionicons
+                    name="add-circle"
+                    size={20}
+                    color={colors.white}
+                  />
+                }
+                style={[
+                  styles.chatButton,
+                  { backgroundColor: colors.success, borderColor: colors.success }
+                ]}
+                textStyle={{ color: colors.white }}
+              />
+            ) : null}
           </>
         )}
       </Card>

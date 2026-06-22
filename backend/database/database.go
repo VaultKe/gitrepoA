@@ -99,6 +99,8 @@ func Migrate(db *sql.DB) error {
 		{"addRecipientIDToTransactions", addRecipientIDToTransactions},
 		{"addDividendTypeColumn", addDividendTypeColumn},
 		{"addLoanTypeIdToLoans", addLoanTypeIdColumn},
+		{"addChatRoomIdToChamas", addChatRoomIdToChamasTable},
+		{"backfillChatRoomIds", backfillChatRoomIds},
 	}
 
 	for _, m := range customMigrations {
@@ -480,6 +482,7 @@ CREATE TABLE IF NOT EXISTS chamas (
     created_by TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    chat_room_id TEXT,
     FOREIGN KEY (created_by) REFERENCES users(id)
 );`
 
@@ -1348,6 +1351,59 @@ func addCategoryColumnToChamasTable(db *sql.DB) error {
 		}
 	}
 
+	return nil
+}
+
+// addChatRoomIdToChamasTable adds chat_room_id column to chamas table if it doesn't exist
+func addChatRoomIdToChamasTable(db *sql.DB) error {
+	var columnExists bool
+	checkQuery := `
+		SELECT COUNT(*) > 0
+		FROM information_schema.columns
+		WHERE table_name = 'chamas'
+		AND column_name = 'chat_room_id'
+	`
+	err := db.QueryRow(checkQuery).Scan(&columnExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if chat_room_id column exists: %w", err)
+	}
+
+	if !columnExists {
+		log.Println("Adding chat_room_id column to chamas table")
+		addColumnQuery := `
+			ALTER TABLE chamas ADD COLUMN chat_room_id TEXT
+		`
+		_, err = db.Exec(addColumnQuery)
+		if err != nil {
+			return fmt.Errorf("failed to add chat_room_id column: %w", err)
+		}
+		log.Println("Successfully added chat_room_id column to chamas table")
+	} else {
+		log.Println("Column chat_room_id already exists in chamas table")
+	}
+
+	return nil
+}
+
+// backfillChatRoomIds ensures chamas.chat_room_id is populated for any chama that already has a chat_rooms entry
+func backfillChatRoomIds(db *sql.DB) error {
+	updateQuery := `
+		UPDATE chamas c
+		SET chat_room_id = cr.id, updated_at = CURRENT_TIMESTAMP
+		FROM chat_rooms cr
+		WHERE cr.type = 'chama'
+		  AND cr.chama_id = c.id
+		  AND cr.is_active = true
+		  AND c.chat_room_id IS NULL
+	`
+	result, err := db.Exec(updateQuery)
+	if err != nil {
+		return fmt.Errorf("failed to backfill chat_room_id: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Printf("Backfilled chat_room_id for %d chama(s)", rowsAffected)
+	}
 	return nil
 }
 
