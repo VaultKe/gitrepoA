@@ -163,91 +163,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-  const [chatRoomLoading, setChatRoomLoading] = useState(false);
-
-  const getExistingChatRoomId = () => {
-    return chamaData?.chat_room_id || chamaData?.chatRoomId || chamaData?.chat_room?.id || chamaData?.chatRoom?.id;
-  };
-
-  const navigateToChatRoom = (roomId) => {
-    const roomName = `${chamaData?.name || 'Chama'} Group Chat`;
-
-    if (onRouteChange) {
-      onRouteChange('chat', 'ChatRoom', { roomId, roomName, chamaId });
-    } else {
-      navigation.navigate('ChatRoom', {
-        roomId,
-        roomName,
-        roomType: 'group',
-        chamaId,
-      });
-    }
-  };
-
-  const handleCreateChatRoom = () => {
-    const role = userRole?.toLowerCase();
-    if (role !== 'chairperson' && role !== 'treasurer') {
-      Toast.show({
-        type: 'error',
-        text1: 'Access Denied',
-        text2: 'Only chairperson and treasurer can create chat room',
-      });
-      return;
-    }
-
-    const existingChatRoomId = getExistingChatRoomId();
-    if (existingChatRoomId) {
-      navigateToChatRoom(existingChatRoomId);
-      return;
-    }
-
-    Alert.alert(
-      'Create Chat Room',
-      'This will create a chat room for this chama. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Create', style: 'default', onPress: confirmCreateChatRoom },
-      ]
-    );
-  };
-
-  const confirmCreateChatRoom = async () => {
-    try {
-      setChatRoomLoading(true);
-
-      const response = await api.createChamaChatRoom(chamaId);
-
-      if (response.success) {
-        const roomId = response.data?.roomId || response.data?.id || getExistingChatRoomId();
-
-        if (!roomId) {
-          throw new Error('Chat room was created but no room ID was returned');
-        }
-
-        setChamaData(prev => prev ? { ...prev, chat_room_id: roomId } : prev);
-
-        Toast.show({
-          type: 'success',
-          text1: 'Chat Room Created',
-          text2: 'Chat room has been created for this chama',
-        });
-
-        navigateToChatRoom(roomId);
-      } else {
-        throw new Error(response.error || 'Failed to create chat room');
-      }
-    } catch (error) {
-      console.error('Error creating chat room:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Failed',
-        text2: error.message || 'Failed to create chat room',
-      });
-    } finally {
-      setChatRoomLoading(false);
-    }
-  };
-
   // Real-time setting update function
   const updateSettingRealTime = async (settingType, settingKey, value) => {
     if (userRole?.toLowerCase() !== 'chairperson') {
@@ -620,34 +535,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               !isChairperson
             )}
           </>
-        ))}
-
-        {/* Chat Room */}
-        {isAdmin && renderSection('Chat Room', (
-          <>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.createChatButton,
-                { backgroundColor: colors.success, opacity: chatRoomLoading ? 0.7 : 1 }
-              ]}
-              onPress={handleCreateChatRoom}
-              disabled={chatRoomLoading}
-            >
-              {chatRoomLoading ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <Ionicons name="chatbubbles" size={20} color={colors.white} />
-              )}
-              <Text style={[styles.actionButtonText, { color: colors.white }]}>
-                {chatRoomLoading ? 'Creating...' : 'Create Chat Room for Chama'}
-              </Text>
-            </TouchableOpacity>
-            <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
-              If this chama doesn't have a chat room, create one to enable group messaging.
-            </Text>
-          </>
-        ))}
+        ))}       
 
         {/* Notifications */}
         {renderSection('Notifications', (
@@ -870,9 +758,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     borderWidth: 1,
   },
-  createChatButton: {
-    marginBottom: spacing.sm,
-  },
+
   sectionDescription: {
     fontSize: typography.fontSize.sm,
     marginTop: spacing.xs,
