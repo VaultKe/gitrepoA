@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors, typography, spacing, shadows } from '../../utils/theme';
+import { getThemeColors, spacing, typography, shadows } from '../../utils/theme';
+import SmartHeader from '../../components/common/SmartHeader';
 import ApiService from '../../services/api';
 
 const UserSearchScreen = ({ navigation }) => {
@@ -61,7 +62,6 @@ const UserSearchScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Failed to search users:', error);
-      // Filter locally if API search fails
       const filtered = users.filter(user =>
         user.firstName?.toLowerCase().includes(query.toLowerCase()) ||
         user.lastName?.toLowerCase().includes(query.toLowerCase()) ||

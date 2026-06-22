@@ -486,7 +486,11 @@ function UserTabNavigator() {
           tabBarButton: () => null, // Hide from tab bar
         }}
       />
-
+      <Stack.Screen
+        name="UserSearch"
+        component={UserSearchScreen}
+        options={{ title: 'Search Users' }}
+      />
 
     </Tab.Navigator>
   );
@@ -522,11 +526,11 @@ export default function UserDashboardStack() {
         component={withUserFooter(CreateGroupChatScreen)}
         options={{ title: 'New Group Chat' }}
       />
-      <Stack.Screen
+      {/* <Stack.Screen
         name="UserSearch"
         component={withUserFooter(UserSearchScreen)}
         options={{ title: 'Search Users' }}
-      />
+      /> */}
 
       {/* Meeting Summary Screen */}
       <Stack.Screen

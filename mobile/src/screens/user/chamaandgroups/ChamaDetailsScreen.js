@@ -429,8 +429,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const renderChamaHeader = () => {
-    // Debug logging to check category value
-    // Determine if it's a chama or contribution group
     const isContributionGroup = chama?.category === 'contribution';
     const typeConfig = isContributionGroup ? {
       color: colors.success,
@@ -496,12 +494,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const renderStats = () => {
-    // Extract data using the same structure as ChamaDashboard
     const financialStats = statistics?.financial_stats || {};
     const memberStats = statistics?.member_stats || {};
     const activityStats = statistics?.activity_stats || {};
     const chamaInfo = statistics?.chama_info || {};
-    // Calculate values using the same logic as ChamaDashboard
     const walletBalance = chamaInfo.wallet_balance || chamaInfo.total_funds || chama?.total_funds || 0;
     const totalMembers = memberStats.active_members || memberStats.total_members || chamaInfo.current_members || members.length || 0;
     const maxMembers = chama?.max_members || chamaInfo.max_members || 50;
