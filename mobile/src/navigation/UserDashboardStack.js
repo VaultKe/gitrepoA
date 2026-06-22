@@ -526,12 +526,6 @@ export default function UserDashboardStack() {
         component={withUserFooter(CreateGroupChatScreen)}
         options={{ title: 'New Group Chat' }}
       />
-      {/* <Stack.Screen
-        name="UserSearch"
-        component={withUserFooter(UserSearchScreen)}
-        options={{ title: 'Search Users' }}
-      /> */}
-
       {/* Meeting Summary Screen */}
       <Stack.Screen
         name="MeetingSummary"

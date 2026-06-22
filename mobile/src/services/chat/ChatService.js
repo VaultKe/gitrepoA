@@ -351,7 +351,7 @@ class ChatService {
   async createRoom(roomData) {
     try {
       const ApiService = (await import('../api')).default;
-      const response = await ApiService.makeRequest('/chat/rooms/', {
+      const response = await ApiService.makeRequest('/chat/rooms', {
         method: 'POST',
         body: roomData,
       });
