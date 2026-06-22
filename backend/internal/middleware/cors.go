@@ -45,71 +45,66 @@ func (w *corsResponseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// CORSMiddleware applies smart CORS handling
+// CORSMiddleware applies strict CORS handling
 func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
+	// cfg retained for compatibility even though strict CORS
+	// no longer depends on environment.
+	_ = cfg
+
+	allowedOrigins := map[string]struct{}{
+		"https://gitrepoa-1.onrender.com":  {},
+		"http://localhost:8081":            {},
+		"https://localhost":                {},
+		"https://127.0.0.1:8081":           {},
+		"http://localhost:8085":            {},
+		"http://localhost:3000":            {},
+		"http://127.0.0.1:3000":            {},
+		"https://vault-better1.vercel.app": {},
+		"http://localhost:19006":           {},
+		"http://127.0.0.1:19006":           {},
+	}
+
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
 		path := c.Request.URL.Path
 
-		allowedOrigins := []string{
-			"https://gitrepoa-1.onrender.com",
-			"http://localhost:8081",
-			"https://localhost",
-			"https://127.0.0.1:8081",
-			"http://localhost:8085",
-			"http://localhost:3000",
-			"http://127.0.0.1:3000",
-			"https://vault-better1.vercel.app",
-			"http://localhost:19006",
-			"http://127.0.0.1:19006",
-		}
+		// Reject requests with missing or null origin
+		if origin == "" || origin == "null" {
+			log.Printf("🚫 CORS: Missing or null Origin")
 
-		allowedOrigin := ""
-
-		if origin != "" {
-			for _, allowed := range allowedOrigins {
-				if origin == allowed {
-					allowedOrigin = origin
-					break
-				}
-			}
-		}
-
-		// dev mode is permissive
-		if cfg.Environment != "production" {
-			if origin == "" || origin == "null" {
-				allowedOrigin = "*"
-			} else {
-				allowedOrigin = origin
-			}
-		} else if origin == "" || origin == "null" {
-			allowedOrigin = "*"
-		}
-
-		// strict production rejection
-		if cfg.Environment == "production" && allowedOrigin == "" {
-			log.Printf("🚫 CORS: Origin '%s' not allowed", origin)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Origin not allowed",
 			})
 			return
 		}
 
-		// wrap writer (single CORS behavior point)
+		// Verify origin is explicitly whitelisted
+		if _, allowed := allowedOrigins[origin]; !allowed {
+			log.Printf("🚫 CORS: Origin '%s' not allowed", origin)
+
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "Origin not allowed",
+			})
+			return
+		}
+
+		allowedOrigin := origin
+
+		// Wrap writer (single CORS behavior point)
 		c.Writer = &corsResponseWriter{
 			ResponseWriter: c.Writer,
 			origin:         allowedOrigin,
 		}
 
-		// preflight handling
-		if c.Request.Method == "OPTIONS" {
+		// Preflight handling
+		if c.Request.Method == http.MethodOptions {
 			setCORSHeaders(c.Writer.Header(), allowedOrigin)
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
-		// reserved logging hook (no behavior change)
-		if c.Request.Method == "POST" &&
+		// Reserved logging hook (no behavior change)
+		if c.Request.Method == http.MethodPost &&
 			strings.HasPrefix(path, "/api/v1/chamas") &&
 			!strings.HasSuffix(path, "/") {
 			// placeholder for redirect safety
