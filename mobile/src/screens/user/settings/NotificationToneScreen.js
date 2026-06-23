@@ -278,19 +278,22 @@ const NotificationToneScreen = ({ navigation }) => {
         );
       } else {
         // Fallback: try to play the sound directly
-        const directPlay = await notificationService.forcePlayNotificationSound(soundId);
-        if (directPlay) {
-          Alert.alert(
-            'Sound Test',
-            'The notification sound was played directly. If you didn\'t hear it, check your device volume and notification settings.',
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert(
-            'Test Failed',
-            'Unable to test the notification sound. Please check your device settings and try again.',
-            [{ text: 'OK' }]
-          );
+        const sound = availableSounds.find(s => s.id === soundId);
+        if (sound && sound.file_path) {
+          const directPlay = await notificationService.forcePlayNotificationSound(soundId, sound.file_path);
+          if (directPlay) {
+            Alert.alert(
+              'Sound Test',
+              'The notification sound was played directly. If you didn\'t hear it, check your device volume and notification settings.',
+              [{ text: 'OK' }]
+            );
+          } else {
+            Alert.alert(
+              'Test Failed',
+              'Unable to test the notification sound. Please check your device settings and try again.',
+              [{ text: 'OK' }]
+            );
+          }
         }
       }
 

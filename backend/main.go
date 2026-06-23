@@ -75,7 +75,7 @@ func main() {
 	})
 
 	// Initialize services
-	authService := services.NewAuthService(cfg.JWTSecret, cfg.JWTExpiration)
+	authService := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpiration)
 	wsService := services.NewWebSocketService(db)
 
 	// Initialize email service

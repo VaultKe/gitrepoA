@@ -68,27 +68,25 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 		origin := c.GetHeader("Origin")
 		path := c.Request.URL.Path
 
-		// Reject requests with missing or null origin
+		var allowedOrigin string
+
+		// Handle requests with missing or null origin (mobile apps, curl, etc.)
 		if origin == "" || origin == "null" {
-			log.Printf("🚫 CORS: Missing or null Origin")
-
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "Origin not allowed",
-			})
-			return
-		}
-
-		// Verify origin is explicitly whitelisted
-		if _, allowed := allowedOrigins[origin]; !allowed {
+			// For API requests without Origin, allow with wildcard or use first available origin
+			// This enables mobile app access while still logging
+			log.Printf("ℹ️ CORS: Request without Origin header (likely mobile client)")
+			// Allow the request to proceed - don't abort
+			allowedOrigin = "*"
+		} else if _, allowed := allowedOrigins[origin]; !allowed {
 			log.Printf("🚫 CORS: Origin '%s' not allowed", origin)
 
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Origin not allowed",
 			})
 			return
+		} else {
+			allowedOrigin = origin
 		}
-
-		allowedOrigin := origin
 
 		// Wrap writer (single CORS behavior point)
 		c.Writer = &corsResponseWriter{

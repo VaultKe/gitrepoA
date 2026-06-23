@@ -177,3 +177,18 @@ func (fd *FlexibleDate) UnmarshalJSON(data []byte) error {
 
 	return fmt.Errorf("unable to parse date: %s", str)
 }
+
+// RefreshToken represents a stored refresh token
+type RefreshToken struct {
+	ID                 int       `json:"id" db:"id"`
+	UserID             string    `json:"user_id" db:"user_id"`
+	TokenHash          string    `json:"-" db:"token_hash"`
+	UserAgentHash      *string   `json:"user_agent_hash,omitempty" db:"user_agent_hash"`
+	IPAddress          *string   `json:"ip_address,omitempty" db:"ip_address"`
+	ExpiresAt          time.Time `json:"expires_at" db:"expires_at"`
+	LastUsedAt         *time.Time `json:"last_used_at,omitempty" db:"last_used_at"`
+	Revoked            bool      `json:"revoked" db:"revoked"`
+	ReplacedByTokenHash *string  `json:"replaced_by_token_hash,omitempty" db:"replaced_by_token_hash"`
+	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
+}

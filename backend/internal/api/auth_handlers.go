@@ -261,13 +261,15 @@ func extractDeviceInfo(c *gin.Context) DeviceInfo {
 type AuthHandlers struct {
 	userService *services.UserService
 	authService *services.AuthService
+	db          *sql.DB
 }
 
 // NewAuthHandlers creates new auth handlers
 func NewAuthHandlers(db *sql.DB, jwtSecret string, jwtExpiration int) *AuthHandlers {
 	return &AuthHandlers{
 		userService: services.NewUserService(db),
-		authService: services.NewAuthService(jwtSecret, jwtExpiration),
+		authService: services.NewAuthService(db, jwtSecret, jwtExpiration),
+		db:          db,
 	}
 }
 
@@ -281,8 +283,17 @@ type AuthResponse struct {
 
 // AuthData represents the data in auth response
 type AuthData struct {
-	User  *models.User `json:"user,omitempty"`
-	Token string       `json:"token,omitempty"`
+	User         *models.User    `json:"user,omitempty"`
+	Token        string          `json:"token,omitempty"`
+	RefreshToken string          `json:"refreshToken,omitempty"`
+}
+
+// issueRefreshToken generates and returns a refresh token for a user
+func (h *AuthHandlers) issueRefreshToken(c *gin.Context, userID string) (string, error) {
+	userAgent := c.GetHeader("User-Agent")
+	clientIP := c.ClientIP()
+	plainToken, _, err := h.authService.GenerateRefreshToken(userID, userAgent, clientIP)
+	return plainToken, err
 }
 
 // Register handles user registration
@@ -316,6 +327,12 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		return
 	}
 
+	// Issue refresh token
+	refreshToken, err := h.issueRefreshToken(c, user.ID)
+	if err != nil {
+		fmt.Printf("Failed to issue refresh token for new user %s: %v\n", user.ID, err)
+	}
+
 	// Send email verification automatically after registration
 	emailVerificationService, exists := c.Get("emailVerificationService")
 	if exists {
@@ -345,8 +362,9 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		Success: true,
 		Message: "Registration successful! Please check your email for a verification code to complete your account setup.",
 		Data: &AuthData{
-			User:  user,
-			Token: token,
+			User:         user,
+			Token:        token,
+			RefreshToken: refreshToken,
 		},
 	})
 }
@@ -380,6 +398,14 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 			Error:   "Failed to generate token",
 		})
 		return
+	}
+
+	// Issue refresh token bound to device
+	userAgent := c.GetHeader("User-Agent")
+	clientIP := c.ClientIP()
+	refreshToken, _, err := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)
+	if err != nil {
+		fmt.Printf("Failed to issue refresh token for user %s: %v\n", user.ID, err)
 	}
 
 	// Record login session with real device info
@@ -435,8 +461,9 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		Success: true,
 		Message: "Login successful",
 		Data: &AuthData{
-			User:  user,
-			Token: token,
+			User:         user,
+			Token:        token,
+			RefreshToken: refreshToken,
 		},
 	})
 }
@@ -445,32 +472,21 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 func (h *AuthHandlers) Logout(c *gin.Context) {
 	// Get token from Authorization header
 	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		c.JSON(http.StatusOK, AuthResponse{
-			Success: true,
-			Message: "Logout successful", // Still return success even without token
-		})
-		return
+
+	var refreshToken string
+	if c.Request.Body != nil {
+		_ = c.BindJSON(&struct {
+			RefreshToken string `json:"refreshToken"`
+		}{})
 	}
 
-	// Extract token (remove "Bearer " prefix)
-	tokenString := ""
-	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-		tokenString = authHeader[7:]
+	if authHeader != "" && len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+		tokenString := authHeader[7:]
+		_ = h.authService.BlacklistToken(tokenString)
 	}
 
-	if tokenString != "" {
-		// Add token to blacklist
-		err := h.authService.BlacklistToken(tokenString)
-		if err != nil {
-			// Log error but don't fail the logout
-			// Client-side cleanup should still proceed
-			c.JSON(http.StatusOK, AuthResponse{
-				Success: true,
-				Message: "Logout successful (token cleanup failed)",
-			})
-			return
-		}
+	if refreshToken != "" {
+		_ = h.authService.RevokeRefreshToken(refreshToken)
 	}
 
 	c.JSON(http.StatusOK, AuthResponse{
@@ -479,23 +495,24 @@ func (h *AuthHandlers) Logout(c *gin.Context) {
 	})
 }
 
-// RefreshToken handles token refresh
+// RefreshToken handles token refresh using stored refresh token
 func (h *AuthHandlers) RefreshToken(c *gin.Context) {
-	// Get token from header
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		c.JSON(http.StatusUnauthorized, AuthResponse{
+	var req struct {
+		RefreshToken string `json:"refreshToken" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
-			Error:   "Authorization header required",
+			Error:   "Refresh token is required",
 		})
 		return
 	}
 
-	// Extract token
-	tokenString := authHeader[7:] // Remove "Bearer " prefix
+	userAgent := c.GetHeader("User-Agent")
+	clientIP := c.ClientIP()
 
-	// Refresh token
-	newToken, err := h.authService.RefreshToken(tokenString)
+	accessToken, newRefreshToken, err := h.authService.RefreshAccessToken(req.RefreshToken, userAgent, clientIP)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, AuthResponse{
 			Success: false,
@@ -508,7 +525,8 @@ func (h *AuthHandlers) RefreshToken(c *gin.Context) {
 		Success: true,
 		Message: "Token refreshed successfully",
 		Data: &AuthData{
-			Token: newToken,
+			Token:        accessToken,
+			RefreshToken: newRefreshToken,
 		},
 	})
 }

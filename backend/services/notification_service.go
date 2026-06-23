@@ -36,7 +36,7 @@ func (ns *NotificationService) CreateNotification(req models.CreateNotificationR
 
 	// Check if user wants this type of notification
 	if !ns.shouldSendNotification(req.Type, preferences) {
-		log.Printf("Notification skipped due to user preferences: user_id=%d, type=%s", req.UserID, req.Type)
+		log.Printf("Notification skipped due to user preferences: user_id=%s, type=%s", req.UserID, req.Type)
 		return nil, nil
 	}
 
@@ -60,7 +60,7 @@ func (ns *NotificationService) CreateNotification(req models.CreateNotificationR
 		INSERT INTO notifications 
 		(user_id, title, message, type, priority, category, reference_type, reference_id, 
 		 scheduled_for, data, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $11, 'pending', $12, $13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
 	`
 
 	now := time.Now()
@@ -89,7 +89,7 @@ func (ns *NotificationService) CreateNotification(req models.CreateNotificationR
 		go ns.DeliverNotification(notification, preferences)
 	}
 
-	log.Printf("Notification created successfully: id=%d, user_id=%d, type=%s", id, req.UserID, req.Type)
+	log.Printf("Notification created successfully: id=%d, user_id=%s, type=%s", id, req.UserID, req.Type)
 	return notification, nil
 }
 
@@ -279,7 +279,7 @@ func (ns *NotificationService) UpdateUserPreferences(userID string, req models.U
 		return nil, fmt.Errorf("failed to update preferences: %w", err)
 	}
 
-	log.Printf("User notification preferences updated: user_id=%d", userID)
+	log.Printf("User notification preferences updated: user_id=%s", userID)
 
 	// Return updated preferences
 	return ns.GetUserPreferences(userID)
@@ -290,7 +290,7 @@ func (ns *NotificationService) GetAvailableSounds() ([]models.NotificationSound,
 	query := `
 		SELECT id, name, file_path, file_size, duration_seconds, is_default, is_active, created_at, updated_at
 		FROM notification_sounds 
-		WHERE is_active = 1 
+		WHERE is_active = true 
 		ORDER BY is_default DESC, name ASC
 	`
 
@@ -322,8 +322,8 @@ func (ns *NotificationService) MarkAsRead(notificationID int, userID string) err
 	now := time.Now()
 	result, err := ns.db.Exec(`
 		UPDATE notifications 
-		SET is_read = 1, read_at = ?, updated_at = ?
-		WHERE id = ? AND user_id = ?
+		SET is_read = true, read_at = $1, updated_at = $2
+		WHERE id = $3 AND user_id = $4
 	`, now, now, notificationID, userID)
 
 	if err != nil {
@@ -345,22 +345,26 @@ func (ns *NotificationService) MarkAsRead(notificationID int, userID string) err
 // GetUserNotifications gets paginated user notifications
 func (ns *NotificationService) GetUserNotifications(userID string, filters map[string]interface{}) (*models.NotificationListResponse, error) {
 	// Build WHERE clause
-	whereParts := []string{"user_id = ?"}
+	whereParts := []string{"user_id = $1"}
 	args := []interface{}{userID}
+	placeholder := 2
 
 	if notifType, ok := filters["type"].(string); ok && notifType != "" {
-		whereParts = append(whereParts, "type = ?")
+		whereParts = append(whereParts, fmt.Sprintf("type = $%d", placeholder))
 		args = append(args, notifType)
+		placeholder++
 	}
 
 	if isRead, ok := filters["is_read"].(bool); ok {
-		whereParts = append(whereParts, "is_read = ?")
+		whereParts = append(whereParts, fmt.Sprintf("is_read = $%d", placeholder))
 		args = append(args, isRead)
+		placeholder++
 	}
 
 	if priority, ok := filters["priority"].(string); ok && priority != "" {
-		whereParts = append(whereParts, "priority = ?")
+		whereParts = append(whereParts, fmt.Sprintf("priority = $%d", placeholder))
 		args = append(args, priority)
+		placeholder++
 	}
 
 	whereClause := strings.Join(whereParts, " AND ")
@@ -375,7 +379,7 @@ func (ns *NotificationService) GetUserNotifications(userID string, filters map[s
 
 	// Get unread count
 	var unreadCount int
-	err = ns.db.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0", userID).Scan(&unreadCount)
+	err = ns.db.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = 0", userID).Scan(&unreadCount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get unread count: %w", err)
 	}
@@ -402,8 +406,8 @@ func (ns *NotificationService) GetUserNotifications(userID string, filters map[s
 		FROM notifications 
 		WHERE %s 
 		ORDER BY created_at DESC 
-		LIMIT ? OFFSET ?
-	`, whereClause)
+		LIMIT $%d OFFSET $%d
+	`, whereClause, placeholder, placeholder+1)
 
 	args = append(args, perPage, offset)
 	rows, err := ns.db.Query(query, args...)
@@ -454,12 +458,11 @@ func (ns *NotificationService) GetNotificationByID(id int) (*models.Notification
 			   status, is_read, read_at, scheduled_for, sent_at, delivered_at, data, sound_played,
 			   retry_count, created_at, updated_at
 		FROM notifications 
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var n models.Notification
 	var dataStr sql.NullString
-
 	err := ns.db.QueryRow(query, id).Scan(
 		&n.ID, &n.UserID, &n.Title, &n.Message, &n.Type, &n.Priority,
 		&n.Category, &n.ReferenceType, &n.ReferenceID, &n.Status,
@@ -588,8 +591,8 @@ func (ns *NotificationService) scheduleForLater(notification *models.Notificatio
 	// Update notification
 	_, err = ns.db.Exec(`
 		UPDATE notifications
-		SET scheduled_for = ?, status = 'pending', updated_at = ?
-		WHERE id = ?
+		SET scheduled_for = $1, status = 'pending', updated_at = $2
+		WHERE id = $3
 	`, scheduleTime, time.Now(), notification.ID)
 
 	return err
@@ -632,7 +635,7 @@ func (ns *NotificationService) deliverPush(notification *models.Notification, pr
 
 	// Here you would integrate with your push notification service
 	// (Firebase, OneSignal, etc.)
-	log.Printf("Push notification sent: user_id=%d, payload=%+v", notification.UserID, payload)
+	log.Printf("Push notification sent: user_id=%s, payload=%+v", notification.UserID, payload)
 
 	ns.logDelivery(notification.ID, notification.UserID, "push", "sent", "")
 	return nil
@@ -646,10 +649,10 @@ func (ns *NotificationService) logDelivery(notificationID int, userID string, me
 		deliveredAt = &now
 	}
 
-	_, err := ns.db.Exec(`
+_, err := ns.db.Exec(`
 		INSERT INTO notification_delivery_log
 		(notification_id, user_id, delivery_method, status, attempted_at, delivered_at, error_message, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, notificationID, userID, method, status, now, deliveredAt, errorMsg, now)
 
 	if err != nil {
@@ -699,8 +702,8 @@ func (ns *NotificationService) createDefaultPreferences(userID string) (*models.
 		 system_notifications, quiet_hours_enabled,
 		 quiet_hours_start, quiet_hours_end, timezone, notification_frequency,
 		 priority_only_during_quiet, created_at, updated_at)
-		VALUES (?, ?, 1, 1, 80, 1, 1, 1, 1, 0, 0, '22:00:00', '07:00:00',
-		        'Africa/Nairobi', 'immediate', 1, ?, ?)
+		VALUES ($1, $2, true, true, 80, true, true, true, true, false, '22:00:00', '07:00:00',
+		        'Africa/Nairobi', 'immediate', true, $3, $4)
 	`
 
 	_, err = ns.db.Exec(query, userID, defaultSoundID, now, now)
@@ -714,7 +717,7 @@ func (ns *NotificationService) createDefaultPreferences(userID string) (*models.
 // getDefaultSoundID gets the default notification sound ID
 func (ns *NotificationService) getDefaultSoundID() (*int, error) {
 	var id int
-	err := ns.db.QueryRow("SELECT id FROM notification_sounds WHERE is_default = 1 AND is_active = 1 LIMIT 1").Scan(&id)
+	err := ns.db.QueryRow("SELECT id FROM notification_sounds WHERE is_default = true AND is_active = true LIMIT 1").Scan(&id)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -729,7 +732,7 @@ func (ns *NotificationService) getSoundByID(id int) (*models.NotificationSound, 
 	query := `
 		SELECT id, name, file_path, file_size, duration_seconds, is_default, is_active, created_at, updated_at
 		FROM notification_sounds
-		WHERE id = ? AND is_active = 1
+		WHERE id = $1 AND is_active = true
 	`
 
 	err := ns.db.QueryRow(query, id).Scan(
@@ -757,7 +760,7 @@ func (ns *NotificationService) getTemplate(name string) (*models.NotificationTem
 			   default_priority, requires_sound, requires_vibration, variables,
 			   is_active, created_at, updated_at
 		FROM notification_templates
-		WHERE name = ? AND is_active = 1
+		WHERE name = $1 AND is_active = true
 	`
 
 	err := ns.db.QueryRow(query, name).Scan(

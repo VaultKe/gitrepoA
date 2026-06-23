@@ -101,6 +101,7 @@ func Migrate(db *sql.DB) error {
 		{"addLoanTypeIdToLoans", addLoanTypeIdColumn},
 		{"addChatRoomIdToChamas", addChatRoomIdToChamasTable},
 		{"backfillChatRoomIds", backfillChatRoomIds},
+		{"createRefreshTokensTable", createRefreshTokensTable},
 	}
 
 	for _, m := range customMigrations {
@@ -2790,5 +2791,35 @@ func EnsureLoanTypesTable(db *sql.DB) error {
 		}
 	}
 	log.Println("✅ loan_types schema ready")
+	return nil
+}
+
+// createRefreshTokensTable creates the refresh_tokens table
+func createRefreshTokensTable(db *sql.DB) error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS refresh_tokens (
+			id SERIAL PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash TEXT NOT NULL,
+			user_agent_hash TEXT,
+			ip_address TEXT,
+			expires_at TIMESTAMP NOT NULL,
+			last_used_at TIMESTAMP,
+			revoked BOOLEAN DEFAULT FALSE,
+			replaced_by_token_hash TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(token_hash)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_revoked ON refresh_tokens(revoked)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to create refresh_tokens table/index: %w", err)
+		}
+	}
+	log.Println("✅ refresh_tokens schema ready")
 	return nil
 }
