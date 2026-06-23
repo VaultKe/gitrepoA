@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1135,21 +1136,27 @@ func (h *AuthHandlers) handleMultipartProfileUpdate(c *gin.Context, req *models.
 	if files, ok := form.File["profile_image"]; ok && len(files) > 0 {
 		file := files[0]
 
-		// Validate file type
+		// Validate file type - only JPG and PNG allowed for security
 		allowedTypes := map[string]bool{
 			"image/jpeg": true,
 			"image/jpg":  true,
 			"image/png":  true,
-			"image/webp": true,
 		}
 
 		if !allowedTypes[file.Header.Get("Content-Type")] {
-			return fmt.Errorf("invalid file type. Only JPEG, PNG, and WebP images are allowed")
+			return fmt.Errorf("invalid file type. Only JPEG and PNG images are allowed")
 		}
 
 		// Validate file size (5MB max)
 		if file.Size > 5*1024*1024 {
 			return fmt.Errorf("file too large. Maximum size is 5MB")
+		}
+
+		// Validate file extension
+		ext := strings.ToLower(filepath.Ext(file.Filename))
+		allowedExtensions := map[string]bool{".jpg": true, ".jpeg": true, ".png": true}
+		if !allowedExtensions[ext] {
+			return fmt.Errorf("invalid file extension. Only .jpg and .png are allowed")
 		}
 
 		// Create uploads directory if it doesn't exist
@@ -1159,9 +1166,8 @@ func (h *AuthHandlers) handleMultipartProfileUpdate(c *gin.Context, req *models.
 		}
 
 		// Generate unique filename
-		ext := filepath.Ext(file.Filename)
 		filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), userID, ext)
-		filepath := filepath.Join(uploadDir, filename)
+		dstPath := filepath.Join(uploadDir, filename)
 
 		// Open uploaded file
 		src, err := file.Open()
@@ -1170,16 +1176,43 @@ func (h *AuthHandlers) handleMultipartProfileUpdate(c *gin.Context, req *models.
 		}
 		defer src.Close()
 
-		// Create destination file
-		dst, err := os.Create(filepath)
+		// Create temporary file for virus scanning
+		tmpFile, err := os.CreateTemp("", "profile_upload_*"+ext)
 		if err != nil {
-			return fmt.Errorf("failed to create destination file: %w", err)
+			return fmt.Errorf("failed to create temp file: %w", err)
 		}
-		defer dst.Close()
+		tmpFilePath := tmpFile.Name()
 
-		// Copy file content
-		if _, err := io.Copy(dst, src); err != nil {
-			return fmt.Errorf("failed to save file: %w", err)
+		// Copy to temp file first for scanning
+		if _, err := io.Copy(tmpFile, src); err != nil {
+			os.Remove(tmpFilePath)
+			return fmt.Errorf("failed to copy file for scanning: %w", err)
+		}
+		tmpFile.Close()
+
+		// ClamAV scan before persisting (optional if ClamAV is not installed)
+		scanResult := services.ScanFileWithClamAV(tmpFilePath)
+		if services.IsClamAVAvailable() {
+			if scanResult.ScanError != nil {
+				os.Remove(tmpFilePath)
+				return fmt.Errorf("virus scan failed: %w", scanResult.ScanError)
+			}
+			if scanResult.Infected || !scanResult.IsClean {
+				os.Remove(tmpFilePath)
+				reason := "malware detected"
+				if scanResult.ScanError != nil {
+					reason = scanResult.ScanError.Error()
+				}
+				return fmt.Errorf("file rejected by security policy: %s", reason)
+			}
+		} else {
+			log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tmpFilePath)
+		}
+
+		// Move scanned file to final destination
+		if err := os.Rename(tmpFilePath, dstPath); err != nil {
+			os.Remove(tmpFilePath)
+			return fmt.Errorf("failed to move file to storage: %w", err)
 		}
 
 		// Set avatar path in request
