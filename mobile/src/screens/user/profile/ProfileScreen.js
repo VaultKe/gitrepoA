@@ -30,15 +30,15 @@ const ProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [profileData, setProfileData] = useState({
-    first_name: user?.first_name || user?.firstName || '',
-    last_name: user?.last_name || user?.lastName || '',
+    firstName: user?.firstName || '',
+    lastName: user?.lastName || '',
     email: user?.email || '',
     phone: user?.phone || '',
     county: user?.county || '',
     town: user?.town || '',
     bio: user?.bio || '',
     occupation: user?.occupation || '',
-    date_of_birth: user?.date_of_birth || '',
+    dateOfBirth: user?.dateOfBirth || '',
     gender: user?.gender || '',
   });
   const [profileImage, setProfileImage] = useState(
@@ -80,25 +80,22 @@ const ProfileScreen = ({ navigation }) => {
   // Helper function to update profile from API response
   const updateProfileFromResponse = (response) => {
     if (response.success && response.data) {
-      const userData = response.data;
+      const userData = response.data.User || response.data.user || response.data;
       setProfileData({
-        first_name: userData.first_name || userData.firstName || '',
-        last_name: userData.last_name || userData.lastName || '',
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
         email: userData.email || '',
         phone: userData.phone || '',
         county: userData.county || '',
         town: userData.town || '',
         bio: userData.bio || '',
         occupation: userData.occupation || '',
-        date_of_birth: userData.date_of_birth || '',
+        dateOfBirth: userData.dateOfBirth || '',
         gender: userData.gender || '',
       });
 
-      if (userData.profile_image && userData.profile_image !== 'avatar://cached-base64-image') {
-        setProfileImage(userData.profile_image);
-      } else if (userData.profile_image === 'avatar://cached-base64-image') {
-        // Don't set the cached identifier as profileImage, let the useEffect handle it
-        setProfileImage(null);
+      if (userData.avatar && userData.avatar !== 'avatar://cached-base64-image') {
+        setProfileImage(userData.avatar.startsWith('http') ? userData.avatar : `${apiService.baseURL}/${userData.avatar.startsWith('/') ? '' : '/'}${userData.avatar}`);
       }
     }
   };
@@ -106,12 +103,8 @@ const ProfileScreen = ({ navigation }) => {
   // Fetch fresh profile data from backend with lightning-fast caching
   const fetchProfileData = async () => {
     try {
-      // console.log('⚡ Fetching profile data with lightning caching...');
-
-      // Try to get cached data first for instant loading
       const cachedResult = await getCachedData('profile');
       if (cachedResult && cachedResult.success) {
-        // console.log('⚡ Using cached profile data for instant load');
         updateProfileFromResponse(cachedResult);
       }
 
@@ -153,15 +146,15 @@ const ProfileScreen = ({ navigation }) => {
 
   const updateLocalProfileData = async () => {
     setProfileData({
-      first_name: user?.first_name || user?.firstName || '',
-      last_name: user?.last_name || user?.lastName || '',
+      firstName: user?.firstName || '',
+      lastName: user?.lastName || '',
       email: user?.email || '',
       phone: user?.phone || '',
       county: user?.county || '',
       town: user?.town || '',
       bio: user?.bio || '',
       occupation: user?.occupation || '',
-      date_of_birth: user?.date_of_birth || '',
+      dateOfBirth: user?.dateOfBirth || '',
       gender: user?.gender || '',
     });
 
@@ -219,7 +212,10 @@ const ProfileScreen = ({ navigation }) => {
       });
 
       if (!result.canceled) {
-        setProfileImage(result.assets[0].uri);
+        const selectedAsset = result.assets[0];
+
+        // Set profile image - validation happens at backend during upload
+        setProfileImage(selectedAsset.uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -232,71 +228,63 @@ const ProfileScreen = ({ navigation }) => {
       setLoading(true);
 
       const updateData = {
-        // Map frontend field names to backend field names
-        firstName: profileData.first_name,
-        lastName: profileData.last_name,
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
         phone: profileData.phone,
         county: profileData.county,
         town: profileData.town,
         bio: profileData.bio,
         occupation: profileData.occupation,
-        // Only include dateOfBirth if it's not empty
-        ...(profileData.date_of_birth && profileData.date_of_birth.trim() !== '' && {
-          dateOfBirth: profileData.date_of_birth
+        ...(profileData.dateOfBirth && profileData.dateOfBirth.trim() !== '' && {
+          dateOfBirth: profileData.dateOfBirth
         }),
-        // Only include gender if it's not empty
         ...(profileData.gender && profileData.gender.trim() !== '' && {
           gender: profileData.gender
         }),
-        // Send profile_image field for proper image upload detection
         profile_image: profileImage,
-        avatar: profileImage, // Keep both for compatibility
       };
 
       console.log('Updating profile with data:', {
         ...updateData,
-        avatar: profileImage ? 'Image selected' : 'No image'
+        profile_image: profileImage ? 'Image selected' : 'No image'
       });
 
-      // Try API update first
       try {
         const response = await apiService.updateProfile(updateData);
         if (response.success) {
-          // Extract user data from response (API returns { data: { user: {...} } })
           const updatedUserData = response.data?.user || response.data;
           await updateUser(updatedUserData);
 
-          // Update local profileData state with the new values
           setProfileData(prevData => ({
             ...prevData,
-            first_name: updateData.firstName || prevData.first_name,
-            last_name: updateData.lastName || prevData.last_name,
-            phone: updateData.phone || prevData.phone,
-            county: updateData.county || prevData.county,
-            town: updateData.town || prevData.town,
-            bio: updateData.bio || prevData.bio,
-            occupation: updateData.occupation || prevData.occupation,
-            gender: updateData.gender || prevData.gender,
+            firstName: updatedUserData.firstName || prevData.firstName,
+            lastName: updatedUserData.lastName || prevData.lastName,
+            phone: updatedUserData.phone || prevData.phone,
+            county: updatedUserData.county || prevData.county,
+            town: updatedUserData.town || prevData.town,
+            bio: updatedUserData.bio || prevData.bio,
+            occupation: updatedUserData.occupation || prevData.occupation,
+            dateOfBirth: updatedUserData.dateOfBirth || prevData.dateOfBirth,
+            gender: updatedUserData.gender || prevData.gender,
           }));
 
-          // Force refresh profile data from updated user context after a short delay
           setTimeout(() => {
             if (updatedUserData) {
               setProfileData(prevData => ({
                 ...prevData,
-                first_name: updatedUserData.firstName || updatedUserData.first_name || prevData.first_name,
-                last_name: updatedUserData.lastName || updatedUserData.last_name || prevData.last_name,
+                firstName: updatedUserData.firstName || prevData.firstName,
+                lastName: updatedUserData.lastName || prevData.lastName,
                 phone: updatedUserData.phone || prevData.phone,
                 county: updatedUserData.county || prevData.county,
                 town: updatedUserData.town || prevData.town,
                 bio: updatedUserData.bio || prevData.bio,
                 occupation: updatedUserData.occupation || prevData.occupation,
+                dateOfBirth: updatedUserData.dateOfBirth || prevData.dateOfBirth,
                 gender: updatedUserData.gender || prevData.gender,
               }));
             }
           }, 100);
 
-          // Update profile image display immediately
           const newAvatarUrl = updatedUserData?.avatar || updatedUserData?.profile_image;
           if (newAvatarUrl) {
             let fullAvatarUrl;
@@ -324,12 +312,8 @@ const ProfileScreen = ({ navigation }) => {
           ...user,
           ...profileData,
           avatar: profileImage,
-          profile_image: profileImage, // Keep both for compatibility
-          // Ensure both naming conventions are updated
-          firstName: profileData.first_name,
-          lastName: profileData.last_name,
-          first_name: profileData.first_name,
-          last_name: profileData.last_name,
+          firstName: profileData.firstName,
+          lastName: profileData.lastName,
         };
 
         await updateUser(updatedUserData);
@@ -363,18 +347,18 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleCancel = () => {
     setProfileData({
-      first_name: user?.first_name || user?.firstName || '',
-      last_name: user?.last_name || user?.lastName || '',
+      firstName: user?.firstName || '',
+      lastName: user?.lastName || '',
       email: user?.email || '',
       phone: user?.phone || '',
       county: user?.county || '',
       town: user?.town || '',
       bio: user?.bio || '',
       occupation: user?.occupation || '',
-      date_of_birth: user?.date_of_birth || '',
+      dateOfBirth: user?.dateOfBirth || '',
       gender: user?.gender || '',
     });
-    setProfileImage(user?.profile_image || null);
+    setProfileImage(user?.avatar || null);
     setEditing(false);
   };
 
@@ -908,16 +892,16 @@ const ProfileScreen = ({ navigation }) => {
       <View style={styles.row}>
         <Input
           label="First Name"
-          value={profileData.first_name}
-          onChangeText={(text) => handleInputChange('first_name', text)}
+          value={profileData.firstName}
+          onChangeText={(text) => handleInputChange('firstName', text)}
           editable={editing}
           style={styles.halfInput}
         />
 
         <Input
           label="Last Name"
-          value={profileData.last_name}
-          onChangeText={(text) => handleInputChange('last_name', text)}
+          value={profileData.lastName}
+          onChangeText={(text) => handleInputChange('lastName', text)}
           editable={editing}
           style={styles.halfInput}
         />
@@ -967,8 +951,8 @@ const ProfileScreen = ({ navigation }) => {
 
       <Input
         label="Date of Birth"
-        value={profileData.date_of_birth}
-        onChangeText={(text) => handleInputChange('date_of_birth', text)}
+        value={profileData.dateOfBirth}
+        onChangeText={(text) => handleInputChange('dateOfBirth', text)}
         editable={editing}
         placeholder="YYYY-MM-DD (e.g., 1990-01-15)"
         keyboardType="numeric"
