@@ -37,7 +37,7 @@ const updateNotificationPreferences = async (preferences) => {
   });
 };
 
-const getNotificationSounds = async () => {
+const getAvailableNotificationSounds = async () => {
   return await makeRequest('/notifications/sounds', { method: 'GET' });
 };
 
@@ -67,7 +67,7 @@ export {
   deleteNotification,
   getNotificationPreferences,
   updateNotificationPreferences,
-  getNotificationSounds,
+  getAvailableNotificationSounds,
   testNotificationSound,
   getNotificationSettings,
   updateNotificationSettings,

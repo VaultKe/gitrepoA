@@ -100,25 +100,19 @@ const NotificationToneScreen = ({ navigation }) => {
         // Continue anyway - audio might still work
       }
 
-      // Load and play the sound - fix URI construction
+// Load and play the sound - fix URI construction
       let soundUri;
       if (sound.file_path.startsWith('http://') || sound.file_path.startsWith('https://')) {
         // Already a full URL
         soundUri = sound.file_path;
-       } else if (sound.file_path.startsWith('/')) {
-         // Absolute path
-         if (!API_BASE_URL) {
-           console.error('API_BASE_URL is not configured');
-           return;
-         }
-         soundUri = `${API_BASE_URL}${sound.file_path}`;
-       } else {
-         // Relative path
-         if (!API_BASE_URL) {
-           console.error('API_BASE_URL is not configured');
-           return;
-         }
-         soundUri = `${API_BASE_URL}/${sound.file_path}`;
+      } else if (sound.file_path.startsWith('/')) {
+        // Absolute path - remove /api/v1 suffix if present since notification_sound is a static route
+        const baseUrl = API_BASE_URL.replace(/\/api\/v1$/, '');
+        soundUri = `${baseUrl}${sound.file_path}`;
+      } else {
+        // Relative path
+        const baseUrl = API_BASE_URL.replace(/\/api\/v1$/, '');
+        soundUri = `${baseUrl}/${sound.file_path}`;
       }
 
       // console.log('🎵 Loading sound from URI:', soundUri);
