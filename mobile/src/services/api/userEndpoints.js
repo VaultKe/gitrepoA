@@ -250,11 +250,51 @@ const calculateSystemAnalytics = (users, chamas, transactions, period) => {
   };
 };
 
+const searchUserByPhoneAndNationalId = async (phone, nationalId) => {
+  return await makeRequest(`/users/search?phone=${encodeURIComponent(phone)}&nationalId=${encodeURIComponent(nationalId)}`);
+};
+
+const sendOnboardingTOTP = async (email, userId) => {
+  return await makeRequest('/auth/send-onboarding-totp', {
+    method: 'POST',
+    body: { email, userId },
+  });
+};
+
+const verifyOnboardingTOTP = async (code, userId) => {
+  return await makeRequest('/auth/verify-onboarding-totp', {
+    method: 'POST',
+    body: { code, userId },
+  });
+};
+
+const onboardUser = async (userData) => {
+  return await makeRequest('/users/onboard', {
+    method: 'POST',
+    body: userData,
+  });
+};
+
+const updateUserPhoneVerified = async (userId, verified) => {
+  return await makeRequest(`/users/${userId}/phone-verified`, {
+    method: 'PUT',
+    body: { verified },
+  });
+};
+
+const updateUserPaymentStatus = async (userId, hasPaid) => {
+  return await makeRequest(`/users/${userId}/registration-payment`, {
+    method: 'PUT',
+    body: { hasPaid },
+  });
+};
+
 export {
   getProfile,
   updateProfile,
   getUsers,
   searchUsers,
+  searchUserByPhoneAndNationalId,
   getAllUsersForAdmin,
   getAllUsersComplete,
   getUserStatistics,
@@ -262,4 +302,9 @@ export {
   getSystemAnalytics,
   buildSystemAnalytics,
   calculateSystemAnalytics,
+  sendOnboardingTOTP,
+  verifyOnboardingTOTP,
+  onboardUser,
+  updateUserPhoneVerified,
+  updateUserPaymentStatus,
 };

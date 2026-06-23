@@ -102,6 +102,7 @@ func Migrate(db *sql.DB) error {
 		{"addChatRoomIdToChamas", addChatRoomIdToChamasTable},
 		{"backfillChatRoomIds", backfillChatRoomIds},
 		{"createRefreshTokensTable", createRefreshTokensTable},
+		{"addRegistrationFeeColumns", addRegistrationFeeColumns},
 	}
 
 	for _, m := range customMigrations {
@@ -2823,5 +2824,22 @@ func createRefreshTokensTable(db *sql.DB) error {
 		}
 	}
 	log.Println("✅ refresh_tokens schema ready")
+	return nil
+}
+
+// addRegistrationFeeColumns adds registration_fee_paid columns to users and chamas tables
+func addRegistrationFeeColumns(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`,
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`,
+		`CREATE INDEX IF NOT EXISTS idx_users_registration_fee_paid ON users(registration_fee_paid)`,
+		`CREATE INDEX IF NOT EXISTS idx_chamas_registration_fee_paid ON chamas(registration_fee_paid)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add registration fee columns: %w", err)
+		}
+	}
+	log.Println("✅ registration fee columns ready")
 	return nil
 }

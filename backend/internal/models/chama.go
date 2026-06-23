@@ -90,6 +90,7 @@ type Chama struct {
 	Rules                 []string               `json:"rules" db:"rules"`
 	MeetingSchedule       *MeetingSchedule       `json:"meetingSchedule,omitempty" db:"meeting_schedule"`
 	Permissions           map[string]interface{} `json:"permissions,omitempty" db:"permissions"`
+	RegistrationFeePaid  bool                   `json:"registrationFeePaid" db:"registration_fee_paid"`
 	CreatedBy             string                 `json:"createdBy" db:"created_by"`
 	CreatedAt             time.Time              `json:"createdAt" db:"created_at"`
 	UpdatedAt             time.Time              `json:"updatedAt" db:"updated_at"`
@@ -137,6 +138,7 @@ type ChamaCreation struct {
 	RequiresApproval      bool                  `json:"requiresApproval"`
 	Rules                 []string              `json:"rules"`
 	MeetingSchedule       *MeetingSchedule      `json:"meetingSchedule,omitempty"`
+	RegistrationFeePaid   bool                  `json:"registrationFeePaid"`
 }
 
 // ChamaUpdate represents data for updating a chama

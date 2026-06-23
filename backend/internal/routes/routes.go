@@ -144,6 +144,10 @@ func SetupRoutes(
 			auth.POST("/verify-email-code", authHandlers.VerifyEmailCode)
 			auth.POST("/check-email-verification-status", authHandlers.CheckEmailVerificationStatus)
 
+			// Onboarding TOTP routes
+			auth.POST("/send-onboarding-totp", authHandlers.SendOnboardingTOTP)
+			auth.POST("/verify-onboarding-totp", authHandlers.VerifyOnboardingTOTP)
+
 			auth.POST("/test-email", authHandlers.TestEmail)
 		}
 
@@ -204,11 +208,15 @@ func SetupRoutes(
 				users.GET("/preferences", api.GetUserPreferences)
 				users.PUT("/preferences", api.UpdateUserPreferences)
 
-				users.POST("/avatar", api.UploadAvatar)
-				users.PUT("/:id/role", api.AdminUpdateUserRole)
-				users.PUT("/:id/status", api.UpdateUserStatus)
-				users.DELETE("/:id", api.DeleteUser)
-			}
+			users.POST("/avatar", api.UploadAvatar)
+			users.GET("/search-by-credentials", api.SearchUserByCredentials)
+			users.PUT("/:id/role", api.AdminUpdateUserRole)
+			users.PUT("/:id/status", api.UpdateUserStatus)
+			users.DELETE("/:id", api.DeleteUser)
+			users.POST("/onboard", api.OnboardUser)
+			users.PUT("/:id/phone-verified", api.UpdateUserPhoneVerified)
+			users.PUT("/:id/registration-payment", api.UpdateUserPaymentStatus)
+		}
 
 			e2ee := protected.Group("/e2ee")
 			{
@@ -267,10 +275,11 @@ func SetupRoutes(
 				wallets.GET("/transactions", api.GetUserTransactions)
 				wallets.GET("/:id", api.GetWallet)
 				wallets.GET("/:id/transactions", api.GetWalletTransactions)
-				wallets.POST("/transfer", api.TransferMoney)
-				wallets.POST("/deposit", api.DepositMoney)
-				wallets.POST("/withdraw", api.WithdrawMoney)
-			}
+			wallets.POST("/transfer", api.TransferMoney)
+			wallets.POST("/deposit", api.DepositMoney)
+			wallets.POST("/withdraw", api.WithdrawMoney)
+			wallets.POST("/registration-payment", api.InitiateRegistrationPayment)
+		}
 
 			receipts := protected.Group("/receipts")
 			{

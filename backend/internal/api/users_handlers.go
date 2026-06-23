@@ -2,12 +2,16 @@ package api
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"github.com/gin-gonic/gin"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
 )
 
 // User handlers
@@ -1227,4 +1231,370 @@ func DeleteUser(c *gin.Context) {
 			"id": userID,
 		},
 	})
+}
+
+// SearchUserByCredentials searches for a user by both phone and national ID
+// Returns the user only if both credentials match the same person
+func SearchUserByCredentials(c *gin.Context) {
+	phone := c.Query("phone")
+	nationalId := c.Query("nationalId")
+
+	if phone == "" || nationalId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Both phone and national ID are required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	var phoneUser, idUser struct {
+		ID         string
+		Email      string
+		Phone      string
+		FirstName  string
+		LastName   string
+		IDNumber   string
+	}
+
+	err := database.QueryRow(
+		"SELECT id, email, phone, first_name, last_name, id_number FROM users WHERE phone = $1",
+		phone,
+	).Scan(&phoneUser.ID, &phoneUser.Email, &phoneUser.Phone, &phoneUser.FirstName, &phoneUser.LastName, &phoneUser.IDNumber)
+
+	err2 := database.QueryRow(
+		"SELECT id, email, phone, first_name, last_name, id_number FROM users WHERE id_number = $1",
+		nationalId,
+	).Scan(&idUser.ID, &idUser.Email, &idUser.Phone, &idUser.FirstName, &idUser.LastName, &idUser.IDNumber)
+
+	phoneExists := err == nil
+	idExists := err2 == nil
+
+	if phoneExists && idExists && phoneUser.ID == idUser.ID {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    phoneUser,
+			"match":   true,
+		})
+		return
+	}
+
+	if phoneExists && idExists && phoneUser.ID != idUser.ID {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"error":   "Credential mismatch: phone and national ID belong to different users",
+			"phoneUser": phoneUser,
+			"idUser":    idUser,
+		})
+		return
+	}
+
+	if phoneExists && !idExists {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "National ID not found for the user with this phone number",
+			"phoneUser": phoneUser,
+		})
+		return
+	}
+
+	if !phoneExists && idExists {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "Phone number not found for the user with this national ID",
+			"idUser": idUser,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": false,
+		"error":   "No user found with these credentials",
+	})
+}
+
+// OnboardUser creates a new user during chama member onboarding
+func OnboardUser(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	var req struct {
+		FirstName string  `json:"firstName" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
+		LastName  string  `json:"lastName" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
+		Email     *string `json:"email,omitempty" validate:"omitempty,email,max=100,no_sql_injection,no_xss"`
+		Phone     string  `json:"phone" validate:"required,phone,no_sql_injection,no_xss"`
+		IDNumber  string  `json:"idNumber" validate:"required,numeric,min=6,max=9,no_sql_injection,no_xss"`
+		Gender    *string `json:"gender,omitempty" validate:"omitempty,oneof=male female other prefer_not_to_say"`
+		Password  *string `json:"password,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Validation error: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	var emailStr string
+	if req.Email != nil && *req.Email != "" {
+		emailStr = *req.Email
+	}
+
+	var genderStr string
+	if req.Gender != nil && *req.Gender != "" {
+		genderStr = *req.Gender
+	}
+
+	var passwordHash string
+	if req.Password != nil && *req.Password != "" {
+		hashedPassword, err := hashPassword(*req.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to process password",
+			})
+			return
+		}
+		passwordHash = hashedPassword
+	} else {
+		randomPassword := generateRandomPassword()
+		hashedPassword, err := hashPassword(randomPassword)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to process password",
+			})
+			return
+		}
+		passwordHash = hashedPassword
+		log.Printf("🔑 Auto-generated password for onboarding user %s %s: %s", req.FirstName, req.LastName, randomPassword)
+	}
+
+	query := `
+		INSERT INTO users (email, phone, first_name, last_name, password_hash, id_number, gender, role, status, is_email_verified, is_phone_verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'user', 'pending', false, false, NOW(), NOW())
+		RETURNING id, email, phone, first_name, last_name, created_at
+	`
+
+	var newUser struct {
+		ID        string
+		Email     string
+		Phone     string
+		FirstName string
+		LastName  string
+		CreatedAt string
+	}
+
+	err := database.QueryRow(query, emailStr, req.Phone, req.FirstName, req.LastName, passwordHash, req.IDNumber, genderStr).Scan(
+		&newUser.ID, &newUser.Email, &newUser.Phone, &newUser.FirstName, &newUser.LastName, &newUser.CreatedAt,
+	)
+
+	if err != nil {
+		log.Printf("Failed to create onboarded user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create user account",
+		})
+		return
+	}
+
+	log.Printf("✅ Onboarded new user: %s %s (ID: %s)", req.FirstName, req.LastName, newUser.ID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "User onboarded successfully",
+		"data": gin.H{
+			"id":        newUser.ID,
+			"email":     newUser.Email,
+			"phone":     newUser.Phone,
+			"firstName": newUser.FirstName,
+			"lastName":  newUser.LastName,
+			"createdAt": newUser.CreatedAt,
+		},
+	})
+}
+
+// UpdateUserPhoneVerified updates a user's phone verification status
+func UpdateUserPhoneVerified(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	targetUserID := c.Param("id")
+	if targetUserID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "User ID is required",
+		})
+		return
+	}
+
+	var req struct {
+		Verified bool `json:"verified" validate:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	query := `UPDATE users SET is_phone_verified = $1, updated_at = NOW() WHERE id = $2`
+	result, err := database.Exec(query, req.Verified, targetUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update phone verification status",
+		})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "User not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Phone verification status updated",
+	})
+}
+
+// UpdateUserPaymentStatus updates a user's registration payment status
+func UpdateUserPaymentStatus(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	targetUserID := c.Param("id")
+	if targetUserID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "User ID is required",
+		})
+		return
+	}
+
+	var req struct {
+		HasPaid bool `json:"hasPaid" validate:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	query := `UPDATE users SET updated_at = NOW() WHERE id = $1`
+	result, err := database.Exec(query, targetUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update payment status",
+		})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "User not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Payment status updated",
+	})
+}
+
+func hashPassword(password string) (string, error) {
+	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedBytes), nil
+}
+
+func generateRandomPassword() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 12)
+	for i := range b {
+		b[i] = charset[int(time.Now().UnixNano())%len(charset)]
+	}
+	return string(b)
 }

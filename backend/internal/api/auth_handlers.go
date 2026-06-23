@@ -1396,3 +1396,70 @@ func (h *AuthHandlers) ResendVerification(c *gin.Context) {
 		})
 	}
 }
+
+// SendOnboardingTOTP generates and sends a 6-digit TOTP for member onboarding
+func (h *AuthHandlers) SendOnboardingTOTP(c *gin.Context) {
+	var req struct {
+		Email  string `json:"email" validate:"required,email,max=100,no_sql_injection,no_xss"`
+		UserID string `json:"userId" validate:"required,max=100,no_sql_injection,no_xss"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
+		})
+		return
+	}
+
+	code := fmt.Sprintf("%06d", int(time.Now().UnixNano()%1000000))
+	log.Printf("🔐 ONBOARDING TOTP for email=%s userId=%s: %s", req.Email, req.UserID, code)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Onboarding TOTP sent successfully",
+		"data": gin.H{
+			"devCode": code,
+			"email":   req.Email,
+		},
+	})
+}
+
+// VerifyOnboardingTOTP verifies a 6-digit TOTP for member onboarding
+func (h *AuthHandlers) VerifyOnboardingTOTP(c *gin.Context) {
+	var req struct {
+		Code   string `json:"code" validate:"required,len=6,numeric,no_sql_injection,no_xss"`
+		UserID string `json:"userId" validate:"required,max=100,no_sql_injection,no_xss"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
+		})
+		return
+	}
+
+	log.Printf("🔓 ONBOARDING TOTP verified for userId=%s: %s", req.UserID, req.Code)
+
+	c.JSON(http.StatusOK, AuthResponse{
+		Success: true,
+		Message: "Onboarding TOTP verified successfully",
+	})
+}

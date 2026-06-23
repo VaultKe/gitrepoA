@@ -62,6 +62,7 @@ type User struct {
 	IDNumber            *string    `json:"idNumber" db:"id_number"`
 	Rating              float64    `json:"rating" db:"rating"`
 	TotalRatings        int        `json:"totalRatings" db:"total_ratings"`
+	RegistrationFeePaid bool       `json:"registrationFeePaid" db:"registration_fee_paid"`
 	CreatedAt           time.Time  `json:"createdAt" db:"created_at"`
 	UpdatedAt           time.Time  `json:"updatedAt" db:"updated_at"`
 }

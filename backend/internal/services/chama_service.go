@@ -69,12 +69,13 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		PaybillAccountNumber:  creation.PaybillAccountNumber,
 		PaymentRecipientName:  creation.PaymentRecipientName,
 		MaxMembers:            creation.MaxMembers,
-		CurrentMembers:        1, // Creator is the first member
+		CurrentMembers:        1,
 		TotalFunds:            0,
 		IsPublic:              creation.IsPublic,
 		RequiresApproval:      creation.RequiresApproval,
 		Rules:                 creation.Rules,
 		MeetingSchedule:       creation.MeetingSchedule,
+		RegistrationFeePaid:   creation.RegistrationFeePaid,
 		CreatedBy:             createdBy,
 		CreatedAt:             time.Now(),
 		UpdatedAt:             time.Now(),
@@ -106,7 +107,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 			payment_method, till_number, paybill_business_number, paybill_account_number, payment_recipient_name,
 			max_members, current_members, total_funds, is_public, requires_approval, rules,
 			meeting_frequency, meeting_day_of_week, meeting_day_of_month, meeting_time,
-			created_by, created_at, updated_at
+			registration_fee_paid, created_by, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
 	`
 
@@ -127,7 +128,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		chama.PaymentMethod, chama.TillNumber, chama.PaybillBusinessNumber, chama.PaybillAccountNumber, chama.PaymentRecipientName,
 		chama.MaxMembers, chama.CurrentMembers, chama.TotalFunds, chama.IsPublic, chama.RequiresApproval,
 		rulesJSON, meetingFreq, meetingDayOfWeek, meetingDayOfMonth, meetingTime,
-		chama.CreatedBy, chama.CreatedAt, chama.UpdatedAt,
+		chama.RegistrationFeePaid, chama.CreatedBy, chama.CreatedAt, chama.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chama: %w", err)

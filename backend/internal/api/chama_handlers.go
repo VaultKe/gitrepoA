@@ -39,9 +39,10 @@ func GetChamas(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Get all public chamas
 	chamas, err := chamaService.GetChamas(limit, offset)
@@ -96,9 +97,10 @@ func GetAllChamasForAdmin(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Get all chamas for admin
 	chamas, err := chamaService.GetAllChamasForAdmin(limit, offset)
@@ -152,9 +154,10 @@ func GetUserChamas(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Get user's chamas
 	chamas, err := chamaService.GetChamasByUser(userID.(string), limit, offset)
@@ -207,10 +210,13 @@ func CreateChama(c *gin.Context) {
 		RequiresApproval      bool    `json:"requires_approval"`
 		Rules                 string  `json:"rules" validate:"max=1000,safe_text,no_sql_injection,no_xss"`
 		MeetingSchedule       string  `json:"meeting_schedule" validate:"max=200,safe_text,no_sql_injection,no_xss"`
+		RegistrationFeePaid   bool    `json:"registration_fee_paid"`
 		Members               []struct {
-			UserID string `json:"user_id"`
-			Role   string `json:"role"`
-			Status string `json:"status"`
+			UserID              string `json:"user_id"`
+			Role                string `json:"role"`
+			Status              string `json:"status"`
+			HasPaidRegistration bool   `json:"has_paid_registration,omitempty"`
+			PhoneVerified       bool   `json:"phone_verified,omitempty"`
 		} `json:"members,omitempty"`
 	}
 
@@ -404,9 +410,10 @@ func CreateChama(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Convert string fields to proper types
 	var description *string
@@ -498,6 +505,7 @@ func CreateChama(c *gin.Context) {
 		RequiresApproval:      req.RequiresApproval,
 		Rules:                 rules,
 		MeetingSchedule:       meetingSchedule,
+		RegistrationFeePaid:   req.RegistrationFeePaid,
 	}
 
 	// Create the chama
@@ -518,17 +526,19 @@ func CreateChama(c *gin.Context) {
 				continue
 			}
 
-			// Add member to chama
-			err := chamaService.AddMemberToChama(chama.ID, member.UserID, member.Role)
-			if err != nil {
-				// Log error but don't fail the entire operation
-				// The chama is already created, so we continue with other members
-				fmt.Printf("Warning: Failed to add member %s to chama %s: %v\n", member.UserID, chama.ID, err)
-				continue
-			}
+		// Add member to chama
+		err := chamaService.AddMemberToChama(chama.ID, member.UserID, member.Role)
+		if err != nil {
+			fmt.Printf("Warning: Failed to add member %s to chama %s: %v\n", member.UserID, chama.ID, err)
+			continue
+		}
 
-			// Update current members count
-			chama.CurrentMembers++
+		if member.HasPaidRegistration {
+			_, _ = database.Exec("UPDATE users SET registration_fee_paid = true, updated_at = NOW() WHERE id = $1", member.UserID)
+		}
+
+		// Update current members count
+		chama.CurrentMembers++
 		}
 
 		// Update the chama's current members count in database
@@ -564,6 +574,7 @@ func CreateChama(c *gin.Context) {
 			"current_members":        chama.CurrentMembers,
 			"is_public":              chama.IsPublic,
 			"requires_approval":      chama.RequiresApproval,
+			"registration_fee_paid":  chama.RegistrationFeePaid,
 			"created_by":             chama.CreatedBy,
 			"created_at":             chama.CreatedAt,
 		},
@@ -609,9 +620,10 @@ func GetChama(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Get chama details
 	chama, err := chamaService.GetChamaByID(chamaID)
@@ -661,9 +673,10 @@ func UpdateChama(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if user is chairperson of this chama
 	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
@@ -763,9 +776,10 @@ func DeleteChama(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if user is chairperson of this chama
 	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
@@ -831,9 +845,10 @@ func LeaveChama(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if user is a member of this chama
 	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
@@ -1108,9 +1123,10 @@ func SendChamaInvitation(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if the chama exists
 	_, err := chamaService.GetChamaByID(chamaID)
@@ -1289,9 +1305,10 @@ func GetUserInvitations(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Get user invitations
 	invitations, err := chamaService.GetUserInvitations(userID.(string))
@@ -1341,9 +1358,10 @@ func GetChamaSentInvitations(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if user has permission to view invitations (chairperson, secretary, treasurer)
 	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
@@ -1863,9 +1881,10 @@ func RemoveChamaMember(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if user has permission to remove members (chairperson only)
 	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
@@ -1932,9 +1951,10 @@ func GetChamaStatistics(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if user is a member of this chama
 	_, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
@@ -2007,9 +2027,10 @@ func GetChamaTransactions(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
 	// Create chama service
-	chamaService := services.NewChamaService(db.(*sql.DB))
+	chamaService := services.NewChamaService(database)
 
 	// Check if user is a member of this chama
 	_, err = chamaService.GetUserRoleInChama(chamaID, userID.(string))
