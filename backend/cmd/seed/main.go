@@ -249,6 +249,8 @@ func seedChamaMembers(db *sql.DB, users []string, chamas []string) {
 			candidate := users[rand.Intn(len(users))]
 			if !contains(memberIDs, candidate) {
 				memberIDs = append(memberIDs, candidate)
+			}
+		}
 	}
 }
 
@@ -265,49 +267,6 @@ func addAdminToAllChamas(db *sql.DB) {
 		log.Printf("⚠️  User with ID %s not found, skipping admin assignment", userID)
 		return
 	}
-
-	// Get all chamas
-	rows, err := db.Query("SELECT id FROM chamas")
-	if err != nil {
-		log.Printf("⚠️  Failed to get chamas: %v\n", err)
-		return
-	}
-	defer rows.Close()
-
-	chamaIDs := make([]string, 0)
-	for rows.Next() {
-		var chamaID string
-		rows.Scan(&chamaID)
-		chamaIDs = append(chamaIDs, chamaID)
-	}
-
-	// Add user as chairperson to each chama (if not already a member)
-	for _, chamaID := range chamaIDs {
-		var existingMember bool
-		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2)", chamaID, userID).Scan(&existingMember)
-		if err != nil {
-			continue
-		}
-
-		if !existingMember {
-			memberID := uuid.New().String()
-			query := `
-				INSERT INTO chama_members (id, chama_id, user_id, role, joined_at, is_active, total_contributions, rating, total_ratings)
-				VALUES ($1, $2, $3, 'chairperson', NOW(), true, 0, 0, 0)
-				ON CONFLICT (chama_id, user_id) DO NOTHING
-			`
-			_, err := db.Exec(query, memberID, chamaID, userID)
-			if err != nil {
-				log.Printf("⚠️  Failed to add sam@gmail.com to chama %s: %v\n", chamaID, err)
-			} else {
-				// Increment current_members count
-				db.Exec("UPDATE chamas SET current_members = current_members + 1 WHERE id = $1", chamaID)
-			}
-		}
-	}
-
-	log.Printf("✅ Added sam@gmail.com (ID: %s) as chairperson to all chamas", userID)
-}
 
 	// Get all chamas
 	rows, err := db.Query("SELECT id FROM chamas")

@@ -711,7 +711,7 @@ func (gds *GoogleDriveService) getUserSettings(userID string) (map[string]interf
 	// Get notification preferences
 	notificationQuery := `
 		SELECT sound_enabled, system_notifications, chama_notifications,
-		       transaction_notifications, marketing_notifications, vibration_enabled,
+		       transaction_notifications, vibration_enabled,
 		       volume_level, notification_sound_id
 		FROM user_notification_preferences
 		WHERE user_id = $1
@@ -719,12 +719,12 @@ func (gds *GoogleDriveService) getUserSettings(userID string) (map[string]interf
 
 	settings := make(map[string]interface{})
 	var soundEnabled, systemNotifications, chamaNotifications bool
-	var transactionNotifications, marketingNotifications, vibrationEnabled bool
+	var transactionNotifications, vibrationEnabled bool
 	var volumeLevel, notificationSoundID sql.NullInt64
 
 	err := gds.db.QueryRow(notificationQuery, userID).Scan(
 		&soundEnabled, &systemNotifications, &chamaNotifications,
-		&transactionNotifications, &marketingNotifications, &vibrationEnabled,
+		&transactionNotifications, &vibrationEnabled,
 		&volumeLevel, &notificationSoundID,
 	)
 	if err != nil && err != sql.ErrNoRows {
@@ -736,7 +736,6 @@ func (gds *GoogleDriveService) getUserSettings(userID string) (map[string]interf
 		"system_notifications":      systemNotifications,
 		"chama_notifications":       chamaNotifications,
 		"transaction_notifications": transactionNotifications,
-		"marketing_notifications":   marketingNotifications,
 		"vibration_enabled":         vibrationEnabled,
 		"volume_level":              volumeLevel.Int64,
 		"notification_sound_id":     notificationSoundID.Int64,

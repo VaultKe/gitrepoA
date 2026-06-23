@@ -155,10 +155,10 @@ func initializeExistingUsers(db *sql.DB) error {
 		INSERT INTO user_notification_preferences 
 		(user_id, notification_sound_id, sound_enabled, vibration_enabled, volume_level,
 		 chama_notifications, transaction_notifications, reminder_notifications, 
-		 system_notifications, marketing_notifications, quiet_hours_enabled,
+		 system_notifications, quiet_hours_enabled,
 		 quiet_hours_start, quiet_hours_end, timezone, notification_frequency,
 		 priority_only_during_quiet, created_at, updated_at)
-		VALUES (?, ?, 1, 1, 80, 1, 1, 1, 1, 0, 0, '22:00:00', '07:00:00', 
+		VALUES (?, ?, 1, 1, 80, 1, 1, 1, 1, 0, '22:00:00', '07:00:00', 
 		        'Africa/Nairobi', 'immediate', 1, NOW(), NOW())
 	`
 

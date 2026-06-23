@@ -2,6 +2,8 @@ import { API_BASE_URL, REQUEST_TIMEOUT, getAuthToken, getDeviceInfo, sanitizeHea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { triggerAppLogout } from '../../utils/authLogout';
 
+let logoutInProgress = false;
+
 const makeRequest = async (endpoint, options = {}) => {
   const token = await getAuthToken();
   const isFormData = options.body instanceof FormData;
@@ -63,7 +65,11 @@ const makeRequest = async (endpoint, options = {}) => {
 
   if (!response.ok) {
     if (response.status === 401) {
-      await triggerAppLogout();
+      if (!logoutInProgress) {
+        logoutInProgress = true;
+        await triggerAppLogout();
+        logoutInProgress = false;
+      }
       throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
     }
     if (response.status === 429) {

@@ -45,7 +45,6 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
     transaction_notifications INTEGER DEFAULT 1,
     reminder_notifications INTEGER DEFAULT 1,
     system_notifications INTEGER DEFAULT 1,
-    marketing_notifications INTEGER DEFAULT 0,
     quiet_hours_enabled INTEGER DEFAULT 0,
     quiet_hours_start TEXT DEFAULT '22:00:00',
     quiet_hours_end TEXT DEFAULT '07:00:00',

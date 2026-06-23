@@ -133,7 +133,7 @@ const NotificationsScreen = ({ navigation }) => {
   useEffect(() => {
     if (baseNotifications.length > 0) {
       const currentIds = new Set(baseNotifications.map(n => n.id));
-      const trulyNewNotificationIds = [...currentIds].filter(id => !processedNotificationIds.has(id));
+      const trulyNewNotificationIds = [...currentIds].filter(id => !processedNotificationIds.current.has(id));
 
       if (trulyNewNotificationIds.length > 0) {
         // Play notification tone for new notifications (only if they haven't been read)
@@ -155,7 +155,7 @@ const NotificationsScreen = ({ navigation }) => {
         }
 
         // Mark these notifications as processed to prevent duplicate playback
-        trulyNewNotificationIds.forEach(id => processedNotificationIds.add(id));
+        trulyNewNotificationIds.forEach(id => processedNotificationIds.current.add(id));
       }
     }
   }, [baseNotifications]);

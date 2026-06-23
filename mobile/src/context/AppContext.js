@@ -6,6 +6,7 @@ import webSocketService from '../services/websocket';
 import dataPreloadService from '../services/dataPreloadService';
 import lightningDataService from '../services/cacheDataService';
 import smartPrefetchService from '../services/smartPrefetchService';
+import { setAppLogout } from '../utils/authLogout';
 
 // Initial state
 const initialState = {
@@ -929,6 +930,8 @@ export function AppProvider({ children }) {
       dispatch({ type: ActionTypes.LOGOUT });
     }
   };
+
+  setAppLogout(logout);
 
   // Load user chamas from API
   const loadUserChamas = async () => {

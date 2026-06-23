@@ -293,7 +293,6 @@ func GetNotificationSettings(c *gin.Context) {
 		"transactionNotifications": preferences.TransactionNotifications,
 		"reminderNotifications":    preferences.ReminderNotifications,
 		"systemNotifications":      preferences.SystemNotifications,
-		"marketingNotifications":   preferences.MarketingNotifications,
 		"soundEnabled":             preferences.SoundEnabled,
 		"vibrationEnabled":         preferences.VibrationEnabled,
 		"volumeLevel":              preferences.VolumeLevel,
@@ -352,9 +351,6 @@ func UpdateNotificationSettings(c *gin.Context) {
 	}
 	if val, ok := legacyReq["systemNotifications"].(bool); ok {
 		req.SystemNotifications = &val
-	}
-	if val, ok := legacyReq["marketingNotifications"].(bool); ok {
-		req.MarketingNotifications = &val
 	}
 	if val, ok := legacyReq["soundEnabled"].(bool); ok {
 		req.SoundEnabled = &val

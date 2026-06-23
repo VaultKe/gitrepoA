@@ -31,7 +31,6 @@ type UserNotificationPreferences struct {
 	TransactionNotifications bool      `json:"transaction_notifications" db:"transaction_notifications"`
 	ReminderNotifications    bool      `json:"reminder_notifications" db:"reminder_notifications"`
 	SystemNotifications      bool      `json:"system_notifications" db:"system_notifications"`
-	MarketingNotifications   bool      `json:"marketing_notifications" db:"marketing_notifications"`
 	QuietHoursEnabled        bool      `json:"quiet_hours_enabled" db:"quiet_hours_enabled"`
 	QuietHoursStart          string    `json:"quiet_hours_start" db:"quiet_hours_start"`
 	QuietHoursEnd            string    `json:"quiet_hours_end" db:"quiet_hours_end"`
@@ -187,7 +186,7 @@ type CreateNotificationRequest struct {
 	UserID        string                 `json:"user_id" validate:"required"`
 	Title         string                 `json:"title" validate:"required"`
 	Message       string                 `json:"message" validate:"required"`
-	Type          string                 `json:"type" validate:"required,oneof=chama transaction reminder system marketing alert"`
+	Type          string                 `json:"type" validate:"required,oneof=chama transaction reminder system alert"`
 	Priority      string                 `json:"priority" validate:"oneof=low normal high urgent"`
 	Category      string                 `json:"category"`
 	ReferenceType string                 `json:"reference_type"`
@@ -206,7 +205,6 @@ type UpdatePreferencesRequest struct {
 	TransactionNotifications *bool  `json:"transaction_notifications"`
 	ReminderNotifications    *bool  `json:"reminder_notifications"`
 	SystemNotifications      *bool  `json:"system_notifications"`
-	MarketingNotifications   *bool  `json:"marketing_notifications"`
 	QuietHoursEnabled        *bool  `json:"quiet_hours_enabled"`
 	QuietHoursStart          string `json:"quiet_hours_start" validate:"omitempty"`
 	QuietHoursEnd            string `json:"quiet_hours_end" validate:"omitempty"`

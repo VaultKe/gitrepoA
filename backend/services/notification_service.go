@@ -153,10 +153,10 @@ func (ns *NotificationService) DeliverNotification(notification *models.Notifica
 	// Update notification status
 	if delivered {
 		now := time.Now()
-		_, err := ns.db.Exec(`
+	_, err := ns.db.Exec(`
 			UPDATE notifications 
-			SET status = 'delivered', sent_at = ?, delivered_at = ?, updated_at = ?
-			WHERE id = ?
+			SET status = 'delivered', sent_at = $1, delivered_at = $2, updated_at = $3
+			WHERE id = $4
 		`, now, now, now, notification.ID)
 
 		if err != nil {
@@ -174,11 +174,11 @@ func (ns *NotificationService) GetUserPreferences(userID string) (*models.UserNo
 	query := `
 		SELECT id, user_id, notification_sound_id, sound_enabled, vibration_enabled, volume_level,
 			   chama_notifications, transaction_notifications, reminder_notifications, 
-			   system_notifications, marketing_notifications, quiet_hours_enabled,
-			   quiet_hours_start, quiet_hours_end, timezone, notification_frequency,
+			   system_notifications, quiet_hours_enabled,
+			   quiet_hours_start::text, quiet_hours_end::text, timezone, notification_frequency,
 			   priority_only_during_quiet, created_at, updated_at
 		FROM user_notification_preferences 
-		WHERE user_id = ?
+		WHERE user_id = $1
 	`
 
 	err := ns.db.QueryRow(query, userID).Scan(
@@ -186,7 +186,7 @@ func (ns *NotificationService) GetUserPreferences(userID string) (*models.UserNo
 		&preferences.SoundEnabled, &preferences.VibrationEnabled, &preferences.VolumeLevel,
 		&preferences.ChamaNotifications, &preferences.TransactionNotifications,
 		&preferences.ReminderNotifications, &preferences.SystemNotifications,
-		&preferences.MarketingNotifications, &preferences.QuietHoursEnabled,
+		&preferences.QuietHoursEnabled,
 		&preferences.QuietHoursStart, &preferences.QuietHoursEnd, &preferences.Timezone,
 		&preferences.NotificationFrequency, &preferences.PriorityOnlyDuringQuiet,
 		&preferences.CreatedAt, &preferences.UpdatedAt,
@@ -213,82 +213,66 @@ func (ns *NotificationService) UpdateUserPreferences(userID string, req models.U
 	// Build update query dynamically
 	setParts := []string{}
 	args := []interface{}{}
+	placeholder := 1
+
+	addUpdate := func(column string, value interface{}) {
+		setParts = append(setParts, fmt.Sprintf("%s = $%d", column, placeholder))
+		args = append(args, value)
+		placeholder++
+	}
 
 	if req.NotificationSoundID != nil {
-		setParts = append(setParts, "notification_sound_id = ?")
-		args = append(args, *req.NotificationSoundID)
+		addUpdate("notification_sound_id", *req.NotificationSoundID)
 	}
 	if req.SoundEnabled != nil {
-		setParts = append(setParts, "sound_enabled = ?")
-		args = append(args, *req.SoundEnabled)
+		addUpdate("sound_enabled", *req.SoundEnabled)
 	}
 	if req.VibrationEnabled != nil {
-		setParts = append(setParts, "vibration_enabled = ?")
-		args = append(args, *req.VibrationEnabled)
+		addUpdate("vibration_enabled", *req.VibrationEnabled)
 	}
 	if req.VolumeLevel != nil {
-		setParts = append(setParts, "volume_level = ?")
-		args = append(args, *req.VolumeLevel)
+		addUpdate("volume_level", *req.VolumeLevel)
 	}
 	if req.ChamaNotifications != nil {
-		setParts = append(setParts, "chama_notifications = ?")
-		args = append(args, *req.ChamaNotifications)
+		addUpdate("chama_notifications", *req.ChamaNotifications)
 	}
 	if req.TransactionNotifications != nil {
-		setParts = append(setParts, "transaction_notifications = ?")
-		args = append(args, *req.TransactionNotifications)
+		addUpdate("transaction_notifications", *req.TransactionNotifications)
 	}
 	if req.ReminderNotifications != nil {
-		setParts = append(setParts, "reminder_notifications = ?")
-		args = append(args, *req.ReminderNotifications)
+		addUpdate("reminder_notifications", *req.ReminderNotifications)
 	}
 	if req.SystemNotifications != nil {
-		setParts = append(setParts, "system_notifications = ?")
-		args = append(args, *req.SystemNotifications)
-	}
-	if req.MarketingNotifications != nil {
-		setParts = append(setParts, "marketing_notifications = ?")
-		args = append(args, *req.MarketingNotifications)
+		addUpdate("system_notifications", *req.SystemNotifications)
 	}
 	if req.QuietHoursEnabled != nil {
-		setParts = append(setParts, "quiet_hours_enabled = ?")
-		args = append(args, *req.QuietHoursEnabled)
+		addUpdate("quiet_hours_enabled", *req.QuietHoursEnabled)
 	}
 	if req.QuietHoursStart != "" {
-		setParts = append(setParts, "quiet_hours_start = ?")
-		args = append(args, req.QuietHoursStart)
+		addUpdate("quiet_hours_start", req.QuietHoursStart)
 	}
 	if req.QuietHoursEnd != "" {
-		setParts = append(setParts, "quiet_hours_end = ?")
-		args = append(args, req.QuietHoursEnd)
+		addUpdate("quiet_hours_end", req.QuietHoursEnd)
 	}
 	if req.Timezone != "" {
-		setParts = append(setParts, "timezone = ?")
-		args = append(args, req.Timezone)
+		addUpdate("timezone", req.Timezone)
 	}
 	if req.NotificationFrequency != "" {
-		setParts = append(setParts, "notification_frequency = ?")
-		args = append(args, req.NotificationFrequency)
+		addUpdate("notification_frequency", req.NotificationFrequency)
 	}
 	if req.PriorityOnlyDuringQuiet != nil {
-		setParts = append(setParts, "priority_only_during_quiet = ?")
-		args = append(args, *req.PriorityOnlyDuringQuiet)
+		addUpdate("priority_only_during_quiet", *req.PriorityOnlyDuringQuiet)
 	}
 
 	if len(setParts) == 0 {
-		return preferences, nil // No updates
+		return preferences, nil
 	}
-
-	// Add updated_at and user_id
-	setParts = append(setParts, "updated_at = ?")
-	args = append(args, time.Now())
-	args = append(args, userID)
 
 	query := fmt.Sprintf(`
 		UPDATE user_notification_preferences 
 		SET %s 
-		WHERE user_id = ?
-	`, strings.Join(setParts, ", "))
+		WHERE user_id = $%d
+	`, strings.Join(setParts, ", "), placeholder)
 
 	_, err = ns.db.Exec(query, args...)
 	if err != nil {
@@ -514,7 +498,7 @@ func (ns *NotificationService) validateNotificationRequest(req models.CreateNoti
 		return fmt.Errorf("type is required")
 	}
 
-	validTypes := []string{"chama", "transaction", "reminder", "system", "marketing", "alert"}
+	validTypes := []string{"chama", "transaction", "reminder", "system", "alert"}
 	validType := false
 	for _, vt := range validTypes {
 		if req.Type == vt {
@@ -540,8 +524,6 @@ func (ns *NotificationService) shouldSendNotification(notifType string, preferen
 		return preferences.ReminderNotifications
 	case "system":
 		return preferences.SystemNotifications
-	case "marketing":
-		return preferences.MarketingNotifications
 	default:
 		return true // Always send alerts and unknown types
 	}
@@ -714,7 +696,7 @@ func (ns *NotificationService) createDefaultPreferences(userID string) (*models.
 		INSERT INTO user_notification_preferences
 		(user_id, notification_sound_id, sound_enabled, vibration_enabled, volume_level,
 		 chama_notifications, transaction_notifications, reminder_notifications,
-		 system_notifications, marketing_notifications, quiet_hours_enabled,
+		 system_notifications, quiet_hours_enabled,
 		 quiet_hours_start, quiet_hours_end, timezone, notification_frequency,
 		 priority_only_during_quiet, created_at, updated_at)
 		VALUES (?, ?, 1, 1, 80, 1, 1, 1, 1, 0, 0, '22:00:00', '07:00:00',
