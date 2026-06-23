@@ -64,7 +64,12 @@ const CreateChamaStep3 = ({
 
   const searchUser = async () => {
     if (!phoneNumber && !nationalId) {
-      Toast.show({ type: 'error', text1: 'Enter phone number or national ID to search' });
+      Toast.show({ type: 'error', text1: 'Enter phone number and national ID to search' });
+      return;
+    }
+
+    if (!phoneNumber || !nationalId) {
+      Toast.show({ type: 'error', text1: 'Both phone number and national ID are required' });
       return;
     }
 
@@ -73,24 +78,29 @@ const CreateChamaStep3 = ({
     setShowUserForm(false);
 
     try {
-      const query = phoneNumber || nationalId;
-      const response = await ApiService.searchUsers(query);
-      if (response.success && response.data && response.data.length > 0) {
-        let matched = response.data.find(u => {
-          if (nationalId && u.nationalId && u.nationalId === nationalId) return true;
-          if (phoneNumber && u.phoneNumber && u.phoneNumber === phoneNumber) return true;
-          if (phoneNumber && u.phone && u.phone === phoneNumber) return true;
-          return false;
-        });
+      const response = await ApiService.searchUserByCredentials(phoneNumber, nationalId);
 
-        if (!matched) {
-          matched = response.data[0];
-        }
+      if (response.success && response.data && response.match) {
+        setFoundUser(response.data);
+        setOnboardingPhase('confirm');
+        return;
+      }
 
-        if (matched) {
-          setFoundUser(matched);
-          setOnboardingPhase('confirm');
-          return;
+      if (response.success === false && response.error) {
+        if (response.error.includes('Credential mismatch')) {
+          Toast.show({
+            type: 'error',
+            text1: 'Credential Mismatch',
+            text2: 'Phone number and National ID do not belong to the same user. This may indicate credential sharing.',
+            visibilityTime: 5000,
+          });
+        } else if (response.error.includes('not found')) {
+          Toast.show({
+            type: 'error',
+            text1: 'Incomplete Credentials',
+            text2: response.error,
+            visibilityTime: 4000,
+          });
         }
       }
 
@@ -159,18 +169,18 @@ const CreateChamaStep3 = ({
   };
 
   const sendTOTP = async () => {
-    const email = foundUser?.email || userForm.email;
+    const phone = foundUser?.phoneNumber || foundUser?.phone || userForm.phone;
     const userId = foundUser?.id || 'new';
     setTotpLoading(true);
     try {
-      const response = await ApiService.sendOnboardingTOTP(email, userId);
+      const response = await ApiService.sendOnboardingTOTP(phone, userId);
       if (response.success) {
         const devCode = response.data?.devCode || generateDevTOTP();
         console.log('========================================');
         console.log('DEV TOTP (onboarding verification):', devCode);
         console.log('========================================');
         setTotpCode(devCode);
-        Toast.show({ type: 'success', text1: 'Verification code sent to email', text2: `Dev: ${devCode}`, visibilityTime: 5000 });
+        Toast.show({ type: 'success', text1: 'Verification code sent to phone', text2: `Dev: ${devCode}`, visibilityTime: 5000 });
       } else {
         throw new Error(response.error || 'Failed to send code');
       }

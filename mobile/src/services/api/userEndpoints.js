@@ -72,8 +72,12 @@ const getUsers = async (limit = 50, offset = 0, query = '') => {
   return await makeRequest(url);
 };
 
+const searchUserByCredentials = async (phone, nationalId) => {
+  return await makeRequest(`/users/search-by-credentials?phone=${encodeURIComponent(phone)}&nationalId=${encodeURIComponent(nationalId)}`);
+};
+
 const searchUsers = async (query) => {
-  return await makeRequest(`/users/?q=${encodeURIComponent(query)}`);
+  return await makeRequest(`/users/search?q=${encodeURIComponent(query)}`);
 };
 
 const getAllUsersForAdmin = async (limit = 15, offset = 0, query = '') => {
@@ -254,10 +258,10 @@ const searchUserByPhoneAndNationalId = async (phone, nationalId) => {
   return await makeRequest(`/users/search?phone=${encodeURIComponent(phone)}&nationalId=${encodeURIComponent(nationalId)}`);
 };
 
-const sendOnboardingTOTP = async (email, userId) => {
+const sendOnboardingTOTP = async (phone, userId) => {
   return await makeRequest('/auth/send-onboarding-totp', {
     method: 'POST',
-    body: { email, userId },
+    body: { phone, userId },
   });
 };
 
@@ -294,7 +298,7 @@ export {
   updateProfile,
   getUsers,
   searchUsers,
-  searchUserByPhoneAndNationalId,
+  searchUserByCredentials,
   getAllUsersForAdmin,
   getAllUsersComplete,
   getUserStatistics,

@@ -1379,6 +1379,38 @@ func OnboardUser(c *gin.Context) {
 		genderStr = *req.Gender
 	}
 
+	if emailStr != "" {
+		var existingEmail string
+		err := database.QueryRow("SELECT id FROM users WHERE email = $1", emailStr).Scan(&existingEmail)
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error":   "Email already exists",
+			})
+			return
+		}
+	}
+
+	var existingPhone string
+	err := database.QueryRow("SELECT id FROM users WHERE phone = $1", req.Phone).Scan(&existingPhone)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"error":   "Phone number already exists",
+		})
+		return
+	}
+
+	var existingID string
+	err = database.QueryRow("SELECT id FROM users WHERE id_number = $1", req.IDNumber).Scan(&existingID)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"error":   "National ID already exists",
+		})
+		return
+	}
+
 	var passwordHash string
 	if req.Password != nil && *req.Password != "" {
 		hashedPassword, err := hashPassword(*req.Password)
@@ -1419,7 +1451,7 @@ func OnboardUser(c *gin.Context) {
 		CreatedAt string
 	}
 
-	err := database.QueryRow(query, emailStr, req.Phone, req.FirstName, req.LastName, passwordHash, req.IDNumber, genderStr).Scan(
+	err = database.QueryRow(query, emailStr, req.Phone, req.FirstName, req.LastName, passwordHash, req.IDNumber, genderStr).Scan(
 		&newUser.ID, &newUser.Email, &newUser.Phone, &newUser.FirstName, &newUser.LastName, &newUser.CreatedAt,
 	)
 

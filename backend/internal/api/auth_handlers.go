@@ -1397,38 +1397,38 @@ func (h *AuthHandlers) ResendVerification(c *gin.Context) {
 	}
 }
 
-// SendOnboardingTOTP generates and sends a 6-digit TOTP for member onboarding
+// SendOnboardingTOTP generates and sends a 6-digit TOTP for member onboarding via phone
 func (h *AuthHandlers) SendOnboardingTOTP(c *gin.Context) {
 	var req struct {
-		Email  string `json:"email" validate:"required,email,max=100,no_sql_injection,no_xss"`
+		Phone  string `json:"phone" validate:"required,phone,max=20,no_sql_injection,no_xss"`
 		UserID string `json:"userId" validate:"required,max=100,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, AuthResponse{
-			Success: false,
-			Error:   "Invalid request data: " + err.Error(),
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
 		})
 		return
 	}
 
 	if err := utils.ValidateStruct(&req); err != nil {
-		c.JSON(http.StatusBadRequest, AuthResponse{
-			Success: false,
-			Error:   "Validation error: " + err.Error(),
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Validation error: " + err.Error(),
 		})
 		return
 	}
 
 	code := fmt.Sprintf("%06d", int(time.Now().UnixNano()%1000000))
-	log.Printf("🔐 ONBOARDING TOTP for email=%s userId=%s: %s", req.Email, req.UserID, code)
+	log.Printf("🔐 ONBOARDING TOTP for phone=%s userId=%s: %s", req.Phone, req.UserID, code)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Onboarding TOTP sent successfully",
 		"data": gin.H{
 			"devCode": code,
-			"email":   req.Email,
+			"phone":   req.Phone,
 		},
 	})
 }
