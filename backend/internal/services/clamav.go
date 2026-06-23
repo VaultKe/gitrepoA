@@ -23,10 +23,10 @@ func ScanFileWithClamAV(filePath string) *ClamAVScanResult {
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return &ClamAVScanResult{
-			IsClean:    false,
-			Infected:   false,
-			ScanError:  fmt.Errorf("file does not exist: %s", filePath),
-			ScanTime:   time.Since(startTime),
+			IsClean:   false,
+			Infected:  false,
+			ScanError: fmt.Errorf("file does not exist: %s", filePath),
+			ScanTime:  time.Since(startTime),
 		}
 	}
 

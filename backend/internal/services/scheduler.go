@@ -74,7 +74,7 @@ func (s *SchedulerService) runScheduledTasks() {
 func (s *SchedulerService) checkMeetingAutoUnlock() {
 	now := time.Now()
 	unlockTime := now.Add(5 * time.Minute) // 5 minutes from now
-	
+
 	query := `
 		SELECT id, title, scheduled_at, meeting_type
 		FROM meetings 
@@ -82,55 +82,55 @@ func (s *SchedulerService) checkMeetingAutoUnlock() {
 		AND scheduled_at <= $1 
 		AND scheduled_at > $2
 	`
-	
+
 	rows, err := s.db.Query(query, unlockTime, now)
 	if err != nil {
 		log.Printf("Error checking meetings for auto-unlock: %v", err)
 		return
 	}
 	defer rows.Close()
-	
+
 	var unlockedCount int
-	
+
 	for rows.Next() {
 		var meetingID, title, meetingType string
 		var scheduledAt time.Time
-		
+
 		err := rows.Scan(&meetingID, &title, &scheduledAt, &meetingType)
 		if err != nil {
 			log.Printf("Error scanning meeting row: %v", err)
 			continue
 		}
-		
+
 		// Update meeting status to allow joining
 		updateQuery := `
 			UPDATE meetings 
 			SET status = 'ready', updated_at = CURRENT_TIMESTAMP
 			WHERE id = $1 AND status = 'scheduled'
 		`
-		
+
 		result, err := s.db.Exec(updateQuery, meetingID)
 		if err != nil {
 			log.Printf("Error updating meeting %s status: %v", meetingID, err)
 			continue
 		}
-		
+
 		rowsAffected, err := result.RowsAffected()
 		if err != nil {
 			log.Printf("Error checking rows affected for meeting %s: %v", meetingID, err)
 			continue
 		}
-		
+
 		if rowsAffected > 0 {
 			unlockedCount++
-			log.Printf("Auto-unlocked meeting: %s (%s) scheduled for %v", 
+			log.Printf("Auto-unlocked meeting: %s (%s) scheduled for %v",
 				meetingID, title, scheduledAt.Format("2006-01-02 15:04:05"))
-			
+
 			// Send notifications to chama members
 			s.sendMeetingNotifications(meetingID, title, "Meeting is now available to join")
 		}
 	}
-	
+
 	if unlockedCount > 0 {
 		log.Printf("Auto-unlocked %d meetings", unlockedCount)
 	}
@@ -139,7 +139,7 @@ func (s *SchedulerService) checkMeetingAutoUnlock() {
 // checkMeetingAutoEnd checks for meetings that should be automatically ended
 func (s *SchedulerService) checkMeetingAutoEnd() {
 	now := time.Now()
-	
+
 	// End meetings that have been active for more than their duration + 30 minutes grace period
 	query := `
 		SELECT id, title, scheduled_at, duration, started_at
@@ -148,42 +148,42 @@ func (s *SchedulerService) checkMeetingAutoEnd() {
 		AND started_at IS NOT NULL
 		AND started_at + (duration + 30) * INTERVAL '1 minute' <= $1
 	`
-	
+
 	rows, err := s.db.Query(query, now)
 	if err != nil {
 		log.Printf("Error checking meetings for auto-end: %v", err)
 		return
 	}
 	defer rows.Close()
-	
+
 	var endedCount int
-	
+
 	for rows.Next() {
 		var meetingID, title string
 		var scheduledAt, startedAt time.Time
 		var duration int
-		
+
 		err := rows.Scan(&meetingID, &title, &scheduledAt, &duration, &startedAt)
 		if err != nil {
 			log.Printf("Error scanning meeting row for auto-end: %v", err)
 			continue
 		}
-		
+
 		// End the meeting
 		err = s.meetingService.EndMeeting(meetingID)
 		if err != nil {
 			log.Printf("Error auto-ending meeting %s: %v", meetingID, err)
 			continue
 		}
-		
+
 		endedCount++
-		log.Printf("Auto-ended meeting: %s (%s) that started at %v", 
+		log.Printf("Auto-ended meeting: %s (%s) that started at %v",
 			meetingID, title, startedAt.Format("2006-01-02 15:04:05"))
-		
+
 		// Send notifications
 		s.sendMeetingNotifications(meetingID, title, "Meeting has ended")
 	}
-	
+
 	if endedCount > 0 {
 		log.Printf("Auto-ended %d meetings", endedCount)
 	}
@@ -198,7 +198,7 @@ func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, mes
 		log.Printf("Error getting chama ID for meeting %s: %v", meetingID, err)
 		return
 	}
-	
+
 	// Get all chama members
 	query := `
 		SELECT cm.user_id, u.first_name, u.last_name 
@@ -206,16 +206,16 @@ func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, mes
 		JOIN users u ON cm.user_id = u.id
 		WHERE cm.chama_id = $1 AND cm.is_active = TRUE
 	`
-	
+
 	rows, err := s.db.Query(query, chamaID)
 	if err != nil {
 		log.Printf("Error getting chama members for notifications: %v", err)
 		return
 	}
 	defer rows.Close()
-	
+
 	var notificationCount int
-	
+
 	for rows.Next() {
 		var userID, firstName, lastName string
 		err := rows.Scan(&userID, &firstName, &lastName)
@@ -223,7 +223,7 @@ func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, mes
 			log.Printf("Error scanning chama member: %v", err)
 			continue
 		}
-		
+
 		// Create notification
 		notificationID := generateUUID()
 		insertQuery := `
@@ -231,30 +231,30 @@ func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, mes
 				id, user_id, title, message, type, data, created_at
 			) VALUES ($1, $2, $3, $4, 'meeting', $5, CURRENT_TIMESTAMP)
 		`
-		
+
 		notificationData := map[string]interface{}{
 			"meetingId":    meetingID,
 			"meetingTitle": meetingTitle,
 			"chamaId":      chamaID,
 		}
-		
+
 		dataJSON, _ := jsonMarshal(notificationData)
-		
-		_, err = s.db.Exec(insertQuery, 
-			notificationID, 
-			userID, 
-			meetingTitle, 
-			message, 
+
+		_, err = s.db.Exec(insertQuery,
+			notificationID,
+			userID,
+			meetingTitle,
+			message,
 			string(dataJSON))
-		
+
 		if err != nil {
 			log.Printf("Error creating notification for user %s: %v", userID, err)
 			continue
 		}
-		
+
 		notificationCount++
 	}
-	
+
 	if notificationCount > 0 {
 		log.Printf("Sent %d notifications for meeting %s", notificationCount, meetingID)
 	}

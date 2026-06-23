@@ -20,10 +20,10 @@ const (
 type LoanType string
 
 const (
-	LoanTypePersonal   LoanType = "personal"
-	LoanTypeBusiness   LoanType = "business"
-	LoanTypeEmergency  LoanType = "emergency"
-	LoanTypeEducation  LoanType = "education"
+	LoanTypePersonal  LoanType = "personal"
+	LoanTypeBusiness  LoanType = "business"
+	LoanTypeEmergency LoanType = "emergency"
+	LoanTypeEducation LoanType = "education"
 )
 
 // GuarantorStatus represents guarantor status
@@ -37,70 +37,70 @@ const (
 
 // Loan represents a loan in the system
 type Loan struct {
-	ID                string      `json:"id" db:"id"`
-	BorrowerID        string      `json:"borrowerId" db:"borrower_id"`
-	ChamaID           string      `json:"chamaId" db:"chama_id"`
-	Type              LoanType    `json:"type" db:"type"`
-	Amount            float64     `json:"amount" db:"amount"`
-	InterestRate      float64     `json:"interestRate" db:"interest_rate"`
-	Duration          int         `json:"duration" db:"duration"` // in months
-	Purpose           string      `json:"purpose" db:"purpose"`
-	Status            LoanStatus  `json:"status" db:"status"`
-	ApprovedBy        *string     `json:"approvedBy,omitempty" db:"approved_by"`
-	ApprovedAt        *time.Time  `json:"approvedAt,omitempty" db:"approved_at"`
-	DisbursedAt       *time.Time  `json:"disbursedAt,omitempty" db:"disbursed_at"`
-	DueDate           *time.Time  `json:"dueDate,omitempty" db:"due_date"`
-	TotalAmount       float64     `json:"totalAmount" db:"total_amount"`
-	PaidAmount        float64     `json:"paidAmount" db:"paid_amount"`
-	RemainingAmount   float64     `json:"remainingAmount" db:"remaining_amount"`
+	ID                 string     `json:"id" db:"id"`
+	BorrowerID         string     `json:"borrowerId" db:"borrower_id"`
+	ChamaID            string     `json:"chamaId" db:"chama_id"`
+	Type               LoanType   `json:"type" db:"type"`
+	Amount             float64    `json:"amount" db:"amount"`
+	InterestRate       float64    `json:"interestRate" db:"interest_rate"`
+	Duration           int        `json:"duration" db:"duration"` // in months
+	Purpose            string     `json:"purpose" db:"purpose"`
+	Status             LoanStatus `json:"status" db:"status"`
+	ApprovedBy         *string    `json:"approvedBy,omitempty" db:"approved_by"`
+	ApprovedAt         *time.Time `json:"approvedAt,omitempty" db:"approved_at"`
+	DisbursedAt        *time.Time `json:"disbursedAt,omitempty" db:"disbursed_at"`
+	DueDate            *time.Time `json:"dueDate,omitempty" db:"due_date"`
+	TotalAmount        float64    `json:"totalAmount" db:"total_amount"`
+	PaidAmount         float64    `json:"paidAmount" db:"paid_amount"`
+	RemainingAmount    float64    `json:"remainingAmount" db:"remaining_amount"`
 	RequiredGuarantors int        `json:"requiredGuarantors" db:"required_guarantors"`
 	ApprovedGuarantors int        `json:"approvedGuarantors" db:"approved_guarantors"`
-	CreatedAt         time.Time   `json:"createdAt" db:"created_at"`
-	UpdatedAt         time.Time   `json:"updatedAt" db:"updated_at"`
-	
+	CreatedAt          time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt          time.Time  `json:"updatedAt" db:"updated_at"`
+
 	// Joined data
-	Borrower   *User        `json:"borrower,omitempty"`
-	Chama      *Chama       `json:"chama,omitempty"`
-	Guarantors []Guarantor  `json:"guarantors,omitempty"`
+	Borrower   *User         `json:"borrower,omitempty"`
+	Chama      *Chama        `json:"chama,omitempty"`
+	Guarantors []Guarantor   `json:"guarantors,omitempty"`
 	Payments   []LoanPayment `json:"payments,omitempty"`
 }
 
 // Guarantor represents a loan guarantor
 type Guarantor struct {
-	ID         string          `json:"id" db:"id"`
-	LoanID     string          `json:"loanId" db:"loan_id"`
-	UserID     string          `json:"userId" db:"user_id"`
-	Amount     float64         `json:"amount" db:"amount"`
-	Status     GuarantorStatus `json:"status" db:"status"`
-	Message    *string         `json:"message,omitempty" db:"message"`
-	RespondedAt *time.Time     `json:"respondedAt,omitempty" db:"responded_at"`
-	CreatedAt  time.Time       `json:"createdAt" db:"created_at"`
-	
+	ID          string          `json:"id" db:"id"`
+	LoanID      string          `json:"loanId" db:"loan_id"`
+	UserID      string          `json:"userId" db:"user_id"`
+	Amount      float64         `json:"amount" db:"amount"`
+	Status      GuarantorStatus `json:"status" db:"status"`
+	Message     *string         `json:"message,omitempty" db:"message"`
+	RespondedAt *time.Time      `json:"respondedAt,omitempty" db:"responded_at"`
+	CreatedAt   time.Time       `json:"createdAt" db:"created_at"`
+
 	// Joined data
 	User *User `json:"user,omitempty"`
 }
 
 // LoanPayment represents a loan payment
 type LoanPayment struct {
-	ID            string    `json:"id" db:"id"`
-	LoanID        string    `json:"loanId" db:"loan_id"`
-	Amount        float64   `json:"amount" db:"amount"`
-	PrincipalAmount float64 `json:"principalAmount" db:"principal_amount"`
-	InterestAmount  float64 `json:"interestAmount" db:"interest_amount"`
-	PaymentMethod string    `json:"paymentMethod" db:"payment_method"`
-	Reference     *string   `json:"reference,omitempty" db:"reference"`
-	PaidAt        time.Time `json:"paidAt" db:"paid_at"`
-	CreatedAt     time.Time `json:"createdAt" db:"created_at"`
+	ID              string    `json:"id" db:"id"`
+	LoanID          string    `json:"loanId" db:"loan_id"`
+	Amount          float64   `json:"amount" db:"amount"`
+	PrincipalAmount float64   `json:"principalAmount" db:"principal_amount"`
+	InterestAmount  float64   `json:"interestAmount" db:"interest_amount"`
+	PaymentMethod   string    `json:"paymentMethod" db:"payment_method"`
+	Reference       *string   `json:"reference,omitempty" db:"reference"`
+	PaidAt          time.Time `json:"paidAt" db:"paid_at"`
+	CreatedAt       time.Time `json:"createdAt" db:"created_at"`
 }
 
 // LoanApplication represents loan application data
 type LoanApplication struct {
-	Type              LoanType `json:"type" validate:"required"`
-	Amount            float64  `json:"amount" validate:"required,gt=0"`
-	Duration          int      `json:"duration" validate:"required,gt=0"`
-	Purpose           string   `json:"purpose" validate:"required"`
-	RequiredGuarantors int     `json:"requiredGuarantors" validate:"required,gt=0"`
-	GuarantorUserIDs  []string `json:"guarantorUserIds" validate:"required,min=1"`
+	Type               LoanType `json:"type" validate:"required"`
+	Amount             float64  `json:"amount" validate:"required,gt=0"`
+	Duration           int      `json:"duration" validate:"required,gt=0"`
+	Purpose            string   `json:"purpose" validate:"required"`
+	RequiredGuarantors int      `json:"requiredGuarantors" validate:"required,gt=0"`
+	GuarantorUserIDs   []string `json:"guarantorUserIds" validate:"required,min=1"`
 }
 
 // LoanApproval represents loan approval data
@@ -118,43 +118,43 @@ type GuarantorResponse struct {
 
 // LoanProduct represents a configurable loan type template for a chama
 type LoanProduct struct {
-	ID                    string     `json:"id" db:"id"`
-	ChamaID               string     `json:"chamaId" db:"chama_id"`
-	Name                  string     `json:"name" db:"name"`
-	Description           *string    `json:"description,omitempty" db:"description"`
-	MaxAmount             float64    `json:"maxAmount" db:"max_amount"`
-	MinAmount             float64    `json:"minAmount" db:"min_amount"`
-	InterestRate          float64    `json:"interestRate" db:"interest_rate"`
-	TermMonths            int        `json:"termMonths" db:"term_months"`
-	EligibilityCriteria   string     `json:"eligibilityCriteria" db:"eligibility_criteria"`
-	ApprovalRequired      bool       `json:"approvalRequired" db:"approval_required"`
-	GracePeriodDays       int        `json:"gracePeriodDays" db:"grace_period_days"`
-	PenaltyRate           float64    `json:"penaltyRate" db:"penalty_rate"`
-	MaxLoansPerMember     int        `json:"maxLoansPerMember" db:"max_loans_per_member"`
-	RequiresCollateral    bool       `json:"requiresCollateral" db:"requires_collateral"`
-	CollateralDesc        *string    `json:"collateralDescription,omitempty" db:"collateral_description"`
-	Status                string     `json:"status" db:"status"`
-	CreatedBy             string     `json:"createdBy" db:"created_by"`
-	CreatedAt             time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt             time.Time  `json:"updatedAt" db:"updated_at"`
+	ID                  string    `json:"id" db:"id"`
+	ChamaID             string    `json:"chamaId" db:"chama_id"`
+	Name                string    `json:"name" db:"name"`
+	Description         *string   `json:"description,omitempty" db:"description"`
+	MaxAmount           float64   `json:"maxAmount" db:"max_amount"`
+	MinAmount           float64   `json:"minAmount" db:"min_amount"`
+	InterestRate        float64   `json:"interestRate" db:"interest_rate"`
+	TermMonths          int       `json:"termMonths" db:"term_months"`
+	EligibilityCriteria string    `json:"eligibilityCriteria" db:"eligibility_criteria"`
+	ApprovalRequired    bool      `json:"approvalRequired" db:"approval_required"`
+	GracePeriodDays     int       `json:"gracePeriodDays" db:"grace_period_days"`
+	PenaltyRate         float64   `json:"penaltyRate" db:"penalty_rate"`
+	MaxLoansPerMember   int       `json:"maxLoansPerMember" db:"max_loans_per_member"`
+	RequiresCollateral  bool      `json:"requiresCollateral" db:"requires_collateral"`
+	CollateralDesc      *string   `json:"collateralDescription,omitempty" db:"collateral_description"`
+	Status              string    `json:"status" db:"status"`
+	CreatedBy           string    `json:"createdBy" db:"created_by"`
+	CreatedAt           time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt           time.Time `json:"updatedAt" db:"updated_at"`
 }
 
 // LoanProductRequest represents the request to create/update a loan product
 type LoanProductRequest struct {
-	Name                  string  `json:"name" validate:"required,min=1,max=100"`
-	Description           *string `json:"description,omitempty"`
-	MaxAmount             float64 `json:"maxAmount" validate:"required,gt=0"`
-	MinAmount             float64 `json:"minAmount" validate:"gte=0"`
-	InterestRate          float64 `json:"interestRate" validate:"required,min=0"`
-	TermMonths            int     `json:"termMonths" validate:"required,gt=0"`
-	EligibilityCriteria   string  `json:"eligibilityCriteria" validate:"omitempty"`
-	ApprovalRequired      *bool   `json:"approvalRequired,omitempty"`
-	GracePeriodDays       int     `json:"gracePeriodDays" validate:"gte=0"`
-	PenaltyRate           float64 `json:"penaltyRate" validate:"gte=0"`
-	MaxLoansPerMember     int     `json:"maxLoansPerMember" validate:"gte=1"`
-	RequiresCollateral    *bool   `json:"requiresCollateral,omitempty"`
-	CollateralDesc        *string `json:"collateralDescription,omitempty"`
-	Status                string  `json:"status" validate:"omitempty,oneof=active inactive"`
+	Name                string  `json:"name" validate:"required,min=1,max=100"`
+	Description         *string `json:"description,omitempty"`
+	MaxAmount           float64 `json:"maxAmount" validate:"required,gt=0"`
+	MinAmount           float64 `json:"minAmount" validate:"gte=0"`
+	InterestRate        float64 `json:"interestRate" validate:"required,min=0"`
+	TermMonths          int     `json:"termMonths" validate:"required,gt=0"`
+	EligibilityCriteria string  `json:"eligibilityCriteria" validate:"omitempty"`
+	ApprovalRequired    *bool   `json:"approvalRequired,omitempty"`
+	GracePeriodDays     int     `json:"gracePeriodDays" validate:"gte=0"`
+	PenaltyRate         float64 `json:"penaltyRate" validate:"gte=0"`
+	MaxLoansPerMember   int     `json:"maxLoansPerMember" validate:"gte=1"`
+	RequiresCollateral  *bool   `json:"requiresCollateral,omitempty"`
+	CollateralDesc      *string `json:"collateralDescription,omitempty"`
+	Status              string  `json:"status" validate:"omitempty,oneof=active inactive"`
 }
 
 // LoanProductResponse represents a standard API response wrapper for loan products
@@ -231,7 +231,7 @@ func (l *Loan) GetRemainingDays() int {
 	if l.DueDate == nil {
 		return 0
 	}
-	
+
 	remaining := time.Until(*l.DueDate)
 	return int(remaining.Hours() / 24)
 }
@@ -263,25 +263,25 @@ func (lp *LoanPayment) GetTotalAmount() float64 {
 
 // LoanSummary represents loan summary statistics
 type LoanSummary struct {
-	TotalLoans       int     `json:"totalLoans"`
-	ActiveLoans      int     `json:"activeLoans"`
-	CompletedLoans   int     `json:"completedLoans"`
-	DefaultedLoans   int     `json:"defaultedLoans"`
-	TotalBorrowed    float64 `json:"totalBorrowed"`
-	TotalRepaid      float64 `json:"totalRepaid"`
-	TotalOutstanding float64 `json:"totalOutstanding"`
+	TotalLoans          int     `json:"totalLoans"`
+	ActiveLoans         int     `json:"activeLoans"`
+	CompletedLoans      int     `json:"completedLoans"`
+	DefaultedLoans      int     `json:"defaultedLoans"`
+	TotalBorrowed       float64 `json:"totalBorrowed"`
+	TotalRepaid         float64 `json:"totalRepaid"`
+	TotalOutstanding    float64 `json:"totalOutstanding"`
 	AverageInterestRate float64 `json:"averageInterestRate"`
 }
 
 // LoanSchedule represents loan repayment schedule
 type LoanSchedule struct {
-	PaymentNumber   int       `json:"paymentNumber"`
-	DueDate         time.Time `json:"dueDate"`
-	PrincipalAmount float64   `json:"principalAmount"`
-	InterestAmount  float64   `json:"interestAmount"`
-	TotalAmount     float64   `json:"totalAmount"`
-	RemainingBalance float64  `json:"remainingBalance"`
-	IsPaid          bool      `json:"isPaid"`
+	PaymentNumber    int       `json:"paymentNumber"`
+	DueDate          time.Time `json:"dueDate"`
+	PrincipalAmount  float64   `json:"principalAmount"`
+	InterestAmount   float64   `json:"interestAmount"`
+	TotalAmount      float64   `json:"totalAmount"`
+	RemainingBalance float64   `json:"remainingBalance"`
+	IsPaid           bool      `json:"isPaid"`
 }
 
 // GenerateSchedule generates loan repayment schedule
@@ -298,7 +298,7 @@ func (l *Loan) GenerateSchedule() []LoanSchedule {
 
 	for i := 1; i <= l.Duration; i++ {
 		dueDate := l.DisbursedAt.AddDate(0, i, 0)
-		
+
 		// Adjust last payment to account for rounding
 		if i == l.Duration {
 			monthlyPrincipal = remainingBalance
@@ -312,7 +312,7 @@ func (l *Loan) GenerateSchedule() []LoanSchedule {
 			InterestAmount:   monthlyInterest,
 			TotalAmount:      monthlyPayment,
 			RemainingBalance: remainingBalance - monthlyPrincipal,
-			IsPaid:          false, // This would be determined by checking actual payments
+			IsPaid:           false, // This would be determined by checking actual payments
 		})
 
 		remainingBalance -= monthlyPrincipal

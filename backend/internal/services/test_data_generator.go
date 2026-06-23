@@ -24,13 +24,13 @@ const (
 
 // TestDataGenerator generates random test data for development/testing
 type TestDataGenerator struct {
-	db         *sql.DB
-	running    bool
-	interval   time.Duration
-	stopChan   chan bool
-	lastRun    time.Time
-	stats      map[string]int
-	mu         chan struct{} // simple lock using channel
+	db       *sql.DB
+	running  bool
+	interval time.Duration
+	stopChan chan bool
+	lastRun  time.Time
+	stats    map[string]int
+	mu       chan struct{} // simple lock using channel
 }
 
 // NewTestDataGenerator creates a new test data generator
@@ -173,10 +173,10 @@ func (g *TestDataGenerator) GetStats() map[string]interface{} {
 	defer func() { <-g.mu }()
 
 	return map[string]interface{}{
-		"running":    g.running,
-		"interval":   g.interval.String(),
-		"last_run":   g.lastRun,
-		"total":      g.stats,
+		"running":  g.running,
+		"interval": g.interval.String(),
+		"last_run": g.lastRun,
+		"total":    g.stats,
 	}
 }
 
@@ -343,7 +343,7 @@ func (g *TestDataGenerator) createRandomLoan(chamas, users []string) {
 		status = "active"
 		approver := g.pickRandom(users)
 		approvedBy = &approver
-		approvedAt = time.Now().Add(-time.Duration(rand.Intn(30))*24*time.Hour)
+		approvedAt = time.Now().Add(-time.Duration(rand.Intn(30)) * 24 * time.Hour)
 		disbursedAt = approvedAt.Add(24 * time.Hour)
 	}
 

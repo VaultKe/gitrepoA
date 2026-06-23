@@ -125,14 +125,14 @@ func (s *AuthService) GenerateRefreshToken(userID, userAgent, ipAddress string) 
 	expiresAt := time.Now().Add(30 * 24 * time.Hour) // 30 days
 
 	rt := &models.RefreshToken{
-		UserID:         userID,
-		TokenHash:      tokenHash,
-		UserAgentHash:  &uaHash,
-		IPAddress:      &ipAddress,
-		ExpiresAt:      expiresAt,
-		Revoked:        false,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		UserID:        userID,
+		TokenHash:     tokenHash,
+		UserAgentHash: &uaHash,
+		IPAddress:     &ipAddress,
+		ExpiresAt:     expiresAt,
+		Revoked:       false,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	query := `

@@ -39,12 +39,12 @@ export default function ForgotPasswordScreen({ navigation }) {
       return;
     }
 
-    // Basic email validation
+    // Strict Kenyan phone or email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^\+?[\d\s-()]+$/;
+    const phoneRegex = /^(\+254|254|0)[17]\d{8}$/;
 
     if (!emailRegex.test(identifier.trim()) && !phoneRegex.test(identifier.trim())) {
-      setErrors({ identifier: 'Please enter a valid email address or phone number' });
+      setErrors({ identifier: 'Please enter a valid Kenyan phone number (+2547XXXXXXXX or 07XXXXXXXX) or email address' });
       return;
     }
 

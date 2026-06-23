@@ -24,14 +24,14 @@ type WebSocketMessage struct {
 
 // Client represents a WebSocket client
 type Client struct {
-	ID            string
-	UserID        string
-	Conn          *websocket.Conn
-	Send          chan WebSocketMessage
-	Hub           *Hub
+	ID               string
+	UserID           string
+	Conn             *websocket.Conn
+	Send             chan WebSocketMessage
+	Hub              *Hub
 	WebSocketService *WebSocketService
-	rooms         map[string]bool // Track rooms this client is in for cleanup
-	mutex         sync.RWMutex
+	rooms            map[string]bool // Track rooms this client is in for cleanup
+	mutex            sync.RWMutex
 }
 
 // Hub maintains the set of active clients and broadcasts messages to the clients
@@ -315,39 +315,39 @@ func (c *Client) readPump() {
 			break
 		}
 
-	// Handle different message types
-	switch message.Type {
-	case "join_room":
-		if message.RoomID != "" {
-			c.Hub.JoinRoom(c, message.RoomID)
-		}
-	case "leave_room":
-		if message.RoomID != "" {
-			c.Hub.LeaveRoom(c, message.RoomID)
-		}
-	case "send_message":
-		// Handle message sending - process and save to database
-		c.handleSendMessage(c.WebSocketService, message)
-	case "ping":
-		// Send pong response
-		select {
-		case c.Send <- WebSocketMessage{Type: "pong"}:
-		default:
-			return
-		}
-	// Chat-specific requests (request-response pattern)
-	case "get_rooms":
-		c.handleGetRooms(c.WebSocketService, message)
-	case "get_room":
-		c.handleGetRoom(c.WebSocketService, message)
-	case "create_room":
-		c.handleCreateRoom(c.WebSocketService, message)
-	case "get_messages":
-		c.handleGetMessages(c.WebSocketService, message)
-	case "mark_read":
-		c.handleMarkRead(c.WebSocketService, message)
-	case "typing_start", "typing_stop":
-		c.handleTyping(c.WebSocketService, message)
+		// Handle different message types
+		switch message.Type {
+		case "join_room":
+			if message.RoomID != "" {
+				c.Hub.JoinRoom(c, message.RoomID)
+			}
+		case "leave_room":
+			if message.RoomID != "" {
+				c.Hub.LeaveRoom(c, message.RoomID)
+			}
+		case "send_message":
+			// Handle message sending - process and save to database
+			c.handleSendMessage(c.WebSocketService, message)
+		case "ping":
+			// Send pong response
+			select {
+			case c.Send <- WebSocketMessage{Type: "pong"}:
+			default:
+				return
+			}
+		// Chat-specific requests (request-response pattern)
+		case "get_rooms":
+			c.handleGetRooms(c.WebSocketService, message)
+		case "get_room":
+			c.handleGetRoom(c.WebSocketService, message)
+		case "create_room":
+			c.handleCreateRoom(c.WebSocketService, message)
+		case "get_messages":
+			c.handleGetMessages(c.WebSocketService, message)
+		case "mark_read":
+			c.handleMarkRead(c.WebSocketService, message)
+		case "typing_start", "typing_stop":
+			c.handleTyping(c.WebSocketService, message)
 		}
 	}
 }
@@ -355,7 +355,7 @@ func (c *Client) readPump() {
 func (c *Client) writePump() {
 	defer c.Conn.Close()
 
-	for  {
+	for {
 		select {
 		case message, ok := <-c.Send:
 			if !ok {
@@ -731,7 +731,7 @@ func (c *Client) handleTyping(wsService *WebSocketService, message WebSocketMess
 			RoomID: roomID,
 			UserID: userID,
 			Data: map[string]interface{}{
-				"userId":  userID,
+				"userId":   userID,
 				"isTyping": isTyping,
 			},
 		}

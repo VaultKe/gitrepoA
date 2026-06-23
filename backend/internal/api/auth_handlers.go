@@ -16,6 +16,7 @@ import (
 
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
 )
 
 // DeviceInfo represents device information extracted from request
@@ -499,13 +500,21 @@ func (h *AuthHandlers) Logout(c *gin.Context) {
 // RefreshToken handles token refresh using stored refresh token
 func (h *AuthHandlers) RefreshToken(c *gin.Context) {
 	var req struct {
-		RefreshToken string `json:"refreshToken" binding:"required"`
+		RefreshToken string `json:"refreshToken" validate:"required,max=128,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
 			Error:   "Refresh token is required",
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
 		})
 		return
 	}
@@ -587,13 +596,21 @@ func (h *AuthHandlers) VerifyPhone(c *gin.Context) {
 // ForgotPassword handles password reset request
 func (h *AuthHandlers) ForgotPassword(c *gin.Context) {
 	var req struct {
-		Identifier string `json:"identifier" binding:"required"`
+		Identifier string `json:"identifier" validate:"required,max=100,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
 			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
 		})
 		return
 	}
@@ -642,14 +659,22 @@ func (h *AuthHandlers) ForgotPassword(c *gin.Context) {
 // ResetPassword handles password reset
 func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 	var req struct {
-		Token       string `json:"token" binding:"required"`
-		NewPassword string `json:"newPassword" binding:"required,min=6"`
+		Token       string `json:"token" validate:"required,max=128,no_sql_injection,no_xss"`
+		NewPassword string `json:"newPassword" validate:"required,min=6,max=128,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
 			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
 		})
 		return
 	}
@@ -685,13 +710,21 @@ func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 // TestEmail handles email testing (for development only)
 func (h *AuthHandlers) TestEmail(c *gin.Context) {
 	var req struct {
-		Email string `json:"email" binding:"required,email"`
+		Email string `json:"email" validate:"required,email,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
 			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
 		})
 		return
 	}
@@ -727,13 +760,21 @@ func (h *AuthHandlers) TestEmail(c *gin.Context) {
 // CheckTokenStatus checks the status of a password reset token for countdown display
 func (h *AuthHandlers) CheckTokenStatus(c *gin.Context) {
 	var req struct {
-		Token string `json:"token" binding:"required"`
+		Token string `json:"token" validate:"required,max=128,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
 			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
 		})
 		return
 	}
@@ -769,13 +810,21 @@ func (h *AuthHandlers) CheckTokenStatus(c *gin.Context) {
 // SendEmailVerification sends an email verification code to the user
 func (h *AuthHandlers) SendEmailVerification(c *gin.Context) {
 	var req struct {
-		UserID string `json:"userId" binding:"required"`
+		UserID string `json:"userId" validate:"required,max=100,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
 			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
 		})
 		return
 	}
@@ -844,7 +893,23 @@ func (h *AuthHandlers) SendEmailVerification(c *gin.Context) {
 // VerifyEmailCode verifies a user's email using the verification code
 func (h *AuthHandlers) VerifyEmailCode(c *gin.Context) {
 	var req struct {
-		Token string `json:"token" binding:"required"`
+		Token string `json:"token" validate:"required,max=128,no_sql_injection,no_xss"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
+		})
+		return
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -887,7 +952,23 @@ func (h *AuthHandlers) VerifyEmailCode(c *gin.Context) {
 // CheckEmailVerificationStatus checks the status of an email verification token
 func (h *AuthHandlers) CheckEmailVerificationStatus(c *gin.Context) {
 	var req struct {
-		Token string `json:"token" binding:"required"`
+		Token string `json:"token" validate:"required,max=128,no_sql_injection,no_xss"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	if err := utils.ValidateStruct(&req); err != nil {
+		c.JSON(http.StatusBadRequest, AuthResponse{
+			Success: false,
+			Error:   "Validation error: " + err.Error(),
+		})
+		return
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1235,7 +1316,7 @@ func (h *AuthHandlers) ResendVerification(c *gin.Context) {
 	}
 
 	var req struct {
-		Type string `json:"type" binding:"required"` // "email" or "phone"
+		Type string `json:"type" binding:"required,oneof=email phone"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

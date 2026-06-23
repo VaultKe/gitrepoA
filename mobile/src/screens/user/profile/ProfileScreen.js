@@ -33,6 +33,7 @@ const ProfileScreen = ({ navigation }) => {
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
+    idNumber: user?.idNumber || '',
     phone: user?.phone || '',
     county: user?.county || '',
     town: user?.town || '',
@@ -85,6 +86,7 @@ const ProfileScreen = ({ navigation }) => {
         firstName: userData.firstName || '',
         lastName: userData.lastName || '',
         email: userData.email || '',
+        idNumber: userData.idNumber || '',
         phone: userData.phone || '',
         county: userData.county || '',
         town: userData.town || '',
@@ -149,6 +151,7 @@ const ProfileScreen = ({ navigation }) => {
       firstName: user?.firstName || '',
       lastName: user?.lastName || '',
       email: user?.email || '',
+      idNumber: user?.idNumber || '',
       phone: user?.phone || '',
       county: user?.county || '',
       town: user?.town || '',
@@ -230,6 +233,7 @@ const ProfileScreen = ({ navigation }) => {
       const updateData = {
         firstName: profileData.firstName,
         lastName: profileData.lastName,
+        idNumber: profileData.idNumber,
         phone: profileData.phone,
         county: profileData.county,
         town: profileData.town,
@@ -259,6 +263,7 @@ const ProfileScreen = ({ navigation }) => {
             ...prevData,
             firstName: updatedUserData.firstName || prevData.firstName,
             lastName: updatedUserData.lastName || prevData.lastName,
+            idNumber: updatedUserData.idNumber || prevData.idNumber,
             phone: updatedUserData.phone || prevData.phone,
             county: updatedUserData.county || prevData.county,
             town: updatedUserData.town || prevData.town,
@@ -274,6 +279,7 @@ const ProfileScreen = ({ navigation }) => {
                 ...prevData,
                 firstName: updatedUserData.firstName || prevData.firstName,
                 lastName: updatedUserData.lastName || prevData.lastName,
+                idNumber: updatedUserData.idNumber || prevData.idNumber,
                 phone: updatedUserData.phone || prevData.phone,
                 county: updatedUserData.county || prevData.county,
                 town: updatedUserData.town || prevData.town,
@@ -350,6 +356,7 @@ const ProfileScreen = ({ navigation }) => {
       firstName: user?.firstName || '',
       lastName: user?.lastName || '',
       email: user?.email || '',
+      idNumber: user?.idNumber || '',
       phone: user?.phone || '',
       county: user?.county || '',
       town: user?.town || '',
@@ -880,13 +887,25 @@ const ProfileScreen = ({ navigation }) => {
         keyboardType="email-address"
       />
 
-      <Input
-        label="Phone Number"
-        value={profileData.phone}
-        onChangeText={(text) => handleInputChange('phone', text)}
-        editable={editing}
-        keyboardType="phone-pad"
-      />
+      <View style={styles.row}>
+        <Input
+          label="ID Number"
+          value={profileData.idNumber}
+          onChangeText={(text) => handleInputChange('idNumber', text)}
+          editable={editing}
+          keyboardType="numeric"
+          style={styles.halfInput}
+        />
+
+        <Input
+          label="Phone Number"
+          value={profileData.phone}
+          onChangeText={(text) => handleInputChange('phone', text)}
+          editable={editing}
+          keyboardType="phone-pad"
+          style={styles.halfInput}
+        />
+      </View>
 
       <View style={styles.row}>
         <Input

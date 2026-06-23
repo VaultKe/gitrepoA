@@ -46,6 +46,7 @@ func (s *UserService) CreateUser(registration *models.UserRegistration) (*models
 	registration.FirstName = utils.SanitizeString(registration.FirstName)
 	registration.LastName = utils.SanitizeString(registration.LastName)
 	registration.Language = utils.SanitizeString(registration.Language)
+	registration.IDNumber = utils.SanitizeString(registration.IDNumber)
 	if registration.Gender != nil {
 		*registration.Gender = utils.SanitizeString(*registration.Gender)
 	}
@@ -77,6 +78,16 @@ func (s *UserService) CreateUser(registration *models.UserRegistration) (*models
 	// Format phone number
 	formattedPhone := utils.FormatPhoneNumber(registration.Phone)
 
+	// Encrypt id number
+	var encryptedIDNumber *string
+	if registration.IDNumber != "" {
+		encrypted, err := utils.EncryptUserData(registration.IDNumber)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt id number: %w", err)
+		}
+		encryptedIDNumber = &encrypted
+	}
+
 	// Determine user role - check if this is Samuel Okoth (admin)
 	userRole := models.UserRoleUser // Default to user
 	if registration.Email == "sam.okothomulo@gmail.com" {
@@ -98,6 +109,7 @@ func (s *UserService) CreateUser(registration *models.UserRegistration) (*models
 		Language:        registration.Language,
 		Theme:           "dark", // Default theme
 		Gender:          registration.Gender,
+		IDNumber:        encryptedIDNumber,
 		Rating:          0,
 		TotalRatings:    0,
 		CreatedAt:       time.Now(),
@@ -113,16 +125,16 @@ func (s *UserService) CreateUser(registration *models.UserRegistration) (*models
 	query := `
 		INSERT INTO users (
 			id, email, phone, first_name, last_name, password_hash, role, status,
-			is_email_verified, is_phone_verified, language, theme, gender, rating, total_ratings,
+			is_email_verified, is_phone_verified, language, theme, gender, id_number, rating, total_ratings,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 	`
 
 	_, err = s.db.Exec(query,
 		user.ID, user.Email, user.Phone, user.FirstName, user.LastName,
 		user.PasswordHash, user.Role, user.Status, user.IsEmailVerified,
-		user.IsPhoneVerified, user.Language, user.Theme, user.Gender, user.Rating,
-		user.TotalRatings, user.CreatedAt, user.UpdatedAt,
+		user.IsPhoneVerified, user.Language, user.Theme, user.Gender, user.IDNumber,
+		user.Rating, user.TotalRatings, user.CreatedAt, user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
@@ -185,7 +197,7 @@ func (s *UserService) GetUserByID(userID string) (*models.User, error) {
 		SELECT id, email, phone, first_name, last_name, avatar, role, status,
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, bio, occupation,
-			   date_of_birth, gender, rating, total_ratings, created_at, updated_at
+			   date_of_birth, gender, id_number, rating, total_ratings, created_at, updated_at
 		FROM users WHERE id = $1
 	`
 
@@ -196,13 +208,22 @@ func (s *UserService) GetUserByID(userID string) (*models.User, error) {
 		&user.IsPhoneVerified, &user.Language, &user.Theme, &user.County,
 		&user.Town, &user.Latitude, &user.Longitude, &user.BusinessType,
 		&user.BusinessDescription, &user.Bio, &user.Occupation, &user.DateOfBirth,
-		&user.Gender, &user.Rating, &user.TotalRatings, &user.CreatedAt, &user.UpdatedAt,
+		&user.Gender, &user.IDNumber, &user.Rating, &user.TotalRatings, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if user.IDNumber != nil {
+		decrypted, err := utils.DecryptUserData(*user.IDNumber)
+		if err != nil {
+			fmt.Printf("Warning: failed to decrypt id number for user %s: %v\n", userID, err)
+		} else {
+			user.IDNumber = &decrypted
+		}
 	}
 
 	return user, nil
@@ -230,7 +251,7 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 		SELECT id, email, phone, first_name, last_name, password_hash, avatar, role, status,
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, bio, occupation,
-			   date_of_birth, gender, rating, total_ratings, created_at, updated_at
+			   date_of_birth, gender, id_number, rating, total_ratings, created_at, updated_at
 		FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3
 	`
 
@@ -241,7 +262,7 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 		&user.IsEmailVerified, &user.IsPhoneVerified, &user.Language, &user.Theme,
 		&user.County, &user.Town, &user.Latitude, &user.Longitude,
 		&user.BusinessType, &user.BusinessDescription, &user.Bio, &user.Occupation,
-		&user.DateOfBirth, &user.Gender, &user.Rating, &user.TotalRatings,
+		&user.DateOfBirth, &user.Gender, &user.IDNumber, &user.Rating, &user.TotalRatings,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -249,6 +270,15 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if user.IDNumber != nil {
+		decrypted, err := utils.DecryptUserData(*user.IDNumber)
+		if err != nil {
+			fmt.Printf("Warning: failed to decrypt id number for user %s: %v\n", user.ID, err)
+		} else {
+			user.IDNumber = &decrypted
+		}
 	}
 
 	return user, nil
@@ -322,6 +352,14 @@ func (s *UserService) UpdateUser(userID string, update *models.UserProfileUpdate
 	if update.Gender != nil {
 		setParts = append(setParts, fmt.Sprintf("gender = $%d", len(args)+1))
 		args = append(args, *update.Gender)
+	}
+	if update.IDNumber != nil {
+		encrypted, err := utils.EncryptUserData(*update.IDNumber)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt id number: %w", err)
+		}
+		setParts = append(setParts, fmt.Sprintf("id_number = $%d", len(args)+1))
+		args = append(args, encrypted)
 	}
 
 	if len(setParts) == 0 {
@@ -407,7 +445,7 @@ func (s *UserService) GetUsersByLocation(county, town string, limit, offset int)
 	SELECT id, email, phone, first_name, last_name, avatar, role, status,
 		   is_email_verified, is_phone_verified, language, theme, county, town,
 		   latitude, longitude, business_type, business_description, bio, occupation,
-		   date_of_birth, gender, rating, total_ratings, created_at, updated_at
+		   date_of_birth, gender, id_number, rating, total_ratings, created_at, updated_at
 	FROM users
 	WHERE county = $1 AND town = $2 AND status = $3
 	ORDER BY created_at DESC
@@ -429,10 +467,18 @@ func (s *UserService) GetUsersByLocation(county, town string, limit, offset int)
 			&user.IsPhoneVerified, &user.Language, &user.Theme, &user.County,
 			&user.Town, &user.Latitude, &user.Longitude, &user.BusinessType,
 			&user.BusinessDescription, &user.Bio, &user.Occupation, &user.DateOfBirth,
-			&user.Gender, &user.Rating, &user.TotalRatings, &user.CreatedAt, &user.UpdatedAt,
+			&user.Gender, &user.IDNumber, &user.Rating, &user.TotalRatings, &user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+		if user.IDNumber != nil {
+			decrypted, err := utils.DecryptUserData(*user.IDNumber)
+			if err != nil {
+				fmt.Printf("Warning: failed to decrypt id number for user %s: %v\n", user.ID, err)
+			} else {
+				user.IDNumber = &decrypted
+			}
 		}
 		users = append(users, user)
 	}
@@ -480,14 +526,14 @@ func (s *UserService) GetUserStatistics(userID string) (map[string]interface{}, 
 
 	// Build response
 	stats["user_info"] = map[string]interface{}{
-		"id":         user.ID,
-		"firstName":  user.FirstName,
-		"lastName":   user.LastName,
-		"email":      user.Email,
-		"phone":      user.Phone,
-		"role":       user.Role,
-		"rating":     user.Rating,
-		"createdAt":  user.CreatedAt,
+		"id":        user.ID,
+		"firstName": user.FirstName,
+		"lastName":  user.LastName,
+		"email":     user.Email,
+		"phone":     user.Phone,
+		"role":      user.Role,
+		"rating":    user.Rating,
+		"createdAt": user.CreatedAt,
 	}
 
 	stats["wallet_stats"] = walletStats
@@ -540,7 +586,7 @@ func (s *UserService) getUserChamaStatistics(userID string) (map[string]interfac
 
 	// Get total chamas joined
 	var totalChamas, activeChamas int
-		err := s.db.QueryRow(`
+	err := s.db.QueryRow(`
 			SELECT
 				COUNT(*) as total_chamas,
 				COUNT(CASE WHEN is_active = true THEN 1 END) as active_chamas
@@ -553,7 +599,7 @@ func (s *UserService) getUserChamaStatistics(userID string) (map[string]interfac
 
 	// Get user roles distribution
 	var chairpersonCount, secretaryCount, treasurerCount, memberCount int
-		err = s.db.QueryRow(`
+	err = s.db.QueryRow(`
 			SELECT
 				COUNT(CASE WHEN role = 'chairperson' THEN 1 END) as chairperson_count,
 				COUNT(CASE WHEN role = 'secretary' THEN 1 END) as secretary_count,

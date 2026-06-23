@@ -45,7 +45,7 @@ func maskPassword(password string) string {
 	}
 	if len(password) <= 4 {
 		return "****"
-	}	
+	}
 	return password[:2] + "****" + password[len(password)-2:]
 }
 

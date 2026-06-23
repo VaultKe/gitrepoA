@@ -59,6 +59,7 @@ type User struct {
 	Occupation          *string    `json:"occupation" db:"occupation"`
 	DateOfBirth         *string    `json:"dateOfBirth" db:"date_of_birth"`
 	Gender              *string    `json:"gender" db:"gender"`
+	IDNumber            *string    `json:"idNumber" db:"id_number"`
 	Rating              float64    `json:"rating" db:"rating"`
 	TotalRatings        int        `json:"totalRatings" db:"total_ratings"`
 	CreatedAt           time.Time  `json:"createdAt" db:"created_at"`
@@ -68,18 +69,19 @@ type User struct {
 // UserRegistration represents user registration data
 type UserRegistration struct {
 	Email     string  `json:"email" validate:"required,email,max=100,no_sql_injection,no_xss"`
-	Phone     string  `json:"phone" validate:"required,phone"`
+	Phone     string  `json:"phone" validate:"required,phone,no_sql_injection,no_xss"`
 	FirstName string  `json:"firstName" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
 	LastName  string  `json:"lastName" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
-	Password  string  `json:"password" validate:"required,min=8,max=128"`
+	IDNumber  string  `json:"idNumber" validate:"required,numeric,min=6,max=9,no_sql_injection,no_xss"`
+	Password  string  `json:"password" validate:"required,min=8,max=128,no_sql_injection,no_xss"`
 	Gender    *string `json:"gender,omitempty" validate:"omitempty,oneof=male female other prefer_not_to_say"`
-	Language  string  `json:"language" validate:"alpha,max=5"`
+	Language  string  `json:"language" validate:"alpha,max=5,no_sql_injection,no_xss"`
 }
 
 // UserLogin represents user login data
 type UserLogin struct {
 	Identifier string `json:"identifier" validate:"required,max=100,no_sql_injection,no_xss"` // email or phone
-	Password   string `json:"password" validate:"required,max=128"`
+	Password   string `json:"password" validate:"required,max=128,no_sql_injection,no_xss"`
 }
 
 // UserProfileUpdate represents user profile update data
@@ -96,6 +98,7 @@ type UserProfileUpdate struct {
 	Occupation          *string       `json:"occupation,omitempty"`
 	DateOfBirth         *FlexibleDate `json:"dateOfBirth,omitempty"`
 	Gender              *string       `json:"gender,omitempty"`
+	IDNumber            *string       `json:"idNumber,omitempty"`
 	Latitude            *float64      `json:"latitude,omitempty"`
 	Longitude           *float64      `json:"longitude,omitempty"`
 	BusinessType        *string       `json:"businessType,omitempty"`
@@ -180,15 +183,15 @@ func (fd *FlexibleDate) UnmarshalJSON(data []byte) error {
 
 // RefreshToken represents a stored refresh token
 type RefreshToken struct {
-	ID                 int       `json:"id" db:"id"`
-	UserID             string    `json:"user_id" db:"user_id"`
-	TokenHash          string    `json:"-" db:"token_hash"`
-	UserAgentHash      *string   `json:"user_agent_hash,omitempty" db:"user_agent_hash"`
-	IPAddress          *string   `json:"ip_address,omitempty" db:"ip_address"`
-	ExpiresAt          time.Time `json:"expires_at" db:"expires_at"`
-	LastUsedAt         *time.Time `json:"last_used_at,omitempty" db:"last_used_at"`
-	Revoked            bool      `json:"revoked" db:"revoked"`
-	ReplacedByTokenHash *string  `json:"replaced_by_token_hash,omitempty" db:"replaced_by_token_hash"`
-	CreatedAt          time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
+	ID                  int        `json:"id" db:"id"`
+	UserID              string     `json:"user_id" db:"user_id"`
+	TokenHash           string     `json:"-" db:"token_hash"`
+	UserAgentHash       *string    `json:"user_agent_hash,omitempty" db:"user_agent_hash"`
+	IPAddress           *string    `json:"ip_address,omitempty" db:"ip_address"`
+	ExpiresAt           time.Time  `json:"expires_at" db:"expires_at"`
+	LastUsedAt          *time.Time `json:"last_used_at,omitempty" db:"last_used_at"`
+	Revoked             bool       `json:"revoked" db:"revoked"`
+	ReplacedByTokenHash *string    `json:"replaced_by_token_hash,omitempty" db:"replaced_by_token_hash"`
+	CreatedAt           time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at" db:"updated_at"`
 }

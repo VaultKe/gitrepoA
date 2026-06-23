@@ -3,8 +3,8 @@ package services
 import (
 	"database/sql"
 	"fmt"
-	"time"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 

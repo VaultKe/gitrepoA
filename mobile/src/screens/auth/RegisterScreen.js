@@ -28,6 +28,7 @@ export default function RegisterScreen({ navigation }) {
     lastName: '',
     email: '',
     phone: '',
+    idNumber: '',
     password: '',
     confirmPassword: '',
     gender: '',
@@ -74,7 +75,7 @@ export default function RegisterScreen({ navigation }) {
   };
 
   const validateForm = () => {
-    const { firstName, lastName, email, phone, password, confirmPassword } = formData;
+    const { firstName, lastName, email, phone, idNumber, password, confirmPassword } = formData;
     const newErrors = {};
 
     // First Name validation
@@ -113,6 +114,13 @@ export default function RegisterScreen({ navigation }) {
       if (!phoneRegex.test(phone.trim())) {
         newErrors.phone = 'Please enter a valid Kenyan phone number (e.g., 0712345678)';
       }
+    }
+
+    // ID Number validation
+    if (!idNumber.trim()) {
+      newErrors.idNumber = 'ID Number is required';
+    } else if (!/^\d{6,9}$/.test(idNumber.trim())) {
+      newErrors.idNumber = 'Please enter a valid ID number (6-9 digits)';
     }
 
     // Password validation
@@ -161,6 +169,7 @@ export default function RegisterScreen({ navigation }) {
         lastName: userData.lastName.trim(),
         email: userData.email.trim().toLowerCase(),
         phone: userData.phone.trim(),
+        idNumber: userData.idNumber.trim(),
         password: userData.password,
       };
 
@@ -346,6 +355,22 @@ export default function RegisterScreen({ navigation }) {
             error={errors.phone}
           />
 
+          {/* ID Number */}
+          <FormField
+            label="ID Number"
+            value={formData.idNumber}
+            onChangeText={(value) => {
+              handleInputChange('idNumber', value);
+              if (errors.idNumber) {
+                setErrors(prev => ({ ...prev, idNumber: null }));
+              }
+            }}
+            placeholder="National ID number"
+            icon="card-outline"
+            keyboardType="number-pad"
+            error={errors.idNumber}
+          />
+
           {/* Gender Selection Card */}
           <Card
             variant="outlined"
@@ -477,7 +502,7 @@ export default function RegisterScreen({ navigation }) {
             ]}
             disabled={!formData.firstName.trim() || !formData.lastName.trim() ||
                      !formData.email.trim() || !formData.phone.trim() ||
-                     !formData.password || !formData.confirmPassword || !acceptedTerms}
+                     !formData.idNumber.trim() || !formData.password || !formData.confirmPassword || !acceptedTerms}
           />
 
           {/* Divider */}

@@ -293,30 +293,7 @@ const ViewMember = ({ route, navigation }) => {
 
               {/* Profile Info Section - Below the image */}
               <View style={styles.framelessProfileInfo}>
-                <Text style={[styles.memberName, styles.memberNameText]}>
-                  {memberData.user?.first_name || memberData.first_name} {memberData.user?.last_name || memberData.last_name}
-                </Text>
-                <Text style={[styles.memberEmail, styles.memberEmailSecondary]}>
-                  {memberData.user?.email || memberData.email}
-                </Text>
-
-                <View style={[
-                  styles.roleBadge,
-                  ['chairperson', 'secretary', 'treasurer'].includes(memberData.role) ? styles.roleBadgeWarning : styles.roleBadgeMuted,
-                ]}>
-                  <Ionicons
-                    name={getRoleIcon(memberData.role)}
-                    size={16}
-                    color={getRoleColor(memberData.role)}
-                  />
-                  <Text style={[
-                    styles.roleText,
-                    ['chairperson', 'secretary', 'treasurer'].includes(memberData.role) ? styles.roleTextWarning : styles.roleTextMuted,
-                  ]}>
-                    {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
-                  </Text>
-                </View>
-
+                
                 <Text style={[styles.minimizeHint, styles.minimizeHintSecondary]}>
                   Tap the × to minimize
                 </Text>

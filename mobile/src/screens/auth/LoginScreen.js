@@ -70,11 +70,17 @@ export default function LoginScreen({ navigation }) {
   // Enhanced validation function
   const validateForm = () => {
     const newErrors = {};
+    const id = identifier.trim();
 
-    if (!identifier.trim()) {
+    if (!id) {
       newErrors.identifier = 'Email or phone number is required';
-    } else if (identifier.trim().length < 3) {
-      newErrors.identifier = 'Please enter a valid email or phone number';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const phoneRegex = /^(\+254|254|0)[17]\d{8}$/;
+
+      if (!emailRegex.test(id) && !phoneRegex.test(id)) {
+        newErrors.identifier = 'Please enter a valid email or Kenyan phone number (+2547XXXXXXXX or 07XXXXXXXX)';
+      }
     }
 
     if (!password) {

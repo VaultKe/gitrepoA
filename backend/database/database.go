@@ -175,40 +175,40 @@ func addMissingChamaIDColumnToTransactions(db *sql.DB) error {
 		} else {
 			log.Printf("Created index for chama_id on transactions table")
 		}
-  } else {
-    log.Printf("Column chama_id already exists in transactions table")
-  }
+	} else {
+		log.Printf("Column chama_id already exists in transactions table")
+	}
 
-  return nil
+	return nil
 }
 
 // addMissingRecipientIDColumnToTransactions adds recipient_id column to transactions table if missing
 func addMissingRecipientIDColumnToTransactions(db *sql.DB) error {
-  var exists bool
-  query := `SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'recipient_id'`
-  err := db.QueryRow(query).Scan(&exists)
-  if err != nil {
-    return fmt.Errorf("failed to check if recipient_id column exists: %w", err)
-  }
+	var exists bool
+	query := `SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'recipient_id'`
+	err := db.QueryRow(query).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check if recipient_id column exists: %w", err)
+	}
 
-  if !exists {
-    alterQuery := `ALTER TABLE transactions ADD COLUMN recipient_id TEXT`
-    if _, err := db.Exec(alterQuery); err != nil {
-      return fmt.Errorf("failed to add recipient_id column: %w", err)
-    }
-    log.Printf("Added recipient_id column to transactions table")
+	if !exists {
+		alterQuery := `ALTER TABLE transactions ADD COLUMN recipient_id TEXT`
+		if _, err := db.Exec(alterQuery); err != nil {
+			return fmt.Errorf("failed to add recipient_id column: %w", err)
+		}
+		log.Printf("Added recipient_id column to transactions table")
 
-    indexQuery := `CREATE INDEX IF NOT EXISTS idx_transactions_recipient_id ON transactions(recipient_id)`
-    if _, err := db.Exec(indexQuery); err != nil {
-      log.Printf("Warning: failed to create index for recipient_id: %v", err)
-    } else {
-      log.Printf("Created index for recipient_id on transactions table")
-    }
-  } else {
-    log.Printf("Column recipient_id already exists in transactions table")
-  }
+		indexQuery := `CREATE INDEX IF NOT EXISTS idx_transactions_recipient_id ON transactions(recipient_id)`
+		if _, err := db.Exec(indexQuery); err != nil {
+			log.Printf("Warning: failed to create index for recipient_id: %v", err)
+		} else {
+			log.Printf("Created index for recipient_id on transactions table")
+		}
+	} else {
+		log.Printf("Column recipient_id already exists in transactions table")
+	}
 
-  return nil
+	return nil
 }
 
 // addDividendTypeColumn adds dividend_type column to dividend_declarations table
@@ -331,6 +331,7 @@ CREATE TABLE IF NOT EXISTS users (
     business_description TEXT,
     rating REAL DEFAULT 0,
     total_ratings INTEGER DEFAULT 0,
+    id_number TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`
@@ -910,6 +911,7 @@ func addMissingUserProfileFields(db *sql.DB) error {
 		{"occupation", "TEXT"},
 		{"date_of_birth", "DATE"},
 		{"gender", "TEXT"},
+		{"id_number", "TEXT"},
 	}
 
 	for _, col := range columns {

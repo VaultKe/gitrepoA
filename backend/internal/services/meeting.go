@@ -126,7 +126,7 @@ type MeetingAttendance struct {
 	LeftAt          *time.Time     `json:"leftAt"`
 	DurationMinutes int            `json:"durationMinutes"`
 	IsPresent       bool           `json:"isPresent"`
-	Notes           sql.NullString `json:"-"` // Exclude from JSON, use custom marshaling
+	Notes           sql.NullString `json:"-"`     // Exclude from JSON, use custom marshaling
 	NotesString     string         `json:"notes"` // For JSON serialization
 	CreatedAt       time.Time      `json:"createdAt"`
 	UpdatedAt       time.Time      `json:"updatedAt"`
@@ -612,5 +612,3 @@ func (s *MeetingService) EnsureVirtualMeetingsHaveRoomNames() error {
 	log.Printf("Updated %d meetings with room names", updateCount)
 	return nil
 }
-
-
