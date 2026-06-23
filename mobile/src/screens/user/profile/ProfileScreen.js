@@ -24,7 +24,7 @@ import apiService from '../../../services/api';
 import { getTransactions } from '../../../services/api/walletEndpoints';
 
 const ProfileScreen = ({ navigation }) => {
-  const { theme, setTheme, user, userRole, updateUser, wallets, chamas, logout, getCachedData, getLightningData, getCachedAvatarData } = useApp();
+  const { theme, user, userRole, updateUser, wallets, chamas, logout, getCachedData, getLightningData, getCachedAvatarData } = useApp();
   const colors = getThemeColors(theme);
 
   const [loading, setLoading] = useState(false);
@@ -687,24 +687,7 @@ const ProfileScreen = ({ navigation }) => {
 
           {/* Action Buttons - Below info */}
           <View style={styles.framelessHeaderActions}>
-            {/* Single Theme Toggle Button */}
-            <TouchableOpacity
-              style={[
-                styles.themeButton,
-                {
-                  backgroundColor: colors.primary + '20',
-                  borderColor: colors.primary,
-                }
-              ]}
-              onPress={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={theme === 'light' ? "moon" : "sunny"}
-                size={22}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
+
 
             <TouchableOpacity
               style={[
@@ -814,24 +797,6 @@ const ProfileScreen = ({ navigation }) => {
 
             {/* Action Icons under name and email */}
             <View style={styles.profileActionIcons}>
-              {/* Single Theme Toggle Button */}
-              <TouchableOpacity
-                style={[
-                  styles.themeButton,
-                  {
-                    backgroundColor: colors.primary + '20',
-                    borderColor: colors.primary,
-                  }
-                ]}
-                onPress={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={theme === 'light' ? "moon" : "sunny"}
-                  size={20}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
 
               <TouchableOpacity
                 style={[

@@ -43,7 +43,7 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     paddingHorizontal: spacing.xs,
   },
   nameCell: {
-    flex: 3,
+    flex: 1.5,
     alignItems: 'flex-start',
   },
   categoryCell: {

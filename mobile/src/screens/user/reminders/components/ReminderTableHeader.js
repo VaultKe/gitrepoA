@@ -141,7 +141,7 @@ const ReminderTableHeader = ({
         marginTop: spacing.sm,
       }}>
         <Text style={{
-          flex: 3,
+          flex: 1.5,
           fontSize: 14,
           fontWeight: '600',
           color: colors.textSecondary,
