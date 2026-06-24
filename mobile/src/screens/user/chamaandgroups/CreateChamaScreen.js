@@ -56,7 +56,6 @@ const CreateChamaScreen = ({ navigation }) => {
     paybill_business_number: '',
     paybill_account_number: '',
     payment_recipient_name: '',
-    registration_fee_status: 'pending',
   });
 
   const [onboardedMembers, setOnboardedMembers] = useState([]);
@@ -772,20 +771,17 @@ const CreateChamaScreen = ({ navigation }) => {
 
       const formData = {
         ...sanitizedData,
-        registration_fee_status: chamaData.registration_fee_status || 'pending',
         members: [
           {
             user_id: user.id,
             role: 'chairperson',
             status: 'active',
-            has_paid_registration: chamaData.registration_fee_status === 'paid',
           },
           ...onboardedMembers.map(member => ({
             user_id: member.id,
             role: member.role || 'member',
             status: 'pending',
             phone_verified: member.phoneVerified || false,
-            has_paid_registration: member.hasPaidRegistration || false,
           }))
         ]
       };

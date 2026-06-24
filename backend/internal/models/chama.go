@@ -170,24 +170,6 @@ type ChamaUpdate struct {
 	MonthlySubscriptionFee *float64              `json:"monthlySubscriptionFee,omitempty"`
 }
 
-// ChamaUpdate represents data for updating a chama
-type ChamaUpdate struct {
-	Name                  *string                `json:"name,omitempty"`
-	Description           *string                `json:"description,omitempty"`
-	Type                  *ChamaType             `json:"type,omitempty"`
-	County                *string                `json:"county,omitempty"`
-	Town                  *string                `json:"town,omitempty"`
-	Latitude              *float64               `json:"latitude,omitempty"`
-	Longitude             *float64               `json:"longitude,omitempty"`
-	ContributionAmount    *float64               `json:"contributionAmount,omitempty"`
-	ContributionFrequency *ContributionFrequency `json:"contributionFrequency,omitempty"`
-	MaxMembers            *int                   `json:"maxMembers,omitempty"`
-	IsPublic              *bool                  `json:"isPublic,omitempty"`
-	RequiresApproval      *bool                  `json:"requiresApproval,omitempty"`
-	Rules                 []string               `json:"rules,omitempty"`
-	MeetingSchedule       *MeetingSchedule       `json:"meetingSchedule,omitempty"`
-}
-
 // GetLocation returns the chama's location as a formatted string
 func (c *Chama) GetLocation() string {
 	return c.Town + ", " + c.County

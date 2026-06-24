@@ -76,6 +76,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		Rules:                 creation.Rules,
 		MeetingSchedule:       creation.MeetingSchedule,
 		RegistrationFeePaid:   creation.RegistrationFeePaid,
+		MonthlySubscriptionFee: creation.MonthlySubscriptionFee,
 		CreatedBy:             createdBy,
 		CreatedAt:             time.Now(),
 		UpdatedAt:             time.Now(),
@@ -174,6 +175,25 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 	_, err = walletService.CreateWalletWithTx(tx, chama.ID, models.WalletTypeChama)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chama wallet: %w", err)
+	}
+
+	// For chamas, create initial subscription payment record
+	if creation.Category == models.ChamaCategoryChama && creation.MonthlySubscriptionFee > 0 {
+		now := time.Now()
+		dueDate := time.Date(now.Year(), now.Month()+1, 2, 0, 0, 0, 0, now.Location())
+		monthYear := dueDate.Format("2006-01")
+		
+		subscriptionQuery := `
+			INSERT INTO subscription_payments (id, chama_id, amount, status, due_date, month_year, created_at, updated_at)
+			VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7)
+		`
+		_, err = tx.Exec(subscriptionQuery,
+			generateUUID(), chama.ID, creation.MonthlySubscriptionFee,
+			dueDate, monthYear, now, now,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create subscription payment: %w", err)
+		}
 	}
 
 	// Commit transaction

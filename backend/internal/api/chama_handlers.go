@@ -211,6 +211,7 @@ func CreateChama(c *gin.Context) {
 		Rules                 string  `json:"rules" validate:"max=1000,safe_text,no_sql_injection,no_xss"`
 		MeetingSchedule       string  `json:"meeting_schedule" validate:"max=200,safe_text,no_sql_injection,no_xss"`
 		RegistrationFeePaid   bool    `json:"registration_fee_paid"`
+		MonthlySubscriptionFee float64 `json:"monthly_subscription_fee"`
 		Members               []struct {
 			UserID              string `json:"user_id"`
 			Role                string `json:"role"`
@@ -506,6 +507,7 @@ func CreateChama(c *gin.Context) {
 		Rules:                 rules,
 		MeetingSchedule:       meetingSchedule,
 		RegistrationFeePaid:   req.RegistrationFeePaid,
+		MonthlySubscriptionFee: req.MonthlySubscriptionFee,
 	}
 
 	// Create the chama
@@ -575,6 +577,7 @@ func CreateChama(c *gin.Context) {
 			"is_public":              chama.IsPublic,
 			"requires_approval":      chama.RequiresApproval,
 			"registration_fee_paid":  chama.RegistrationFeePaid,
+			"monthly_subscription_fee": chama.MonthlySubscriptionFee,
 			"created_by":             chama.CreatedBy,
 			"created_at":             chama.CreatedAt,
 		},
@@ -2795,5 +2798,321 @@ func CreateChamaChatRoom(c *gin.Context) {
 		"data": map[string]interface{}{
 			"roomId": chatRoom.ID,
 		},
+	})
+}
+
+// GetChamaSubscriptionPayments gets subscription payments for a chama
+func GetChamaSubscriptionPayments(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	query := `
+		SELECT id, chama_id, amount, status, due_date, paid_at, payment_method, transaction_id, month_year, created_at, updated_at
+		FROM subscription_payments
+		WHERE chama_id = $1
+		ORDER BY due_date DESC
+	`
+	rows, err := database.Query(query, chamaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to get subscription payments",
+		})
+		return
+	}
+	defer rows.Close()
+
+	var payments []map[string]interface{}
+	for rows.Next() {
+		var id, chamaID, status, monthYear, paymentMethod, transactionID string
+		var amount float64
+		var dueDate, paidAt, createdAt, updatedAt time.Time
+
+		err := rows.Scan(&id, &chamaID, &amount, &status, &dueDate, &paidAt, &paymentMethod, &transactionID, &monthYear, &createdAt, &updatedAt)
+		if err != nil {
+			continue
+		}
+
+		payment := map[string]interface{}{
+			"id":          id,
+			"chamaId":     chamaID,
+			"amount":      amount,
+			"status":      status,
+			"dueDate":     dueDate,
+			"paidAt":      paidAt,
+			"paymentMethod": paymentMethod,
+			"transactionId": transactionID,
+			"monthYear":   monthYear,
+			"createdAt":   createdAt,
+			"updatedAt":   updatedAt,
+		}
+		payments = append(payments, payment)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    payments,
+	})
+}
+
+// PaySubscriptionPayment initiates payment for a subscription
+func PaySubscriptionPayment(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	paymentID := c.Param("paymentId")
+	if paymentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Payment ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	var payment struct {
+		Amount float64
+		Status string
+	}
+
+	err := database.QueryRow(
+		"SELECT amount, status FROM subscription_payments WHERE id = $1 AND chama_id = $2",
+		paymentID, chamaID,
+	).Scan(&payment.Amount, &payment.Status)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Payment not found",
+		})
+		return
+	}
+
+	if payment.Status != "pending" && payment.Status != "overdue" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Payment is not in payable status",
+		})
+		return
+	}
+
+	now := time.Now()
+	_, err = database.Exec(
+		"UPDATE subscription_payments SET status = 'paid', paid_at = $1, updated_at = $2 WHERE id = $3",
+		now, now, paymentID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update payment",
+		})
+		return
+	}
+
+	_, err = database.Exec(
+		"UPDATE chamas SET subscription_fee_paid = true WHERE id = $1",
+		chamaID,
+	)
+	if err != nil {
+		log.Printf("Error updating chama subscription status: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Subscription payment processed successfully",
+	})
+}
+
+// GetChamaServiceFeePayments gets service fee payments for members of a chama
+func GetChamaServiceFeePayments(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	query := `
+		SELECT sfp.id, sfp.chama_id, sfp.user_id, u.first_name, u.last_name, u.phone,
+			   sfp.amount, sfp.status, sfp.due_date, sfp.paid_at, sfp.payment_method,
+			   sfp.transaction_id, sfp.warning_sent, sfp.created_at, sfp.updated_at
+		FROM service_fee_payments sfp
+		JOIN users u ON sfp.user_id = u.id
+		WHERE sfp.chama_id = $1
+		ORDER BY sfp.created_at DESC
+	`
+	rows, err := database.Query(query, chamaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to get service fee payments",
+		})
+		return
+	}
+	defer rows.Close()
+
+	var payments []map[string]interface{}
+	for rows.Next() {
+		var id, chamaID, userID, firstName, lastName, phone, status, paymentMethod, transactionID string
+		var amount float64
+		var dueDate, paidAt, createdAt, updatedAt time.Time
+		var warningSent bool
+
+		err := rows.Scan(&id, &chamaID, &userID, &firstName, &lastName, &phone,
+			&amount, &status, &dueDate, &paidAt, &paymentMethod, &transactionID,
+			&warningSent, &createdAt, &updatedAt)
+		if err != nil {
+			continue
+		}
+
+		payment := map[string]interface{}{
+			"id":          id,
+			"chamaId":     chamaID,
+			"userId":      userID,
+			"userName":    firstName + " " + lastName,
+			"userPhone":   phone,
+			"amount":      amount,
+			"status":      status,
+			"dueDate":     dueDate,
+			"paidAt":      paidAt,
+			"paymentMethod": paymentMethod,
+			"transactionId": transactionID,
+			"warningSent": warningSent,
+			"createdAt":   createdAt,
+			"updatedAt":   updatedAt,
+		}
+		payments = append(payments, payment)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    payments,
+	})
+}
+
+// PayServiceFeePayment initiates payment for a member's service fee
+func PayServiceFeePayment(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	paymentID := c.Param("paymentId")
+	if paymentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Payment ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	var payment struct {
+		Amount float64
+		Status string
+		UserID string
+	}
+
+	err := database.QueryRow(
+		"SELECT amount, status, user_id FROM service_fee_payments WHERE id = $1 AND chama_id = $2",
+		paymentID, chamaID,
+	).Scan(&payment.Amount, &payment.Status, &payment.UserID)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Payment not found",
+		})
+		return
+	}
+
+	if payment.Status != "pending" && payment.Status != "overdue" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Payment is not in payable status",
+		})
+		return
+	}
+
+	now := time.Now()
+	_, err = database.Exec(
+		"UPDATE service_fee_payments SET status = 'paid', paid_at = $1, updated_at = $2 WHERE id = $3",
+		now, now, paymentID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update payment",
+		})
+		return
+	}
+
+	_, err = database.Exec(
+		"UPDATE chama_members SET service_fee_paid = true, service_fee_paid_at = $1, service_fee_status = 'paid' WHERE chama_id = $2 AND user_id = $3",
+		now, chamaID, payment.UserID,
+	)
+	if err != nil {
+		log.Printf("Error updating member service fee status: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Service fee payment processed successfully",
 	})
 }

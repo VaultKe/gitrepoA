@@ -104,6 +104,60 @@ const createRoleEscalationPoll = async (chamaId, data) => {
   });
 };
 
+const getChamaSubscriptionPayments = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/subscription-payments`);
+};
+
+const paySubscriptionPayment = async (chamaId, paymentId) => {
+  return await makeRequest(`/chamas/${chamaId}/subscription-payments/${paymentId}/pay`, {
+    method: 'POST',
+  });
+};
+
+const getChamaServiceFeePayments = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/service-fee-payments`);
+};
+
+const payServiceFeePayment = async (chamaId, paymentId) => {
+  return await makeRequest(`/chamas/${chamaId}/service-fee-payments/${paymentId}/pay`, {
+    method: 'POST',
+  });
+};
+
+const addMemberToChama = async (chamaId, userId, role = 'member') => {
+  return await makeRequest(`/chamas/${chamaId}/members`, {
+    method: 'POST',
+    body: { userId, role },
+  });
+};
+
+const removeMemberFromChama = async (chamaId, memberId) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}`, {
+    method: 'DELETE',
+  });
+};
+
+const updateMemberRole = async (chamaId, memberId, newRole) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}/role`, {
+    method: 'PUT',
+    body: { role: newRole },
+  });
+};
+
+const deleteChama = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}`, {
+    method: 'DELETE',
+  });
+};
+
+const getChama = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}`);
+};
+
+const getChamaWalletBalance = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/wallet/balance`);
+};
+
 export {
   getChamas,
   getAllChamasForAdmin,
@@ -114,9 +168,6 @@ export {
   getChamaTransactions,
   getMerryGoRounds,
   createMerryGoRound,
-  createChama,
-  updateChama,
-  createChamaChatRoom,
   joinChama,
   leaveChama,
   getMemberRole,
@@ -125,4 +176,17 @@ export {
   createVote,
   castVote,
   createRoleEscalationPoll,
+  addMemberToChama,
+  removeMemberFromChama,
+  deleteChama,
+  getChama,
+  updateMemberRole,
+  createChama,
+  updateChama,
+  getChamaWalletBalance,
+  createChamaChatRoom,
+  getChamaSubscriptionPayments,
+  paySubscriptionPayment,
+  getChamaServiceFeePayments,
+  payServiceFeePayment,
 };

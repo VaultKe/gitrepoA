@@ -53,10 +53,6 @@ const CreateChamaStep3 = ({
   const [totpLoading, setTotpLoading] = useState(false);
   const [totpVerified, setTotpVerified] = useState(false);
 
-  const [hasRegistrationMoney, setHasRegistrationMoney] = useState(false);
-  const [payLoading, setPayLoading] = useState(false);
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
-
   const [onboardLoading, setOnboardLoading] = useState(false);
 
   const memberRoles = [
@@ -275,17 +271,13 @@ const CreateChamaStep3 = ({
     }
     setTotpLoading(true);
     try {
-      const email = foundUser?.email || userForm.email;
+      const phone = foundUser?.phoneNumber || foundUser?.phone || userForm.phone;
       const userId = foundUser?.id || 'new';
       const response = await ApiService.verifyOnboardingTOTP(totpCode, userId);
       if (response.success) {
         setTotpVerified(true);
         Toast.show({ type: 'success', text1: 'Phone verified successfully' });
-        if (foundUser) {
-          setOnboardingPhase('payment_check');
-        } else {
-          setOnboardingPhase('payment_check');
-        }
+        onboardMember();
       } else {
         Toast.show({ type: 'error', text1: response.error || 'Invalid code' });
       }
@@ -293,23 +285,6 @@ const CreateChamaStep3 = ({
       Toast.show({ type: 'error', text1: 'Verification failed', text2: error.message });
     } finally {
       setTotpLoading(false);
-    }
-  };
-
-  const handleRegistrationPayment = async () => {
-    setPayLoading(true);
-    try {
-      const response = await ApiService.initiateRegistrationPayment(50, phoneNumber);
-      if (response.success) {
-        setPaymentCompleted(true);
-        Toast.show({ type: 'success', text1: 'Registration fee paid successfully' });
-      } else {
-        Toast.show({ type: 'error', text1: response.error || 'Payment failed' });
-      }
-    } catch (error) {
-      Toast.show({ type: 'error', text1: 'Payment failed', text2: error.message });
-    } finally {
-      setPayLoading(false);
     }
   };
 
@@ -322,7 +297,7 @@ const CreateChamaStep3 = ({
         ...(foundUser || userForm),
         role,
         phoneVerified: totpVerified,
-        hasPaidRegistration: paymentCompleted,
+        serviceFeeStatus: 'pending',
         onboardedAt: new Date().toISOString(),
       };
 
@@ -359,8 +334,6 @@ const CreateChamaStep3 = ({
     setOnboardingPhase('search');
     setTotpCode('');
     setTotpVerified(false);
-    setHasRegistrationMoney(false);
-    setPaymentCompleted(false);
   };
 
   const updateMemberStatus = (memberId, field, value) => {
@@ -618,68 +591,6 @@ const CreateChamaStep3 = ({
     </Card>
   );
 
-  const renderPaymentCheck = () => (
-    <Card style={styles.section}>
-      <Text style={[styles.stepTitle, { color: colors.text }]}>
-        Registration Fee
-      </Text>
-      <Text style={[styles.stepDescription, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
-        Does this user have the KES 50 registration fee?
-      </Text>
-
-      <View style={styles.checkboxRow}>
-        <TouchableOpacity
-          style={[
-            styles.checkbox,
-            { borderColor: colors.border },
-            hasRegistrationMoney && { backgroundColor: colors.primary, borderColor: colors.primary }
-          ]}
-          onPress={() => setHasRegistrationMoney(!hasRegistrationMoney)}
-        >
-          {hasRegistrationMoney && <Ionicons name="checkmark" size={16} color={colors.white} />}
-        </TouchableOpacity>
-        <Text style={[styles.checkboxLabel, { color: colors.text }]}>
-          This member has KES 50 registration fees and has accepted to pay right now</Text>
-        </View>
-      {hasRegistrationMoney && !paymentCompleted && (
-        <View style={styles.paymentSection}>
-          <Button
-            title={payLoading ? 'Processing Payment...' : 'Pay KES 50 Registration Fee'}
-            onPress={handleRegistrationPayment}
-            loading={payLoading}
-            style={styles.payButton}
-          />
-        </View>
-      )}
-
-      {paymentCompleted && (
-        <View style={[styles.successBadge, { backgroundColor: colors.success + '20' }]}>
-          <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-          <Text style={[styles.successText, { color: colors.success }]}>
-            Payment confirmed
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.actionButtonsRow}>
-        <Button
-          title="Skip & Onboard"
-          variant="outline"
-          onPress={() => onboardMember()}
-          loading={onboardLoading}
-          style={styles.actionButton}
-        />
-        <Button
-          title="Pay & Onboard"
-          onPress={() => onboardMember()}
-          loading={onboardLoading}
-          disabled={hasRegistrationMoney && !paymentCompleted}
-          style={styles.actionButton}
-        />
-      </View>
-    </Card>
-  );
-
   const renderOnboardedTable = () => {
     if (onboardedMembers.length === 0) return null;
 
@@ -695,7 +606,7 @@ const CreateChamaStep3 = ({
               <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Name</Text>
               <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Role</Text>
               <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Phone Verified</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Reg. Fee Paid</Text>
+              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Service Fee</Text>
               <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Actions</Text>
             </View>
 
@@ -740,16 +651,16 @@ const CreateChamaStep3 = ({
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.statusChip, { backgroundColor: member.hasPaidRegistration ? colors.success + '20' : colors.error + '20' }]}
-                  onPress={() => updateMemberStatus(member.id || member.phone, 'hasPaidRegistration', !member.hasPaidRegistration)}
+                  style={[styles.statusChip, { backgroundColor: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success + '20' : colors.error + '20' }]}
+                  onPress={() => updateMemberStatus(member.id || member.phone, 'serviceFeeStatus', member.serviceFeeStatus === 'paid' ? 'pending' : 'paid')}
                 >
                   <Ionicons
-                    name={member.hasPaidRegistration ? 'checkmark-circle' : 'close-circle'}
+                    name={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'checkmark-circle' : 'close-circle'}
                     size={16}
-                    color={member.hasPaidRegistration ? colors.success : colors.error}
+                    color={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error}
                   />
-                  <Text style={[styles.statusText, { color: member.hasPaidRegistration ? colors.success : colors.error }]}>
-                    {member.hasPaidRegistration ? 'Paid' : 'Unpaid'}
+                  <Text style={[styles.statusText, { color: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error }]}>
+                    {(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'Paid' : 'Unpaid'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -790,8 +701,6 @@ const CreateChamaStep3 = ({
         return renderNewUserForm();
       case 'totp':
         return renderTOTPStep();
-      case 'payment_check':
-        return renderPaymentCheck();
       default:
         return renderSearchSection();
     }
