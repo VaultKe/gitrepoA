@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from '../../../services/api';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
+
+const ONBOARDING_DRAFT_KEY = 'createChama_onboarding_draft';
 
 const CreateChamaStep3 = ({
   chamaData,
@@ -62,6 +65,42 @@ const CreateChamaStep3 = ({
     { id: 'secretary', name: 'Secretary', description: 'Keeps records and manages communications' },
   ];
 
+  useEffect(() => {
+    const loadDraft = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(ONBOARDING_DRAFT_KEY);
+        if (saved) {
+          const draft = JSON.parse(saved);
+          if (draft.phoneNumber) setPhoneNumber(draft.phoneNumber);
+          if (draft.nationalId) setNationalId(draft.nationalId);
+          if (draft.userForm) setUserForm(draft.userForm);
+          if (draft.onboardingPhase) setOnboardingPhase(draft.onboardingPhase);
+          if (draft.foundUser) setFoundUser(draft.foundUser);
+        }
+      } catch (e) {
+        console.error('Failed to load onboarding draft:', e);
+      }
+    };
+    loadDraft();
+  }, []);
+
+  useEffect(() => {
+    const saveDraft = async () => {
+      try {
+        await AsyncStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({
+          phoneNumber,
+          nationalId,
+          userForm,
+          onboardingPhase,
+          foundUser,
+        }));
+      } catch (e) {
+        console.error('Failed to save onboarding draft:', e);
+      }
+    };
+    saveDraft();
+  }, [phoneNumber, nationalId, userForm, onboardingPhase, foundUser]);
+
   const searchUser = async () => {
     if (!phoneNumber && !nationalId) {
       Toast.show({ type: 'error', text1: 'Enter phone number and national ID to search' });
@@ -79,6 +118,7 @@ const CreateChamaStep3 = ({
 
     try {
       const response = await ApiService.searchUserByCredentials(phoneNumber, nationalId);
+      console.log('Search credentials response:', response);
 
       if (response.success && response.data && response.match) {
         setFoundUser(response.data);
@@ -101,6 +141,13 @@ const CreateChamaStep3 = ({
             text2: response.error,
             visibilityTime: 4000,
           });
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'Not Found',
+            text2: response.error,
+            visibilityTime: 4000,
+          });
         }
       }
 
@@ -112,6 +159,7 @@ const CreateChamaStep3 = ({
         idNumber: nationalId,
       }));
     } catch (error) {
+      console.log('Search error:', error);
       Toast.show({ type: 'error', text1: 'Search failed', text2: error.message });
       setShowUserForm(true);
       setOnboardingPhase('new_user');
@@ -591,9 +639,8 @@ const CreateChamaStep3 = ({
           {hasRegistrationMoney && <Ionicons name="checkmark" size={16} color={colors.white} />}
         </TouchableOpacity>
         <Text style={[styles.checkboxLabel, { color: colors.text }]}>
-          This member has KES 50 registration. <span>if not they can paylater</span></Text>
-      </View>
-
+          This member has KES 50 registration fees and has accepted to pay right now</Text>
+        </View>
       {hasRegistrationMoney && !paymentCompleted && (
         <View style={styles.paymentSection}>
           <Button
@@ -623,7 +670,7 @@ const CreateChamaStep3 = ({
           style={styles.actionButton}
         />
         <Button
-          title="Onboard Member"
+          title="Pay & Onboard"
           onPress={() => onboardMember()}
           loading={onboardLoading}
           disabled={hasRegistrationMoney && !paymentCompleted}

@@ -74,6 +74,8 @@ func Migrate(db *sql.DB) error {
 		createSignalMessagesTable,
 		createE2EEKeyBundlesTable,
 		createE2EESessionsTable,
+		createSubscriptionPaymentsTable,
+		createServiceFeePaymentsTable,
 	}
 
 	for i, migration := range migrations {
@@ -103,6 +105,8 @@ func Migrate(db *sql.DB) error {
 		{"backfillChatRoomIds", backfillChatRoomIds},
 		{"createRefreshTokensTable", createRefreshTokensTable},
 		{"addRegistrationFeeColumns", addRegistrationFeeColumns},
+		{"addSubscriptionFeeColumns", addSubscriptionFeeColumns},
+		{"addServiceFeeColumns", addServiceFeeColumns},
 	}
 
 	for _, m := range customMigrations {
@@ -482,6 +486,10 @@ CREATE TABLE IF NOT EXISTS chamas (
     meeting_day_of_week INTEGER,
     meeting_day_of_month INTEGER,
     meeting_time TEXT,
+    monthly_subscription_fee REAL DEFAULT 500, -- Monthly subscription for chamas
+    subscription_fee_paid BOOLEAN DEFAULT FALSE, -- Current month subscription status
+    subscription_fee_due_date TIMESTAMP, -- Due date for current subscription
+    registration_fee_paid BOOLEAN DEFAULT FALSE, -- One-time registration fee (for contribution groups)
     created_by TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -501,8 +509,48 @@ CREATE TABLE IF NOT EXISTS chama_members (
     last_contribution TIMESTAMP,
     rating REAL DEFAULT 0,
     total_ratings INTEGER DEFAULT 0,
+    service_fee_paid BOOLEAN DEFAULT FALSE, -- One-time service fee to join chama
+    service_fee_paid_at TIMESTAMP, -- When service fee was paid
+    service_fee_status TEXT DEFAULT 'pending', -- pending, paid, overdue
+    service_fee_warning_sent BOOLEAN DEFAULT FALSE, -- Warning sent after 2 days
     FOREIGN KEY (chama_id) REFERENCES chamas(id),
     FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(chama_id, user_id)
+);`
+
+const createSubscriptionPaymentsTable = `
+CREATE TABLE IF NOT EXISTS subscription_payments (
+    id TEXT PRIMARY KEY,
+    chama_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, paid, overdue, cancelled
+    due_date TIMESTAMP NOT NULL,
+    paid_at TIMESTAMP,
+    payment_method TEXT,
+    transaction_id TEXT,
+    month_year TEXT NOT NULL, -- e.g., "2025-06" for June 2025
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chama_id) REFERENCES chamas(id) ON DELETE CASCADE,
+    UNIQUE(chama_id, month_year)
+);`
+
+const createServiceFeePaymentsTable = `
+CREATE TABLE IF NOT EXISTS service_fee_payments (
+    id TEXT PRIMARY KEY,
+    chama_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, paid, overdue, cancelled
+    due_date TIMESTAMP NOT NULL,
+    paid_at TIMESTAMP,
+    payment_method TEXT,
+    transaction_id TEXT,
+    warning_sent BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chama_id) REFERENCES chamas(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(chama_id, user_id)
 );`
 
@@ -2841,5 +2889,42 @@ func addRegistrationFeeColumns(db *sql.DB) error {
 		}
 	}
 	log.Println("✅ registration fee columns ready")
+	return nil
+}
+
+// addSubscriptionFeeColumns adds subscription fee columns to chamas table
+func addSubscriptionFeeColumns(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS monthly_subscription_fee REAL DEFAULT 500`,
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS subscription_fee_paid BOOLEAN DEFAULT FALSE`,
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS subscription_fee_due_date TIMESTAMP`,
+		`CREATE INDEX IF NOT EXISTS idx_chamas_subscription_fee_paid ON chamas(subscription_fee_paid)`,
+		`CREATE INDEX IF NOT EXISTS idx_chamas_subscription_fee_due_date ON chamas(subscription_fee_due_date)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add subscription fee columns: %w", err)
+		}
+	}
+	log.Println("✅ subscription fee columns ready")
+	return nil
+}
+
+// addServiceFeeColumns adds service fee columns to chama_members table
+func addServiceFeeColumns(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE chama_members ADD COLUMN IF NOT EXISTS service_fee_paid BOOLEAN DEFAULT FALSE`,
+		`ALTER TABLE chama_members ADD COLUMN IF NOT EXISTS service_fee_paid_at TIMESTAMP`,
+		`ALTER TABLE chama_members ADD COLUMN IF NOT EXISTS service_fee_status TEXT DEFAULT 'pending'`,
+		`ALTER TABLE chama_members ADD COLUMN IF NOT EXISTS service_fee_warning_sent BOOLEAN DEFAULT FALSE`,
+		`CREATE INDEX IF NOT EXISTS idx_chama_members_service_fee_status ON chama_members(service_fee_status)`,
+		`CREATE INDEX IF NOT EXISTS idx_chama_members_service_fee_warning_sent ON chama_members(service_fee_warning_sent)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add service fee columns: %w", err)
+		}
+	}
+	log.Println("✅ service fee columns ready")
 	return nil
 }

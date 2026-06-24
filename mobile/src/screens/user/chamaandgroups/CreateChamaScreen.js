@@ -2,7 +2,7 @@
  * CreateChamaScreen - Secure Chama/Contribution Group Creation
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
@@ -25,6 +26,8 @@ import CreateChamaStep1 from './CreateChamaStep1';
 import CreateChamaStep2 from './CreateChamaStep2';
 import CreateChamaStep3 from './CreateChamaStep3';
 import CreateChamaStep4 from './CreateChamaStep4';
+
+const CREATE_CHAMA_DRAFT_KEY = 'createChama_draft';
 
 const CreateChamaScreen = ({ navigation }) => {
   const { theme, user, loadUserChamas } = useApp();
@@ -83,6 +86,46 @@ const CreateChamaScreen = ({ navigation }) => {
     xmlEntities: /&[a-zA-Z0-9#]+;/g,
     dangerousChars: /[<>\"'&\x00-\x1f\x7f-\x9f]/g,
     controlChars: /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g,
+  };
+
+  useEffect(() => {
+    const loadDraft = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(CREATE_CHAMA_DRAFT_KEY);
+        if (saved) {
+          const draft = JSON.parse(saved);
+          if (draft.chamaData) setChamaData(draft.chamaData);
+          if (draft.onboardedMembers) setOnboardedMembers(draft.onboardedMembers);
+          if (draft.currentStep) setCurrentStep(draft.currentStep);
+        }
+      } catch (e) {
+        console.error('Failed to load create chama draft:', e);
+      }
+    };
+    loadDraft();
+  }, []);
+
+  useEffect(() => {
+    const saveDraft = async () => {
+      try {
+        await AsyncStorage.setItem(CREATE_CHAMA_DRAFT_KEY, JSON.stringify({
+          chamaData,
+          onboardedMembers,
+          currentStep,
+        }));
+      } catch (e) {
+        console.error('Failed to save create chama draft:', e);
+      }
+    };
+    saveDraft();
+  }, [chamaData, onboardedMembers, currentStep]);
+
+  const clearDraft = async () => {
+    try {
+      await AsyncStorage.removeItem(CREATE_CHAMA_DRAFT_KEY);
+    } catch (e) {
+      console.error('Failed to clear draft:', e);
+    }
   };
 
   const sanitizeInput = (value, type = 'text') => {
@@ -763,6 +806,7 @@ const CreateChamaScreen = ({ navigation }) => {
           text2: `Your ${isContribution ? 'contribution group' : 'chama'} has been created and you are now the chairperson.`,
           visibilityTime: 3000,
         });
+        await clearDraft();
         navigation.navigate('MyChamas', {
           newChamaId: response.data.id,
           refresh: true

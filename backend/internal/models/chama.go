@@ -91,6 +91,9 @@ type Chama struct {
 	MeetingSchedule       *MeetingSchedule       `json:"meetingSchedule,omitempty" db:"meeting_schedule"`
 	Permissions           map[string]interface{} `json:"permissions,omitempty" db:"permissions"`
 	RegistrationFeePaid  bool                   `json:"registrationFeePaid" db:"registration_fee_paid"`
+	MonthlySubscriptionFee float64              `json:"monthlySubscriptionFee" db:"monthly_subscription_fee"`
+	SubscriptionFeePaid   bool                   `json:"subscriptionFeePaid" db:"subscription_fee_paid"`
+	SubscriptionFeeDueDate *time.Time            `json:"subscriptionFeeDueDate,omitempty" db:"subscription_fee_due_date"`
 	CreatedBy             string                 `json:"createdBy" db:"created_by"`
 	CreatedAt             time.Time              `json:"createdAt" db:"created_at"`
 	UpdatedAt             time.Time              `json:"updatedAt" db:"updated_at"`
@@ -112,6 +115,12 @@ type ChamaMember struct {
 
 	// Joined user data (populated when needed)
 	User *User `json:"user,omitempty"`
+
+	// Service fee fields (one-time fee to join chama)
+	ServiceFeePaid      bool       `json:"serviceFeePaid" db:"service_fee_paid"`
+	ServiceFeePaidAt    *time.Time `json:"serviceFeePaidAt,omitempty" db:"service_fee_paid_at"`
+	ServiceFeeStatus    string     `json:"serviceFeeStatus" db:"service_fee_status"`
+	ServiceFeeWarningSent bool     `json:"serviceFeeWarningSent" db:"service_fee_warning_sent"`
 }
 
 // ChamaCreation represents data for creating a new chama
@@ -139,6 +148,26 @@ type ChamaCreation struct {
 	Rules                 []string              `json:"rules"`
 	MeetingSchedule       *MeetingSchedule      `json:"meetingSchedule,omitempty"`
 	RegistrationFeePaid   bool                  `json:"registrationFeePaid"`
+	MonthlySubscriptionFee float64              `json:"monthlySubscriptionFee"`
+}
+
+// ChamaUpdate represents data for updating a chama
+type ChamaUpdate struct {
+	Name                  *string                `json:"name,omitempty"`
+	Description           *string                `json:"description,omitempty"`
+	Type                  *ChamaType             `json:"type,omitempty"`
+	County                *string                `json:"county,omitempty"`
+	Town                  *string                `json:"town,omitempty"`
+	Latitude              *float64               `json:"latitude,omitempty"`
+	Longitude             *float64               `json:"longitude,omitempty"`
+	ContributionAmount    *float64               `json:"contributionAmount,omitempty"`
+	ContributionFrequency *ContributionFrequency `json:"contributionFrequency,omitempty"`
+	MaxMembers            *int                   `json:"maxMembers,omitempty"`
+	IsPublic              *bool                  `json:"isPublic,omitempty"`
+	RequiresApproval      *bool                  `json:"requiresApproval,omitempty"`
+	Rules                 []string               `json:"rules,omitempty"`
+	MeetingSchedule       *MeetingSchedule       `json:"meetingSchedule,omitempty"`
+	MonthlySubscriptionFee *float64              `json:"monthlySubscriptionFee,omitempty"`
 }
 
 // ChamaUpdate represents data for updating a chama
@@ -247,4 +276,35 @@ func (cm *ChamaMember) CanManageMembers() bool {
 // CanManageFinances checks if a member can manage finances
 func (cm *ChamaMember) CanManageFinances() bool {
 	return cm.Role == ChamaRoleChairperson || cm.Role == ChamaRoleTreasurer
+}
+
+// SubscriptionPayment represents a monthly subscription payment for a chama
+type SubscriptionPayment struct {
+	ID                 string     `json:"id" db:"id"`
+	ChamaID            string     `json:"chamaId" db:"chama_id"`
+	Amount              float64    `json:"amount" db:"amount"`
+	Status              string     `json:"status" db:"status"`
+	DueDate             time.Time  `json:"dueDate" db:"due_date"`
+	PaidAt              *time.Time `json:"paidAt,omitempty" db:"paid_at"`
+	PaymentMethod       *string    `json:"paymentMethod,omitempty" db:"payment_method"`
+	TransactionID       *string    `json:"transactionId,omitempty" db:"transaction_id"`
+	MonthYear           string     `json:"monthYear" db:"month_year"`
+	CreatedAt           time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt           time.Time  `json:"updatedAt" db:"updated_at"`
+}
+
+// ServiceFeePayment represents a one-time service fee payment for a member joining a chama
+type ServiceFeePayment struct {
+	ID                 string     `json:"id" db:"id"`
+	ChamaID            string     `json:"chamaId" db:"chama_id"`
+	UserID             string     `json:"userId" db:"user_id"`
+	Amount             float64    `json:"amount" db:"amount"`
+	Status             string     `json:"status" db:"status"`
+	DueDate            time.Time  `json:"dueDate" db:"due_date"`
+	PaidAt             *time.Time `json:"paidAt,omitempty" db:"paid_at"`
+	PaymentMethod      *string    `json:"paymentMethod,omitempty" db:"payment_method"`
+	TransactionID      *string    `json:"transactionId,omitempty" db:"transaction_id"`
+	WarningSent        bool       `json:"warningSent" db:"warning_sent"`
+	CreatedAt          time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt          time.Time  `json:"updatedAt" db:"updated_at"`
 }

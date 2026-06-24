@@ -1257,29 +1257,34 @@ func SearchUserByCredentials(c *gin.Context) {
 	}
 	database := db.(*sql.DB)
 
-	var phoneUser, idUser struct {
-		ID         string
-		Email      string
-		Phone      string
-		FirstName  string
-		LastName   string
-		IDNumber   string
-	}
+	var phoneUser map[string]interface{}
 
-	err := database.QueryRow(
+	row := database.QueryRow(
 		"SELECT id, email, phone, first_name, last_name, id_number FROM users WHERE phone = $1",
 		phone,
-	).Scan(&phoneUser.ID, &phoneUser.Email, &phoneUser.Phone, &phoneUser.FirstName, &phoneUser.LastName, &phoneUser.IDNumber)
+	)
+	var puID, puEmail, puPhone, puFirstName, puLastName, puIDNumber sql.NullString
+	err := row.Scan(&puID, &puEmail, &puPhone, &puFirstName, &puLastName, &puIDNumber)
 
-	err2 := database.QueryRow(
+	row2 := database.QueryRow(
 		"SELECT id, email, phone, first_name, last_name, id_number FROM users WHERE id_number = $1",
 		nationalId,
-	).Scan(&idUser.ID, &idUser.Email, &idUser.Phone, &idUser.FirstName, &idUser.LastName, &idUser.IDNumber)
+	)
+	var iuID, iuEmail, iuPhone, iuFirstName, iuLastName, iuIDNumber sql.NullString
+	err2 := row2.Scan(&iuID, &iuEmail, &iuPhone, &iuFirstName, &iuLastName, &iuIDNumber)
 
 	phoneExists := err == nil
 	idExists := err2 == nil
 
-	if phoneExists && idExists && phoneUser.ID == idUser.ID {
+	if phoneExists && idExists && puID.String == iuID.String {
+		phoneUser = map[string]interface{}{
+			"id":         puID.String,
+			"email":      puEmail.String,
+			"phone":      puPhone.String,
+			"firstName":  puFirstName.String,
+			"lastName":   puLastName.String,
+			"nationalId": puIDNumber.String,
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data":    phoneUser,
@@ -1288,17 +1293,41 @@ func SearchUserByCredentials(c *gin.Context) {
 		return
 	}
 
-	if phoneExists && idExists && phoneUser.ID != idUser.ID {
+	if phoneExists && idExists && puID.String != iuID.String {
+		phoneUserMap := map[string]interface{}{
+			"id":         puID.String,
+			"email":      puEmail.String,
+			"phone":      puPhone.String,
+			"firstName":  puFirstName.String,
+			"lastName":   puLastName.String,
+			"nationalId": puIDNumber.String,
+		}
+		idUserMap := map[string]interface{}{
+			"id":         iuID.String,
+			"email":      iuEmail.String,
+			"phone":      iuPhone.String,
+			"firstName":  iuFirstName.String,
+			"lastName":   iuLastName.String,
+			"nationalId":  iuIDNumber.String,
+		}
 		c.JSON(http.StatusConflict, gin.H{
 			"success": false,
 			"error":   "Credential mismatch: phone and national ID belong to different users",
-			"phoneUser": phoneUser,
-			"idUser":    idUser,
+			"phoneUser": phoneUserMap,
+			"idUser":    idUserMap,
 		})
 		return
 	}
 
 	if phoneExists && !idExists {
+		phoneUser = map[string]interface{}{
+			"id":         puID.String,
+			"email":      puEmail.String,
+			"phone":      puPhone.String,
+			"firstName":  puFirstName.String,
+			"lastName":   puLastName.String,
+			"nationalId": puIDNumber.String,
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"error":   "National ID not found for the user with this phone number",
@@ -1308,6 +1337,14 @@ func SearchUserByCredentials(c *gin.Context) {
 	}
 
 	if !phoneExists && idExists {
+		idUser := map[string]interface{}{
+			"id":         iuID.String,
+			"email":      iuEmail.String,
+			"phone":      iuPhone.String,
+			"firstName":  iuFirstName.String,
+			"lastName":   iuLastName.String,
+			"nationalId":  iuIDNumber.String,
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"error":   "Phone number not found for the user with this national ID",
