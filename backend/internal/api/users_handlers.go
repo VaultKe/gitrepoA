@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/gin-gonic/gin"
 	"vaultke-backend/internal/services"
@@ -1406,19 +1407,23 @@ func OnboardUser(c *gin.Context) {
 	}
 	database := db.(*sql.DB)
 
-	var emailStr string
+	var emailStr sql.NullString
 	if req.Email != nil && *req.Email != "" {
-		emailStr = *req.Email
+		emailStr = sql.NullString{String: *req.Email, Valid: true}
+	} else {
+		emailStr = sql.NullString{Valid: false}
 	}
 
-	var genderStr string
+	var genderStr sql.NullString
 	if req.Gender != nil && *req.Gender != "" {
-		genderStr = *req.Gender
+		genderStr = sql.NullString{String: *req.Gender, Valid: true}
+	} else {
+		genderStr = sql.NullString{Valid: false}
 	}
 
-	if emailStr != "" {
+	if emailStr.Valid {
 		var existingEmail string
-		err := database.QueryRow("SELECT id FROM users WHERE email = $1", emailStr).Scan(&existingEmail)
+		err := database.QueryRow("SELECT id FROM users WHERE email = $1", emailStr.String).Scan(&existingEmail)
 		if err == nil {
 			c.JSON(http.StatusConflict, gin.H{
 				"success": false,
@@ -1474,21 +1479,23 @@ func OnboardUser(c *gin.Context) {
 	}
 
 	query := `
-		INSERT INTO users (email, phone, first_name, last_name, password_hash, id_number, gender, role, status, is_email_verified, is_phone_verified, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'user', 'pending', false, false, NOW(), NOW())
+		INSERT INTO users (id, email, phone, first_name, last_name, password_hash, id_number, gender, role, status, is_email_verified, is_phone_verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'user', 'pending', false, false, NOW(), NOW())
 		RETURNING id, email, phone, first_name, last_name, created_at
 	`
 
+	newUserID := uuid.New().String()
+
 	var newUser struct {
 		ID        string
-		Email     string
+		Email     sql.NullString
 		Phone     string
 		FirstName string
 		LastName  string
 		CreatedAt string
 	}
 
-	err = database.QueryRow(query, emailStr, req.Phone, req.FirstName, req.LastName, passwordHash, req.IDNumber, genderStr).Scan(
+	err = database.QueryRow(query, newUserID, emailStr, req.Phone, req.FirstName, req.LastName, passwordHash, req.IDNumber, genderStr).Scan(
 		&newUser.ID, &newUser.Email, &newUser.Phone, &newUser.FirstName, &newUser.LastName, &newUser.CreatedAt,
 	)
 
@@ -1496,7 +1503,7 @@ func OnboardUser(c *gin.Context) {
 		log.Printf("Failed to create onboarded user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to create user account",
+			"error":   "Failed to create user account: " + err.Error(),
 		})
 		return
 	}
@@ -1508,7 +1515,7 @@ func OnboardUser(c *gin.Context) {
 		"message": "User onboarded successfully",
 		"data": gin.H{
 			"id":        newUser.ID,
-			"email":     newUser.Email,
+			"email":     newUser.Email.String,
 			"phone":     newUser.Phone,
 			"firstName": newUser.FirstName,
 			"lastName":  newUser.LastName,
