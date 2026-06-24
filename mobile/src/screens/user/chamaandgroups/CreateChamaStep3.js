@@ -57,10 +57,22 @@ const CreateChamaStep3 = ({
   const [editingRole, setEditingRole] = useState(null);
 
   const memberRoles = [
-    { id: 'member', name: 'Member', description: 'Regular member with basic privileges' },
-    { id: 'treasurer', name: 'Treasurer', description: 'Manages finances and transactions' },
-    { id: 'secretary', name: 'Secretary', description: 'Keeps records and manages communications' },
+    { id: 'chairperson', name: 'Chairperson', description: 'Leads the chama and presides over meetings', maxCount: 2 },
+    { id: 'secretary', name: 'Secretary', description: 'Keeps records and manages communications', maxCount: 2 },
+    { id: 'treasurer', name: 'Treasurer', description: 'Manages finances and transactions', maxCount: 2 },
+    { id: 'member', name: 'Member', description: 'Regular member with basic privileges', maxCount: 1000 },
   ];
+
+  const getRoleCount = (roleId) => {
+    return onboardedMembers.filter(m => m.role === roleId).length;
+  };
+
+  const canAssignRole = (roleId) => {
+    if (roleId === 'chairperson') return false;
+    const role = memberRoles.find(r => r.id === roleId);
+    if (!role || role.maxCount === Infinity) return true;
+    return getRoleCount(roleId) < role.maxCount;
+  };
 
   useEffect(() => {
     const loadDraft = async () => {
@@ -733,35 +745,50 @@ const CreateChamaStep3 = ({
         >
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Select Role for {member.firstName} {member.lastName}</Text>
-            {memberRoles.map((role) => (
-              <TouchableOpacity
-                key={role.id}
-                style={[
-                  styles.modalOption,
-                  { borderBottomColor: colors.border },
-                  member.role === role.id && { backgroundColor: colors.primary + '20' }
-                ]}
-                onPress={() => {
-                  updateMemberStatus(member.id || member.phone, 'role', role.id);
-                  setEditingRole(null);
-                }}
-              >
-                <View>
-                  <Text style={[
-                    styles.modalOptionText,
-                    { color: member.role === role.id ? colors.primary : colors.text, fontWeight: member.role === role.id ? 'bold' : 'normal' }
-                  ]}>
-                    {role.name}
-                  </Text>
-                  <Text style={styles.modalOptionDesc}>
-                    {role.description}
-                  </Text>
-                </View>
-                {member.role === role.id && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
+            {memberRoles.map((role) => {
+              const isFull = !canAssignRole(role.id);
+              const isCurrentRole = member.role === role.id;
+              return (
+                <TouchableOpacity
+                  key={role.id}
+                  style={[
+                    styles.modalOption,
+                    { borderBottomColor: colors.border },
+                    isCurrentRole && { backgroundColor: colors.primary + '20' },
+                    isFull && !isCurrentRole && { opacity: 0.5 }
+                  ]}
+                  onPress={() => {
+                    if (isFull && !isCurrentRole) {
+                      Toast.show({ type: 'error', text1: `${role.name} role is already filled (max 1)` });
+                      return;
+                    }
+                    updateMemberStatus(member.id || member.phone, 'role', role.id);
+                    setEditingRole(null);
+                  }}
+                  disabled={isFull && !isCurrentRole}
+                >
+                  <View>
+                    <Text style={[
+                      styles.modalOptionText,
+                      { color: isCurrentRole ? colors.primary : colors.text, fontWeight: isCurrentRole ? 'bold' : 'normal' }
+                    ]}>
+                      {role.name}
+                    </Text>
+                    <Text style={styles.modalOptionDesc}>
+                      {role.description}
+                    </Text>
+                    {isFull && !isCurrentRole && (
+                      <Text style={[styles.roleFullText, { color: colors.error }]}>
+                        (Filled - max 2)
+                      </Text>
+                    )}
+                  </View>
+                  {isCurrentRole && (
+                    <Ionicons name="checkmark" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1048,6 +1075,11 @@ const styles = StyleSheet.create({
   modalOptionDesc: {
     fontSize: typography.fontSize.xs,
     marginTop: 2,
+  },
+  roleFullText: {
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   inputLabel: {
     fontSize: typography.fontSize.sm,

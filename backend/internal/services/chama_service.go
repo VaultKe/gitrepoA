@@ -47,6 +47,10 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		return nil, fmt.Errorf("validation error: %w", err)
 	}
 
+	if creation.MonthlySubscriptionFee == 0 {
+		creation.MonthlySubscriptionFee = 1000
+	}
+
 	// Create chama
 	chama := &models.Chama{
 		ID:                    uuid.New().String(),

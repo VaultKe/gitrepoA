@@ -2954,6 +2954,86 @@ func PaySubscriptionPayment(c *gin.Context) {
 	})
 }
 
+// GetMemberServiceFeePayments gets service fee payments for a specific member
+func GetMemberServiceFeePayments(c *gin.Context) {
+	chamaID := c.Param("id")
+	memberID := c.Param("memberId")
+	if chamaID == "" || memberID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID and Member ID are required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	query := `
+		SELECT sfp.id, sfp.chama_id, sfp.user_id, u.first_name, u.last_name, u.phone,
+			   sfp.amount, sfp.status, sfp.due_date, sfp.paid_at, sfp.payment_method,
+			   sfp.transaction_id, sfp.warning_sent, sfp.created_at, sfp.updated_at
+		FROM service_fee_payments sfp
+		JOIN users u ON sfp.user_id = u.id
+		WHERE sfp.chama_id = $1 AND sfp.user_id = $2
+		ORDER BY sfp.created_at DESC
+	`
+	rows, err := database.Query(query, chamaID, memberID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to get service fee payments",
+		})
+		return
+	}
+	defer rows.Close()
+
+	var payments []map[string]interface{}
+	for rows.Next() {
+		var id, chamaID, userID, firstName, lastName, phone, status, paymentMethod, transactionID string
+		var amount float64
+		var dueDate, paidAt, createdAt, updatedAt time.Time
+		var warningSent bool
+
+		err := rows.Scan(&id, &chamaID, &userID, &firstName, &lastName, &phone,
+			&amount, &status, &dueDate, &paidAt, &paymentMethod, &transactionID,
+			&warningSent, &createdAt, &updatedAt)
+		if err != nil {
+			continue
+		}
+
+		payment := map[string]interface{}{
+			"id":          id,
+			"chamaId":     chamaID,
+			"userId":      userID,
+			"userName":    firstName + " " + lastName,
+			"userPhone":   phone,
+			"amount":      amount,
+			"status":      status,
+			"dueDate":     dueDate,
+			"paidAt":      paidAt,
+			"paymentMethod": paymentMethod,
+			"transactionId": transactionID,
+			"warningSent": warningSent,
+			"createdAt":   createdAt,
+			"updatedAt":   updatedAt,
+		}
+		payments = append(payments, payment)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    payments,
+	})
+}
+
 // GetChamaServiceFeePayments gets service fee payments for members of a chama
 func GetChamaServiceFeePayments(c *gin.Context) {
 	chamaID := c.Param("id")

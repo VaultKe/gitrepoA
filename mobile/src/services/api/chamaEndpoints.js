@@ -118,6 +118,10 @@ const getChamaServiceFeePayments = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/service-fee-payments`);
 };
 
+const getMemberServiceFeePayments = async (chamaId, memberId) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}/service-fee-payments`);
+};
+
 const payServiceFeePayment = async (chamaId, paymentId) => {
   return await makeRequest(`/chamas/${chamaId}/service-fee-payments/${paymentId}/pay`, {
     method: 'POST',
@@ -188,5 +192,6 @@ export {
   getChamaSubscriptionPayments,
   paySubscriptionPayment,
   getChamaServiceFeePayments,
+  getMemberServiceFeePayments,
   payServiceFeePayment,
 };

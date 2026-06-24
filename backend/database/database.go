@@ -486,7 +486,7 @@ CREATE TABLE IF NOT EXISTS chamas (
     meeting_day_of_week INTEGER,
     meeting_day_of_month INTEGER,
     meeting_time TEXT,
-    monthly_subscription_fee REAL DEFAULT 500, -- Monthly subscription for chamas
+    monthly_subscription_fee REAL DEFAULT 1000, -- Monthly subscription for chamas
     subscription_fee_paid BOOLEAN DEFAULT FALSE, -- Current month subscription status
     subscription_fee_due_date TIMESTAMP, -- Due date for current subscription
     registration_fee_paid BOOLEAN DEFAULT FALSE, -- One-time registration fee (for contribution groups)
@@ -2895,7 +2895,7 @@ func addRegistrationFeeColumns(db *sql.DB) error {
 // addSubscriptionFeeColumns adds subscription fee columns to chamas table
 func addSubscriptionFeeColumns(db *sql.DB) error {
 	queries := []string{
-		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS monthly_subscription_fee REAL DEFAULT 500`,
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS monthly_subscription_fee REAL DEFAULT 1000`,
 		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS subscription_fee_paid BOOLEAN DEFAULT FALSE`,
 		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS subscription_fee_due_date TIMESTAMP`,
 		`CREATE INDEX IF NOT EXISTS idx_chamas_subscription_fee_paid ON chamas(subscription_fee_paid)`,

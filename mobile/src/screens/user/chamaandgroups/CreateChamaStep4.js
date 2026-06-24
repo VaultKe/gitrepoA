@@ -177,7 +177,7 @@ const CreateChamaStep4 = ({
           <View style={[styles.infoBox, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]}>
             <Ionicons name="information-circle" size={20} color={colors.primary} />
             <Text style={[styles.infoText, { color: colors.primary, marginLeft: spacing.sm }]}>
-              Monthly subscription fee of KES 500 will be auto-deducted from the chama wallet on the 2nd of each month. Service fees for members will be managed separately.
+              Monthly subscription fee of KES 1000 will be auto-deducted from the chama wallet on the 2nd of each month. Service fees for members will be managed separately.
             </Text>
           </View>
         )}

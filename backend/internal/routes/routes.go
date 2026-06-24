@@ -269,6 +269,7 @@ func SetupRoutes(
 			chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
 			chamas.POST("/:id/subscription-payments/:paymentId/pay", api.PaySubscriptionPayment)
 			chamas.GET("/:id/service-fee-payments", api.GetChamaServiceFeePayments)
+			chamas.GET("/:id/members/:memberId/service-fee-payments", api.GetMemberServiceFeePayments)
 			chamas.POST("/:id/service-fee-payments/:paymentId/pay", api.PayServiceFeePayment)
 			}
 

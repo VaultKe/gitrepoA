@@ -1,15 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Input from '../../../components/common/Input';
-
-const frequencies = [
-  { id: 'weekly', name: 'Weekly' },
-  { id: 'monthly', name: 'Monthly' },
-  { id: 'quarterly', name: 'Quarterly' },
-];
+import KENYA_COUNTIES from '../../../utils/kenyaCounties';
 
 const CreateChamaStep2 = ({
   chamaData,
@@ -18,6 +13,25 @@ const CreateChamaStep2 = ({
   formErrors,
   colors,
 }) => {
+  const [showCountyPicker, setShowCountyPicker] = useState(false);
+  const [countySearch, setCountySearch] = useState('');
+
+  const filteredCounties = KENYA_COUNTIES.filter(county =>
+    county.toLowerCase().includes(countySearch.toLowerCase())
+  );
+
+  const selectCounty = (county) => {
+    handleInputChange('county', county);
+    setShowCountyPicker(false);
+    setCountySearch('');
+  };
+
+  const frequencies = [
+    { id: 'weekly', name: 'Weekly' },
+    { id: 'monthly', name: 'Monthly' },
+    { id: 'quarterly', name: 'Quarterly' },
+  ];
+
   return (
     <Card style={styles.section}>
       <Text style={[styles.stepTitle, { color: colors.text }]}>
@@ -25,14 +39,15 @@ const CreateChamaStep2 = ({
       </Text>
 
       <View style={styles.row}>
-        <Input
-          label="County *"
-          value={chamaData.county}
-          onChangeText={(text) => handleInputChange('county', text)}
-          placeholder="Select county"
-          style={styles.halfInput}
-          error={showErrors && formErrors.county}
-        />
+        <TouchableOpacity
+          style={[styles.halfInput, styles.countySelector, { borderColor: showErrors && formErrors.county ? colors.error : colors.border }]}
+          onPress={() => setShowCountyPicker(true)}
+        >
+          <Text style={[styles.countyText, { color: chamaData.county ? colors.text : colors.textSecondary }]}>
+            {chamaData.county || 'Select county'}
+          </Text>
+          <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
 
         <Input
           label="Town *"
@@ -43,6 +58,58 @@ const CreateChamaStep2 = ({
           error={showErrors && formErrors.town}
         />
       </View>
+
+      <Modal
+        visible={showCountyPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCountyPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCountyPicker(false)}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Select County</Text>
+            <TextInput
+              style={[styles.countySearch, { color: colors.text, borderColor: colors.border }]}
+              placeholder="Search counties..."
+              placeholderTextColor={colors.textSecondary}
+              value={countySearch}
+              onChangeText={setCountySearch}
+            />
+            <ScrollView style={styles.countyList} nestedScrollEnabled>
+              {filteredCounties.map((county) => (
+                <TouchableOpacity
+                  key={county}
+                  style={[
+                    styles.countyOption,
+                    { borderBottomColor: colors.border },
+                    chamaData.county === county && { backgroundColor: colors.primary + '20' }
+                  ]}
+                  onPress={() => selectCounty(county)}
+                >
+                  <Text style={[
+                    styles.countyOptionText,
+                    { color: chamaData.county === county ? colors.primary : colors.text }
+                  ]}>
+                    {county}
+                  </Text>
+                  {chamaData.county === county && (
+                    <Ionicons name="checkmark" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+              {filteredCounties.length === 0 && (
+                <Text style={[styles.noResults, { color: colors.textSecondary }]}>
+                  No counties found
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {chamaData.group_type === 'chama' && (
         <View style={styles.row}>
@@ -355,6 +422,72 @@ const styles = StyleSheet.create({
   paymentMethodCardRight: {
     flex: 1,
     marginLeft: spacing.xs,
+  },
+  countySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    minHeight: 48,
+  },
+  countyText: {
+    fontSize: typography.fontSize.base,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    maxWidth: 320,
+    maxHeight: '70%',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    ...shadows.lg,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    marginBottom: spacing.xs,
+  },
+  countySearch: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    fontSize: typography.fontSize.base,
+  },
+  countyList: {
+    maxHeight: 300,
+  },
+  countyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  countyOptionText: {
+    fontSize: typography.fontSize.base,
+    flex: 1,
+  },
+  noResults: {
+    fontSize: typography.fontSize.base,
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
   },
 });
 

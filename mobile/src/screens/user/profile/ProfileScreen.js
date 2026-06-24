@@ -9,6 +9,8 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,10 +24,12 @@ import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import apiService from '../../../services/api';
 import { getTransactions } from '../../../services/api/walletEndpoints';
+import KENYA_COUNTIES from '../../../utils/kenyaCounties';
 
 const ProfileScreen = ({ navigation }) => {
   const { theme, user, userRole, updateUser, wallets, chamas, logout, getCachedData, getLightningData, getCachedAvatarData } = useApp();
   const colors = getThemeColors(theme);
+  const styles = createStyles(colors);
 
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -48,6 +52,21 @@ const ProfileScreen = ({ navigation }) => {
       : null
   );
   const [avatarData, setAvatarData] = useState(null);
+  const [showCountyPicker, setShowCountyPicker] = useState(false);
+  const [countySearch, setCountySearch] = useState('');
+
+  const filteredCounties = KENYA_COUNTIES.filter(county =>
+    county.toLowerCase().includes(countySearch.toLowerCase())
+  );
+
+  const selectCounty = (county) => {
+    setProfileData(prev => ({
+      ...prev,
+      county: county,
+    }));
+    setShowCountyPicker(false);
+    setCountySearch('');
+  };
 
   // Recent Activities state
   const [recentActivities, setRecentActivities] = useState([]);
@@ -908,13 +927,21 @@ const ProfileScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.row}>
-        <Input
-          label="County"
-          value={profileData.county}
-          onChangeText={(text) => handleInputChange('county', text)}
-          editable={editing}
-          style={styles.halfInput}
-        />
+        <View style={styles.halfInput}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: spacing.xs }]}>
+            County {editing && '*'}
+          </Text>
+          <TouchableOpacity
+            style={[styles.countySelector, { borderColor: colors.border }]}
+            onPress={() => editing && setShowCountyPicker(true)}
+            disabled={!editing}
+          >
+            <Text style={[styles.countyText, { color: profileData.county ? colors.text : colors.textSecondary }]}>
+              {profileData.county || 'Select county'}
+            </Text>
+            {editing && <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />}
+          </TouchableOpacity>
+        </View>
 
         <Input
           label="Town"
@@ -924,6 +951,58 @@ const ProfileScreen = ({ navigation }) => {
           style={styles.halfInput}
         />
       </View>
+
+      <Modal
+        visible={showCountyPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCountyPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCountyPicker(false)}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Select County</Text>
+            <TextInput
+              style={[styles.countySearch, { color: colors.text, borderColor: colors.border }]}
+              placeholder="Search counties..."
+              placeholderTextColor={colors.textSecondary}
+              value={countySearch}
+              onChangeText={setCountySearch}
+            />
+            <ScrollView style={styles.countyList} nestedScrollEnabled>
+              {filteredCounties.map((county) => (
+                <TouchableOpacity
+                  key={county}
+                  style={[
+                    styles.countyOption,
+                    { borderBottomColor: colors.border },
+                    profileData.county === county && { backgroundColor: colors.primary + '20' }
+                  ]}
+                  onPress={() => selectCounty(county)}
+                >
+                  <Text style={[
+                    styles.countyOptionText,
+                    { color: profileData.county === county ? colors.primary : colors.text }
+                  ]}>
+                    {county}
+                  </Text>
+                  {profileData.county === county && (
+                    <Ionicons name="checkmark" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+              {filteredCounties.length === 0 && (
+                <Text style={[styles.noResults, { color: colors.textSecondary }]}>
+                  No counties found
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <Input
         label="Occupation"
@@ -1044,7 +1123,7 @@ const ProfileScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -1371,6 +1450,73 @@ const styles = StyleSheet.create({
   },
   readOnlyText: {
     fontSize: typography.fontSize.base,
+  },
+  countySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    minHeight: 48,
+    backgroundColor: colors.surface,
+  },
+  countyText: {
+    fontSize: typography.fontSize.base,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    maxWidth: 320,
+    maxHeight: '70%',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    ...shadows.lg,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    marginBottom: spacing.xs,
+  },
+  countySearch: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    fontSize: typography.fontSize.base,
+  },
+  countyList: {
+    maxHeight: 300,
+  },
+  countyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  countyOptionText: {
+    fontSize: typography.fontSize.base,
+    flex: 1,
+  },
+  noResults: {
+    fontSize: typography.fontSize.base,
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
   },
 });
 
