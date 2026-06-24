@@ -1155,12 +1155,59 @@ func InitiateRegistrationPayment(c *gin.Context) {
 		return
 	}
 
-	go func(txID string) {
-		time.Sleep(2 * time.Second)
-		if err := walletService.ProcessTransaction(txID); err != nil {
-			log.Printf("Failed to process registration payment transaction %s: %v", txID, err)
+	// Initiate real M-Pesa STK push
+	phoneNumber := req.PhoneNumber
+	if strings.HasPrefix(phoneNumber, "07") {
+		phoneNumber = "254" + phoneNumber[1:]
+	} else if strings.HasPrefix(phoneNumber, "+254") {
+		phoneNumber = phoneNumber[1:]
+	}
+
+	mpesaReq := models.MpesaTransaction{
+		PhoneNumber:      phoneNumber,
+		Amount:           req.Amount,
+		AccountReference: reference,
+		TransactionDesc:  description,
+	}
+
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+
+	mpesaService := services.NewMpesaService(database, cfg.(*config.Config))
+
+	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
+	if err != nil {
+		log.Printf("STK Push failed for registration payment: %v", err)
+
+		developmentMode := os.Getenv("DEVELOPMENT_MODE") == "true"
+		mockSuccess := c.Query("mock_success") == "true"
+
+		if developmentMode || mockSuccess {
+			log.Printf("Development mode - marking registration payment as completed")
+			_, _ = database.Exec(
+				"UPDATE transactions SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+				transaction.ID,
+			)
+		} else {
+			_, _ = database.Exec(
+				"UPDATE transactions SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+				transaction.ID,
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to initiate STK push: " + err.Error(),
+			})
+			return
 		}
-	}(transaction.ID)
+	} else {
+		updateTransactionCheckoutRequestID(database, transaction.ID, stkResponse.CheckoutRequestID)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1170,6 +1217,8 @@ func InitiateRegistrationPayment(c *gin.Context) {
 			"amount":        req.Amount,
 			"reference":     reference,
 			"status":        "processing",
+			"checkoutRequestId": stkResponse.CheckoutRequestID,
+			"customerMessage":   stkResponse.CustomerMessage,
 		},
 	})
 }

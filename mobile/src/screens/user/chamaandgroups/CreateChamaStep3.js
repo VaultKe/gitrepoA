@@ -629,17 +629,15 @@ const CreateChamaStep3 = ({
                   </Text>
                 </View>
                 <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                  <View style={styles.roleCell}>
-                    <Text style={[styles.roleText, { color: colors.text }]}>
-                      {memberRoles.find(r => r.id === member.role)?.name || member.role}
+                  <TouchableOpacity
+                    style={[styles.roleDropdown, { borderColor: colors.border }]}
+                    onPress={() => setEditingRole({ member: member.id || member.phone, currentRole: member.role })}
+                  >
+                    <Text style={[styles.roleDropdownText, { color: colors.text }]}>
+                      {memberRoles.find(r => r.id === member.role)?.name || 'Select role'}
                     </Text>
-                    <TouchableOpacity
-                      style={[styles.roleEditButton, { borderColor: colors.border }]}
-                      onPress={() => setEditingRole({ member: member.id || member.phone, currentRole: member.role })}
-                    >
-                      <Ionicons name="pencil" size={12} color={colors.primary} />
-                    </TouchableOpacity>
-                  </View>
+                    <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+                  </TouchableOpacity>
                 </View>
                 <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
                   <TouchableOpacity
@@ -755,7 +753,7 @@ const CreateChamaStep3 = ({
                   ]}>
                     {role.name}
                   </Text>
-                  <Text style={[styles.modalOptionDesc, { color: colors.textSecondary }]}>
+                  <Text style={styles.modalOptionDesc}>
                     {role.description}
                   </Text>
                 </View>
@@ -952,6 +950,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  roleDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    minWidth: 110,
+    maxWidth: 140,
+    gap: spacing.xs,
+  },
+  roleDropdownText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    textTransform: 'capitalize',
+    flex: 1,
   },
   statusChip: {
     flexDirection: 'row',

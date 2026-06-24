@@ -902,6 +902,7 @@ const CreateChamaScreen = ({ navigation }) => {
             showErrors={showErrors}
             formErrors={formErrors}
             colors={colors}
+            user={user}
             onRegistrationFeeStatusChange={(status) => {
               setChamaData(prev => ({
                 ...prev,

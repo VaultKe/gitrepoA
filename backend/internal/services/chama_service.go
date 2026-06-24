@@ -109,7 +109,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 			max_members, current_members, total_funds, is_public, requires_approval, rules,
 			meeting_frequency, meeting_day_of_week, meeting_day_of_month, meeting_time,
 			registration_fee_paid, created_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
 	`
 
 	var meetingFreq, meetingTime *string
