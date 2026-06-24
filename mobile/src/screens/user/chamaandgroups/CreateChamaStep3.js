@@ -54,6 +54,7 @@ const CreateChamaStep3 = ({
   const [totpVerified, setTotpVerified] = useState(false);
 
   const [onboardLoading, setOnboardLoading] = useState(false);
+  const [editingRole, setEditingRole] = useState(null);
 
   const memberRoles = [
     { id: 'member', name: 'Member', description: 'Regular member with basic privileges' },
@@ -603,78 +604,87 @@ const CreateChamaStep3 = ({
         <ScrollView horizontal>
           <View style={styles.tableContainer}>
             <View style={[styles.tableRow, styles.tableHeader]}>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Name</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Role</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Phone Verified</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Service Fee</Text>
-              <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Actions</Text>
+              <View style={[styles.tableCell, { flex: 2.0, alignItems: 'flex-start' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Name</Text>
+              </View>
+              <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Role</Text>
+              </View>
+              <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Phone Verified</Text>
+              </View>
+              <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Service Fee</Text>
+              </View>
+              <View style={[styles.tableCell, { flex: 0.5, alignItems: 'center' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Actions</Text>
+              </View>
             </View>
 
             {onboardedMembers.map((member) => (
               <View key={member.id || member.phone} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.tableCell, { color: colors.text }]}>
-                  {member.firstName} {member.lastName}
-                </Text>
-                <View style={styles.roleSelector}>
-                  {memberRoles.map((role) => (
-                    <TouchableOpacity
-                      key={role.id}
-                      style={[
-                        styles.roleChip,
-                        {
-                          backgroundColor: member.role === role.id ? colors.primary : colors.backgroundSecondary,
-                          borderColor: colors.border,
-                        }
-                      ]}
-                      onPress={() => updateMemberStatus(member.id || member.phone, 'role', role.id)}
-                    >
-                      <Text style={[
-                        styles.roleChipText,
-                        { color: member.role === role.id ? colors.white : colors.text }
-                      ]}>
-                        {role.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                <View style={[styles.tableCell, { flex: 1.5, alignItems: 'flex-start' }]}>
+                  <Text style={[styles.tableCellText, { color: colors.text, textAlign: 'left' }]}>
+                    {member.firstName} {member.lastName}
+                  </Text>
                 </View>
-                <TouchableOpacity
-                  style={[styles.statusChip, { backgroundColor: member.phoneVerified ? colors.success + '20' : colors.error + '20' }]}
-                  onPress={() => updateMemberStatus(member.id || member.phone, 'phoneVerified', !member.phoneVerified)}
-                >
-                  <Ionicons
-                    name={member.phoneVerified ? 'checkmark-circle' : 'close-circle'}
-                    size={16}
-                    color={member.phoneVerified ? colors.success : colors.error}
-                  />
-                  <Text style={[styles.statusText, { color: member.phoneVerified ? colors.success : colors.error }]}>
-                    {member.phoneVerified ? 'Verified' : 'Unverified'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.statusChip, { backgroundColor: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success + '20' : colors.error + '20' }]}
-                  onPress={() => updateMemberStatus(member.id || member.phone, 'serviceFeeStatus', member.serviceFeeStatus === 'paid' ? 'pending' : 'paid')}
-                >
-                  <Ionicons
-                    name={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'checkmark-circle' : 'close-circle'}
-                    size={16}
-                    color={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error}
-                  />
-                  <Text style={[styles.statusText, { color: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error }]}>
-                    {(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'Paid' : 'Unpaid'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => onUpdateMember(member.id || member.phone, { _remove: true })}
-                >
-                  <Ionicons name="trash-outline" size={18} color={colors.error} />
-                </TouchableOpacity>
+                <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                  <View style={styles.roleCell}>
+                    <Text style={[styles.roleText, { color: colors.text }]}>
+                      {memberRoles.find(r => r.id === member.role)?.name || member.role}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.roleEditButton, { borderColor: colors.border }]}
+                      onPress={() => setEditingRole({ member: member.id || member.phone, currentRole: member.role })}
+                    >
+                      <Ionicons name="pencil" size={12} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                  <TouchableOpacity
+                    style={[styles.statusChip, { backgroundColor: member.phoneVerified ? colors.success + '20' : colors.error + '20' }]}
+                    onPress={() => updateMemberStatus(member.id || member.phone, 'phoneVerified', !member.phoneVerified)}
+                  >
+                    <Ionicons
+                      name={member.phoneVerified ? 'checkmark-circle' : 'close-circle'}
+                      size={16}
+                      color={member.phoneVerified ? colors.success : colors.error}
+                    />
+                    <Text style={[styles.statusText, { color: member.phoneVerified ? colors.success : colors.error }]}>
+                      {member.phoneVerified ? 'Verified' : 'Unverified'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                  <TouchableOpacity
+                    style={[styles.statusChip, { backgroundColor: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success + '20' : colors.error + '20' }]}
+                    onPress={() => updateMemberStatus(member.id || member.phone, 'serviceFeeStatus', member.serviceFeeStatus === 'paid' ? 'pending' : 'paid')}
+                  >
+                    <Ionicons
+                      name={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'checkmark-circle' : 'close-circle'}
+                      size={16}
+                      color={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error}
+                    />
+                    <Text style={[styles.statusText, { color: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error }]}>
+                      {(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'Paid' : 'Unpaid'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.tableCell, { flex: 0.5, alignItems: 'center' }]}>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => onUpdateMember(member.id || member.phone, { _remove: true })}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
           </View>
         </ScrollView>
 
-        <View style={styles.tableActionRow}>
+        <View style={[styles.tableActionRow, { flexDirection: 'column' }]}>
           <Button
             title="Onboard More Users"
             variant="outline"
@@ -706,10 +716,65 @@ const CreateChamaStep3 = ({
     }
   };
 
+  const renderRoleEditModal = () => {
+    if (!editingRole) return null;
+    const member = onboardedMembers.find(m => (m.id || m.phone) === editingRole.member);
+    if (!member) return null;
+
+    return (
+      <Modal
+        visible={!!editingRole}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingRole(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setEditingRole(null)}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Select Role for {member.firstName} {member.lastName}</Text>
+            {memberRoles.map((role) => (
+              <TouchableOpacity
+                key={role.id}
+                style={[
+                  styles.modalOption,
+                  { borderBottomColor: colors.border },
+                  member.role === role.id && { backgroundColor: colors.primary + '20' }
+                ]}
+                onPress={() => {
+                  updateMemberStatus(member.id || member.phone, 'role', role.id);
+                  setEditingRole(null);
+                }}
+              >
+                <View>
+                  <Text style={[
+                    styles.modalOptionText,
+                    { color: member.role === role.id ? colors.primary : colors.text, fontWeight: member.role === role.id ? 'bold' : 'normal' }
+                  ]}>
+                    {role.name}
+                  </Text>
+                  <Text style={[styles.modalOptionDesc, { color: colors.textSecondary }]}>
+                    {role.description}
+                  </Text>
+                </View>
+                {member.role === role.id && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
+
   return (
     <View>
       {renderOnboardingFlow()}
       {renderOnboardedTable()}
+      {renderRoleEditModal()}
     </View>
   );
 };
@@ -867,22 +932,26 @@ const styles = StyleSheet.create({
   tableCell: {
     fontSize: typography.fontSize.sm,
     minWidth: 100,
-    flex: 1,
+    justifyContent: 'center',
   },
-  roleSelector: {
+  roleCell: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
     minWidth: 100,
+    justifyContent: 'center',
   },
-  roleChip: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+  roleText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    textTransform: 'capitalize',
+  },
+  roleEditButton: {
+    padding: spacing.xs,
     borderRadius: borderRadius.sm,
     borderWidth: 1,
-  },
-  roleChipText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusChip: {
     flexDirection: 'row',
@@ -901,9 +970,11 @@ const styles = StyleSheet.create({
   removeButton: {
     padding: spacing.xs,
     marginLeft: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tableActionRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: spacing.md,
     marginTop: spacing.lg,
   },
@@ -957,6 +1028,10 @@ const styles = StyleSheet.create({
   modalOptionText: {
     fontSize: typography.fontSize.base,
     flex: 1,
+  },
+  modalOptionDesc: {
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
   },
   inputLabel: {
     fontSize: typography.fontSize.sm,
