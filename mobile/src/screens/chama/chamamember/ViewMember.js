@@ -256,9 +256,7 @@ const ViewMember = ({ route, navigation }) => {
               setPayingFee('pending');
               setLastPayAttempt(Date.now());
               setCooldownActive(true);
-              console.log('Initiating payment for member:', memberId, 'chama:', chamaId);
               const response = await payMemberServiceFee(chamaId, memberId);
-              console.log('Payment response:', response);
               if (response.success) {
                 Toast.show({
                   type: 'success',
@@ -270,7 +268,6 @@ const ViewMember = ({ route, navigation }) => {
                 throw new Error(response.error || 'Failed to initiate payment');
               }
             } catch (error) {
-              console.error('Payment error:', error);
               Toast.show({
                 type: 'error',
                 text1: 'Payment Failed',
@@ -310,6 +307,37 @@ const ViewMember = ({ route, navigation }) => {
         }},
       ]
     );
+  };
+
+  const maskPhone = (phone) => {
+    if (!phone) return 'N/A';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 4) {
+      return phone.slice(0, 2) + '****' + phone.slice(-4);
+    }
+    return phone;
+  };
+
+  const maskLocation = (location) => {
+    if (!location) return 'N/A';
+    const parts = location.split(',');
+    if (parts.length >= 2) {
+      const town = parts[0].trim();
+      const county = parts.slice(1).join(',').trim();
+      const maskedTown = town.slice(0, 2) + '****';
+      return `${maskedTown}, ${county}`;
+    }
+    return location.slice(0, 2) + '****';
+  };
+
+  const maskOccupation = (text) => {
+    if (!text) return 'N/A';
+    const words = text.split(' ');
+    return words.map((word, i) => {
+      if (i === 0) return word;
+      if (word.length <= 2) return word;
+      return word.slice(0, 2) + '****';
+    }).join(' ');
   };
 
   const formatDate = (dateString) => {
@@ -651,15 +679,8 @@ const ViewMember = ({ route, navigation }) => {
                         </Text>
                       </View>
 
-                      <View style={styles.tableRowOdd}>
-                        <Text style={styles.tableLabel}>Savings Balance</Text>
-                        <Text style={styles.tableValueTextPrimary}>
-                          {formatCurrency(memberData.savings_balance || 0)}
-                        </Text>
-                      </View>
-
                       {memberData.loan_balance > 0 && (
-                        <View style={styles.tableRowEven}>
+                        <View style={styles.tableRowOdd}>
                           <Text style={styles.tableLabel}>Loan Balance</Text>
                           <Text style={styles.tableValueTextError}>
                             {formatCurrency(memberData.loan_balance)}
@@ -680,7 +701,7 @@ const ViewMember = ({ route, navigation }) => {
                         <View style={styles.tableRowEven}>
                           <Text style={styles.tableLabel}>Location</Text>
                           <Text style={styles.tableValueText}>
-                            {memberData.location}
+                            {maskLocation(memberData.location)}
                           </Text>
                         </View>
                       )}
@@ -689,7 +710,7 @@ const ViewMember = ({ route, navigation }) => {
                         <View style={styles.tableRowOdd}>
                           <Text style={styles.tableLabel}>Phone</Text>
                           <Text style={styles.tableValueText}>
-                            {memberData.user?.phone || memberData.phone_number}
+                            {maskPhone(memberData.user?.phone || memberData.phone_number)}
                           </Text>
                         </View>
                       )}
@@ -700,7 +721,7 @@ const ViewMember = ({ route, navigation }) => {
                             {memberData.user?.occupation ? 'Occupation' : 'Bio'}
                           </Text>
                           <Text style={styles.tableValueText}>
-                            {memberData.user?.occupation || memberData.user?.bio}
+                            {maskOccupation(memberData.user?.occupation || memberData.user?.bio)}
                           </Text>
                         </View>
                       )}
@@ -936,15 +957,8 @@ const ViewMember = ({ route, navigation }) => {
                         </Text>
                       </View>
 
-                      <View style={styles.tableRowOdd}>
-                        <Text style={styles.tableLabel}>Savings Balance</Text>
-                        <Text style={styles.tableValueTextPrimary}>
-                          {formatCurrency(memberData.savings_balance || 0)}
-                        </Text>
-                      </View>
-
                       {memberData.loan_balance > 0 && (
-                        <View style={styles.tableRowEven}>
+                        <View style={styles.tableRowOdd}>
                           <Text style={styles.tableLabel}>Loan Balance</Text>
                           <Text style={styles.tableValueTextError}>
                             {formatCurrency(memberData.loan_balance)}
@@ -965,7 +979,7 @@ const ViewMember = ({ route, navigation }) => {
                         <View style={styles.tableRowEven}>
                           <Text style={styles.tableLabel}>Location</Text>
                           <Text style={styles.tableValueText}>
-                            {memberData.location}
+                            {maskLocation(memberData.location)}
                           </Text>
                         </View>
                       )}
@@ -974,7 +988,7 @@ const ViewMember = ({ route, navigation }) => {
                         <View style={styles.tableRowOdd}>
                           <Text style={styles.tableLabel}>Phone</Text>
                           <Text style={styles.tableValueText}>
-                            {memberData.user?.phone || memberData.phone_number}
+                            {maskPhone(memberData.user?.phone || memberData.phone_number)}
                           </Text>
                         </View>
                       )}
@@ -985,7 +999,7 @@ const ViewMember = ({ route, navigation }) => {
                             {memberData.user?.occupation ? 'Occupation' : 'Bio'}
                           </Text>
                           <Text style={styles.tableValueText}>
-                            {memberData.user?.occupation || memberData.user?.bio}
+                            {maskOccupation(memberData.user?.occupation || memberData.user?.bio)}
                           </Text>
                         </View>
                       )}
