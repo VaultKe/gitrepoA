@@ -271,6 +271,7 @@ func SetupRoutes(
 			chamas.GET("/:id/service-fee-payments", api.GetChamaServiceFeePayments)
 			chamas.GET("/:id/members/:memberId/service-fee-payments", api.GetMemberServiceFeePayments)
 			chamas.POST("/:id/service-fee-payments/:paymentId/pay", api.PayServiceFeePayment)
+			chamas.POST("/:id/members/:memberId/pay-service-fee", api.PayMemberServiceFee)
 			}
 
 			wallets := protected.Group("/wallets")

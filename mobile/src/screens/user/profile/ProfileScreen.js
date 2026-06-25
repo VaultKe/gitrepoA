@@ -1456,10 +1456,10 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: 4,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    minHeight: 48,
+    minHeight: 36,
     backgroundColor: colors.surface,
   },
   countyText: {

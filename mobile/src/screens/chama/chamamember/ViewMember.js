@@ -17,7 +17,7 @@ import Card from '../../../components/common/Card';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
-import { getMemberServiceFeePayments, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
+import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
 
 const ViewMember = ({ route, navigation }) => {
   const { memberId, chamaId, userRole } = route.params;
@@ -32,6 +32,28 @@ const ViewMember = ({ route, navigation }) => {
   const [serviceFeePayments, setServiceFeePayments] = useState([]);
   const [feePaymentsLoading, setFeePaymentsLoading] = useState(false);
   const [payingFee, setPayingFee] = useState(null);
+  const [lastPayAttempt, setLastPayAttempt] = useState(null);
+  const [cooldownActive, setCooldownActive] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const PAY_COOLDOWN_MS = 30000;
+
+  useEffect(() => {
+    let timer;
+    if (lastPayAttempt && cooldownActive) {
+      const updateCooldown = () => {
+        const remaining = Math.ceil((PAY_COOLDOWN_MS - (Date.now() - lastPayAttempt)) / 1000);
+        if (remaining <= 0) {
+          setCooldownActive(false);
+          setCooldownRemaining(0);
+        } else {
+          setCooldownRemaining(remaining);
+        }
+      };
+      updateCooldown();
+      timer = setInterval(updateCooldown, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [lastPayAttempt, cooldownActive]);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const isDesktop = screenWidth >= breakpoints.lg;
 
@@ -197,6 +219,95 @@ const ViewMember = ({ route, navigation }) => {
             }
           },
         },
+      ]
+    );
+  };
+
+  const handlePayMemberServiceFee = async () => {
+    if (userRole !== 'chairperson' && userRole !== 'treasurer') {
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Only chairperson or treasurer can initiate payments',
+      });
+      return;
+    }
+
+    const now = Date.now();
+    if (lastPayAttempt && now - lastPayAttempt < PAY_COOLDOWN_MS) {
+      const remaining = Math.ceil((PAY_COOLDOWN_MS - (now - lastPayAttempt)) / 1000);
+      Toast.show({
+        type: 'info',
+        text1: 'Please wait',
+        text2: `Cooldown active. Try again in ${remaining}s`,
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Pay Registration Fee',
+      `Send STK push to ${memberData.user?.first_name || memberData.first_name} ${memberData.user?.last_name || memberData.last_name} for KES 50 registration fee?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send STK Push',
+          onPress: async () => {
+            try {
+              setPayingFee('pending');
+              setLastPayAttempt(Date.now());
+              setCooldownActive(true);
+              console.log('Initiating payment for member:', memberId, 'chama:', chamaId);
+              const response = await payMemberServiceFee(chamaId, memberId);
+              console.log('Payment response:', response);
+              if (response.success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Payment Initiated',
+                  text2: 'STK push sent to member\'s phone',
+                });
+                loadServiceFeePayments();
+              } else {
+                throw new Error(response.error || 'Failed to initiate payment');
+              }
+            } catch (error) {
+              console.error('Payment error:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Payment Failed',
+                text2: error.message || 'Failed to initiate payment',
+              });
+            } finally {
+              setPayingFee(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePrintReceipt = (member, payment) => {
+    const receiptData = {
+      memberName: `${member.user?.first_name || member.first_name} ${member.user?.last_name || member.last_name}`,
+      amount: 'KES 50',
+      status: 'Paid',
+      date: payment ? formatDate(payment.paidAt || payment.createdAt) : formatDate(member.service_fee_paid_at || member.joined_at),
+      chamaId: chamaId,
+      memberId: memberId,
+      paymentId: payment?.id || 'N/A',
+      transactionId: payment?.transactionId || 'N/A',
+    };
+
+    Alert.alert(
+      'Payment Receipt',
+      `Member: ${receiptData.memberName}\nAmount: ${receiptData.amount}\nStatus: ${receiptData.status}\nDate: ${receiptData.date}\nPayment ID: ${receiptData.paymentId}\nTransaction ID: ${receiptData.transactionId}`,
+      [
+        { text: 'Close', style: 'cancel' },
+        { text: 'Share', onPress: () => {
+          Toast.show({
+            type: 'success',
+            text1: 'Receipt ready to share',
+          });
+        }},
       ]
     );
   };
@@ -599,7 +710,7 @@ const ViewMember = ({ route, navigation }) => {
               </View>
 
               {/* Service Fee Payments Table */}
-              <View style={styles.feeCardContent}>
+              <View style={[styles.feeCardContent, { alignSelf: 'stretch' }]}>
                 <Text style={styles.feeCardTitle}>
                   Service Fee Payments
                 </Text>
@@ -607,17 +718,85 @@ const ViewMember = ({ route, navigation }) => {
                   <View style={styles.feeLoadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
                   </View>
-                ) : serviceFeePayments.length === 0 ? (
-                  <View style={styles.feeEmptyContainer}>
-                    <Ionicons name="receipt-outline" size={32} color={colors.textSecondary} />
-                    <Text style={[styles.feeEmptyText, { color: colors.textSecondary }]}>
-                      No service fee payments
-                    </Text>
+                ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Action</Text>
+                      )}
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        {formatDate(memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="time" size={14} color={colors.warning} />
+                        <Text style={[styles.feeStatusText, { color: colors.warning }]}>
+                          Pending
+                        </Text>
+                      </View>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <TouchableOpacity
+                          style={[styles.feePayButton, { backgroundColor: colors.primary }]}
+                          onPress={() => handlePayMemberServiceFee()}
+                          disabled={payingFee === 'pending' || cooldownActive}
+                        >
+                          {payingFee === 'pending' ? (
+                            <ActivityIndicator size="small" color={colors.white} />
+                          ) : cooldownActive ? (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Wait {cooldownRemaining}s
+                            </Text>
+                          ) : (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Pay
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Receipt</Text>
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                        <Text style={[styles.feeStatusText, { color: colors.success }]}>
+                          Paid
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                        onPress={() => handlePrintReceipt(memberData)}
+                      >
+                        <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                          Print Receipt
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ) : (
                   <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
                     <View style={styles.feeTable}>
-                      <View style={[styles.feeTableHeader, { backgroundColor: colors.primary + '10' }]}>
+                      <View style={styles.feeTableHeader}>
                         <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
                         <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
                         <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
@@ -654,7 +833,7 @@ const ViewMember = ({ route, navigation }) => {
                                 {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
                               </Text>
                             </View>
-                            {userRole === 'chairperson' && payment.status !== 'paid' && (
+                            {payment.status !== 'paid' && (
                               <TouchableOpacity
                                 style={[
                                   styles.feePayButton,
@@ -672,10 +851,15 @@ const ViewMember = ({ route, navigation }) => {
                                 )}
                               </TouchableOpacity>
                             )}
-                            {userRole === 'chairperson' && payment.status === 'paid' && (
-                              <View style={[styles.feePaidBadge, { backgroundColor: colors.success + '20' }]}>
-                                <Ionicons name="checkmark" size={14} color={colors.success} />
-                              </View>
+                            {payment.status === 'paid' && (
+                              <TouchableOpacity
+                                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                                onPress={() => handlePrintReceipt(memberData, payment)}
+                              >
+                                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                                  Print Receipt
+                                </Text>
+                              </TouchableOpacity>
                             )}
                           </View>
                         );
@@ -821,17 +1005,85 @@ const ViewMember = ({ route, navigation }) => {
                   <View style={styles.feeLoadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
                   </View>
-                ) : serviceFeePayments.length === 0 ? (
-                  <View style={styles.feeEmptyContainer}>
-                    <Ionicons name="receipt-outline" size={32} color={colors.textSecondary} />
-                    <Text style={[styles.feeEmptyText, { color: colors.textSecondary }]}>
-                      No service fee payments
-                    </Text>
+                ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Action</Text>
+                      )}
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        {formatDate(memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="time" size={14} color={colors.warning} />
+                        <Text style={[styles.feeStatusText, { color: colors.warning }]}>
+                          Pending
+                        </Text>
+                      </View>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <TouchableOpacity
+                          style={[styles.feePayButton, { backgroundColor: colors.primary }]}
+                          onPress={() => handlePayMemberServiceFee()}
+                          disabled={payingFee === 'pending' || cooldownActive}
+                        >
+                          {payingFee === 'pending' ? (
+                            <ActivityIndicator size="small" color={colors.white} />
+                          ) : cooldownActive ? (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Wait {cooldownRemaining}s
+                            </Text>
+                          ) : (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Pay
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Receipt</Text>
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                        <Text style={[styles.feeStatusText, { color: colors.success }]}>
+                          Paid
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                        onPress={() => handlePrintReceipt(memberData)}
+                      >
+                        <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                          Print Receipt
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ) : (
                   <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
                     <View style={styles.feeTable}>
-                      <View style={[styles.feeTableHeader, { backgroundColor: colors.primary + '10' }]}>
+                      <View style={styles.feeTableHeader}>
                         <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
                         <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
                         <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
@@ -868,7 +1120,7 @@ const ViewMember = ({ route, navigation }) => {
                                 {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
                               </Text>
                             </View>
-                            {userRole === 'chairperson' && payment.status !== 'paid' && (
+                            {payment.status !== 'paid' && (
                               <TouchableOpacity
                                 style={[
                                   styles.feePayButton,
@@ -886,10 +1138,15 @@ const ViewMember = ({ route, navigation }) => {
                                 )}
                               </TouchableOpacity>
                             )}
-                            {userRole === 'chairperson' && payment.status === 'paid' && (
-                              <View style={[styles.feePaidBadge, { backgroundColor: colors.success + '20' }]}>
-                                <Ionicons name="checkmark" size={14} color={colors.success} />
-                              </View>
+                            {payment.status === 'paid' && (
+                              <TouchableOpacity
+                                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                                onPress={() => handlePrintReceipt(memberData, payment)}
+                              >
+                                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                                  Print Receipt
+                                </Text>
+                              </TouchableOpacity>
                             )}
                           </View>
                         );
@@ -1365,7 +1622,8 @@ const createStyles = (colors) => StyleSheet.create({
     overflow: 'hidden',
   },
   desktopCombinedContent: {
-    flexDirection: 'row',
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   feeCard: {
     borderRadius: 12,
@@ -1384,13 +1642,20 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: 32,
     alignItems: 'center',
   },
-  feeEmptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 32,
+  feeTableWrapper: {
+    minWidth: 320,
   },
-  feeEmptyText: {
-    fontSize: 14,
-    marginTop: 8,
+  feeEmptyRow: {
+    paddingVertical: 24,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  feeEmptyCell: {
+    fontSize: 13,
+    textAlign: 'center',
+    flex: 1,
   },
   feeTableScroll: {
     maxHeight: 300,
@@ -1403,7 +1668,8 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 2,
-    borderRadius: 8,
+    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary + '10',
   },
   feeTableHeaderText: {
     flex: 1,
@@ -1447,7 +1713,7 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  feePaidBadge: {
+  feeReceiptButton: {
     flex: 1,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -1455,6 +1721,11 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 60,
+    borderWidth: 1,
+  },
+  feeReceiptButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

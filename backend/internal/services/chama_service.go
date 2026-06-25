@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"log"
 
 	"github.com/google/uuid"
 
@@ -165,6 +166,18 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add creator as member: %w", err)
+	}
+
+	// Create service fee payment record for the chama creator (KES 50 registration fee)
+	serviceFeeQuery := `
+		INSERT INTO service_fee_payments (id, chama_id, user_id, amount, status, due_date, created_at, updated_at)
+		VALUES ($1, $2, $3, 50, 'pending', $4, $5, $6)
+	`
+	_, err = tx.Exec(serviceFeeQuery,
+		generateUUID(), chama.ID, createdBy, time.Now(), time.Now(), time.Now(),
+	)
+	if err != nil {
+		log.Printf("Warning: failed to create service fee payment for creator: %v", err)
 	}
 
 	// Create chat room for the chama within the same transaction
@@ -1258,6 +1271,19 @@ func (s *ChamaService) AddMemberToChama(chamaID, userID, role string) error {
 	)
 	if err != nil {
 		return fmt.Errorf("failed to add member to chama: %w", err)
+	}
+
+	// Create service fee payment record for the new member (KES 50 registration fee)
+	serviceFeeQuery := `
+		INSERT INTO service_fee_payments (id, chama_id, user_id, amount, status, due_date, created_at, updated_at)
+		VALUES ($1, $2, $3, 50, 'pending', $4, $5, $6)
+		ON CONFLICT (chama_id, user_id) DO NOTHING
+	`
+	_, err = s.db.Exec(serviceFeeQuery,
+		uuid.New().String(), chamaID, userID, time.Now(), time.Now(), time.Now(),
+	)
+	if err != nil {
+		log.Printf("Warning: failed to create service fee payment record: %v", err)
 	}
 
 	return nil

@@ -128,6 +128,12 @@ const payServiceFeePayment = async (chamaId, paymentId) => {
   });
 };
 
+const payMemberServiceFee = async (chamaId, memberId) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}/pay-service-fee`, {
+    method: 'POST',
+  });
+};
+
 const addMemberToChama = async (chamaId, userId, role = 'member') => {
   return await makeRequest(`/chamas/${chamaId}/members`, {
     method: 'POST',
@@ -194,4 +200,5 @@ export {
   getChamaServiceFeePayments,
   getMemberServiceFeePayments,
   payServiceFeePayment,
+  payMemberServiceFee,
 };

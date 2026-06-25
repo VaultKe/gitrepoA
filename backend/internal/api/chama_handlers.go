@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"vaultke-backend/config"
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
 
@@ -3113,7 +3115,7 @@ func GetChamaServiceFeePayments(c *gin.Context) {
 	})
 }
 
-// PayServiceFeePayment initiates payment for a member's service fee
+// PayServiceFeePayment initiates STK push payment for a member's registration fee
 func PayServiceFeePayment(c *gin.Context) {
 	chamaID := c.Param("id")
 	if chamaID == "" {
@@ -3170,17 +3172,65 @@ func PayServiceFeePayment(c *gin.Context) {
 		return
 	}
 
-	now := time.Now()
-	_, err = database.Exec(
-		"UPDATE service_fee_payments SET status = 'paid', paid_at = $1, updated_at = $2 WHERE id = $3",
-		now, now, paymentID,
-	)
+	// Get member's phone number
+	var memberPhone string
+	err = database.QueryRow("SELECT phone FROM users WHERE id = $1", payment.UserID).Scan(&memberPhone)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Failed to update payment",
+			"error":   "Member phone number not found",
 		})
 		return
+	}
+
+	// Convert phone number to M-Pesa format
+	phoneNumber := memberPhone
+	if strings.HasPrefix(phoneNumber, "07") {
+		phoneNumber = "254" + phoneNumber[1:]
+	} else if strings.HasPrefix(phoneNumber, "+254") {
+		phoneNumber = phoneNumber[1:]
+	}
+
+	// Initiate M-Pesa STK push
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+
+	mpesaService := services.NewMpesaService(database, cfg.(*config.Config))
+
+	mpesaReq := models.MpesaTransaction{
+		PhoneNumber:      phoneNumber,
+		Amount:           payment.Amount,
+		AccountReference: fmt.Sprintf("REG-FEE-%s", chamaID[:8]),
+		TransactionDesc:  "Chama Registration Fee",
+	}
+
+	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
+	if err != nil {
+		log.Printf("STK Push failed for registration fee: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to initiate STK push: " + err.Error(),
+		})
+		return
+	}
+
+	// Update checkout request ID on payment record
+	updateTransactionCheckoutRequestID(database, paymentID, stkResponse.CheckoutRequestID)
+
+	// Mark as paid immediately (callback will confirm later)
+	now := time.Now()
+	_, err = database.Exec(
+		"UPDATE service_fee_payments SET status = 'paid', paid_at = $1, updated_at = $2, transaction_id = $3 WHERE id = $4",
+		now, now, stkResponse.CheckoutRequestID, paymentID,
+	)
+	if err != nil {
+		log.Printf("Error updating service fee payment: %v", err)
 	}
 
 	_, err = database.Exec(
@@ -3193,6 +3243,126 @@ func PayServiceFeePayment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Service fee payment processed successfully",
+		"message": "STK push initiated successfully",
+		"data": gin.H{
+			"checkoutRequestId": stkResponse.CheckoutRequestID,
+			"customerMessage":   stkResponse.CustomerMessage,
+		},
+	})
+}
+
+// PayMemberServiceFee creates a service fee record and initiates STK push for a member
+func PayMemberServiceFee(c *gin.Context) {
+	chamaID := c.Param("id")
+	memberID := c.Param("memberId")
+	log.Printf("PayMemberServiceFee called: chama=%s member=%s", chamaID, memberID)
+	if chamaID == "" || memberID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID and Member ID are required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	// Get member's phone number and check if already paid
+	var memberPhone string
+	var alreadyPaid bool
+	err := database.QueryRow(
+		"SELECT u.phone, cm.service_fee_paid FROM users u JOIN chama_members cm ON u.id = cm.user_id WHERE cm.user_id = $1 AND cm.chama_id = $2",
+		memberID, chamaID,
+	).Scan(&memberPhone, &alreadyPaid)
+	log.Printf("Member query result: phone=%s alreadyPaid=%v err=%v", memberPhone, alreadyPaid, err)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Member not found",
+		})
+		return
+	}
+
+	if alreadyPaid {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Service fee already paid",
+		})
+		return
+	}
+
+	// Convert phone number to M-Pesa format
+	phoneNumber := memberPhone
+	if strings.HasPrefix(phoneNumber, "07") {
+		phoneNumber = "254" + phoneNumber[1:]
+	} else if strings.HasPrefix(phoneNumber, "+254") {
+		phoneNumber = phoneNumber[1:]
+	}
+
+	// Initiate M-Pesa STK push
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+
+	mpesaService := services.NewMpesaService(database, cfg.(*config.Config))
+
+	paymentID := fmt.Sprintf("SFP_%d", time.Now().UnixNano())
+	mpesaReq := models.MpesaTransaction{
+		PhoneNumber:      phoneNumber,
+		Amount:           50,
+		AccountReference: fmt.Sprintf("REG-FEE-%s", chamaID[:8]),
+		TransactionDesc:  "Chama Registration Fee",
+	}
+
+	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
+	if err != nil {
+		log.Printf("STK Push failed for registration fee: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to initiate STK push: " + err.Error(),
+		})
+		return
+	}
+	log.Printf("STK Push success: checkoutRequestId=%s customerMessage=%s", stkResponse.CheckoutRequestID, stkResponse.CustomerMessage)
+
+	now := time.Now()
+
+	// Create service fee payment record
+	_, err = database.Exec(
+		"INSERT INTO service_fee_payments (id, chama_id, user_id, amount, status, due_date, transaction_id, paid_at, created_at, updated_at) VALUES ($1, $2, $3, $4, 'paid', $5, $6, $7, $8, $9)",
+		paymentID, chamaID, memberID, 50, now, stkResponse.CheckoutRequestID, now, now, now,
+	)
+	if err != nil {
+		log.Printf("Error creating service fee payment: %v", err)
+	}
+
+	// Update member status
+	_, err = database.Exec(
+		"UPDATE chama_members SET service_fee_paid = true, service_fee_paid_at = $1, service_fee_status = 'paid' WHERE chama_id = $2 AND user_id = $3",
+		now, chamaID, memberID,
+	)
+	if err != nil {
+		log.Printf("Error updating member service fee status: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "STK push initiated successfully",
+		"data": gin.H{
+			"checkoutRequestId": stkResponse.CheckoutRequestID,
+			"customerMessage":   stkResponse.CustomerMessage,
+		},
 	})
 }
