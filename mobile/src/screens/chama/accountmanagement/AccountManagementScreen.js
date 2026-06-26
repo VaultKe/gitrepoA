@@ -34,6 +34,13 @@ const AccountManagementScreen = ({ route, navigation }) => {
       bg: colors.warning + '20',
     },
     {
+      title: 'Subscriptions',
+      icon: 'repeat',
+      color: colors.info || colors.primary,
+      route: 'SubscriptionManagement',
+      bg: (colors.info || colors.primary) + '20',
+    },
+    {
       title: 'Savings',
       icon: 'wallet',
       color: colors.secondary,
@@ -48,6 +55,10 @@ const AccountManagementScreen = ({ route, navigation }) => {
       bg: colors.primary + '20',
     },
   ];
+
+  const topRow = [modules[0], modules[1]];
+  const middleRow = [modules[2], modules[3]];
+  const bottomRow = [modules[4]];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -109,19 +120,51 @@ const AccountManagementScreen = ({ route, navigation }) => {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Management Modules</Text>
 
           <View style={styles.navigationGrid}>
-            {modules.map((mod, idx) => (
-              <TouchableOpacity
-                key={mod.title}
-                style={styles.navCard}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate(mod.route, { chamaId })}
-              >
-                <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
-                  <Ionicons name={mod.icon} size={32} color={mod.color} />
-                </View>
-                <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.navRow}>
+              {topRow.map((mod) => (
+                <TouchableOpacity
+                  key={mod.title}
+                  style={styles.navCard}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate(mod.route, { chamaId })}
+                >
+                  <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
+                    <Ionicons name={mod.icon} size={32} color={mod.color} />
+                  </View>
+                  <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.navRow}>
+              {middleRow.map((mod) => (
+                <TouchableOpacity
+                  key={mod.title}
+                  style={styles.navCard}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate(mod.route, { chamaId })}
+                >
+                  <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
+                    <Ionicons name={mod.icon} size={32} color={mod.color} />
+                  </View>
+                  <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.navRow}>
+              {bottomRow.map((mod) => (
+                <TouchableOpacity
+                  key={mod.title}
+                  style={[styles.navCard, bottomRow.length === 1 && { alignSelf: 'center' }]}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate(mod.route, { chamaId })}
+                >
+                  <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
+                    <Ionicons name={mod.icon} size={32} color={mod.color} />
+                  </View>
+                  <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </Card>
       </ScrollView>
@@ -184,14 +227,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   navigationGrid: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  navRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    width: '100%',
   },
   navCard: {
     alignItems: 'center',
     backgroundColor: 'transparent',
     borderRadius: borderRadius.sm,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs,
     flex: 1,
   },

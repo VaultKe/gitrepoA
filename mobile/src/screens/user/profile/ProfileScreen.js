@@ -24,6 +24,7 @@ import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import apiService from '../../../services/api';
 import { getTransactions } from '../../../services/api/walletEndpoints';
+import { getUserChamas, payMemberServiceFee } from '../../../services/api/chamaEndpoints';
 import KENYA_COUNTIES from '../../../utils/kenyaCounties';
 
 const ProfileScreen = ({ navigation }) => {
@@ -71,6 +72,13 @@ const ProfileScreen = ({ navigation }) => {
   // Recent Activities state
   const [recentActivities, setRecentActivities] = useState([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+
+  // User Chamas state
+  const [userChamas, setUserChamas] = useState([]);
+  const [chamasLoading, setChamasLoading] = useState(false);
+  const [payingChamaFee, setPayingChamaFee] = useState(null);
+  const [chamasPage, setChamasPage] = useState(1);
+  const CHAMAS_PER_PAGE = 10;
 
   // Helper: format currency
   useEffect(() => {  
@@ -147,9 +155,13 @@ const ProfileScreen = ({ navigation }) => {
           // Check if it's already a complete URL (http/https) or data URL
           if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
             fullAvatarUrl = avatarUrl;
-          } else {
+          } else if (avatarUrl.includes('base64') || avatarUrl.includes('data:')) {
+            fullAvatarUrl = avatarUrl;
+          } else if (apiService.baseURL) {
             // If it's a relative path, make it absolute
             fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+          } else {
+            fullAvatarUrl = avatarUrl;
           }
           setProfileImage(fullAvatarUrl);
         } else {
@@ -185,12 +197,14 @@ const ProfileScreen = ({ navigation }) => {
     if (avatarUrl && avatarUrl !== 'avatar://cached-base64-image') {
       let fullAvatarUrl;
 
-      // Check if it's already a complete URL (http/https) or data URL
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
         fullAvatarUrl = avatarUrl;
-      } else {
-        // If it's a relative path, make it absolute
+      } else if (avatarUrl.includes('base64') || avatarUrl.includes('data:')) {
+        fullAvatarUrl = avatarUrl;
+      } else if (apiService.baseURL) {
         fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+      } else {
+        fullAvatarUrl = avatarUrl;
       }
       setProfileImage(fullAvatarUrl);
     } else if (avatarUrl === 'avatar://cached-base64-image') {
@@ -313,10 +327,12 @@ const ProfileScreen = ({ navigation }) => {
           const newAvatarUrl = updatedUserData?.avatar || updatedUserData?.profile_image;
           if (newAvatarUrl) {
             let fullAvatarUrl;
-            if (newAvatarUrl.startsWith('http') || newAvatarUrl.startsWith('data:')) {
+            if (newAvatarUrl.startsWith('http') || newAvatarUrl.startsWith('data:') || newAvatarUrl.includes('base64')) {
               fullAvatarUrl = newAvatarUrl;
-            } else {
+            } else if (apiService.baseURL) {
               fullAvatarUrl = `${apiService.baseURL}${newAvatarUrl.startsWith('/') ? '' : '/'}${newAvatarUrl}`;
+            } else {
+              fullAvatarUrl = newAvatarUrl;
             }
             setProfileImage(fullAvatarUrl);
           } else {
@@ -433,6 +449,70 @@ const ProfileScreen = ({ navigation }) => {
     loadRecentActivities();
   }, [loadRecentActivities]);
 
+  useEffect(() => {
+    loadUserChamas();
+  }, []);
+
+  const loadUserChamas = async () => {
+    try {
+      setChamasLoading(true);
+      const response = await getUserChamas(50, 0);
+      if (response.success && response.data) {
+        setUserChamas(response.data);
+      }
+    } catch (error) {
+      console.warn('Failed to load user chamas:', error);
+    } finally {
+      setChamasLoading(false);
+    }
+  };
+
+  const handlePayChamaFee = async (chama) => {
+    if (!chama.memberId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Member ID not found for this chama',
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Pay Registration Fee',
+      `Send STK push to your phone for KES 50 registration fee for ${chama.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Pay KES 50',
+          onPress: async () => {
+            try {
+              setPayingChamaFee(chama.id);
+              const response = await payMemberServiceFee(chama.id, chama.memberId);
+              if (response.success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Payment Initiated',
+                  text2: 'STK push sent to your phone',
+                });
+                loadUserChamas();
+              } else {
+                throw new Error(response.error || 'Failed to initiate payment');
+              }
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Payment Failed',
+                text2: error.message || 'Failed to initiate payment',
+              });
+            } finally {
+              setPayingChamaFee(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getActivityColor = (type, paymentMethod) => {
     const t = (type || '').toLowerCase();
     switch (t) {
@@ -545,10 +625,10 @@ const ProfileScreen = ({ navigation }) => {
         <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           {/* Activity Table Header */}
           <View style={[styles.activityTableHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Date</Text>
-            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Type</Text>
-            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Amount</Text>
-            <Text style={[styles.activityHeaderText, { flex: 2, color: colors.textSecondary }]}>Description</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderDate, { color: colors.textSecondary }]}>Date</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderType, { color: colors.textSecondary }]}>Type</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderAmount, { color: colors.textSecondary }]}>Amount</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderDesc, { color: colors.textSecondary }]}>Description</Text>
           </View>
 
           {/* Activity Table Body */}
@@ -678,11 +758,13 @@ const ProfileScreen = ({ navigation }) => {
 
           {/* Frameless Image Section - touches top, left, and right edges */}
           <View style={styles.framelessImageContainer}>
-            {(profileImage || avatarData) ? (
+            {(profileImage && !profileImage.includes('undefined')) ? (
               <Image
-                source={{ uri: profileImage || avatarData }}
+                source={{ uri: profileImage }}
                 style={styles.framelessImage}
                 onError={(error) => {
+                  console.warn('Profile image load error:', error);
+                  setProfileImage(null);
                 }}
               />
             ) : (
@@ -1105,6 +1187,134 @@ const ProfileScreen = ({ navigation }) => {
     </Card>
   );
 
+  const renderUserChamasTable = () => {
+    if (chamasLoading) {
+      return (
+        <Card style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            My Chamas & Groups
+          </Text>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </Card>
+      );
+    }
+
+    if (userChamas.length === 0) {
+      return (
+        <Card style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            My Chamas & Groups
+          </Text>
+          <Text style={[styles.activityDescText, { color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.lg }]}>
+            You are not part of any chama or contribution group yet.
+          </Text>
+        </Card>
+      );
+    }
+
+    const totalPages = Math.ceil(userChamas.length / CHAMAS_PER_PAGE);
+    const startIndex = (chamasPage - 1) * CHAMAS_PER_PAGE;
+    const paginatedChamas = userChamas.slice(startIndex, startIndex + CHAMAS_PER_PAGE);
+
+    return (
+      <Card style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          My Chamas & Groups
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.chamasTable}>
+            <View style={[styles.chamasTableHeader, { backgroundColor: colors.primary + '10' }]}>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 2 }]}>Name</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Category</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Role</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Reg. Fee</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Action</Text>
+            </View>
+            {paginatedChamas.map((chama, index) => {
+              const isEven = index % 2 === 0;
+              const hasUnpaidFee = !chama.serviceFeePaid;
+              const isPaying = payingChamaFee === chama.id;
+              return (
+                <View
+                  key={chama.id}
+                  style={[
+                    styles.chamasTableRow,
+                    { backgroundColor: isEven ? colors.background : colors.surface }
+                  ]}
+                >
+                  <Text style={[styles.chamasTableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>
+                    {chama.name}
+                  </Text>
+                  <Text style={[styles.chamasTableCell, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                    {chama.category?.charAt(0).toUpperCase() + chama.category?.slice(1)}
+                  </Text>
+                  <Text style={[styles.chamasTableCell, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                    {chama.memberRole?.charAt(0).toUpperCase() + chama.memberRole?.slice(1)}
+                  </Text>
+                  <View style={[styles.chamasStatusCell, { flex: 1.2 }]}>
+                    <Ionicons
+                      name={chama.serviceFeePaid ? 'checkmark-circle' : 'time'}
+                      size={14}
+                      color={chama.serviceFeePaid ? colors.success : colors.warning}
+                    />
+                    <Text style={[
+                      styles.chamasStatusText,
+                      { color: chama.serviceFeePaid ? colors.success : colors.warning }
+                    ]}>
+                      {chama.serviceFeePaid ? 'Paid' : 'Pending'}
+                    </Text>
+                  </View>
+                  <View style={[styles.chamasActionCell, { flex: 1 }]}>
+                    {hasUnpaidFee ? (
+                      <TouchableOpacity
+                        style={[styles.chamasPayButton, { backgroundColor: colors.primary }]}
+                        onPress={() => handlePayChamaFee(chama)}
+                        disabled={isPaying}
+                      >
+                        {isPaying ? (
+                          <ActivityIndicator size="small" color={colors.white} />
+                        ) : (
+                          <Text style={[styles.chamasPayButtonText, { color: colors.white }]}>
+                            Pay
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={[styles.chamasPaidBadge, { backgroundColor: colors.success + '20' }]}>
+                        <Ionicons name="checkmark" size={14} color={colors.success} />
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+        {totalPages > 1 && (
+          <View style={styles.chamasPagination}>
+            <TouchableOpacity
+              style={[styles.chamasPageButton, { opacity: chamasPage === 1 ? 0.5 : 1 }]}
+              onPress={() => setChamasPage(p => Math.max(1, p - 1))}
+              disabled={chamasPage === 1}
+            >
+              <Ionicons name="chevron-back" size={16} color={colors.primary} />
+            </TouchableOpacity>
+            <Text style={[styles.chamasPageText, { color: colors.text }]}>
+              {chamasPage} / {totalPages}
+            </Text>
+            <TouchableOpacity
+              style={[styles.chamasPageButton, { opacity: chamasPage === totalPages ? 0.5 : 1 }]}
+              onPress={() => setChamasPage(p => Math.min(totalPages, p + 1))}
+              disabled={chamasPage === totalPages}
+            >
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </Card>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -1115,6 +1325,7 @@ const ProfileScreen = ({ navigation }) => {
       >
         {renderProfileHeader()}
         {renderPersonalInfo()}
+        {renderUserChamasTable()}
         <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.lg }}>
           {renderRecentActivity()}
         </View>
@@ -1152,12 +1363,29 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.ss,
     borderBottomWidth: 1,
+    alignItems: 'center',
   },
   activityHeaderText: {
     fontSize: 10,
     fontWeight: typography.fontWeight.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  activityHeaderDate: {
+    width: 85,
+    marginRight: spacing.xs,
+  },
+  activityHeaderType: {
+    width: 105,
+    marginRight: spacing.xs,
+  },
+  activityHeaderAmount: {
+    width: 80,
+    marginRight: spacing.xs,
+    textAlign: 'right',
+  },
+  activityHeaderDesc: {
+    flex: 1,
   },
   activityTableBody: {
     borderBottomWidth: 1,
@@ -1517,6 +1745,85 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: typography.fontSize.base,
     textAlign: 'center',
     paddingVertical: spacing.lg,
+  },
+  chamasTable: {
+    minWidth: 600,
+  },
+  chamasTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  chamasTableHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  chamasTableRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  chamasTableCell: {
+    flex: 1,
+    fontSize: 12,
+  },
+  chamasStatusCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  chamasStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  chamasActionCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chamasPayButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+  },
+  chamasPayButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chamasPaidBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+  },
+  chamasPagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  chamasPageButton: {
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  chamasPageText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

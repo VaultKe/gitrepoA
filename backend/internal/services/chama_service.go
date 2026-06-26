@@ -413,7 +413,8 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			   c.latitude, c.longitude, c.contribution_amount, c.contribution_frequency,
 			   c.max_members, c.current_members, c.total_funds, c.is_public, c.requires_approval,
 			   c.rules, c.meeting_frequency, c.meeting_day_of_week, c.meeting_day_of_month,
-			   c.meeting_time, c.created_by, c.created_at, c.updated_at
+			   c.meeting_time, c.created_by, c.created_at, c.updated_at,
+			   cm.role, cm.service_fee_paid, cm.service_fee_status, cm.id as member_id
 		FROM chamas c
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
 		WHERE cm.user_id = $1 AND cm.is_active = $2
@@ -433,6 +434,10 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 		var rulesJSON string
 		var meetingFreq, meetingTime *string
 		var meetingDayOfWeek, meetingDayOfMonth *int
+		var role string
+		var serviceFeePaid bool
+		var serviceFeeStatus string
+		var memberID string
 
 		err := rows.Scan(
 			&chama.ID, &chama.Name, &chama.Description, &chama.Category, &chama.Type, &chama.Status,
@@ -441,6 +446,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
 			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
 			&chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+			&role, &serviceFeePaid, &serviceFeeStatus, &memberID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
@@ -460,6 +466,12 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 				Time:       utils.DerefString(meetingTime),
 			}
 		}
+
+		// Attach member-specific data
+		chama.MemberRole = models.ChamaRole(role)
+		chama.ServiceFeePaid = serviceFeePaid
+		chama.ServiceFeeStatus = serviceFeeStatus
+		chama.MemberID = memberID
 
 		chamas = append(chamas, chama)
 	}

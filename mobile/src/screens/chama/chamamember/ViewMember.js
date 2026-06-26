@@ -742,18 +742,18 @@ const ViewMember = ({ route, navigation }) => {
                 ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
                       {(userRole === 'chairperson' || userRole === 'treasurer') && (
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Action</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
                       )}
                     </View>
                     <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
                         {formatDate(memberData.joined_at)}
                       </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
                         KES 50
                       </Text>
                       <View style={styles.feeStatusCell}>
@@ -786,16 +786,16 @@ const ViewMember = ({ route, navigation }) => {
                 ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Receipt</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
                     </View>
                     <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
                         {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
                       </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
                         KES 50
                       </Text>
                       <View style={styles.feeStatusCell}>
@@ -818,11 +818,11 @@ const ViewMember = ({ route, navigation }) => {
                   <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
                     <View style={styles.feeTable}>
                       <View style={styles.feeTableHeader}>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
                         {userRole === 'chairperson' && (
-                          <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Action</Text>
+                          <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
                         )}
                       </View>
                       {serviceFeePayments.map((payment, index) => {
@@ -1022,18 +1022,18 @@ const ViewMember = ({ route, navigation }) => {
                 ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
                       {(userRole === 'chairperson' || userRole === 'treasurer') && (
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Action</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
                       )}
                     </View>
                     <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
                         {formatDate(memberData.joined_at)}
                       </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
                         KES 50
                       </Text>
                       <View style={styles.feeStatusCell}>
@@ -1066,16 +1066,16 @@ const ViewMember = ({ route, navigation }) => {
                 ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Receipt</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
                     </View>
                     <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
                         {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
                       </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
                         KES 50
                       </Text>
                       <View style={styles.feeStatusCell}>
@@ -1098,11 +1098,11 @@ const ViewMember = ({ route, navigation }) => {
                   <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
                     <View style={styles.feeTable}>
                       <View style={styles.feeTableHeader}>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Date</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Amount</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Status</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
                         {userRole === 'chairperson' && (
-                          <Text style={[styles.feeTableHeaderText, { color: colors.primary }]}>Action</Text>
+                          <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
                         )}
                       </View>
                       {serviceFeePayments.map((payment, index) => {
@@ -1675,7 +1675,7 @@ const createStyles = (colors) => StyleSheet.create({
     maxHeight: 300,
   },
   feeTable: {
-    minWidth: 320,
+    minWidth: 380,
   },
   feeTableHeader: {
     flexDirection: 'row',
@@ -1684,6 +1684,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
     backgroundColor: colors.primary + '10',
+    alignItems: 'center',
   },
   feeTableHeaderText: {
     flex: 1,
@@ -1702,6 +1703,57 @@ const createStyles = (colors) => StyleSheet.create({
   feeTableCell: {
     flex: 1,
     fontSize: 12,
+  },
+  feeStatusCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  feeTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+  },
+  feeTableHeaderText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  feeTableHeaderDate: {
+    flex: 1.5,
+  },
+  feeTableHeaderAmount: {
+    flex: 1,
+  },
+  feeTableHeaderStatus: {
+    flex: 1.5,
+  },
+  feeTableHeaderAction: {
+    flex: 1,
+    minWidth: 60,
+    textAlign: 'center',
+  },
+  feeTableRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  feeTableCell: {
+    fontSize: 12,
+  },
+  feeTableCellDate: {
+    flex: 1.5,
+  },
+  feeTableCellAmount: {
+    flex: 1,
   },
   feeStatusCell: {
     flex: 1,

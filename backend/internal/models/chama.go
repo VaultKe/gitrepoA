@@ -98,6 +98,12 @@ type Chama struct {
 	CreatedAt             time.Time              `json:"createdAt" db:"created_at"`
 	UpdatedAt             time.Time              `json:"updatedAt" db:"updated_at"`
 	ChatRoomID            *string                `json:"chatRoomId,omitempty" db:"chat_room_id"`
+
+	// Member-specific fields (populated when querying user's chamas)
+	MemberID              string                 `json:"memberId" db:"member_id"`
+	MemberRole            ChamaRole              `json:"memberRole" db:"role"`
+	ServiceFeePaid        bool                   `json:"serviceFeePaid" db:"service_fee_paid"`
+	ServiceFeeStatus      string                 `json:"serviceFeeStatus" db:"service_fee_status"`
 }
 
 // ChamaMember represents a member of a chama
