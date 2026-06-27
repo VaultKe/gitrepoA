@@ -286,8 +286,6 @@ func GetGoogleDriveStatus(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("✅ GetGoogleDriveStatus: User %s connected status: %v\n", userID, connected)
-
 	// Add debug information to help troubleshoot
 	debugInfo := gin.H{
 		"user_id":   userID,

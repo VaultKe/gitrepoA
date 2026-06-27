@@ -296,13 +296,11 @@ func MakeContribution(c *gin.Context) {
 		if err != nil {
 			if err == sql.ErrNoRows {
 				// User doesn't have a personal wallet, create one with 0 balance
-				fmt.Printf("⚠️ User %s doesn't have a personal wallet, creating one\n", userID)
 				_, err = tx.Exec(`
 					INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
 					VALUES ($1, $2, 'personal', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 				`, "wallet-"+userID.(string), userID)
 				if err != nil {
-					fmt.Printf("❌ Error creating wallet for user %s: %v\n", userID, err)
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"success": false,
 						"error":   "Failed to create user wallet",
@@ -311,7 +309,6 @@ func MakeContribution(c *gin.Context) {
 				}
 				personalBalance = 0
 			} else {
-				fmt.Printf("❌ Error checking wallet balance for user %s: %v\n", userID, err)
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"success": false,
 					"error":   "Failed to check wallet balance",
@@ -336,7 +333,6 @@ func MakeContribution(c *gin.Context) {
 			WHERE owner_id = $2 AND type = 'personal'
 		`, req.Amount, userID)
 		if err != nil {
-			fmt.Printf("❌ Error deducting from wallet for user %s: %v\n", userID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   "Failed to deduct from personal wallet",
@@ -347,9 +343,6 @@ func MakeContribution(c *gin.Context) {
 		rowsAffected, _ := result.RowsAffected()
 		fmt.Printf("✅ Wallet deduction: %d rows affected for user %s\n", rowsAffected, userID)
 	} else if req.PaymentMethod == "mpesa" {
-		// For M-Pesa payments, we don't deduct from wallet
-		// The M-Pesa callback will handle the actual payment processing
-		// This is just creating a contribution record
 		fmt.Printf("Creating M-Pesa contribution record with reference: %s\n", req.MpesaReference)
 	} else if req.PaymentMethod == "cash" {
 	}

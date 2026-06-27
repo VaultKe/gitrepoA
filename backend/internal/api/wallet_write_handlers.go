@@ -755,10 +755,12 @@ func WithdrawMoney(c *gin.Context) {
 		}
 
 		// Initiate B2C transaction
-		_, err = mpesaService.InitiateB2C(phoneNumber, req.Amount, fmt.Sprintf("Withdrawal for %s", processedTransaction.ID))
+		b2cResponse, err := mpesaService.InitiateB2C(phoneNumber, req.Amount, fmt.Sprintf("Withdrawal for %s", processedTransaction.ID))
 		if err != nil {
 			log.Printf("B2C initiation failed: %v", err)
 			// Continue with pending status - can be processed manually
+		} else {
+			log.Printf("M-Pesa B2C withdrawal initiated: %s, ConversationID: %s", processedTransaction.ID, b2cResponse.ConversationID)
 		}
 	}
 
