@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sort"
-	"time"
 	"net/http"
+	"sort"
 	"strconv"
+	"time"
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
 	"vaultke-backend/internal/utils"
@@ -258,22 +258,22 @@ func GetUserTransactions(c *gin.Context) {
 			}
 
 			tx := map[string]interface{}{
-				"id":            id.String,
-				"type":          type_.String,
-				"status":        status.String,
-				"amount":        amount,
-				"currency":      currency.String,
-				"description":   detailedDesc,
-				"reference":     reference.String,
-				"paymentMethod": paymentMethod.String,
-				"fees":          fees.String,
-				"initiatedBy":   initiatedBy.String,
-				"recipientId":   recipientID.String,
-				"createdAt":     createdAt.Time.Format(time.RFC3339),
-				"updatedAt":     updatedAt.Time.Format(time.RFC3339),
-				"chamaId":       chamaID.String,
-				"metadata":      metadataJSON.String,
-				"chamaName":     chamaName,
+				"id":               id.String,
+				"type":             type_.String,
+				"status":           status.String,
+				"amount":           amount,
+				"currency":         currency.String,
+				"description":      detailedDesc,
+				"reference":        reference.String,
+				"paymentMethod":    paymentMethod.String,
+				"fees":             fees.String,
+				"initiatedBy":      initiatedBy.String,
+				"recipientId":      recipientID.String,
+				"createdAt":        createdAt.Time.Format(time.RFC3339),
+				"updatedAt":        updatedAt.Time.Format(time.RFC3339),
+				"chamaId":          chamaID.String,
+				"metadata":         metadataJSON.String,
+				"chamaName":        chamaName,
 				"contributionType": contribType,
 			}
 			contribTxns = append(contribTxns, tx)
@@ -369,4 +369,3 @@ func GetUserTransactions(c *gin.Context) {
 		},
 	})
 }
-

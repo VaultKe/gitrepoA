@@ -151,12 +151,12 @@ func InitiateMpesaSTK(c *gin.Context) {
 		"success": true,
 		"message": "STK push initiated successfully",
 		"data": gin.H{
-			"transactionId":      transactionID,
-			"checkoutRequestId":  stkResponse.CheckoutRequestID,
-			"merchantRequestId":  stkResponse.MerchantRequestID,
-			"customerMessage":    stkResponse.CustomerMessage,
-			"accountReference":   accountRef,
-			"businessNumber":     partyB,
+			"transactionId":     transactionID,
+			"checkoutRequestId": stkResponse.CheckoutRequestID,
+			"merchantRequestId": stkResponse.MerchantRequestID,
+			"customerMessage":   stkResponse.CustomerMessage,
+			"accountReference":  accountRef,
+			"businessNumber":    partyB,
 		},
 	})
 }

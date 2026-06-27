@@ -39,16 +39,16 @@ func MakeContribution(c *gin.Context) {
 	}
 
 	var req struct {
-		ChamaID       string  `json:"chamaId" binding:"required" validate:"required,uuid"`
-		Amount        float64 `json:"amount" binding:"required" validate:"required,amount"`
-		Description   string  `json:"description" validate:"max=200,safe_text,no_sql_injection,no_xss"`
-		Type          string  `json:"type" validate:"alphanumeric"` // "regular", "penalty", "special"
-		PaymentMethod string  `json:"paymentMethod" validate:"alphanumeric,max=50"` // "wallet", "mpesa", "cash""
-		MpesaReference string `json:"mpesaReference,omitempty"` // For M-Pesa payments
-		Status        string  `json:"status,omitempty"` // For pending M-Pesa payments
-		IsAnonymous   bool    `json:"isAnonymous,omitempty"` // For anonymous contributions in contribution groups
-		ContributorID string  `json:"contributorId,omitempty"` // For cash contributions - who actually contributed
-		CashType      string  `json:"cashType,omitempty"` // Always "cash" for cash contributions
+		ChamaID        string  `json:"chamaId" binding:"required" validate:"required,uuid"`
+		Amount         float64 `json:"amount" binding:"required" validate:"required,amount"`
+		Description    string  `json:"description" validate:"max=200,safe_text,no_sql_injection,no_xss"`
+		Type           string  `json:"type" validate:"alphanumeric"`                 // "regular", "penalty", "special"
+		PaymentMethod  string  `json:"paymentMethod" validate:"alphanumeric,max=50"` // "wallet", "mpesa", "cash""
+		MpesaReference string  `json:"mpesaReference,omitempty"`                     // For M-Pesa payments
+		Status         string  `json:"status,omitempty"`                             // For pending M-Pesa payments
+		IsAnonymous    bool    `json:"isAnonymous,omitempty"`                        // For anonymous contributions in contribution groups
+		ContributorID  string  `json:"contributorId,omitempty"`                      // For cash contributions - who actually contributed
+		CashType       string  `json:"cashType,omitempty"`                           // Always "cash" for cash contributions
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,11 +69,11 @@ func MakeContribution(c *gin.Context) {
 
 	// Validate contribution type
 	validTypes := map[string]bool{
-		"regular":      true,
-		"penalty":      true,
-		"special":      true,
+		"regular":        true,
+		"penalty":        true,
+		"special":        true,
 		"merry-go-round": true,
-		"":             true, // Allow empty (defaults to regular)
+		"":               true, // Allow empty (defaults to regular)
 	}
 	if !validTypes[req.Type] {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -98,13 +98,13 @@ func MakeContribution(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	var currentRecipientID string
 	var merryGoRoundID string
 	var currentRound int
 	if req.Type == "merry-go-round" {
-	    var expectedAmount float64
-	    err := db.(*sql.DB).QueryRow(`
+		var expectedAmount float64
+		err := db.(*sql.DB).QueryRow(`
 	        SELECT mgr.id, mgr.amount_per_round, mgr.current_round
 	        FROM merry_go_rounds mgr
 	        WHERE mgr.chama_id = $1 AND mgr.status = 'active'
@@ -352,7 +352,7 @@ func MakeContribution(c *gin.Context) {
 		// The M-Pesa callback will handle the actual payment processing
 		// This is just creating a contribution record
 		fmt.Printf("Creating M-Pesa contribution record with reference: %s\n", req.MpesaReference)
-	} else if req.PaymentMethod == "cash"{
+	} else if req.PaymentMethod == "cash" {
 	}
 
 	// Add to chama wallet
@@ -716,15 +716,15 @@ func GetChamaMembersForContributions(c *gin.Context) {
 
 // GetMerryGoRoundContributionAmount returns the expected contribution amount for merry-go-round
 func GetMerryGoRoundContributionAmount(c *gin.Context) {
-    // Get user ID from context (set by auth middleware) - not needed for this endpoint
-    _, exists := c.Get("userID")
-    if !exists {
-        c.JSON(http.StatusUnauthorized, gin.H{
-            "success": false,
-            "error":   "User not authenticated",
-        })
-        return
-    }
+	// Get user ID from context (set by auth middleware) - not needed for this endpoint
+	_, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
 
 	chamaID := c.Param("chamaId")
 	if chamaID == "" {
@@ -774,9 +774,9 @@ func GetMerryGoRoundContributionAmount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": map[string]interface{}{
-			"expectedAmount": expectedAmount,
+			"expectedAmount":   expectedAmount,
 			"merryGoRoundName": mgrName,
-			"chamaId": chamaID,
+			"chamaId":          chamaID,
 		},
 		"message": fmt.Sprintf("Expected merry-go-round contribution amount: %.2f KES", expectedAmount),
 	})

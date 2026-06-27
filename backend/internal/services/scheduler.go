@@ -265,32 +265,32 @@ func (s *SchedulerService) sendMeetingNotifications(meetingID, meetingTitle, mes
 // processMonthlySubscriptions processes monthly subscription payments for chamas
 func (s *SchedulerService) processMonthlySubscriptions() {
 	now := time.Now()
-	
+
 	query := `
 		SELECT id, chama_id, amount, month_year 
 		FROM subscription_payments 
 		WHERE status = 'pending' 
 		AND due_date <= $1
 	`
-	
+
 	rows, err := s.db.Query(query, now)
 	if err != nil {
 		log.Printf("Error checking subscription payments: %v", err)
 		return
 	}
 	defer rows.Close()
-	
+
 	var processedCount int
 	for rows.Next() {
 		var paymentID, chamaID, monthYear string
 		var amount float64
-		
+
 		err := rows.Scan(&paymentID, &chamaID, &amount, &monthYear)
 		if err != nil {
 			log.Printf("Error scanning subscription payment: %v", err)
 			continue
 		}
-		
+
 		updateQuery := `
 			UPDATE subscription_payments 
 			SET status = 'overdue', updated_at = CURRENT_TIMESTAMP
@@ -301,7 +301,7 @@ func (s *SchedulerService) processMonthlySubscriptions() {
 			log.Printf("Error updating subscription payment %s to overdue: %v", paymentID, err)
 			continue
 		}
-		
+
 		_, err = s.db.Exec(
 			"UPDATE chamas SET subscription_fee_paid = false WHERE id = $1",
 			chamaID,
@@ -309,11 +309,11 @@ func (s *SchedulerService) processMonthlySubscriptions() {
 		if err != nil {
 			log.Printf("Error updating chama %s subscription status: %v", chamaID, err)
 		}
-		
+
 		processedCount++
 		log.Printf("Subscription payment overdue: chama=%s amount=%.2f month=%s", chamaID, amount, monthYear)
 	}
-	
+
 	if processedCount > 0 {
 		log.Printf("Processed %d overdue subscription payments", processedCount)
 	}
@@ -323,7 +323,7 @@ func (s *SchedulerService) processMonthlySubscriptions() {
 func (s *SchedulerService) sendServiceFeeWarnings() {
 	now := time.Now()
 	warningThreshold := now.Add(-48 * time.Hour)
-	
+
 	query := `
 		SELECT cm.id, cm.chama_id, cm.user_id, u.first_name, u.last_name, u.email, cm.joined_at
 		FROM chama_members cm
@@ -332,25 +332,25 @@ func (s *SchedulerService) sendServiceFeeWarnings() {
 		AND cm.service_fee_warning_sent = false
 		AND cm.joined_at <= $1
 	`
-	
+
 	rows, err := s.db.Query(query, warningThreshold)
 	if err != nil {
 		log.Printf("Error checking service fee warnings: %v", err)
 		return
 	}
 	defer rows.Close()
-	
+
 	var warningCount int
 	for rows.Next() {
 		var memberID, chamaID, userID, firstName, lastName, email string
 		var joinedAt time.Time
-		
+
 		err := rows.Scan(&memberID, &chamaID, &userID, &firstName, &lastName, &email, &joinedAt)
 		if err != nil {
 			log.Printf("Error scanning member for service fee warning: %v", err)
 			continue
 		}
-		
+
 		_, err = s.db.Exec(
 			"UPDATE chama_members SET service_fee_warning_sent = true WHERE id = $1",
 			memberID,
@@ -359,13 +359,13 @@ func (s *SchedulerService) sendServiceFeeWarnings() {
 			log.Printf("Error updating member %s warning status: %v", memberID, err)
 			continue
 		}
-		
+
 		log.Printf("Service fee warning sent to %s %s (%s) for chama %s - joined %s",
 			firstName, lastName, email, chamaID, joinedAt.Format("2006-01-02"))
-		
+
 		warningCount++
 	}
-	
+
 	if warningCount > 0 {
 		log.Printf("Sent %d service fee warnings", warningCount)
 	}

@@ -224,14 +224,9 @@ func (gds *GoogleDriveService) IsUserConnected(userID string) (bool, error) {
 	if count > 0 {
 		fmt.Printf("🔍 IsUserConnected: User %s has Google Drive tokens\n", userID)
 		return true, nil
-	} else {
-		fmt.Printf("🔍 IsUserConnected: No tokens found for user %s\n", userID)
-		return false, nil
 	}
-
-	result := count > 0
-	fmt.Printf("✅ IsUserConnected: Final result for user %s: %v\n", userID, result)
-	return result, nil
+	fmt.Printf("🔍 IsUserConnected: No tokens found for user %s\n", userID)
+	return false, nil
 }
 
 // ensureTablesExist creates the necessary tables if they don't exist

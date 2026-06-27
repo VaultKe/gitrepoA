@@ -290,7 +290,7 @@ func GetMerryGoRounds(c *gin.Context) {
 						} else {
 							status = "current"
 						}
-					} else if p.Position == mgr.CurrentRound + 1 && contributionCount >= (totalParticipants - 1) {
+					} else if p.Position == mgr.CurrentRound+1 && contributionCount >= (totalParticipants-1) {
 						status = "current"
 					} else {
 						status = "pending"
@@ -521,7 +521,6 @@ func CreateMerryGoRound(c *gin.Context) {
 		for i, participant := range req.Participants {
 			participantID := fmt.Sprintf("mgrp-%d-%d", time.Now().UnixNano(), i)
 
-
 			_, err = db.(*sql.DB).Exec(`
 				INSERT INTO merry_go_round_participants (
 					id, merry_go_round_id, user_id, position, has_received, received_at,
@@ -534,7 +533,6 @@ func CreateMerryGoRound(c *gin.Context) {
 			} else {
 			}
 		}
-		
 
 		// Verify participants were inserted
 		var participantCount int
@@ -568,7 +566,6 @@ func CreateMerryGoRound(c *gin.Context) {
 		},
 	})
 }
-
 
 func GetMerryGoRound(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
@@ -675,9 +672,9 @@ func CheckUserContributionStatus(c *gin.Context) {
 					"success": true,
 					"data": gin.H{
 						"hasActiveMerryGoRound": false,
-						"hasContributed":         false,
-						"canContribute":          false,
-						"message":                "No active merry-go-round found",
+						"hasContributed":        false,
+						"canContribute":         false,
+						"message":               "No active merry-go-round found",
 					},
 				})
 				return
@@ -782,18 +779,18 @@ func CheckUserContributionStatus(c *gin.Context) {
 		"success": true,
 		"data": gin.H{
 			"hasActiveMerryGoRound": true,
-			"hasContributed": hasContributed,
-			"canContribute": !hasContributed,
-			"isParticipant": isParticipant,
-			"currentRound": currentRound,
-			"amountPerRound": amountPerRound,
+			"hasContributed":        hasContributed,
+			"canContribute":         !hasContributed,
+			"isParticipant":         isParticipant,
+			"currentRound":          currentRound,
+			"amountPerRound":        amountPerRound,
 			"currentRecipient": gin.H{
-				"id": currentRecipientID,
+				"id":   currentRecipientID,
 				"name": recipientName,
 			},
 			"contributionStats": gin.H{
 				"totalContributions": totalContributions,
-				"totalParticipants": totalParticipants,
+				"totalParticipants":  totalParticipants,
 				"progressPercentage": func() float64 {
 					if totalParticipants > 0 {
 						return (float64(totalContributions) * 100) / float64(totalParticipants)
@@ -950,9 +947,9 @@ func CheckAndAdvanceRound(c *gin.Context) {
 			"message": "Merry-go-round completed successfully!",
 			"data": map[string]interface{}{
 				"merryGoRoundId": merryGoRoundID,
-				"status": "completed",
-				"finalRound": updatedCurrentRound,
-				"totalRounds": totalParticipants,
+				"status":         "completed",
+				"finalRound":     updatedCurrentRound,
+				"totalRounds":    totalParticipants,
 			},
 		})
 	} else if updatedCurrentRound > currentRound {
@@ -967,10 +964,10 @@ func CheckAndAdvanceRound(c *gin.Context) {
 			"message": fmt.Sprintf("Round %d completed! Advanced to round %d", currentRound, updatedCurrentRound),
 			"data": map[string]interface{}{
 				"merryGoRoundId": merryGoRoundID,
-				"previousRound": currentRound,
-				"currentRound": updatedCurrentRound,
+				"previousRound":  currentRound,
+				"currentRound":   updatedCurrentRound,
 				"nextPayoutDate": nextPayoutDate.Format("2006-01-02"),
-				"totalRounds": totalParticipants,
+				"totalRounds":    totalParticipants,
 			},
 		})
 	} else {
@@ -981,12 +978,12 @@ func CheckAndAdvanceRound(c *gin.Context) {
 			"success": true,
 			"message": fmt.Sprintf("Round %d in progress: %d/%d contributions completed", updatedCurrentRound, contributionCount, totalContributionsNeeded),
 			"data": map[string]interface{}{
-				"merryGoRoundId": merryGoRoundID,
-				"currentRound": updatedCurrentRound,
-				"contributionsCompleted": contributionCount,
+				"merryGoRoundId":           merryGoRoundID,
+				"currentRound":             updatedCurrentRound,
+				"contributionsCompleted":   contributionCount,
 				"totalContributionsNeeded": totalContributionsNeeded,
-				"remainingContributions": remainingContributions,
-				"progressPercentage": (contributionCount * 100) / totalContributionsNeeded,
+				"remainingContributions":   remainingContributions,
+				"progressPercentage":       (contributionCount * 100) / totalContributionsNeeded,
 			},
 		})
 	}
@@ -1151,8 +1148,8 @@ func CreateMerryGoRoundCalendarEvent(c *gin.Context) {
 	if creds == "" {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"success": false,
-			"error": "Google Calendar integration is not configured on this server. Please contact the administrator to set up Google Calendar credentials.",
-			"code": "CALENDAR_NOT_CONFIGURED",
+			"error":   "Google Calendar integration is not configured on this server. Please contact the administrator to set up Google Calendar credentials.",
+			"code":    "CALENDAR_NOT_CONFIGURED",
 		})
 		return
 	}
@@ -1160,7 +1157,7 @@ func CreateMerryGoRoundCalendarEvent(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error": "Failed to initialize calendar service. The Google Calendar credentials may be invalid.",
+			"error":   "Failed to initialize calendar service. The Google Calendar credentials may be invalid.",
 			"details": err.Error(),
 		})
 		return

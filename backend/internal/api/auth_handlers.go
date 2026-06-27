@@ -285,9 +285,9 @@ type AuthResponse struct {
 
 // AuthData represents the data in auth response
 type AuthData struct {
-	User         *models.User    `json:"user,omitempty"`
-	Token        string          `json:"token,omitempty"`
-	RefreshToken string          `json:"refreshToken,omitempty"`
+	User         *models.User `json:"user,omitempty"`
+	Token        string       `json:"token,omitempty"`
+	RefreshToken string       `json:"refreshToken,omitempty"`
 }
 
 // issueRefreshToken generates and returns a refresh token for a user

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/gin-gonic/gin"
 	"vaultke-backend/internal/services"
 	"vaultke-backend/internal/utils"
 )
@@ -333,32 +333,32 @@ func GetProfile(c *gin.Context) {
 	`
 
 	var user struct {
-		ID                   string         `json:"id"`
-		Email                string         `json:"email"`
-		Phone                sql.NullString `json:"phone"`
-		FirstName            string         `json:"firstName"`
-		LastName             string         `json:"lastName"`
-		Avatar               sql.NullString `json:"avatar"`
-		Role                 string         `json:"role"`
-		Status               string         `json:"status"`
-		IsEmailVerified      bool           `json:"isEmailVerified"`
-		IsPhoneVerified      bool           `json:"isPhoneVerified"`
-		Language             sql.NullString `json:"language"`
-		Theme                sql.NullString `json:"theme"`
-		County               sql.NullString `json:"county"`
-		Town                 sql.NullString `json:"town"`
-		Latitude             sql.NullFloat64 `json:"latitude"`
-		Longitude            sql.NullFloat64 `json:"longitude"`
-		BusinessType         sql.NullString `json:"businessType"`
-		BusinessDescription  sql.NullString `json:"businessDescription"`
-		Rating               float64        `json:"rating"`
-		TotalRatings         int            `json:"totalRatings"`
-		Bio                  sql.NullString `json:"bio"`
-		Occupation           sql.NullString `json:"occupation"`
-		DateOfBirth          sql.NullString `json:"dateOfBirth"`
-		Gender               sql.NullString `json:"gender"`
-		CreatedAt            string         `json:"createdAt"`
-		UpdatedAt            string         `json:"updatedAt"`
+		ID                  string          `json:"id"`
+		Email               string          `json:"email"`
+		Phone               sql.NullString  `json:"phone"`
+		FirstName           string          `json:"firstName"`
+		LastName            string          `json:"lastName"`
+		Avatar              sql.NullString  `json:"avatar"`
+		Role                string          `json:"role"`
+		Status              string          `json:"status"`
+		IsEmailVerified     bool            `json:"isEmailVerified"`
+		IsPhoneVerified     bool            `json:"isPhoneVerified"`
+		Language            sql.NullString  `json:"language"`
+		Theme               sql.NullString  `json:"theme"`
+		County              sql.NullString  `json:"county"`
+		Town                sql.NullString  `json:"town"`
+		Latitude            sql.NullFloat64 `json:"latitude"`
+		Longitude           sql.NullFloat64 `json:"longitude"`
+		BusinessType        sql.NullString  `json:"businessType"`
+		BusinessDescription sql.NullString  `json:"businessDescription"`
+		Rating              float64         `json:"rating"`
+		TotalRatings        int             `json:"totalRatings"`
+		Bio                 sql.NullString  `json:"bio"`
+		Occupation          sql.NullString  `json:"occupation"`
+		DateOfBirth         sql.NullString  `json:"dateOfBirth"`
+		Gender              sql.NullString  `json:"gender"`
+		CreatedAt           string          `json:"createdAt"`
+		UpdatedAt           string          `json:"updatedAt"`
 	}
 
 	err := db.(*sql.DB).QueryRow(query, userID).Scan(
@@ -499,32 +499,32 @@ func GetUserByID(c *gin.Context) {
 	`
 
 	var user struct {
-		ID                   string         `json:"id"`
-		Email                string         `json:"email"`
-		Phone                sql.NullString `json:"phone"`
-		FirstName            string         `json:"firstName"`
-		LastName             string         `json:"lastName"`
-		Avatar               sql.NullString `json:"avatar"`
-		Role                 string         `json:"role"`
-		Status               string         `json:"status"`
-		IsEmailVerified      bool           `json:"isEmailVerified"`
-		IsPhoneVerified      bool           `json:"isPhoneVerified"`
-		Language             sql.NullString `json:"language"`
-		Theme                sql.NullString `json:"theme"`
-		County               sql.NullString `json:"county"`
-		Town                 sql.NullString `json:"town"`
-		Latitude             sql.NullFloat64 `json:"latitude"`
-		Longitude            sql.NullFloat64 `json:"longitude"`
-		BusinessType         sql.NullString `json:"businessType"`
-		BusinessDescription  sql.NullString `json:"businessDescription"`
-		Rating               float64        `json:"rating"`
-		TotalRatings         int            `json:"totalRatings"`
-		Bio                  sql.NullString `json:"bio"`
-		Occupation           sql.NullString `json:"occupation"`
-		DateOfBirth          sql.NullString `json:"dateOfBirth"`
-		Gender               sql.NullString `json:"gender"`
-		CreatedAt            string         `json:"createdAt"`
-		UpdatedAt            string         `json:"updatedAt"`
+		ID                  string          `json:"id"`
+		Email               string          `json:"email"`
+		Phone               sql.NullString  `json:"phone"`
+		FirstName           string          `json:"firstName"`
+		LastName            string          `json:"lastName"`
+		Avatar              sql.NullString  `json:"avatar"`
+		Role                string          `json:"role"`
+		Status              string          `json:"status"`
+		IsEmailVerified     bool            `json:"isEmailVerified"`
+		IsPhoneVerified     bool            `json:"isPhoneVerified"`
+		Language            sql.NullString  `json:"language"`
+		Theme               sql.NullString  `json:"theme"`
+		County              sql.NullString  `json:"county"`
+		Town                sql.NullString  `json:"town"`
+		Latitude            sql.NullFloat64 `json:"latitude"`
+		Longitude           sql.NullFloat64 `json:"longitude"`
+		BusinessType        sql.NullString  `json:"businessType"`
+		BusinessDescription sql.NullString  `json:"businessDescription"`
+		Rating              float64         `json:"rating"`
+		TotalRatings        int             `json:"totalRatings"`
+		Bio                 sql.NullString  `json:"bio"`
+		Occupation          sql.NullString  `json:"occupation"`
+		DateOfBirth         sql.NullString  `json:"dateOfBirth"`
+		Gender              sql.NullString  `json:"gender"`
+		CreatedAt           string          `json:"createdAt"`
+		UpdatedAt           string          `json:"updatedAt"`
 	}
 
 	err := db.(*sql.DB).QueryRow(query, userID).Scan(
@@ -643,17 +643,17 @@ func UpdateProfile(c *gin.Context) {
 	}
 
 	var request struct {
-		FirstName       string `json:"firstName"`
-		LastName        string `json:"lastName"`
-		Phone           string `json:"phone"`
-		County          string `json:"county"`
-		Town            string `json:"town"`
-		Bio             string `json:"bio"`
-		Occupation      string `json:"occupation"`
-		DateOfBirth     string `json:"dateOfBirth"`
-		Gender          string `json:"gender"`
-		ProfileImage    string `json:"profile_image"`
-		Avatar          string `json:"avatar"`
+		FirstName    string `json:"firstName"`
+		LastName     string `json:"lastName"`
+		Phone        string `json:"phone"`
+		County       string `json:"county"`
+		Town         string `json:"town"`
+		Bio          string `json:"bio"`
+		Occupation   string `json:"occupation"`
+		DateOfBirth  string `json:"dateOfBirth"`
+		Gender       string `json:"gender"`
+		ProfileImage string `json:"profile_image"`
+		Avatar       string `json:"avatar"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -1309,11 +1309,11 @@ func SearchUserByCredentials(c *gin.Context) {
 			"phone":      iuPhone.String,
 			"firstName":  iuFirstName.String,
 			"lastName":   iuLastName.String,
-			"nationalId":  iuIDNumber.String,
+			"nationalId": iuIDNumber.String,
 		}
 		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"error":   "Credential mismatch: phone and national ID belong to different users",
+			"success":   false,
+			"error":     "Credential mismatch: phone and national ID belong to different users",
 			"phoneUser": phoneUserMap,
 			"idUser":    idUserMap,
 		})
@@ -1330,8 +1330,8 @@ func SearchUserByCredentials(c *gin.Context) {
 			"nationalId": puIDNumber.String,
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"error":   "National ID not found for the user with this phone number",
+			"success":   false,
+			"error":     "National ID not found for the user with this phone number",
 			"phoneUser": phoneUser,
 		})
 		return
@@ -1344,12 +1344,12 @@ func SearchUserByCredentials(c *gin.Context) {
 			"phone":      iuPhone.String,
 			"firstName":  iuFirstName.String,
 			"lastName":   iuLastName.String,
-			"nationalId":  iuIDNumber.String,
+			"nationalId": iuIDNumber.String,
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"error":   "Phone number not found for the user with this national ID",
-			"idUser": idUser,
+			"idUser":  idUser,
 		})
 		return
 	}

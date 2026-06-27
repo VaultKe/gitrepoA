@@ -83,6 +83,45 @@ func SetupRoutes(
 	// Authentication middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
+	// Chama chat access middleware
+	chamaChatAccessMiddleware := func(c *gin.Context) {
+		userID := c.GetString("userID")
+		roomID := c.Param("id")
+
+		if userID == "" || roomID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Unauthorized",
+			})
+			c.Abort()
+			return
+		}
+
+		var chamaID string
+		err := db.QueryRow("SELECT chama_id FROM chat_rooms WHERE id = $1 AND type = 'chama'", roomID).Scan(&chamaID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Chat room not found",
+			})
+			c.Abort()
+			return
+		}
+
+		var exists bool
+		err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE)", chamaID, userID).Scan(&exists)
+		if err != nil || !exists {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error":   "You are not authorized to access this chat room",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+
 	// Context injection middleware
 	dbMiddleware := func(c *gin.Context) {
 		c.Set("db", db)
@@ -220,15 +259,15 @@ func SetupRoutes(
 				users.GET("/preferences", api.GetUserPreferences)
 				users.PUT("/preferences", api.UpdateUserPreferences)
 
-			users.POST("/avatar", api.UploadAvatar)
-			users.GET("/search-by-credentials", api.SearchUserByCredentials)
-			users.PUT("/:id/role", api.AdminUpdateUserRole)
-			users.PUT("/:id/status", api.UpdateUserStatus)
-			users.DELETE("/:id", api.DeleteUser)
-			users.POST("/onboard", api.OnboardUser)
-			users.PUT("/:id/phone-verified", api.UpdateUserPhoneVerified)
-			users.PUT("/:id/registration-payment", api.UpdateUserPaymentStatus)
-		}
+				users.POST("/avatar", api.UploadAvatar)
+				users.GET("/search-by-credentials", api.SearchUserByCredentials)
+				users.PUT("/:id/role", api.AdminUpdateUserRole)
+				users.PUT("/:id/status", api.UpdateUserStatus)
+				users.DELETE("/:id", api.DeleteUser)
+				users.POST("/onboard", api.OnboardUser)
+				users.PUT("/:id/phone-verified", api.UpdateUserPhoneVerified)
+				users.PUT("/:id/registration-payment", api.UpdateUserPaymentStatus)
+			}
 
 			e2ee := protected.Group("/e2ee")
 			{
@@ -278,35 +317,35 @@ func SetupRoutes(
 				chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
 				chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
 				chamas.POST("/:id/create-chat-room", api.CreateChamaChatRoom)
-			chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
-			chamas.POST("/:id/subscription-payments/:paymentId/pay", api.PaySubscriptionPayment)
-			chamas.GET("/:id/service-fee-payments", api.GetChamaServiceFeePayments)
-			chamas.GET("/:id/members/:memberId/service-fee-payments", api.GetMemberServiceFeePayments)
-			chamas.POST("/:id/service-fee-payments/:paymentId/pay", api.PayServiceFeePayment)
-			chamas.POST("/:id/members/:memberId/pay-service-fee", api.PayMemberServiceFee)
+				chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
+				chamas.POST("/:id/subscription-payments/:paymentId/pay", api.PaySubscriptionPayment)
+				chamas.GET("/:id/service-fee-payments", api.GetChamaServiceFeePayments)
+				chamas.GET("/:id/members/:memberId/service-fee-payments", api.GetMemberServiceFeePayments)
+				chamas.POST("/:id/service-fee-payments/:paymentId/pay", api.PayServiceFeePayment)
+				chamas.POST("/:id/members/:memberId/pay-service-fee", api.PayMemberServiceFee)
 			}
 
-		wallets := protected.Group("/wallets")
-		{
-			wallets.GET("/", api.GetWallets)
-			wallets.GET("/balance", api.GetWalletBalance)
-			wallets.GET("/transactions", api.GetUserTransactions)
-			wallets.GET("/:id", api.GetWallet)
-			wallets.GET("/:id/transactions", api.GetWalletTransactions)
-			wallets.POST("/transfer", api.TransferMoney)
-			wallets.POST("/deposit", api.DepositMoney)
-			wallets.POST("/withdraw", api.WithdrawMoney)
-			wallets.POST("/registration-payment", api.InitiateRegistrationPayment)
-		}
+			wallets := protected.Group("/wallets")
+			{
+				wallets.GET("/", api.GetWallets)
+				wallets.GET("/balance", api.GetWalletBalance)
+				wallets.GET("/transactions", api.GetUserTransactions)
+				wallets.GET("/:id", api.GetWallet)
+				wallets.GET("/:id/transactions", api.GetWalletTransactions)
+				wallets.POST("/transfer", api.TransferMoney)
+				wallets.POST("/deposit", api.DepositMoney)
+				wallets.POST("/withdraw", api.WithdrawMoney)
+				wallets.POST("/registration-payment", api.InitiateRegistrationPayment)
+			}
 
-		subwallets := protected.Group("/chamas/:id/subwallets")
-		subwallets.Use(subwalletMiddleware)
-		{
-			subwallets.GET("/", subwalletHandlers.GetChamaSubWallets)
-			subwallets.GET("/:type/transactions", subwalletHandlers.GetSubWalletTransactions)
-			subwallets.POST("/:type/pay", subwalletHandlers.PayToSubWallet)
-			subwallets.POST("/:type/withdraw", subwalletHandlers.WithdrawFromSubWallet)
-		}
+			subwallets := protected.Group("/chamas/:id/subwallets")
+			subwallets.Use(subwalletMiddleware)
+			{
+				subwallets.GET("/", subwalletHandlers.GetChamaSubWallets)
+				subwallets.GET("/:type/transactions", subwalletHandlers.GetSubWalletTransactions)
+				subwallets.POST("/:type/pay", subwalletHandlers.PayToSubWallet)
+				subwallets.POST("/:type/withdraw", subwalletHandlers.WithdrawFromSubWallet)
+			}
 
 			receipts := protected.Group("/receipts")
 			{
@@ -321,19 +360,19 @@ func SetupRoutes(
 				payments.POST("/bank-transfer", api.InitiateBankTransfer)
 			}
 
-			chat := protected.Group("/chat")
-			{
-				chat.GET("/rooms", api.GetChatRooms)
-				chat.POST("/rooms", api.CreateChatRoom)
-				chat.GET("/rooms/:id", api.GetChatRoom)
-				chat.POST("/rooms/:id/join", api.JoinChatRoom)
-				chat.GET("/rooms/:id/members", api.GetChatRoomMembers)
-				chat.DELETE("/rooms/:id", api.DeleteChatRoom)
-				chat.POST("/rooms/:id/clear", api.ClearChatRoom)
-				chat.GET("/rooms/:id/messages", api.GetChatMessages)
-				chat.POST("/rooms/:id/messages", api.SendMessage)
-				chat.PUT("/rooms/:id/read", api.MarkMessagesAsRead)
-			}
+		chat := protected.Group("/chat")
+		{
+			chat.GET("/rooms", api.GetChatRooms)
+			chat.POST("/rooms", api.CreateChatRoom)
+			chat.GET("/rooms/:id", api.GetChatRoom, chamaChatAccessMiddleware)
+			chat.POST("/rooms/:id/join", api.JoinChatRoom)
+			chat.GET("/rooms/:id/members", api.GetChatRoomMembers)
+			chat.DELETE("/rooms/:id", api.DeleteChatRoom, chamaChatAccessMiddleware)
+			chat.POST("/rooms/:id/clear", api.ClearChatRoom, chamaChatAccessMiddleware)
+			chat.GET("/rooms/:id/messages", api.GetChatMessages, chamaChatAccessMiddleware)
+			chat.POST("/rooms/:id/messages", api.SendMessage, chamaChatAccessMiddleware)
+			chat.PUT("/rooms/:id/read", api.MarkMessagesAsRead, chamaChatAccessMiddleware)
+		}
 
 			notifications := protected.Group("/notifications")
 			{
@@ -538,9 +577,9 @@ func SetupRoutes(
 				welfare.GET("/:id/contributions", api.GetWelfareContributions)
 			}
 
-		loans := protected.Group("/loans")
-		loans.Use(disbursementMiddleware)
-		{
+			loans := protected.Group("/loans")
+			loans.Use(disbursementMiddleware)
+			{
 				loans.GET("/", api.GetLoanApplications)
 				loans.POST("/apply", api.CreateLoanApplication)
 				loans.GET("/:id", api.GetLoanApplication)

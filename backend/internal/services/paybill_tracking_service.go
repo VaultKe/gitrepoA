@@ -347,18 +347,18 @@ func (s *PaybillTrackingService) CreateTransactionWithWallets(fromWalletID, toWa
 	}
 
 	return &models.Transaction{
-		ID:          transactionID,
+		ID:           transactionID,
 		FromWalletID: &fromWalletID,
 		ToWalletID:   &toWalletID,
-		ChamaID:     chamaID,
-		MemberID:    memberID,
-		Type:        txType,
-		Status:      models.TransactionStatusCompleted,
-		Amount:      amount,
-		Currency:    "KES",
-		Description: &description,
-		Reference:   &reference,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ChamaID:      chamaID,
+		MemberID:     memberID,
+		Type:         txType,
+		Status:       models.TransactionStatusCompleted,
+		Amount:       amount,
+		Currency:     "KES",
+		Description:  &description,
+		Reference:    &reference,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}, nil
 }

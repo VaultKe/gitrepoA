@@ -13,10 +13,10 @@ import (
 )
 
 type DisbursementService struct {
-	db              *sql.DB
-	mpesaService    *MpesaService
-	walletService   *WalletService
-	paybillService  *PaybillTrackingService
+	db             *sql.DB
+	mpesaService   *MpesaService
+	walletService  *WalletService
+	paybillService *PaybillTrackingService
 }
 
 func NewDisbursementService(db *sql.DB, cfg *config.Config) *DisbursementService {
@@ -116,18 +116,18 @@ func (s *DisbursementService) DisburseToChamaWallet(chamaID, subwalletType strin
 	log.Printf("Disbursed KES %.2f from chama %s %s wallet to user %s", amount, chamaID, subwalletType, recipientUserID)
 
 	return &models.Transaction{
-		ID:          transactionID,
+		ID:           transactionID,
 		FromWalletID: &wallet.ID,
-		ChamaID:     chamaID,
-		MemberID:    recipientUserID,
-		Type:        models.TransactionTypeWithdrawal,
-		Status:      models.TransactionStatusCompleted,
-		Amount:      amount,
-		Currency:    "KES",
-		Description: &description,
-		Reference:   &reference,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ChamaID:      chamaID,
+		MemberID:     recipientUserID,
+		Type:         models.TransactionTypeWithdrawal,
+		Status:       models.TransactionStatusCompleted,
+		Amount:       amount,
+		Currency:     "KES",
+		Description:  &description,
+		Reference:    &reference,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}, nil
 }
 
@@ -193,16 +193,16 @@ func (s *DisbursementService) DisburseFromUserWallet(userWalletID string, amount
 	log.Printf("B2C disbursement initiated for KES %.2f to phone %s", amount, recipientPhone)
 
 	return &models.Transaction{
-		ID:          transactionID,
+		ID:           transactionID,
 		FromWalletID: &userWalletID,
-		Type:        models.TransactionTypeWithdrawal,
-		Status:      models.TransactionStatusProcessing,
-		Amount:      amount,
-		Currency:    "KES",
-		Description: &description,
-		Reference:   &reference,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Type:         models.TransactionTypeWithdrawal,
+		Status:       models.TransactionStatusProcessing,
+		Amount:       amount,
+		Currency:     "KES",
+		Description:  &description,
+		Reference:    &reference,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}, nil
 }
 
@@ -562,14 +562,14 @@ type merryGoRound struct {
 }
 
 type welfareFund struct {
-	ID     string
+	ID      string
 	ChamaID string
 }
 
 type disbursementBatch struct {
-	ID     string
+	ID      string
 	ChamaID string
-	Status string
+	Status  string
 }
 
 type disbursementItem struct {

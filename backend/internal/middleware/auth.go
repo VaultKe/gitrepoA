@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
 	"vaultke-backend/internal/services"
@@ -140,6 +141,80 @@ func (m *AuthMiddleware) RequireRole(requiredRole string) gin.HandlerFunc {
 	}
 }
 
+// RequireChamaMembership is a middleware that ensures the user is a member of the chama
+func (m *AuthMiddleware) RequireChamaMembership(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+		chamaID := c.Param("id")
+		if chamaID == "" {
+			chamaID = c.Param("chamaId")
+		}
+
+		if userID == "" || chamaID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Unauthorized",
+			})
+			c.Abort()
+			return
+		}
+
+		var exists bool
+		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE)", chamaID, userID).Scan(&exists)
+		if err != nil || !exists {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error":   "You are not a member of this chama",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// RequireChamaChatAccess is a middleware that ensures the user can access the chama chat room
+func (m *AuthMiddleware) RequireChamaChatAccess(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+		roomID := c.Param("id")
+
+		if userID == "" || roomID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Unauthorized",
+			})
+			c.Abort()
+			return
+		}
+
+		var chamaID string
+		err := db.QueryRow("SELECT chama_id FROM chat_rooms WHERE id = $1 AND type = 'chama'", roomID).Scan(&chamaID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Chat room not found",
+			})
+			c.Abort()
+			return
+		}
+
+		var exists bool
+		err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE)", chamaID, userID).Scan(&exists)
+		if err != nil || !exists {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error":   "You are not authorized to access this chat room",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // RequireRoles is a middleware that checks if the user has one of the specified roles
 func (m *AuthMiddleware) RequireRoles(requiredRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -173,3 +248,4 @@ func (m *AuthMiddleware) RequireRoles(requiredRoles ...string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+

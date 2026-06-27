@@ -13,14 +13,14 @@ import (
 
 // DisbursementHandlers handles disbursement-related API endpoints
 type DisbursementHandlers struct {
-	db                *sql.DB
+	db                  *sql.DB
 	disbursementService *services.DisbursementService
 }
 
 // NewDisbursementHandlers creates a new instance of DisbursementHandlers
 func NewDisbursementHandlers(db *sql.DB, cfg *config.Config) *DisbursementHandlers {
 	return &DisbursementHandlers{
-		db:                db,
+		db:                  db,
 		disbursementService: services.NewDisbursementService(db, cfg),
 	}
 }

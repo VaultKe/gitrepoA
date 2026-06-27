@@ -14,19 +14,19 @@ import (
 )
 
 type SubWalletHandlers struct {
-	db                *sql.DB
-	paybillService    *services.PaybillTrackingService
-	mpesaService      *services.MpesaService
-	walletService     *services.WalletService
+	db                  *sql.DB
+	paybillService      *services.PaybillTrackingService
+	mpesaService        *services.MpesaService
+	walletService       *services.WalletService
 	disbursementService *services.DisbursementService
 }
 
 func NewSubWalletHandlers(db *sql.DB, cfg *config.Config) *SubWalletHandlers {
 	return &SubWalletHandlers{
-		db:                db,
-		paybillService:    services.NewPaybillTrackingService(db),
-		mpesaService:      services.NewMpesaService(db, cfg),
-		walletService:     services.NewWalletService(db),
+		db:                  db,
+		paybillService:      services.NewPaybillTrackingService(db),
+		mpesaService:        services.NewMpesaService(db, cfg),
+		walletService:       services.NewWalletService(db),
 		disbursementService: services.NewDisbursementService(db, cfg),
 	}
 }
@@ -174,8 +174,8 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 			"checkoutRequestId": stkResponse.CheckoutRequestID,
 			"merchantRequestId": stkResponse.MerchantRequestID,
 			"customerMessage":   stkResponse.CustomerMessage,
-			"accountReference":   accountRef,
-			"reference":          reference,
+			"accountReference":  accountRef,
+			"reference":         reference,
 		},
 	})
 }
@@ -201,9 +201,9 @@ func (h *SubWalletHandlers) WithdrawFromSubWallet(c *gin.Context) {
 	}
 
 	var req struct {
-		Amount        float64 `json:"amount" binding:"required,gt=0"`
+		Amount         float64 `json:"amount" binding:"required,gt=0"`
 		RecipientPhone string  `json:"recipientPhone" binding:"required"`
-		Description   string  `json:"description"`
+		Description    string  `json:"description"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -228,10 +228,10 @@ func (h *SubWalletHandlers) WithdrawFromSubWallet(c *gin.Context) {
 		"success": true,
 		"message": "Withdrawal initiated successfully",
 		"data": gin.H{
-			"transactionId":   transaction.ID,
-			"amount":          req.Amount,
-			"recipientPhone":  req.RecipientPhone,
-			"status":          transaction.Status,
+			"transactionId":  transaction.ID,
+			"amount":         req.Amount,
+			"recipientPhone": req.RecipientPhone,
+			"status":         transaction.Status,
 		},
 	})
 }
