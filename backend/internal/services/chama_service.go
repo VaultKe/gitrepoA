@@ -218,6 +218,12 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	// Provision all sub-wallets for the chama after successful creation
+	paybillService := NewPaybillTrackingService(s.db)
+	if err = paybillService.ProvisionChamaSubWallets(chama.ID); err != nil {
+		log.Printf("Warning: failed to provision chama sub-wallets: %v", err)
+	}
+
 	return chama, nil
 }
 

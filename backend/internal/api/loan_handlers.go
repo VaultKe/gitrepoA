@@ -1005,6 +1005,51 @@ func RejectLoan(c *gin.Context) {
 }
 
 func DisburseLoan(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	disbursementServiceVal, exists := c.Get("disbursementService")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Disbursement service not available",
+		})
+		return
+	}
+
+	disbursementService, ok := disbursementServiceVal.(*services.DisbursementService)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Invalid disbursement service",
+		})
+		return
+	}
+
+	err := disbursementService.DisburseLoan(loanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to disburse loan: " + err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Loan disbursed successfully",

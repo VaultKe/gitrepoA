@@ -107,6 +107,9 @@ func Migrate(db *sql.DB) error {
 		{"addRegistrationFeeColumns", addRegistrationFeeColumns},
 		{"addSubscriptionFeeColumns", addSubscriptionFeeColumns},
 		{"addServiceFeeColumns", addServiceFeeColumns},
+		{"addSubwalletTypeToWallets", addSubwalletTypeToWallets},
+		{"addMemberIDToTransactions", addMemberIDToTransactions},
+		{"addSubwalletTypeToTransactions", addSubwalletTypeToTransactions},
 	}
 
 	for _, m := range customMigrations {
@@ -2926,5 +2929,50 @@ func addServiceFeeColumns(db *sql.DB) error {
 		}
 	}
 	log.Println("✅ service fee columns ready")
+	return nil
+}
+
+func addSubwalletTypeToWallets(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE wallets ADD COLUMN IF NOT EXISTS subwallet_type TEXT`,
+		`ALTER TABLE wallets ADD COLUMN IF NOT EXISTS chama_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_wallets_subwallet_type ON wallets(subwallet_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_wallets_owner_id ON wallets(owner_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_wallets_chama_id ON wallets(chama_id)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add subwallet_type column to wallets: %w", err)
+		}
+	}
+	log.Println("✅ subwallet_type column added to wallets table")
+	return nil
+}
+
+func addMemberIDToTransactions(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS member_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_transactions_member_id ON transactions(member_id)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add member_id column to transactions: %w", err)
+		}
+	}
+	log.Println("✅ member_id column added to transactions table")
+	return nil
+}
+
+func addSubwalletTypeToTransactions(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS subwallet_type TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_transactions_subwallet_type ON transactions(subwallet_type)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add subwallet_type column to transactions: %w", err)
+		}
+	}
+	log.Println("✅ subwallet_type column added to transactions table")
 	return nil
 }

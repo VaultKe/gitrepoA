@@ -348,7 +348,7 @@ func AuthRateLimitMiddleware() gin.HandlerFunc {
 		}
 
 		if !limiter.Allow() {
-			fmt.Printf("🚨 Auth rate limit exceeded for IP: %s, Path: %s %s\n", clientIP, c.Request.Method, c.Request.URL.Path)
+			fmt.Printf("Auth rate limit exceeded for IP: %s, Path: %s %s\n", clientIP, c.Request.Method, c.Request.URL.Path)
 
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success": false,

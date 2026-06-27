@@ -370,38 +370,3 @@ func GetUserTransactions(c *gin.Context) {
 	})
 }
 
-// updateTransactionStatus updates transaction status
-func updateTransactionStatus(db *sql.DB, transactionID string, status models.TransactionStatus) error {
-	updateQuery := "UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3"
-	result, err := db.Exec(updateQuery, status, utils.NowEAT(), transactionID)
-	if err != nil {
-		return fmt.Errorf("failed to update transaction status: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("transaction not found: %s", transactionID)
-	}
-
-	log.Printf("Successfully updated transaction %s status to %s", transactionID, status)
-	return nil
-}
-
-// updateTransactionCheckoutRequestID updates transaction with checkout request ID
-func updateTransactionCheckoutRequestID(db *sql.DB, transactionID string, checkoutRequestID string) {
-	updateQuery := "UPDATE transactions SET checkout_request_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2"
-	result, err := db.Exec(updateQuery, checkoutRequestID, transactionID)
-	if err != nil {
-		return
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err == nil && rowsAffected > 0 {
-	} else {
-	}
-}
-

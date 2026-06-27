@@ -25,6 +25,10 @@ type Config struct {
 	MpesaInitiatorPassword string
 	BaseURL                string
 
+	// Centralized Paybill Configuration (for all chama payments)
+	SystemPaybillBusinessNumber string // Single paybill for all chama payments
+	SystemPaybillAccountPrefix   string // Prefix for account numbers (e.g., "VAULTKE")
+
 	// Firebase Configuration
 	FirebaseProjectID    string
 	FirebasePrivateKeyID string
@@ -107,6 +111,10 @@ func Load() *Config {
 		MpesaInitiatorName:     getEnv("MPESA_INITIATOR_NAME", "testapi"),
 		MpesaInitiatorPassword: getEnv("MPESA_INITIATOR_PASSWORD", "Safaricom999!*!"),
 		BaseURL:                getEnv("BASE_URL", "https://gitrepoa-1.onrender.com"),
+
+		// Centralized Paybill Configuration
+		SystemPaybillBusinessNumber: getEnv("SYSTEM_PAYBILL_BUSINESS_NUMBER", "247247"),
+		SystemPaybillAccountPrefix:   getEnv("SYSTEM_PAYBILL_ACCOUNT_PREFIX", "VAULT"),
 
 		// Firebase Configuration
 		FirebaseProjectID:    getEnv("FIREBASE_PROJECT_ID", ""),

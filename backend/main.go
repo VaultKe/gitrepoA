@@ -112,11 +112,13 @@ func main() {
 	reminderHandlers := api.NewReminderHandlers(db)
 
 	pollsHandlers := api.NewPollsHandlers(db)
-	disbursementHandlers := api.NewDisbursementHandlers(db)
+	disbursementHandlers := api.NewDisbursementHandlers(db, cfg)
 	reportsHandlers := api.NewFinancialReportsHandlers(db)
 	userSearchHandlers := api.NewUserSearchHandlers(db)
 	receiptHandlers := api.NewReceiptHandlers(db)
 	accountHandlers := api.NewAccountHandlers(db)
+	subwalletHandlers := api.NewSubWalletHandlers(db, cfg)
+	disbursementService := services.NewDisbursementService(db, cfg)
 
 	// Initialize E2EE service
 	e2eeService := services.NewMilitaryGradeE2EEService(db)
@@ -131,7 +133,7 @@ func main() {
 	}
 
 	// Register routes and middleware
-	routes.SetupRoutes(router, cfg, db, authService, wsService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, e2eeService, testDataGenerator)
+	routes.SetupRoutes(router, cfg, db, authService, wsService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, e2eeService, testDataGenerator, subwalletHandlers, disbursementService)
 
 	// Start server
 	port := os.Getenv("PORT")

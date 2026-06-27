@@ -43,21 +43,19 @@ func (s *WalletService) CreateWalletWithTx(tx *sql.Tx, ownerID string, walletTyp
 	}
 
 	query := `
-		INSERT INTO wallets (id, type, owner_id, balance, currency, is_active, is_locked, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO wallets (id, type, owner_id, subwallet_type, chama_id, balance, currency, is_active, is_locked, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
 	var err error
 	if tx != nil {
-		// Use the provided transaction
 		_, err = tx.Exec(query,
-			wallet.ID, wallet.Type, wallet.OwnerID, wallet.Balance, wallet.Currency,
+			wallet.ID, wallet.Type, wallet.OwnerID, wallet.SubWalletType, wallet.ChamaID, wallet.Balance, wallet.Currency,
 			wallet.IsActive, wallet.IsLocked, wallet.CreatedAt, wallet.UpdatedAt,
 		)
 	} else {
-		// Use the database directly
 		_, err = s.db.Exec(query,
-			wallet.ID, wallet.Type, wallet.OwnerID, wallet.Balance, wallet.Currency,
+			wallet.ID, wallet.Type, wallet.OwnerID, wallet.SubWalletType, wallet.ChamaID, wallet.Balance, wallet.Currency,
 			wallet.IsActive, wallet.IsLocked, wallet.CreatedAt, wallet.UpdatedAt,
 		)
 	}

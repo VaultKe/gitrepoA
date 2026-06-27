@@ -566,7 +566,8 @@ func DepositMoney(c *gin.Context) {
 		mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
 
 		// Create pending transaction record with proper reference
-		transactionID, err := createPendingMpesaTransaction(db.(*sql.DB), &mpesaReq, userID.(string), reference)
+		targetWalletID := "wallet-personal-" + userID.(string)
+		transactionID, err := createPendingMpesaTransaction(db.(*sql.DB), req.Amount, reference, targetWalletID, "", "deposit", "personal", userID.(string))
 		if err != nil {
 			log.Printf("Failed to create pending transaction: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{

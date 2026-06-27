@@ -5,17 +5,24 @@ import (
 	"net/http"
 	"strconv"
 
+	"vaultke-backend/config"
+	"vaultke-backend/internal/services"
+
 	"github.com/gin-gonic/gin"
 )
 
 // DisbursementHandlers handles disbursement-related API endpoints
 type DisbursementHandlers struct {
-	db *sql.DB
+	db                *sql.DB
+	disbursementService *services.DisbursementService
 }
 
 // NewDisbursementHandlers creates a new instance of DisbursementHandlers
-func NewDisbursementHandlers(db *sql.DB) *DisbursementHandlers {
-	return &DisbursementHandlers{db: db}
+func NewDisbursementHandlers(db *sql.DB, cfg *config.Config) *DisbursementHandlers {
+	return &DisbursementHandlers{
+		db:                db,
+		disbursementService: services.NewDisbursementService(db, cfg),
+	}
 }
 
 // GetDisbursementBatches retrieves disbursement batches for a chama
@@ -252,13 +259,23 @@ func (h *DisbursementHandlers) ProcessDisbursementBatch(c *gin.Context) {
 		return
 	}
 
-	// For now, just mark as processed
-	query := `UPDATE disbursement_batches SET status = 'completed', processed_date = CURRENT_TIMESTAMP WHERE id = $1 AND chama_id = $2`
-	_, err := h.db.Exec(query, batchID, chamaID)
+	err := h.disbursementService.ProcessDisbursementBatch(batchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to process disbursement batch",
+			"error":   "Failed to process disbursement batch: " + err.Error(),
+		})
+		return
+	}
+
+	_, err = h.db.Exec(
+		"UPDATE disbursement_batches SET status = 'completed', processed_date = CURRENT_TIMESTAMP WHERE id = $1 AND chama_id = $2",
+		batchID, chamaID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update batch status",
 		})
 		return
 	}

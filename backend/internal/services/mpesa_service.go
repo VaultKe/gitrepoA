@@ -148,6 +148,11 @@ func (s *MpesaService) InitiateSTKPush(transaction *models.MpesaTransaction) (*M
 	timestamp := time.Now().Format("20060102150405")
 	password := s.GeneratePassword(timestamp)
 
+	// Use PartyB from transaction (centralized paybill) or fallback to shortcode
+	partyB := transaction.PartyB
+	if partyB == "" {
+		partyB = s.config.MpesaShortcode
+	}
 	// Create STK push request
 	stkRequest := MpesaSTKPushRequest{
 		BusinessShortCode: s.config.MpesaShortcode,
@@ -156,7 +161,7 @@ func (s *MpesaService) InitiateSTKPush(transaction *models.MpesaTransaction) (*M
 		TransactionType:   "CustomerPayBillOnline",
 		Amount:            fmt.Sprintf("%.0f", transaction.Amount),
 		PartyA:            transaction.PhoneNumber,
-		PartyB:            s.config.MpesaShortcode,
+		PartyB:            partyB, // Use system paybill
 		PhoneNumber:       transaction.PhoneNumber,
 		CallBackURL:       s.config.MpesaCallbackURL,
 		AccountReference:  transaction.AccountReference,
@@ -523,7 +528,7 @@ func (s *MpesaService) InitiateB2C(phoneNumber string, amount float64, remarks s
 	b2cRequest := B2CRequest{
 		InitiatorName:      s.config.MpesaInitiatorName,
 		SecurityCredential: securityCredential,
-		CommandID:          "BusinessPayment", // or "SalaryPayment", "PromotionPayment"
+		CommandID:          "BusinessPayment",
 		Amount:             amount,
 		PartyA:             s.config.MpesaShortcode,
 		PartyB:             phoneNumber,
@@ -573,4 +578,8 @@ func (s *MpesaService) InitiateB2C(phoneNumber string, amount float64, remarks s
 	log.Printf("B2C Response: %+v", response)
 
 	return &response, nil
+}
+
+func (s *MpesaService) InitiateB2CRaw(phoneNumber string, amount float64, remarks, occasion string) (*B2CResponse, error) {
+	return s.InitiateB2C(phoneNumber, amount, remarks)
 }

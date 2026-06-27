@@ -2,22 +2,26 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
 	"vaultke-backend/config"
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Payment handlers
+// Payment handlers for centralized paybill system
+// All payments go to a single configured paybill, identified by account reference
+
 func InitiateMpesaSTK(c *gin.Context) {
-	// Get user ID from context
-	userID, exists := c.Get("userID")
+	userIDVal, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -25,30 +29,21 @@ func InitiateMpesaSTK(c *gin.Context) {
 		})
 		return
 	}
+	userID := userIDVal.(string)
 
-	// Parse request body
-	var req models.MpesaTransaction
+	var req struct {
+		PhoneNumber      string  `json:"phoneNumber" binding:"required"`
+		Amount           float64 `json:"amount" binding:"required,gt=0"`
+		ChamaID          string  `json:"chamaId"`
+		PaymentType      string  `json:"paymentType"`
+		WalletType       string  `json:"walletType"`
+		Description      string  `json:"description"`
+		AccountReference string  `json:"accountReference"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Invalid request format: " + err.Error(),
-		})
-		return
-	}
-
-	// Validate required fields
-	if req.PhoneNumber == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Phone number is required",
-		})
-		return
-	}
-
-	if req.Amount <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Amount must be greater than 0",
 		})
 		return
 	}
@@ -67,18 +62,6 @@ func InitiateMpesaSTK(c *gin.Context) {
 		return
 	}
 
-	// Update phone number in request
-	req.PhoneNumber = phoneNumber
-
-	// Set default values if not provided
-	if req.AccountReference == "" {
-		req.AccountReference = "VaultKe"
-	}
-	if req.TransactionDesc == "" {
-		req.TransactionDesc = "VaultKe Deposit"
-	}
-
-	// Get database connection
 	db, exists := c.Get("db")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -88,7 +71,6 @@ func InitiateMpesaSTK(c *gin.Context) {
 		return
 	}
 
-	// Get configuration
 	cfg, exists := c.Get("config")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -97,15 +79,32 @@ func InitiateMpesaSTK(c *gin.Context) {
 		})
 		return
 	}
+	config := cfg.(*config.Config)
 
-	// Create M-Pesa service
-	mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
+	// Generate or use provided account reference
+	accountRef := req.AccountReference
+	if accountRef == "" {
+		if req.ChamaID != "" {
+			accountRef = models.GetAccountReferenceFromPaybill(req.ChamaID, userID, req.WalletType)
+		} else {
+			accountRef = "VK" + userID[:min(10, len(userID))]
+		}
+	}
 
-	// Generate reference for direct STK push
-	reference := fmt.Sprintf("STK_%d_%s", time.Now().UnixNano(), userID.(string)[:8])
+	// Generate internal reference for tracking
+	prefix := getPaymentPrefix(req.PaymentType)
+	reference := models.GeneratePaybillReference(prefix, req.ChamaID, userID)
 
-	// Create pending transaction record first
-	transactionID, err := createPendingMpesaTransaction(db.(*sql.DB), &req, userID.(string), reference)
+	// For chama payments, determine target wallet
+	var targetWalletID string
+	if req.ChamaID != "" {
+		targetWalletID, _ = getTargetChamaWallet(db.(*sql.DB), req.ChamaID, req.WalletType)
+	} else {
+		targetWalletID = fmt.Sprintf("wallet-%s", userID)
+	}
+
+	// Create pending transaction
+	transactionID, err := createPendingMpesaTransaction(db.(*sql.DB), req.Amount, reference, targetWalletID, req.ChamaID, req.PaymentType, req.WalletType, userID)
 	if err != nil {
 		log.Printf("Failed to create pending transaction: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -115,69 +114,56 @@ func InitiateMpesaSTK(c *gin.Context) {
 		return
 	}
 
-	// Initiate STK push
-	stkResponse, err := mpesaService.InitiateSTKPush(&req)
+	// Use system paybill if configured, otherwise fallback
+	partyB := config.SystemPaybillBusinessNumber
+	if partyB == "" {
+		partyB = config.MpesaShortcode
+	}
+
+	// Prepare M-Pesa request with system paybill
+	mpesaReq := &models.MpesaTransaction{
+		PhoneNumber:      phoneNumber,
+		Amount:           req.Amount,
+		AccountReference: accountRef,
+		TransactionDesc:  req.Description,
+		PartyB:           partyB,
+	}
+
+	mpesaService := services.NewMpesaService(db.(*sql.DB), config)
+	stkResponse, err := mpesaService.InitiateSTKPush(mpesaReq)
 	if err != nil {
 		log.Printf("STK Push failed: %v", err)
-
-		// Mark transaction as failed with proper error details
-		failureReason := fmt.Sprintf("M-Pesa STK Push failed: %v", err)
-
-		// Update transaction status to failed
-		updateErr := updateTransactionStatus(db.(*sql.DB), transactionID, models.TransactionStatusFailed)
-		if updateErr != nil {
-			log.Printf("Failed to update transaction status to failed: %v", updateErr)
-		}
-
-		// Update additional failure details
-		_, updateErr = db.(*sql.DB).Exec(`
-			UPDATE transactions
-			SET reference = $1,
-			    description = CONCAT(description, ' - ', $2),
-			    updated_at = CURRENT_TIMESTAMP
-			WHERE id = $3
-		`, fmt.Sprintf("FAILED_STK_%d", time.Now().UnixNano()), failureReason, transactionID)
-
-		if updateErr != nil {
-			log.Printf("Failed to update transaction failure details: %v", updateErr)
-		}
-
-		// Return proper error response
+		updateTransactionStatus(db.(*sql.DB), transactionID, models.TransactionStatusFailed)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to initiate M-Pesa payment: STK push failed",
-			"details": err.Error(),
+			"error":   "Failed to initiate M-Pesa payment: " + err.Error(),
 			"data": gin.H{
 				"transactionId": transactionID,
 				"status":        "failed",
-				"reason":        failureReason,
 			},
 		})
 		return
 	}
 
-	// Update transaction with checkout request ID in both fields for better lookup
-  updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
+	updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
 
-
-	// Return success response
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "STK push initiated successfully",
 		"data": gin.H{
-			"transactionId":       transactionID,
-			"checkoutRequestId":   stkResponse.CheckoutRequestID,
-			"merchantRequestId":   stkResponse.MerchantRequestID,
-			"customerMessage":     stkResponse.CustomerMessage,
-			"responseDescription": stkResponse.ResponseDescription,
+			"transactionId":      transactionID,
+			"checkoutRequestId":  stkResponse.CheckoutRequestID,
+			"merchantRequestId":  stkResponse.MerchantRequestID,
+			"customerMessage":    stkResponse.CustomerMessage,
+			"accountReference":   accountRef,
+			"businessNumber":     partyB,
 		},
 	})
 }
 
 func HandleMpesaCallback(c *gin.Context) {
-	log.Println("📱 M-Pesa callback received")
+	log.Println("M-Pesa callback received")
 
-	// Parse callback data
 	var callback models.MpesaCallback
 	if err := c.ShouldBindJSON(&callback); err != nil {
 		log.Printf("Failed to parse callback: %v", err)
@@ -188,12 +174,8 @@ func HandleMpesaCallback(c *gin.Context) {
 		return
 	}
 
-	log.Printf("📱 Callback data: %+v", callback)
-
-	// Get database connection
 	db, exists := c.Get("db")
 	if !exists {
-		log.Println("Database connection not available")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Database connection not available",
@@ -201,10 +183,8 @@ func HandleMpesaCallback(c *gin.Context) {
 		return
 	}
 
-	// Get configuration
 	cfg, exists := c.Get("config")
 	if !exists {
-		log.Println("Configuration not available")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Configuration not available",
@@ -212,10 +192,8 @@ func HandleMpesaCallback(c *gin.Context) {
 		return
 	}
 
-	// Create M-Pesa service
 	mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
 
-	// Process the callback
 	err := mpesaService.ProcessMpesaCallback(&callback)
 	if err != nil {
 		log.Printf("Failed to process M-Pesa callback: %v", err)
@@ -226,16 +204,12 @@ func HandleMpesaCallback(c *gin.Context) {
 		return
 	}
 
-	log.Println("✅ M-Pesa callback processed successfully")
-
-	// Return success response (required by Safaricom)
 	c.JSON(http.StatusOK, gin.H{
 		"ResultCode": 0,
 		"ResultDesc": "Success",
 	})
 }
 
-// GetMpesaTransactionStatus checks the status of an M-Pesa transaction
 func GetMpesaTransactionStatus(c *gin.Context) {
 	checkoutRequestID := c.Param("checkoutRequestId")
 	if checkoutRequestID == "" {
@@ -246,7 +220,6 @@ func GetMpesaTransactionStatus(c *gin.Context) {
 		return
 	}
 
-	// Get database connection
 	db, exists := c.Get("db")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -256,7 +229,6 @@ func GetMpesaTransactionStatus(c *gin.Context) {
 		return
 	}
 
-	// Get configuration
 	cfg, exists := c.Get("config")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -266,13 +238,10 @@ func GetMpesaTransactionStatus(c *gin.Context) {
 		return
 	}
 
-	// Create M-Pesa service
 	mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
 
-	// Check transaction status
 	status, err := mpesaService.GetTransactionStatus(checkoutRequestID)
 	if err != nil {
-		log.Printf("Failed to get transaction status: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to check transaction status",
@@ -289,35 +258,86 @@ func GetMpesaTransactionStatus(c *gin.Context) {
 	})
 }
 
-// createPendingMpesaTransaction creates a pending transaction record
-func createPendingMpesaTransaction(db *sql.DB, req *models.MpesaTransaction, userID string, reference string) (string, error) {
-	// Find user's personal wallet
-	var walletID string
-	walletQuery := "SELECT id FROM wallets WHERE owner_id = $1 AND type = $2"
-	err := db.QueryRow(walletQuery, userID, models.WalletTypePersonal).Scan(&walletID)
+func getPaymentPrefix(paymentType string) string {
+	switch paymentType {
+	case "registration":
+		return models.PaybillRefRegistration
+	case "subscription":
+		return models.PaybillRefSubscription
+	case "contribution":
+		return models.PaybillRefContribution
+	case "savings":
+		return models.PaybillRefSavings
+	case "welfare":
+		return models.PaybillRefWelfare
+	case "merry_go_round":
+		return models.PaybillRefMerryGoRound
+	case "loan_repayment":
+		return models.PaybillRefLoanRepayment
+	case "shares":
+		return models.PaybillRefShares
+	case "dividends":
+		return models.PaybillRefDividends
+	default:
+		return models.PaybillRefContribution
+	}
+}
+
+func getTargetChamaWallet(db *sql.DB, chamaID, walletType string) (string, error) {
+	walletID := fmt.Sprintf("wallet-%s-%s", chamaID, walletType)
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM wallets WHERE owner_id = $1 AND type = $2)", chamaID, "chama").Scan(&exists)
 	if err != nil {
-		return "", fmt.Errorf("failed to find user wallet: %w", err)
+		return "", err
 	}
 
-	// Generate transaction ID
+	// Create chama wallet if doesn't exist
+	if !exists {
+		_, err = db.Exec("INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at) VALUES ($1, $2, 'chama', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", walletID, chamaID)
+		if err != nil {
+			return "", err
+		}
+	}
+	return walletID, nil
+}
+
+func createPendingMpesaTransaction(db *sql.DB, amount float64, reference, targetWalletID, chamaID, paymentType, walletType, userID string) (string, error) {
 	transactionID := fmt.Sprintf("TXN_%d", time.Now().UnixNano())
 
-	// Create pending transaction with proper reference and auto-approval
+	metadata := map[string]interface{}{
+		"payment_type": paymentType,
+		"wallet_type":  walletType,
+	}
+	if chamaID != "" {
+		metadata["chama_id"] = chamaID
+	}
+	metadataJSON, _ := json.Marshal(metadata)
+
 	insertQuery := `
 		INSERT INTO transactions (
 			id, to_wallet_id, type, status, amount, currency, description,
-			reference, payment_method, initiated_by, approved_by, requires_approval, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			reference, payment_method, initiated_by, approved_by, requires_approval, metadata, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`
 
-	_, err = db.Exec(insertQuery,
-		transactionID, walletID, models.TransactionTypeDeposit, models.TransactionStatusPending,
-		req.Amount, "KES", req.TransactionDesc, reference, models.PaymentMethodMpesa,
-		userID, userID, false, // approved_by = userID (self-approved deposit)
+	_, err := db.Exec(insertQuery,
+		transactionID, targetWalletID, models.TransactionTypeDeposit, models.TransactionStatusPending,
+		amount, "KES", paymentType, reference, models.PaymentMethodMpesa,
+		userID, userID, false, string(metadataJSON),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create pending transaction: %w", err)
 	}
 
 	return transactionID, nil
+}
+
+func updateTransactionStatus(db *sql.DB, transactionID string, status models.TransactionStatus) error {
+	_, err := db.Exec("UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3", status, utils.NowEAT(), transactionID)
+	return err
+}
+
+func updateTransactionCheckoutRequestID(db *sql.DB, transactionID, checkoutRequestID string) error {
+	_, err := db.Exec("UPDATE transactions SET reference = $1, updated_at = $2 WHERE id = $3", checkoutRequestID, utils.NowEAT(), transactionID)
+	return err
 }

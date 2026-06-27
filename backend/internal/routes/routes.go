@@ -33,6 +33,8 @@ func SetupRoutes(
 	accountHandlers *api.AccountHandlers,
 	e2eeService *services.MilitaryGradeE2EEService,
 	testDataGenerator *services.TestDataGenerator,
+	subwalletHandlers *api.SubWalletHandlers,
+	disbursementService *services.DisbursementService,
 ) {
 	// HTML templates for OAuth pages
 	router.LoadHTMLGlob("templates/*")
@@ -94,6 +96,16 @@ func SetupRoutes(
 
 	wsMiddleware := func(c *gin.Context) {
 		c.Set("wsService", wsService)
+		c.Next()
+	}
+
+	subwalletMiddleware := func(c *gin.Context) {
+		c.Set("subwalletHandlers", subwalletHandlers)
+		c.Next()
+	}
+
+	disbursementMiddleware := func(c *gin.Context) {
+		c.Set("disbursementService", disbursementService)
 		c.Next()
 	}
 
@@ -274,17 +286,26 @@ func SetupRoutes(
 			chamas.POST("/:id/members/:memberId/pay-service-fee", api.PayMemberServiceFee)
 			}
 
-			wallets := protected.Group("/wallets")
-			{
-				wallets.GET("/", api.GetWallets)
-				wallets.GET("/balance", api.GetWalletBalance)
-				wallets.GET("/transactions", api.GetUserTransactions)
-				wallets.GET("/:id", api.GetWallet)
-				wallets.GET("/:id/transactions", api.GetWalletTransactions)
+		wallets := protected.Group("/wallets")
+		{
+			wallets.GET("/", api.GetWallets)
+			wallets.GET("/balance", api.GetWalletBalance)
+			wallets.GET("/transactions", api.GetUserTransactions)
+			wallets.GET("/:id", api.GetWallet)
+			wallets.GET("/:id/transactions", api.GetWalletTransactions)
 			wallets.POST("/transfer", api.TransferMoney)
 			wallets.POST("/deposit", api.DepositMoney)
 			wallets.POST("/withdraw", api.WithdrawMoney)
 			wallets.POST("/registration-payment", api.InitiateRegistrationPayment)
+		}
+
+		subwallets := protected.Group("/chamas/:id/subwallets")
+		subwallets.Use(subwalletMiddleware)
+		{
+			subwallets.GET("/", subwalletHandlers.GetChamaSubWallets)
+			subwallets.GET("/:type/transactions", subwalletHandlers.GetSubWalletTransactions)
+			subwallets.POST("/:type/pay", subwalletHandlers.PayToSubWallet)
+			subwallets.POST("/:type/withdraw", subwalletHandlers.WithdrawFromSubWallet)
 		}
 
 			receipts := protected.Group("/receipts")
@@ -517,8 +538,9 @@ func SetupRoutes(
 				welfare.GET("/:id/contributions", api.GetWelfareContributions)
 			}
 
-			loans := protected.Group("/loans")
-			{
+		loans := protected.Group("/loans")
+		loans.Use(disbursementMiddleware)
+		{
 				loans.GET("/", api.GetLoanApplications)
 				loans.POST("/apply", api.CreateLoanApplication)
 				loans.GET("/:id", api.GetLoanApplication)

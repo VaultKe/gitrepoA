@@ -2,6 +2,8 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -12,6 +14,34 @@ const (
 	WalletTypePersonal WalletType = "personal"
 	WalletTypeChama    WalletType = "chama"
 	WalletTypeBusiness WalletType = "business"
+)
+
+// ChamaWalletType represents different wallet types within a chama
+type ChamaWalletType string
+
+const (
+	ChamaWalletTypeMain       ChamaWalletType = "main"
+	ChamaWalletTypeSavings    ChamaWalletType = "savings"
+	ChamaWalletTypeWelfare    ChamaWalletType = "welfare"
+	ChamaWalletTypeMerryGo    ChamaWalletType = "merry_go_round"
+	ChamaWalletTypeLoan       ChamaWalletType = "loan"
+	ChamaWalletTypeShares     ChamaWalletType = "shares"
+	ChamaWalletTypeDividends  ChamaWalletType = "dividends"
+	ChamaWalletTypeContribution ChamaWalletType = "contribution"
+)
+
+// PaybillReferencePrefix defines prefixes for different payment types
+const (
+	PaybillRefRegistration   = "REG"   // Registration fee
+	PaybillRefSubscription   = "SUB"   // Subscription fee
+	PaybillRefContribution   = "CON"   // Regular contribution
+	PaybillRefSavings        = "SVG"   // Savings contribution
+	PaybillRefWelfare        = "WEL"   // Welfare contribution
+	PaybillRefMerryGoRound   = "MGR"   // Merry-go-round contribution
+	PaybillRefLoanRepayment  = "LOANR" // Loan repayment (to chama)
+	PaybillRefLoanDisbursement = "LOAND" // Loan disbursement (from chama)
+	PaybillRefShares         = "SHR"   // Shares contribution
+	PaybillRefDividends      = "DIV"   // Dividends payout
 )
 
 // TransactionType represents the type of transaction
@@ -52,47 +82,56 @@ const (
 
 // Wallet represents a wallet in the system
 type Wallet struct {
-	ID           string     `json:"id" db:"id"`
-	Type         WalletType `json:"type" db:"type"`
-	OwnerID      string     `json:"ownerId" db:"owner_id"`
-	Balance      float64    `json:"balance" db:"balance"`
-	Currency     string     `json:"currency" db:"currency"`
-	IsActive     bool       `json:"isActive" db:"is_active"`
-	IsLocked     bool       `json:"isLocked" db:"is_locked"`
-	DailyLimit   *float64   `json:"dailyLimit,omitempty" db:"daily_limit"`
-	MonthlyLimit *float64   `json:"monthlyLimit,omitempty" db:"monthly_limit"`
-	CreatedAt    time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updatedAt" db:"updated_at"`
+	ID            string              `json:"id" db:"id"`
+	Type          WalletType          `json:"type" db:"type"`
+	OwnerID       string              `json:"ownerId" db:"owner_id"`
+	SubWalletType ChamaWalletType     `json:"subWalletType,omitempty" db:"subwallet_type"`
+	ChamaID       string              `json:"chamaId,omitempty" db:"chama_id"`
+	Balance       float64             `json:"balance" db:"balance"`
+	Currency      string              `json:"currency" db:"currency"`
+	IsActive      bool                `json:"isActive" db:"is_active"`
+	IsLocked      bool                `json:"isLocked" db:"is_locked"`
+	DailyLimit    *float64            `json:"dailyLimit,omitempty" db:"daily_limit"`
+	MonthlyLimit  *float64            `json:"monthlyLimit,omitempty" db:"monthly_limit"`
+	CreatedAt     time.Time           `json:"createdAt" db:"created_at"`
+	UpdatedAt     time.Time           `json:"updatedAt" db:"updated_at"`
+	MemberID      string              `json:"memberId,omitempty" db:"member_id"`
 }
 
 // Transaction represents a financial transaction
 type Transaction struct {
-	ID               string                 `json:"id" db:"id"`
-	FromWalletID     *string                `json:"fromWalletId,omitempty" db:"from_wallet_id"`
-	ToWalletID       *string                `json:"toWalletId,omitempty" db:"to_wallet_id"`
-	Type             TransactionType        `json:"type" db:"type"`
-	Status           TransactionStatus      `json:"status" db:"status"`
-	Amount           float64                `json:"amount" db:"amount"`
-	Currency         string                 `json:"currency" db:"currency"`
-	Description      *string                `json:"description,omitempty" db:"description"`
-	Reference        *string                `json:"reference,omitempty" db:"reference"`
-	PaymentMethod    PaymentMethod          `json:"paymentMethod" db:"payment_method"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
-	Fees             float64                `json:"fees" db:"fees"`
-	InitiatedBy      string                 `json:"initiatedBy" db:"initiated_by"`
-	RecipientID      *string                `json:"recipientId,omitempty" db:"recipient_id"`
-	ApprovedBy       *string                `json:"approvedBy,omitempty" db:"approved_by"`
-	RequiresApproval bool                   `json:"requiresApproval" db:"requires_approval"`
-	ApprovalDeadline *time.Time             `json:"approvalDeadline,omitempty" db:"approval_deadline"`
-	CreatedAt        time.Time              `json:"createdAt" db:"created_at"`
-	UpdatedAt        time.Time              `json:"updatedAt" db:"updated_at"`
-	User             *User                  `json:"user,omitempty"` // User who initiated the transaction
+	ID            string                 `json:"id" db:"id"`
+	FromWalletID  *string                `json:"fromWalletId,omitempty" db:"from_wallet_id"`
+	ToWalletID    *string                `json:"toWalletId,omitempty" db:"to_wallet_id"`
+	Type          TransactionType        `json:"type" db:"type"`
+	Status        TransactionStatus      `json:"status" db:"status"`
+	Amount        float64                `json:"amount" db:"amount"`
+	Currency      string                 `json:"currency" db:"currency"`
+	Description   *string                `json:"description,omitempty" db:"description"`
+	Reference     *string                `json:"reference,omitempty" db:"reference"`
+	PaymentMethod PaymentMethod          `json:"paymentMethod" db:"payment_method"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
+	Fees          float64                `json:"fees" db:"fees"`
+	InitiatedBy   string                 `json:"initiatedBy" db:"initiated_by"`
+	RecipientID   *string                `json:"recipientId,omitempty" db:"recipient_id"`
+	ChamaID       string                 `json:"chamaId,omitempty" db:"chama_id"`
+	SubWalletType ChamaWalletType        `json:"subWalletType,omitempty" db:"subwallet_type"`
+	MemberID      string                 `json:"memberId,omitempty" db:"member_id"`
+	ApprovedBy    *string                `json:"approvedBy,omitempty" db:"approved_by"`
+	RequiresApproval bool               `json:"requiresApproval" db:"requires_approval"`
+	ApprovalDeadline *time.Time          `json:"approvalDeadline,omitempty" db:"approval_deadline"`
+	CreatedAt     time.Time              `json:"createdAt" db:"created_at"`
+	UpdatedAt     time.Time              `json:"updatedAt" db:"updated_at"`
+	User          *User                  `json:"user,omitempty"`
 }
 
 // TransactionCreation represents data for creating a new transaction
 type TransactionCreation struct {
 	FromWalletID  *string                `json:"fromWalletId,omitempty"`
 	ToWalletID    *string                `json:"toWalletId,omitempty"`
+	ChamaID       string                 `json:"chamaId,omitempty"`
+	SubWalletType ChamaWalletType        `json:"subWalletType,omitempty"`
+	MemberID      string                 `json:"memberId,omitempty"`
 	Type          TransactionType        `json:"type" validate:"required"`
 	Amount        float64                `json:"amount" validate:"required,gt=0"`
 	Description   *string                `json:"description,omitempty"`
@@ -106,6 +145,7 @@ type MpesaTransaction struct {
 	Amount           float64 `json:"amount" validate:"required,gt=0"`
 	AccountReference string  `json:"accountReference" validate:"required"`
 	TransactionDesc  string  `json:"transactionDesc" validate:"required"`
+	PartyB           string  `json:"partyB,omitempty"`
 }
 
 // MpesaCallback represents M-Pesa callback data
@@ -285,4 +325,36 @@ func (mc *MpesaCallback) GetMpesaPhoneNumber() string {
 		}
 	}
 	return ""
+}
+
+// GeneratePaybillReference creates a unique paybill reference for a payment
+// Format: PREFIX-CHAMA_ID-USER_ID-TIMESTAMP-RANDOM
+func GeneratePaybillReference(prefix, chamaID, userID string) string {
+	timestamp := time.Now().Unix()
+	random := time.Now().Nanosecond() % 10000
+	return fmt.Sprintf("%s-%s-%s-%d-%04d", prefix, chamaID, userID, timestamp, random)
+}
+
+// ParsePaybillReference parses a paybill reference and extracts payment details
+// Returns: prefix, chamaID, userID, timestamp, valid
+func ParsePaybillReference(reference string) (string, string, string, int64, bool) {
+	parts := strings.Split(reference, "-")
+	if len(parts) < 5 {
+		return "", "", "", 0, false
+	}
+
+	var timestamp int64
+	_, err := fmt.Sscanf(parts[3], "%d", &timestamp)
+	if err != nil {
+		return parts[0], parts[1], parts[2], 0, false
+	}
+
+	return parts[0], parts[1], parts[2], timestamp, true
+}
+
+// GetAccountReferenceFromPaybill formats the account reference for M-Pesa STK
+// This is what the member sees and enters on their phone
+func GetAccountReferenceFromPaybill(chamaID, userID, walletType string) string {
+	// Format: VAULTKE-CHAMA_ID-USER_ID-WALLETTYPE (truncated to fit M-Pesa's 12 char limit)
+	return fmt.Sprintf("VK%s%s%s", chamaID[:min(8, len(chamaID))], userID[:min(8, len(userID))], walletType[:min(2, len(walletType))])
 }
