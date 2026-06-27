@@ -327,8 +327,6 @@ func GetUserMeetings(c *gin.Context) {
 		totalCount = len(meetings)
 	}
 
-	log.Printf("✅ Successfully fetched %d meetings for user %s from %d chamas", len(meetings), userID, len(chamaCount))
-
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    meetings,

@@ -55,8 +55,6 @@ func SetupRoutes(
 	router.Use(func(c *gin.Context) {
 		// Only log for non-OPTIONS requests to avoid spam
 		if c.Request.Method != "OPTIONS" {
-			// logMsg := "🌐 REQUEST: %s %s - Proto:%s, Host:%s, RemoteAddr:%s"
-			// log.Printf(logMsg, c.Request.Method, c.Request.URL.String(), c.Request.Proto, c.GetHeader("Host"), c.Request.RemoteAddr)
 		}
 		c.Next()
 	})

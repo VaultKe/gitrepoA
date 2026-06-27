@@ -227,12 +227,9 @@ func FileUploadSecurityMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "POST" || c.Request.Method == "PUT" {
 			contentType := c.GetHeader("Content-Type")
-			fmt.Printf("🔍 FileUpload Middleware - Content-Type: %s\n", contentType)
-			fmt.Printf("🔍 FileUpload Middleware - Method: %s, Path: %s\n", c.Request.Method, c.Request.URL.Path)
 
 			if strings.Contains(contentType, "multipart/form-data") {
-				fmt.Printf("🔍 Parsing multipart form data...\n")
-				// Parse multipart form with size limit
+				
 				err := c.Request.ParseMultipartForm(5 * 1024 * 1024) // 5MB limit
 				if err != nil {
 					fmt.Printf("❌ Failed to parse multipart form: %v\n", err)
@@ -243,8 +240,7 @@ func FileUploadSecurityMiddleware() gin.HandlerFunc {
 					c.Abort()
 					return
 				}
-				fmt.Printf("✅ Multipart form parsed successfully\n")
-
+				
 				// Validate uploaded files
 				if c.Request.MultipartForm != nil && c.Request.MultipartForm.File != nil {
 					// Different allowed types based on endpoint
