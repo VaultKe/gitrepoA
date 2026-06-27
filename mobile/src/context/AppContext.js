@@ -34,6 +34,7 @@ const initialState = {
   language: 'en',
   currentDashboard: 'user', // 'user', 'chama', 'admin'
   selectedChama: null,
+  pendingUserRoute: null,
 
   // Error state
   error: null,
@@ -65,6 +66,8 @@ const ActionTypes = {
   SET_LANGUAGE: 'SET_LANGUAGE',
   SET_CURRENT_DASHBOARD: 'SET_CURRENT_DASHBOARD',
   SET_SELECTED_CHAMA: 'SET_SELECTED_CHAMA',
+  SET_PENDING_USER_ROUTE: 'SET_PENDING_USER_ROUTE',
+  CLEAR_PENDING_USER_ROUTE: 'CLEAR_PENDING_USER_ROUTE',
 
   // Error actions
   SET_ERROR: 'SET_ERROR',
@@ -146,6 +149,12 @@ function appReducer(state, action) {
 
     case ActionTypes.SET_SELECTED_CHAMA:
       return { ...state, selectedChama: action.payload };
+
+    case ActionTypes.SET_PENDING_USER_ROUTE:
+      return { ...state, pendingUserRoute: action.payload };
+
+    case ActionTypes.CLEAR_PENDING_USER_ROUTE:
+      return { ...state, pendingUserRoute: null };
 
     case ActionTypes.SET_ERROR:
       return { ...state, error: action.payload };
@@ -1083,9 +1092,12 @@ export function AppProvider({ children }) {
   };
 
   // Dashboard switching functions
-  const switchToUserDashboard = () => {
+  const switchToUserDashboard = (targetRoute = null) => {
     dispatch({ type: ActionTypes.SET_CURRENT_DASHBOARD, payload: 'user' });
     dispatch({ type: ActionTypes.SET_SELECTED_CHAMA, payload: null });
+    if (targetRoute) {
+      dispatch({ type: ActionTypes.SET_PENDING_USER_ROUTE, payload: targetRoute });
+    }
   };
 
   const switchToAdminDashboard = () => {
@@ -1121,6 +1133,10 @@ export function AppProvider({ children }) {
 
   const setSelectedChama = (chama) => {
     dispatch({ type: ActionTypes.SET_SELECTED_CHAMA, payload: chama });
+  };
+
+  const clearPendingUserRoute = () => {
+    dispatch({ type: ActionTypes.CLEAR_PENDING_USER_ROUTE });
   };
 
   // Error handling
@@ -1199,6 +1215,7 @@ export function AppProvider({ children }) {
     setLanguage,
     setCurrentDashboard,
     setSelectedChama,
+    clearPendingUserRoute,
     setError,
     clearError,
     clearAuthData,

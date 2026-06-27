@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -497,7 +497,18 @@ function UserTabNavigator() {
 }
 
 // Main User Dashboard Stack
-export default function UserDashboardStack() {
+export default function UserDashboardStack({ navigation }) {
+  const { currentDashboard, pendingUserRoute, clearPendingUserRoute } = useApp();
+
+  useEffect(() => {
+    if (currentDashboard === 'user' && pendingUserRoute) {
+      navigation.navigate('UserDashboard', {
+        screen: 'UserTabs',
+        params: { screen: pendingUserRoute },
+      });
+      clearPendingUserRoute();
+    }
+  }, [currentDashboard, pendingUserRoute]);
 
   return (
     <Stack.Navigator
