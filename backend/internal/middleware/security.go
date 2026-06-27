@@ -60,7 +60,6 @@ func SecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 			}
 
 			if !limiter.Allow() {
-				fmt.Printf("🚨 Rate limit exceeded for IP: %s, Path: %s %s\n", clientIP, c.Request.Method, c.Request.URL.Path)
 
 				c.JSON(http.StatusTooManyRequests, gin.H{
 					"success": false,

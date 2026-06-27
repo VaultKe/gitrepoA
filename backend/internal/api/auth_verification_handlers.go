@@ -3,7 +3,6 @@ package api
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -417,7 +416,6 @@ func (h *AuthHandlers) SendOnboardingTOTP(c *gin.Context) {
 	}
 
 	code := fmt.Sprintf("%06d", int(time.Now().UnixNano()%1000000))
-	log.Printf("🔐 ONBOARDING TOTP for phone=%s userId=%s: %s", req.Phone, req.UserID, code)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -452,7 +450,6 @@ func (h *AuthHandlers) VerifyOnboardingTOTP(c *gin.Context) {
 		return
 	}
 
-	log.Printf("🔓 ONBOARDING TOTP verified for userId=%s: %s", req.UserID, req.Code)
 
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,

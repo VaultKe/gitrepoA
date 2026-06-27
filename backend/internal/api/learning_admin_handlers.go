@@ -231,15 +231,11 @@ func CreateLearningCourse(c *gin.Context) {
 	}
 
 	// Debug logging for enhanced content structures
-	log.Printf("📝 Creating course with type: %s", req.Type)
 	if req.ArticleContent != nil {
-		log.Printf("📰 Article content received with %d sections", len(req.ArticleContent.Sections))
 	}
 	if req.CourseStructure != nil {
-		log.Printf("📚 Course structure received with %d topics", len(req.CourseStructure.Topics))
 	}
 	if len(req.QuizQuestions) > 0 {
-		log.Printf("🧪 Quiz questions received: %d questions", len(req.QuizQuestions))
 	}
 
 	// Validate level

@@ -114,7 +114,6 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("✅ Password changed successfully for user: %s\n", userID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -341,7 +340,6 @@ func LogoutAllDevices(c *gin.Context) {
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	fmt.Printf("✅ Logged out from %d devices for user: %s\n", rowsAffected, userID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -405,7 +403,6 @@ func LogoutSpecificDevice(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("✅ Logged out from specific device (session: %s) for user: %s\n", sessionID, userID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

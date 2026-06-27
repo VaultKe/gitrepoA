@@ -241,14 +241,12 @@ func (s *EmailVerificationService) SendVerificationEmail(userEmail, userName, ve
 		return fmt.Errorf("email service not configured")
 	}
 
-	fmt.Printf("📧 Attempting to send verification email to: %s\n", userEmail)
 	err := s.emailService.SendEmailVerificationEmail(userEmail, verificationToken, userName)
 	if err != nil {
 		fmt.Printf("❌ Failed to send verification email: %v\n", err)
 		return err
 	}
 
-	fmt.Printf("✅ Verification email sent successfully to: %s\n", userEmail)
 	return nil
 }
 

@@ -320,7 +320,6 @@ func MakeContribution(c *gin.Context) {
 			}
 		}
 
-		fmt.Printf("💰 User %s wallet balance: %.2f, attempting to deduct: %.2f\n", userID, personalBalance, req.Amount)
 
 		if personalBalance < req.Amount {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -471,9 +470,6 @@ func MakeContribution(c *gin.Context) {
 		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, req.ChamaID, transactionInitiator, transactionRecipient, string(metadataJSON)}
 	}
 
-	fmt.Printf("🔍 Executing transaction insert query with %d args\n", len(insertArgs))
-	fmt.Printf("📝 Query: %s\n", insertQuery)
-	fmt.Printf("📊 Args: %+v\n", insertArgs)
 
 	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
@@ -520,7 +516,6 @@ func MakeContribution(c *gin.Context) {
 		var finalUserBalance, finalChamaBalance float64
 		tx.QueryRow("SELECT COALESCE(balance, 0) FROM wallets WHERE owner_id = $1 AND type = 'personal'", userID).Scan(&finalUserBalance)
 		tx.QueryRow("SELECT COALESCE(balance, 0) FROM wallets WHERE owner_id = $2 AND type = 'chama'", req.ChamaID).Scan(&finalChamaBalance)
-		fmt.Printf("📊 Final balances - User %s: %.2f, Chama %s: %.2f\n", userID, finalUserBalance, req.ChamaID, finalChamaBalance)
 	}
 
 	// Commit transaction
@@ -537,7 +532,6 @@ func MakeContribution(c *gin.Context) {
 
 	// For merry-go-round contributions, automatically check and advance the round
 	if req.Type == "merry-go-round" && transactionStatus == "completed" {
-		fmt.Printf("🔄 Merry-go-round contribution completed, checking if round should advance...\n")
 
 		// Get the merry-go-round ID for this chama
 		var merryGoRoundID string
@@ -548,14 +542,12 @@ func MakeContribution(c *gin.Context) {
 		`, req.ChamaID).Scan(&merryGoRoundID)
 
 		if err == nil && merryGoRoundID != "" {
-			fmt.Printf("🎯 Found active merry-go-round %s, checking advancement...\n", merryGoRoundID)
 
 			// Call the round advancement logic directly with proper type assertions
 			err = checkAndAdvanceMerryGoRound(db.(*sql.DB), merryGoRoundID, req.ChamaID, userID.(string))
 			if err != nil {
 				fmt.Printf("⚠️ Round advancement check failed: %v\n", err)
 			} else {
-				fmt.Printf("✅ Round advancement check completed successfully\n")
 			}
 		} else {
 			fmt.Printf("⚠️ No active merry-go-round found for chama %s\n", req.ChamaID)

@@ -264,11 +264,9 @@ func GetMeetingAttendance(c *gin.Context) {
 
 // UploadMeetingDocument handles document uploads for meetings
 func UploadMeetingDocument(c *gin.Context) {
-	log.Printf("📄 UploadMeetingDocument called")
 
 	meetingID := c.Param("id")
 	if meetingID == "" {
-		log.Printf("📄 Missing meeting ID")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Meeting ID is required",
@@ -276,7 +274,6 @@ func UploadMeetingDocument(c *gin.Context) {
 		return
 	}
 
-	log.Printf("📄 Meeting ID: %s", meetingID)
 
 	// Get user ID from context
 	userID, exists := c.Get("userID")
@@ -289,14 +286,10 @@ func UploadMeetingDocument(c *gin.Context) {
 	}
 
 	// Debug: Log request details
-	log.Printf("📄 Document upload request - Content-Type: %s", c.Request.Header.Get("Content-Type"))
-	log.Printf("📄 Document upload request - Content-Length: %d", c.Request.ContentLength)
-	log.Printf("📄 Document upload request - Method: %s", c.Request.Method)
 
 	// Parse multipart form
 	err := c.Request.ParseMultipartForm(10 << 20) // 10 MB max
 	if err != nil {
-		log.Printf("📄 Failed to parse multipart form: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Failed to parse multipart form: " + err.Error(),

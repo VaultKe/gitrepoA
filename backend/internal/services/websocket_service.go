@@ -179,16 +179,14 @@ func (h *Hub) run() {
 		defer ticker.Stop()
 		for range ticker.C {
 			h.mutex.RLock()
-			clientCount := len(h.clients)
-			roomCount := len(h.rooms)
-			userCount := len(h.users)
+		clientCount := len(h.clients)
+		_ = len(h.rooms)
+		_ = len(h.users)
 			h.mutex.RUnlock()
 
-			log.Printf("📊 WebSocket Hub Stats: %d clients, %d rooms, %d users", clientCount, roomCount, userCount)
 
 			// Alert if too many connections
 			if clientCount > 1000 {
-				log.Printf("🚨 WARNING: High client count (%d) - potential memory issue", clientCount)
 			}
 		}
 	}()
@@ -202,7 +200,6 @@ func (h *Hub) run() {
 			h.clientCount++
 			h.mutex.Unlock()
 
-			log.Printf("🔌 WebSocket client registered: %s (total: %d)", client.ID, h.clientCount)
 
 			// Send connection confirmation
 			select {
@@ -221,7 +218,6 @@ func (h *Hub) run() {
 				close(client.Send)
 				h.clientCount--
 
-				log.Printf("🔌 WebSocket client unregistered: %s (remaining: %d)", client.ID, h.clientCount)
 
 				// Remove from all rooms
 				for roomID, roomClients := range h.rooms {
@@ -277,12 +273,8 @@ func (h *Hub) JoinRoom(client *Client, roomID string) {
 	if h.rooms[roomID] == nil {
 		h.rooms[roomID] = make(map[*Client]bool)
 		h.roomCount++
-		log.Printf("🏠 New WebSocket room created: %s (total rooms: %d)", roomID, h.roomCount)
 	}
 	h.rooms[roomID][client] = true
-
-	roomSize := len(h.rooms[roomID])
-	log.Printf("👥 Client %s joined room %s (room size: %d)", client.ID, roomID, roomSize)
 }
 
 // LeaveRoom removes a client from a room

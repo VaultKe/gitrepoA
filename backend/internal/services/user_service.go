@@ -235,7 +235,6 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 	normalizedIdentifier := identifier
 	if strings.Contains(identifier, "@") {
 		normalizedIdentifier = strings.ToLower(strings.TrimSpace(identifier))
-		fmt.Printf("🔍 Login attempt: original='%s' -> normalized='%s'\n", identifier, normalizedIdentifier)
 	} else {
 		normalizedIdentifier = strings.TrimSpace(identifier)
 	}
@@ -394,7 +393,6 @@ func (s *UserService) UserExists(email, phone string) (bool, error) {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 	formattedPhone := utils.FormatPhoneNumber(phone)
 
-	fmt.Printf("🔍 UserExists check: original='%s' -> normalized='%s'\n", email, normalizedEmail)
 
 	// Since we now store all emails in lowercase, we can do direct comparison
 	// But we also check with LOWER() for existing data that might not be normalized
@@ -405,7 +403,6 @@ func (s *UserService) UserExists(email, phone string) (bool, error) {
 		return false, fmt.Errorf("failed to check user existence: %w", err)
 	}
 
-	fmt.Printf("✅ UserExists result: count=%d (exists=%t)\n", count, count > 0)
 	return count > 0, nil
 }
 
@@ -1024,7 +1021,6 @@ func (s *UserService) getSystemChamaAnalytics(dateFilter string) (map[string]int
 		return nil, err
 	}
 
-	fmt.Printf("📊 Chama stats: total=%d, active=%d\n", totalChamas, activeChamas)
 
 	// Get new chamas in period
 	var newChamas int

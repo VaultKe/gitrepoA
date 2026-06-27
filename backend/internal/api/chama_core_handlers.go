@@ -231,8 +231,6 @@ func CreateChama(c *gin.Context) {
 	}
 
 	// Debug logging
-	log.Printf("🔍 Received chama creation request: %+v", req)
-	log.Printf("📋 Members count: %d", len(req.Members))
 
 	// Additional validation - basic security checks
 	if len(req.Name) < 3 || len(req.Name) > 100 {

@@ -62,7 +62,6 @@ func GetChatRooms(c *gin.Context) {
 	// Use the proper chat service with timeout protection
 	chatService := services.NewChatService(db.(*sql.DB))
 
-	fmt.Printf("🔄 GetChatRooms: Calling GetUserChatRooms for user %s\n", userID)
 	rooms, err := chatService.GetUserChatRooms(userID)
 	if err != nil {
 		fmt.Printf("❌ GetChatRooms: Failed for user %s: %v\n", userID, err)
@@ -73,7 +72,6 @@ func GetChatRooms(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("✅ GetChatRooms: Success for user %s, returning %d rooms\n", userID, len(rooms))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    rooms,
@@ -109,7 +107,6 @@ func CreateChatRoom(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("🔍 CreateChatRoom request - UserID: %s, Type: %s, RecipientID: %s\n", userID, req.Type, req.RecipientID)
 
 	db, exists := c.Get("db")
 	if !exists {
@@ -133,7 +130,6 @@ func CreateChatRoom(c *gin.Context) {
 			return
 		}
 
-		fmt.Printf("🔄 Creating private chat between %s and %s\n", userID, req.RecipientID)
 
 		// Create or get existing private chat room
 		room, err := chatService.CreatePrivateChat(userID, req.RecipientID)
@@ -146,7 +142,6 @@ func CreateChatRoom(c *gin.Context) {
 			return
 		}
 
-		fmt.Printf("✅ Private chat created successfully: %s\n", room.ID)
 
 		// If context is provided (e.g., product inquiry), send an initial message
 		if req.Context != nil {
@@ -222,7 +217,6 @@ func CreateChatRoom(c *gin.Context) {
 			return
 		}
 
-		fmt.Printf("🔄 Creating support chat for user %s (admin: %s)\n", supportUserID, userID)
 
 		// Create support chat room (similar to private chat but allows admin to chat with user)
 		room, err := chatService.CreateSupportChat(userID, supportUserID, req.Context)
@@ -235,7 +229,6 @@ func CreateChatRoom(c *gin.Context) {
 			return
 		}
 
-		fmt.Printf("✅ Support chat created successfully: %s\n", room.ID)
 		c.JSON(http.StatusCreated, gin.H{
 			"success": true,
 			"data":    room,
@@ -297,7 +290,6 @@ func JoinChatRoom(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("🔄 JoinChatRoom: User %s joining room %s\n", userID, roomID)
 
 	db, exists := c.Get("db")
 	if !exists {
@@ -322,7 +314,6 @@ func JoinChatRoom(c *gin.Context) {
 	}
 
 	if isMember {
-		fmt.Printf("✅ JoinChatRoom: User %s already member of room %s\n", userID, roomID)
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "User is already a member of this room",
@@ -341,7 +332,6 @@ func JoinChatRoom(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("✅ JoinChatRoom: User %s successfully joined room %s\n", userID, roomID)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Successfully joined room",
@@ -403,7 +393,6 @@ func GetChatMessages(c *gin.Context) {
 			var meta map[string]interface{}
 			if err := json.Unmarshal([]byte(message.Metadata), &meta); err == nil {
 				if encrypted, exists := meta["encrypted"]; exists && encrypted.(bool) {
-					fmt.Printf("🔓 Decrypting message %s for user %s\n", message.ID, userID)
 
 					// Check if message needs decryption
 					if needsDecryption, ok := meta["needsDecryption"].(bool); ok && needsDecryption {
@@ -438,7 +427,6 @@ func GetChatMessages(c *gin.Context) {
 									message.Content = "[Failed to decrypt message]"
 									meta["decryptionError"] = err.Error()
 								} else {
-									fmt.Printf("✅ Group message %s decrypted successfully\n", message.ID)
 									message.Content = decryptedText
 
 									// Update metadata to reflect successful decryption
@@ -476,7 +464,6 @@ func GetChatMessages(c *gin.Context) {
 								message.Content = "[Failed to decrypt message]"
 								meta["decryptionError"] = err.Error()
 							} else {
-								fmt.Printf("✅ Message %s decrypted successfully\n", message.ID)
 								message.Content = decryptedText
 
 								// Update metadata to reflect successful decryption
@@ -601,7 +588,6 @@ func SendMessage(c *gin.Context) {
 	}
 
 	// ALWAYS ENCRYPT MESSAGES FOR SECURITY
-	fmt.Printf("🔐 ENCRYPTING MESSAGE: User %s in room %s\n", userID, roomID)
 
 	// Get room information to determine chat type
 	room, err := chatService.GetChatRoomByID(roomID)
@@ -675,7 +661,6 @@ func SendMessage(c *gin.Context) {
 		}
 	} else {
 		// Group chat (group, chama, support) - encrypt with group E2EE
-		fmt.Printf("🔐 %s chat message - encrypting with group E2EE\n", room.Type)
 
 		// Encrypt the message using group encryption
 		encryptedMessage, err := e2eeService.(*services.MilitaryGradeE2EEService).EncryptGroupMessage(roomID, userID, req.Content, metadataMap)
@@ -714,7 +699,6 @@ func SendMessage(c *gin.Context) {
 		}
 	}
 
-	fmt.Printf("✅ Message encrypted successfully with military-grade E2EE\n")
 
 	// Send message using chat service
 	message, err := chatService.SendMessage(roomID, userID, messageType, finalContent, finalMetadata, req.ReplyToID)

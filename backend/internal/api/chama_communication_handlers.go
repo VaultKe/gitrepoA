@@ -105,7 +105,6 @@ func SendChamaInvitation(c *gin.Context) {
 	}
 
 	// Send invitation
-	fmt.Printf("🔍 Sending chama invitation:\n")
 	fmt.Printf("  - Chama ID: %s\n", chamaID)
 	fmt.Printf("  - User ID: %s\n", userID.(string))
 	fmt.Printf("  - Email: %s\n", req.Email)
@@ -146,7 +145,6 @@ func RespondToInvitation(c *gin.Context) {
 	// Get chama ID from URL (using :id parameter to match route pattern)
 	chamaID := c.Param("id")
 	if chamaID != "" {
-		fmt.Printf("📋 RespondToInvitation: Chama ID provided: %s\n", chamaID)
 	}
 
 	// Get user ID from context (set by auth middleware)
@@ -343,7 +341,6 @@ func CancelInvitation(c *gin.Context) {
 	// Get chama ID from URL (using :id parameter to match route pattern)
 	chamaID := c.Param("id")
 	if chamaID != "" {
-		fmt.Printf("📋 CancelInvitation: Chama ID provided: %s\n", chamaID)
 	}
 
 	// Get user ID from context
@@ -397,8 +394,6 @@ func CancelInvitation(c *gin.Context) {
 
 // ResendInvitation resends a pending invitation
 func ResendInvitation(c *gin.Context) {
-	fmt.Printf("🔄 [RESEND INVITATION] ResendInvitation handler called\n")
-	fmt.Printf("📝 [RESEND INVITATION] Request method: %s, URL: %s\n", c.Request.Method, c.Request.URL.Path)
 
 	// Add panic recovery
 	defer func() {
@@ -413,7 +408,6 @@ func ResendInvitation(c *gin.Context) {
 
 	// Get invitation ID from URL
 	invitationID := c.Param("invitationId")
-	fmt.Printf("📋 [RESEND INVITATION] Invitation ID: %s\n", invitationID)
 	if invitationID == "" {
 		fmt.Printf("❌ [RESEND INVITATION] Invitation ID is missing\n")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -426,7 +420,6 @@ func ResendInvitation(c *gin.Context) {
 	// Get chama ID from URL (using :id parameter to match route pattern)
 	chamaID := c.Param("id")
 	if chamaID != "" {
-		fmt.Printf("📋 [RESEND INVITATION] Chama ID provided: %s\n", chamaID)
 	}
 
 	// Get user ID from context
@@ -518,7 +511,6 @@ func ResendInvitation(c *gin.Context) {
 		// Continue anyway, email sending is not critical
 	} else {
 		// Resend the email
-		fmt.Printf("📧 Resending chama invitation email to: %s\n", invitation.Email)
 		inviterFullName := fmt.Sprintf("%s %s", inviterFirstName, inviterLastName)
 
 		// Safely attempt to send email
@@ -542,7 +534,6 @@ func ResendInvitation(c *gin.Context) {
 					fmt.Printf("❌ Failed to resend invitation email: %v\n", err)
 					// Don't fail the API call if email fails
 				} else {
-					fmt.Printf("✅ Invitation email resent successfully to: %s\n", invitation.Email)
 				}
 			} else {
 				fmt.Printf("❌ Email service not available for resend\n")

@@ -118,7 +118,6 @@ type ChatRoomMember struct {
 
 // CreatePrivateChat creates a private chat between two users
 func (s *ChatService) CreatePrivateChat(user1ID, user2ID string) (*ChatRoom, error) {
-	fmt.Printf("🔍 CreatePrivateChat called with user1ID: %s, user2ID: %s\n", user1ID, user2ID)
 
 	// Prevent users from creating chats with themselves
 	if user1ID == user2ID {
@@ -127,13 +126,10 @@ func (s *ChatService) CreatePrivateChat(user1ID, user2ID string) (*ChatRoom, err
 	}
 
 	// Check if private chat already exists
-	fmt.Printf("🔍 Checking for existing private chat room...\n")
 	existingRoom, err := s.getPrivateChatRoom(user1ID, user2ID)
 	if err == nil {
-		fmt.Printf("✅ Found existing private chat room: %s\n", existingRoom.ID)
 		return existingRoom, nil
 	}
-	fmt.Printf("🔍 No existing room found, creating new one. Error: %v\n", err)
 
 	// Create new private chat room
 	room := &ChatRoom{
@@ -208,7 +204,6 @@ func (s *ChatService) CreatePrivateChat(user1ID, user2ID string) (*ChatRoom, err
 
 // CreateSupportChat creates a support chat between admin and user (allows same user)
 func (s *ChatService) CreateSupportChat(adminID, userID string, context map[string]interface{}) (*ChatRoom, error) {
-	fmt.Printf("🔍 CreateSupportChat called with adminID: %s, userID: %s\n", adminID, userID)
 
 	// For support chats, we allow admin to chat with any user, including themselves for testing
 	// Check if support chat already exists for this context
@@ -225,7 +220,6 @@ func (s *ChatService) CreateSupportChat(adminID, userID string, context map[stri
 			`
 			err := s.db.QueryRow(query, supportRequestID).Scan(&existingRoomID)
 			if err == nil {
-				fmt.Printf("✅ Found existing support chat room: %s\n", existingRoomID)
 				// Get the full room details
 				return s.GetChatRoomByID(existingRoomID)
 			}
@@ -304,7 +298,6 @@ func (s *ChatService) CreateSupportChat(adminID, userID string, context map[stri
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	fmt.Printf("✅ Support chat created successfully: %s\n", room.ID)
 	return room, nil
 }
 
@@ -559,11 +552,9 @@ func (s *ChatService) GetRoomMessages(roomID, userID string, limit, offset int) 
 		return nil, err
 	}
 	if !isMember {
-		fmt.Printf("🚫 PRIVACY VIOLATION BLOCKED: User %s attempted to access room %s without membership\n", userID, roomID)
 		return nil, fmt.Errorf("user is not a member of this chat room")
 	}
 
-	fmt.Printf("✅ Privacy check passed: User %s is authorized to access room %s\n", userID, roomID)
 
 	query := `
 		SELECT m.id, m.room_id, m.sender_id, m.type, m.content, m.metadata, m.file_url,
@@ -663,7 +654,6 @@ type ChatRoomWithParticipants struct {
 
 // GetUserChatRooms retrieves chat rooms for a user with participant information (PRIVACY ENFORCED)
 func (s *ChatService) GetUserChatRooms(userID string) ([]*ChatRoomWithParticipants, error) {
-	fmt.Printf("🔒 GetUserChatRooms: Enforcing privacy for user %s\n", userID)
 
 	// PRIVACY: Only return rooms where user is an ACTIVE member
 	query := `
@@ -1103,12 +1093,10 @@ func (s *ChatService) isMessageEncrypted(metadata string) bool {
 	if exists {
 		encryptedBool, ok := encrypted.(bool)
 		if ok {
-			fmt.Printf("✅ Message is encrypted: %t\n", encryptedBool)
 			return encryptedBool
 		}
 	}
 
-	fmt.Printf("🔍 Defaulting to not encrypted\n")
 	return false
 }
 

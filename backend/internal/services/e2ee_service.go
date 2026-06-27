@@ -200,7 +200,6 @@ func NewMilitaryGradeE2EEService(db *sql.DB) *MilitaryGradeE2EEService {
 
 // InitializeUserKeys initializes cryptographic keys for a user
 func (s *MilitaryGradeE2EEService) InitializeUserKeys(userID string) (*KeyBundle, error) {
-	fmt.Printf("🔐 Initializing military-grade keys for user: %s\n", userID)
 
 	// Generate identity key pair using Curve25519
 	identityPrivate := make([]byte, 32)
@@ -258,13 +257,11 @@ func (s *MilitaryGradeE2EEService) InitializeUserKeys(userID string) (*KeyBundle
 		return nil, fmt.Errorf("failed to store key bundle: %w", err)
 	}
 
-	fmt.Printf("✅ Military-grade keys initialized for user: %s\n", userID)
 	return keyBundle, nil
 }
 
 // EncryptMessage encrypts a message with military-grade security
 func (s *MilitaryGradeE2EEService) EncryptMessage(senderID, recipientID, plaintext string, metadata map[string]interface{}) (*EncryptedMessage, error) {
-	fmt.Printf("🔐 Encrypting message with military-grade security: %s -> %s\n", senderID, recipientID)
 
 	// Get or create session
 	session, err := s.getOrCreateSession(senderID, recipientID)
@@ -322,13 +319,11 @@ func (s *MilitaryGradeE2EEService) EncryptMessage(senderID, recipientID, plainte
 		IntegrityHash: integrityHash,
 	}
 
-	fmt.Printf("✅ Message encrypted with military-grade security\n")
 	return encryptedMessage, nil
 }
 
 // DecryptMessage decrypts a military-grade encrypted message
 func (s *MilitaryGradeE2EEService) DecryptMessage(encryptedMessage *EncryptedMessage) (string, map[string]interface{}, error) {
-	fmt.Printf("🔓 Decrypting military-grade encrypted message\n")
 
 	// Validate message structure
 	if err := s.validateEncryptedMessage(encryptedMessage); err != nil {
@@ -385,7 +380,6 @@ func (s *MilitaryGradeE2EEService) DecryptMessage(encryptedMessage *EncryptedMes
 	content, _ := messageData["content"].(string)
 	metadata := s.unprotectMetadata(messageData["metadata"])
 
-	fmt.Printf("✅ Message decrypted successfully\n")
 	return content, metadata, nil
 }
 
@@ -604,7 +598,6 @@ func (s *MilitaryGradeE2EEService) storeKeyBundle(keyBundle *KeyBundle) error {
 
 // EncryptGroupMessage encrypts a message for a group chat using a room-based symmetric key
 func (s *MilitaryGradeE2EEService) EncryptGroupMessage(roomID, senderID, plaintext string, metadata map[string]interface{}) (*EncryptedMessage, error) {
-	fmt.Printf("🔐 Encrypting group message with military-grade security: room %s, sender %s\n", roomID, senderID)
 
 	// Derive a symmetric key from the room ID using HKDF
 	roomKey := s.deriveRoomKey(roomID)
@@ -650,13 +643,11 @@ func (s *MilitaryGradeE2EEService) EncryptGroupMessage(roomID, senderID, plainte
 		IntegrityHash: integrityHash,
 	}
 
-	fmt.Printf("✅ Group message encrypted with military-grade security\n")
 	return encryptedMessage, nil
 }
 
 // DecryptGroupMessage decrypts a group message using the room-based symmetric key
 func (s *MilitaryGradeE2EEService) DecryptGroupMessage(roomID string, encryptedMessage *EncryptedMessage) (string, map[string]interface{}, error) {
-	fmt.Printf("🔓 Decrypting group message\n")
 
 	// Validate message structure
 	if err := s.validateEncryptedMessage(encryptedMessage); err != nil {
@@ -699,7 +690,6 @@ func (s *MilitaryGradeE2EEService) DecryptGroupMessage(roomID string, encryptedM
 	content, _ := messageData["content"].(string)
 	metadata := s.unprotectMetadata(messageData["metadata"])
 
-	fmt.Printf("✅ Group message decrypted successfully\n")
 	return content, metadata, nil
 }
 

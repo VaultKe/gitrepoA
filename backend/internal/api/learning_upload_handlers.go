@@ -19,7 +19,6 @@ func UploadLearningImage(c *gin.Context) {
 	// Debug logging
 	fmt.Printf("🔍 Upload request received - Method: %s, Content-Type: %s\n",
 		c.Request.Method, c.Request.Header.Get("Content-Type"))
-	fmt.Printf("🔍 Form data keys: %v\n", c.Request.Form)
 
 	userID := c.GetString("userID")
 	if userID == "" {

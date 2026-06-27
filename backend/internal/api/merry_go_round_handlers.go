@@ -597,7 +597,6 @@ func JoinMerryGoRound(c *gin.Context) {
 
 // CheckUserContributionStatus checks if a user has already contributed to the current round
 func CheckUserContributionStatus(c *gin.Context) {
-	fmt.Printf("🔍 [CONTRIBUTION STATUS] CheckUserContributionStatus handler called\n")
 
 	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("userID")
@@ -658,7 +657,6 @@ func CheckUserContributionStatus(c *gin.Context) {
 		}
 	} else {
 		// Get the active merry-go-round for this chama (fallback behavior)
-		fmt.Printf("🎯 Using active merry-go-round for chama: %s\n", chamaID)
 		err := db.(*sql.DB).QueryRow(`
 			SELECT id, current_round, amount_per_round, status
 			FROM merry_go_rounds

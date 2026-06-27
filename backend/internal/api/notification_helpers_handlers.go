@@ -89,7 +89,6 @@ func handleSpecialNotificationRead(db *sql.DB, notificationID, userID string) bo
 
 // handleSpecialNotificationDelete handles deleting special notification types
 func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) bool {
-	fmt.Printf("🗑️ SPECIAL DELETE: Checking notification ID: %s\n", notificationID)
 
 	// First, check if this notification actually exists in the database
 	// If it exists, we should delete it normally, not treat it as virtual
@@ -97,10 +96,8 @@ func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) 
 	checkQuery := "SELECT COUNT(*) FROM notifications WHERE id = $1 AND user_id = $2"
 	err := db.QueryRow(checkQuery, notificationID, userID).Scan(&count)
 	if err == nil && count > 0 {
-		fmt.Printf("🗑️ SPECIAL DELETE: Notification exists in database (count=%d), allowing normal deletion\n", count)
 		return false // Let normal deletion process handle it
 	} else {
-		fmt.Printf("🗑️ SPECIAL DELETE: Notification not found in database (count=%d, err=%v), checking for virtual notification patterns\n", count, err)
 	}
 
 	// Handle prefixed notification IDs from aggregated notifications
@@ -109,50 +106,42 @@ func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) 
 
 	// Check for chama activity notifications
 	if strings.HasPrefix(notificationID, "chama_activity_") {
-		fmt.Printf("🗑️ SPECIAL DELETE: Virtual chama activity notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "chama_activity")
 	}
 
 	// Check for meeting notifications (only if they don't exist in database)
 	if strings.HasPrefix(notificationID, "meeting_") {
-		fmt.Printf("🗑️ SPECIAL DELETE: Virtual meeting notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "meeting")
 	}
 
 	// Check for loan notifications (only if they don't exist in database)
 	if strings.HasPrefix(notificationID, "loan_") {
-		fmt.Printf("🗑️ SPECIAL DELETE: Virtual loan notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "loan")
 	}
 
 	// Check for welfare notifications (only if they don't exist in database)
 	if strings.HasPrefix(notificationID, "welfare_") {
-		fmt.Printf("🗑️ SPECIAL DELETE: Virtual welfare notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "welfare")
 	}
 
 	// Check for transaction notifications (only if they don't exist in database)
 	if strings.HasPrefix(notificationID, "transaction_") {
-		fmt.Printf("🗑️ SPECIAL DELETE: Virtual transaction notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "transaction")
 	}
 
 	// Check for support request notifications
 	if strings.HasPrefix(notificationID, "support_update_") {
-		fmt.Printf("🗑️ SPECIAL DELETE: Support request notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "support_update")
 	}
 
 	// Check for new support request notifications (for admins)
 	if strings.HasPrefix(notificationID, "support_new_") {
-		fmt.Printf("🗑️ SPECIAL DELETE: New support request notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "support_new")
 	}
 
 	// Check for timestamp-based notification IDs (format: YYYYMMDDHHMMSS or YYYYMMDDHHMMSS-XXXXX)
 	// These are often generated notifications that might not be in the main notifications table
 	if matched, _ := regexp.MatchString(`^\d{14}(-[a-zA-Z0-9]+)?$`, notificationID); matched {
-		fmt.Printf("🗑️ SPECIAL DELETE: Virtual timestamp-based notification - storing deletion record\n")
 		return storeVirtualNotificationDeletion(db, userID, notificationID, "timestamp_based")
 	}
 
@@ -162,18 +151,15 @@ func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) 
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM chama_invitations WHERE id = $1", notificationID).Scan(&count)
 		if err == nil && count > 0 {
-			fmt.Printf("🗑️ SPECIAL DELETE: Chama invitation found - attempting to delete\n")
 
 			// Actually delete the chama invitation
 			deleteQuery := "DELETE FROM chama_invitations WHERE id = $1 AND invited_email = (SELECT email FROM users WHERE id = $2)"
 			result, err := db.Exec(deleteQuery, notificationID, userID)
 			if err != nil {
-				fmt.Printf("🗑️ SPECIAL DELETE: Failed to delete chama invitation: %v\n", err)
 				return false
 			}
 
 			rowsAffected, _ := result.RowsAffected()
-			fmt.Printf("🗑️ SPECIAL DELETE: Chama invitation deleted, rows affected: %d\n", rowsAffected)
 			return rowsAffected > 0
 		}
 	}
@@ -181,7 +167,6 @@ func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) 
 	// If we reach here, the notification doesn't exist in the database and doesn't match known patterns
 	// This could be a stale/cached notification that was already deleted or a virtual notification
 	// we don't recognize. For better UX, we'll treat it as successfully deleted.
-	fmt.Printf("🗑️ SPECIAL DELETE: Unknown notification pattern, treating as virtual notification\n")
 	return storeVirtualNotificationDeletion(db, userID, notificationID, "unknown")
 }
 
@@ -201,7 +186,6 @@ func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notifi
 
 	_, err := db.Exec(createTableQuery)
 	if err != nil {
-		fmt.Printf("🗑️ Failed to create deleted_virtual_notifications table: %v\n", err)
 		// Even if table creation fails, we can still return success for virtual notifications
 		return true
 	}
@@ -217,12 +201,10 @@ func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notifi
 
 	_, err = db.Exec(insertQuery, userID, notificationID, notificationType)
 	if err != nil {
-		fmt.Printf("🗑️ Failed to store virtual notification deletion: %v\n", err)
 		// Even if storage fails, we can still return success for virtual notifications
 		return true
 	}
 
-	fmt.Printf("🗑️ Virtual notification deletion stored successfully\n")
 	return true
 }
 
@@ -244,7 +226,6 @@ func getDeletedVirtualNotificationIDs(db *sql.DB, userID string) map[string]bool
 
 	_, err := db.Exec(createTableQuery)
 	if err != nil {
-		fmt.Printf("🗑️ Failed to create deleted_virtual_notifications table: %v\n", err)
 		return deletedIDs
 	}
 
@@ -256,7 +237,6 @@ func getDeletedVirtualNotificationIDs(db *sql.DB, userID string) map[string]bool
 
 	rows, err := db.Query(query, userID)
 	if err != nil {
-		fmt.Printf("🗑️ Failed to get deleted virtual notifications: %v\n", err)
 		return deletedIDs
 	}
 	defer rows.Close()

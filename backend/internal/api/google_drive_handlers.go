@@ -251,7 +251,6 @@ func GetGoogleDriveBackupInfo(c *gin.Context) {
 // GetGoogleDriveStatus checks if user has Google Drive connected
 func GetGoogleDriveStatus(c *gin.Context) {
 	userID := c.GetString("userID")
-	fmt.Printf("🔍 GetGoogleDriveStatus called for user: %s\n", userID)
 
 	if userID == "" {
 		fmt.Printf("❌ GetGoogleDriveStatus: User not authenticated\n")
@@ -277,7 +276,6 @@ func GetGoogleDriveStatus(c *gin.Context) {
 	driveService := services.NewGoogleDriveService(db.(*sql.DB))
 
 	// Check connection status
-	fmt.Printf("🔍 Checking Google Drive connection for user: %s\n", userID)
 	connected, err := driveService.IsUserConnected(userID)
 	if err != nil {
 		fmt.Printf("❌ GetGoogleDriveStatus: Failed to check connection: %v\n", err)
@@ -304,7 +302,6 @@ func GetGoogleDriveStatus(c *gin.Context) {
 		err := db.(*sql.DB).QueryRow(query, userID).Scan(&count)
 		if err == nil {
 			debugInfo["total_tokens"] = count
-			fmt.Printf("🔍 Debug: User %s has %d total tokens in database\n", userID, count)
 		}
 
 		// Check for expired tokens
@@ -313,7 +310,6 @@ func GetGoogleDriveStatus(c *gin.Context) {
 		err = db.(*sql.DB).QueryRow(expiredQuery, userID).Scan(&expiredCount)
 		if err == nil {
 			debugInfo["expired_tokens"] = expiredCount
-			fmt.Printf("🔍 Debug: User %s has %d expired tokens\n", userID, expiredCount)
 		}
 	}
 
@@ -900,7 +896,6 @@ func GenerateTestTokens(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("🧪 GenerateTestTokens called for user: %s\n", userID)
 
 	// Check if user is admin (for development testing)
 	userRole := c.GetString("userRole")
@@ -931,7 +926,6 @@ func GenerateTestTokens(c *gin.Context) {
 	mockRefreshToken := "mock_refresh_token_for_testing_" + userID
 	expiresIn := 3600 // 1 hour
 
-	fmt.Printf("🔑 Generating mock tokens for user %s\n", userID)
 	fmt.Printf("   Access Token: %s...\n", mockAccessToken[:20])
 	fmt.Printf("   Refresh Token: %s...\n", mockRefreshToken[:20])
 
@@ -985,7 +979,6 @@ func GetGoogleDriveAuthURL(c *gin.Context) {
 	stateParam := ""
 	if userID != "" {
 		stateParam = fmt.Sprintf("&state=%s", userID)
-		fmt.Printf("🔗 Including user ID in OAuth state: %s\n", userID)
 	}
 
 	authURL := fmt.Sprintf(
@@ -1065,12 +1058,10 @@ func HandleGoogleDriveCallback(c *gin.Context) {
 	// Store tokens automatically for the user
 	// Try to get user ID from OAuth state parameter first, fallback to context
 	userID := c.Query("state") // Get user ID from OAuth state parameter
-	fmt.Printf("🔍 OAuth callback: state parameter = '%s'\n", userID)
 
 	// If no state parameter, try to get from context (for authenticated requests)
 	if userID == "" {
 		userID = c.GetString("userID")
-		fmt.Printf("🔍 OAuth callback: userID from context = '%s'\n", userID)
 	}
 
 	// If still no user ID, use the one from logs (temporary fallback)

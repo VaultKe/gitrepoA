@@ -78,7 +78,6 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 			// Allow the request to proceed - don't abort
 			allowedOrigin = "*"
 		} else if _, allowed := allowedOrigins[origin]; !allowed {
-			log.Printf("🚫 CORS: Origin '%s' not allowed", origin)
 
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Origin not allowed",

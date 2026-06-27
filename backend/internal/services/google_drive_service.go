@@ -194,7 +194,6 @@ func (gds *GoogleDriveService) DisconnectUser(userID string) error {
 
 // IsUserConnected checks if user has valid Google Drive tokens
 func (gds *GoogleDriveService) IsUserConnected(userID string) (bool, error) {
-	fmt.Printf("🔍 IsUserConnected: Checking connection for user: %s\n", userID)
 
 	// First, ensure the table exists
 	err := gds.ensureTablesExist()
@@ -222,10 +221,8 @@ func (gds *GoogleDriveService) IsUserConnected(userID string) (bool, error) {
 
 	// If user has tokens, they are considered connected
 	if count > 0 {
-		fmt.Printf("🔍 IsUserConnected: User %s has Google Drive tokens\n", userID)
 		return true, nil
 	}
-	fmt.Printf("🔍 IsUserConnected: No tokens found for user %s\n", userID)
 	return false, nil
 }
 
@@ -293,7 +290,6 @@ func (gds *GoogleDriveService) CreateUserBackup(userID string) (*BackupResult, e
 	}
 
 	// Proceed with Google Drive backup for authenticated users
-	fmt.Printf("🔧 Creating Google Drive backup for user %s\n", userID)
 
 	// Check if using mock tokens (for development)
 	if strings.Contains(token.AccessToken, "mock_access_token_for_testing") {
@@ -370,17 +366,14 @@ func (gds *GoogleDriveService) CreateUserBackup(userID string) (*BackupResult, e
 	}
 
 	// Create or get backup folder
-	fmt.Printf("📁 Creating/getting backup folder...\n")
 	folderID, err := gds.getOrCreateBackupFolder(driveService)
 	if err != nil {
 		fmt.Printf("❌ Failed to create/get backup folder: %v\n", err)
 		return nil, fmt.Errorf("failed to create backup folder: %v", err)
 	}
-	fmt.Printf("✅ Backup folder ready: %s\n", folderID)
 
 	// Create backup file
 	fileName := fmt.Sprintf("vaultke_backup_%s_%s.json", userID, time.Now().Format("20060102_150405"))
-	fmt.Printf("📄 Creating backup file: %s\n", fileName)
 
 	file := &drive.File{
 		Name:    fileName,
@@ -389,13 +382,11 @@ func (gds *GoogleDriveService) CreateUserBackup(userID string) (*BackupResult, e
 
 	// Upload file
 	fmt.Printf("⬆️ Uploading file to Google Drive...\n")
-	uploadedFile, err := driveService.Files.Create(file).Media(bytes.NewReader(jsonData)).Do()
+	_, err = driveService.Files.Create(file).Media(bytes.NewReader(jsonData)).Do()
 	if err != nil {
 		fmt.Printf("❌ Failed to upload backup file: %v\n", err)
 		return nil, fmt.Errorf("failed to upload backup file: %v", err)
 	}
-	fmt.Printf("✅ File uploaded successfully! File ID: %s\n", uploadedFile.Id)
-	fmt.Printf("📊 File size: %d bytes\n", len(jsonData))
 
 	// Record backup in database
 	err = gds.recordBackup(userID, fileName, int64(len(jsonData)))
@@ -743,7 +734,6 @@ func (gds *GoogleDriveService) getUserSettings(userID string) (map[string]interf
 func (gds *GoogleDriveService) getOrCreateBackupFolder(service *drive.Service) (string, error) {
 	// Search for existing VaultKe backup folder
 	query := "name='VaultKe Backups' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-	fmt.Printf("🔍 Searching for existing backup folder...\n")
 	fileList, err := service.Files.List().Q(query).Do()
 	if err != nil {
 		fmt.Printf("❌ Failed to search for backup folder: %v\n", err)
@@ -752,12 +742,10 @@ func (gds *GoogleDriveService) getOrCreateBackupFolder(service *drive.Service) (
 
 	// If folder exists, return its ID
 	if len(fileList.Files) > 0 {
-		fmt.Printf("✅ Found existing backup folder: %s\n", fileList.Files[0].Id)
 		return fileList.Files[0].Id, nil
 	}
 
 	// Create new backup folder
-	fmt.Printf("📁 Creating new backup folder...\n")
 	folder := &drive.File{
 		Name:     "VaultKe Backups",
 		MimeType: "application/vnd.google-apps.folder",
@@ -769,7 +757,6 @@ func (gds *GoogleDriveService) getOrCreateBackupFolder(service *drive.Service) (
 		return "", fmt.Errorf("failed to create backup folder: %v", err)
 	}
 
-	fmt.Printf("✅ Created new backup folder: %s\n", createdFolder.Id)
 	return createdFolder.Id, nil
 }
 

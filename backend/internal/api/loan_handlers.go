@@ -115,7 +115,6 @@ func GetLoanApplications(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("🔍 GetLoanApplications called for chamaId: %s\n", chamaID)
 
 	// Get database connection
 	db, exists := c.Get("db")
@@ -505,7 +504,6 @@ func RespondToGuarantorRequest(c *gin.Context) {
 	guarantorID := req.GuarantorID
 
 	// DEBUG: Log the received parameters
-	fmt.Printf("🔍 RespondToGuarantorRequest: loanID=%s, guarantorID=%s, userID=%s, action=%s\n", loanID, guarantorID, userID, req.Action)
 
 	// Validate action
 	if req.Action != "accept" && req.Action != "decline" {
@@ -532,7 +530,6 @@ func RespondToGuarantorRequest(c *gin.Context) {
 	if err != nil {
 		fmt.Printf("❌ Error checking guarantor existence: %v\n", err)
 	} else {
-		fmt.Printf("🔍 Guarantor record %s exists: %d\n", guarantorID, count)
 	}
 
 	// DEBUG: Check guarantor record details
@@ -541,7 +538,6 @@ func RespondToGuarantorRequest(c *gin.Context) {
 	if err != nil {
 		fmt.Printf("❌ Error getting guarantor details: %v\n", err)
 	} else {
-		fmt.Printf("🔍 Guarantor record details: id=%s, user_id=%s, loan_id=%s, status=%s\n", dbGuarantorID, dbUserID, dbLoanID, dbStatus)
 	}
 
 	// Find the guarantor record by ID and ensure the current user is the guarantor

@@ -170,7 +170,6 @@ func CreateSupportRequest(c *gin.Context) {
 				if err != nil {
 					fmt.Printf("Failed to create new support request notification for admin %s: %v\n", adminID, err)
 				} else {
-					fmt.Printf("✅ Created new support request notification for admin %s\n", adminID)
 				}
 			}
 		}
@@ -476,7 +475,6 @@ func UpdateSupportRequest(c *gin.Context) {
 			if err != nil {
 				fmt.Printf("Failed to create support update notification: %v\n", err)
 			} else {
-				fmt.Printf("✅ Created support update notification for user %s\n", supportUserID)
 			}
 		}
 	}()

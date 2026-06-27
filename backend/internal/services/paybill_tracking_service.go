@@ -305,7 +305,6 @@ func (s *PaybillTrackingService) CreateTransactionWithWallets(fromWalletID, toWa
 			VALUES ($1, $2, $3, $4, $5, 'pending', $6, 'KES', $7, $8, $9, $10, $11)
 		`
 		args = []interface{}{transactionID, toWalletID, chamaID, memberID, txType, amount, description, reference, chamaID, now, now}
-	} else {
 		query = `
 			INSERT INTO transactions (id, from_wallet_id, chama_id, member_id, type, status, amount, currency, description, reference, initiated_by, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, 'pending', $6, 'KES', $7, $8, $9, $10, $11)

@@ -47,7 +47,6 @@ func (s *OTPCleanupService) StartCleanupScheduler() {
 		}
 	}()
 
-	log.Println("🧹 OTP cleanup scheduler started - running every 30 seconds")
 }
 
 // CleanupExpiredTokens removes all expired tokens from both tables
@@ -65,7 +64,6 @@ func (s *OTPCleanupService) CleanupExpiredTokens() {
 	} else {
 		emailRowsAffected, _ := emailResult.RowsAffected()
 		if emailRowsAffected > 0 {
-			log.Printf("🧹 Cleaned up %d expired/used email verification tokens", emailRowsAffected)
 		}
 	}
 
@@ -80,7 +78,6 @@ func (s *OTPCleanupService) CleanupExpiredTokens() {
 	} else {
 		passwordRowsAffected, _ := passwordResult.RowsAffected()
 		if passwordRowsAffected > 0 {
-			log.Printf("🧹 Cleaned up %d expired/used password reset tokens", passwordRowsAffected)
 		}
 	}
 }
