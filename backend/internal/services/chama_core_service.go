@@ -171,17 +171,10 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		VALUES ($1, $2, $3, 50, 'pending', $4, $5, $6)
 	`
 	_, err = tx.Exec(serviceFeeQuery,
-		generateUUID(), chama.ID, createdBy, time.Now(), time.Now(), time.Now(),
+		uuid.New().String(), chama.ID, createdBy, time.Now(), time.Now(), time.Now(),
 	)
 	if err != nil {
 		log.Printf("Warning: failed to create service fee payment for creator: %v", err)
-	}
-
-	// Create chat room for the chama within the same transaction
-	chatService := NewChatService(s.db)
-	_, err = chatService.CreateChamaChatWithTx(tx, chama.ID, createdBy)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create chat room for chama: %w", err)
 	}
 
 	// Create chama wallet within the same transaction
@@ -202,7 +195,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 			VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7)
 		`
 		_, err = tx.Exec(subscriptionQuery,
-			generateUUID(), chama.ID, creation.MonthlySubscriptionFee,
+			uuid.New().String(), chama.ID, creation.MonthlySubscriptionFee,
 			dueDate, monthYear, now, now,
 		)
 		if err != nil {

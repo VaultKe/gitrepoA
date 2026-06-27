@@ -596,40 +596,8 @@ func CreateChamaChatRoom(c *gin.Context) {
 		return
 	}
 
-	// Check if chama chat room already exists
-	chatService := services.NewChatService(db.(*sql.DB))
-	existingRoom, _ := chatService.GetChatRoomByChamaID(chamaID)
-	if existingRoom != nil {
-		updateQuery := `UPDATE chamas SET chat_room_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
-		_, _ = db.(*sql.DB).Exec(updateQuery, existingRoom.ID, chamaID)
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Chat room already exists for this chama",
-			"data": map[string]interface{}{
-				"roomId": existingRoom.ID,
-			},
-		})
-		return
-	}
-
-	// Create chat room for chama
-	chatRoom, err := chatService.CreateChamaChat(chamaID, userID.(string))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to create chat room: " + err.Error(),
-		})
-		return
-	}
-
-	updateQuery := `UPDATE chamas SET chat_room_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
-	_, _ = db.(*sql.DB).Exec(updateQuery, chatRoom.ID, chamaID)
-
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Chat room created successfully",
-		"data": map[string]interface{}{
-			"roomId": chatRoom.ID,
-		},
+		"message": "Chat rooms are managed by the chat microservice",
 	})
 }

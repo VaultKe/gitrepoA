@@ -20,7 +20,6 @@ func SetupRoutes(
 	cfg *config.Config,
 	db *sql.DB,
 	authService *services.AuthService,
-	wsService *services.WebSocketService,
 	passwordResetService *services.PasswordResetService,
 	emailVerificationService *services.EmailVerificationService,
 	authHandlers *api.AuthHandlers,
@@ -31,7 +30,6 @@ func SetupRoutes(
 	userSearchHandlers *api.UserSearchHandlers,
 	receiptHandlers *api.ReceiptHandlers,
 	accountHandlers *api.AccountHandlers,
-	e2eeService *services.MilitaryGradeE2EEService,
 	testDataGenerator *services.TestDataGenerator,
 	subwalletHandlers *api.SubWalletHandlers,
 	disbursementService *services.DisbursementService,
@@ -81,45 +79,6 @@ func SetupRoutes(
 	// Authentication middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
-	// Chama chat access middleware
-	chamaChatAccessMiddleware := func(c *gin.Context) {
-		userID := c.GetString("userID")
-		roomID := c.Param("id")
-
-		if userID == "" || roomID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"error":   "Unauthorized",
-			})
-			c.Abort()
-			return
-		}
-
-		var chamaID string
-		err := db.QueryRow("SELECT chama_id FROM chat_rooms WHERE id = $1 AND type = 'chama'", roomID).Scan(&chamaID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Chat room not found",
-			})
-			c.Abort()
-			return
-		}
-
-		var exists bool
-		err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE)", chamaID, userID).Scan(&exists)
-		if err != nil || !exists {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"error":   "You are not authorized to access this chat room",
-			})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-
 	// Context injection middleware
 	dbMiddleware := func(c *gin.Context) {
 		c.Set("db", db)
@@ -128,11 +87,6 @@ func SetupRoutes(
 
 	configMiddleware := func(c *gin.Context) {
 		c.Set("config", cfg)
-		c.Next()
-	}
-
-	wsMiddleware := func(c *gin.Context) {
-		c.Set("wsService", wsService)
 		c.Next()
 	}
 
@@ -153,11 +107,6 @@ func SetupRoutes(
 
 	emailVerificationMiddleware := func(c *gin.Context) {
 		c.Set("emailVerificationService", emailVerificationService)
-		c.Next()
-	}
-
-	e2eeMiddleware := func(c *gin.Context) {
-		c.Set("e2eeService", e2eeService)
 		c.Next()
 	}
 
@@ -200,8 +149,6 @@ func SetupRoutes(
 			auth.POST("/test-email", authHandlers.TestEmail)
 		}
 
-		apiGroup.GET("/ws", wsService.HandleWebSocket)
-
 		publicPayments := apiGroup.Group("/payments")
 		publicPayments.Use(dbMiddleware)
 		publicPayments.Use(configMiddleware)
@@ -219,8 +166,9 @@ func SetupRoutes(
 		protected.Use(authMiddleware.AuthRequired())
 		protected.Use(dbMiddleware)
 		protected.Use(configMiddleware)
-		protected.Use(wsMiddleware)
-		protected.Use(e2eeMiddleware)
+		protected.Use(subwalletMiddleware)
+		protected.Use(disbursementMiddleware)
+		protected.Use(passwordResetMiddleware)
 		{
 			users := protected.Group("/users")
 			{
@@ -267,24 +215,6 @@ func SetupRoutes(
 				users.PUT("/:id/registration-payment", api.UpdateUserPaymentStatus)
 			}
 
-			e2ee := protected.Group("/e2ee")
-			{
-				e2ee.POST("/devices/register", api.RegisterDevice)
-				e2ee.GET("/devices", api.GetDevices)
-				e2ee.POST("/pre-keys/upload", api.UploadPreKeys)
-				e2ee.GET("/pre-key-bundle/:userId", api.GetPreKeyBundle)
-				e2ee.POST("/messages/send", api.SendE2EEMessage)
-				e2ee.GET("/messages", api.GetMessages)
-				e2ee.GET("/safety-number/:userId", api.GetSafetyNumber)
-				e2ee.POST("/keys/rotate", api.RotateKeys)
-				e2ee.POST("/session/reset/:userId", api.ResetSession)
-				e2ee.POST("/initialize", api.InitializeE2EEKeys)
-				e2ee.GET("/key-bundle/:userId", api.GetE2EEKeyBundle)
-				e2ee.POST("/encrypt", api.EncryptMessage)
-				e2ee.POST("/decrypt", api.DecryptMessage)
-				e2ee.GET("/security-status", api.GetE2EESecurityStatus)
-			}
-
 			chamas := protected.Group("/chamas")
 			{
 				chamas.GET("/", api.GetChamas)
@@ -312,10 +242,9 @@ func SetupRoutes(
 				chamas.GET("/:id/eligible-welfare-members", api.GetEligibleWelfareMembers)
 				chamas.GET("/:id/eligible-savings-members", api.GetEligibleSavingsMembers)
 				chamas.GET("/:id/eligible-other-members", api.GetEligibleOtherMembers)
-				chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
-				chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
-				chamas.POST("/:id/create-chat-room", api.CreateChamaChatRoom)
-				chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
+			chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
+			chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
+			chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
 				chamas.POST("/:id/subscription-payments/:paymentId/pay", api.PaySubscriptionPayment)
 				chamas.GET("/:id/service-fee-payments", api.GetChamaServiceFeePayments)
 				chamas.GET("/:id/members/:memberId/service-fee-payments", api.GetMemberServiceFeePayments)
@@ -357,20 +286,6 @@ func SetupRoutes(
 				payments.GET("/mpesa/status/:checkoutRequestId", api.GetMpesaTransactionStatus)
 				payments.POST("/bank-transfer", api.InitiateBankTransfer)
 			}
-
-		chat := protected.Group("/chat")
-		{
-			chat.GET("/rooms", api.GetChatRooms)
-			chat.POST("/rooms", api.CreateChatRoom)
-			chat.GET("/rooms/:id", api.GetChatRoom, chamaChatAccessMiddleware)
-			chat.POST("/rooms/:id/join", api.JoinChatRoom)
-			chat.GET("/rooms/:id/members", api.GetChatRoomMembers)
-			chat.DELETE("/rooms/:id", api.DeleteChatRoom, chamaChatAccessMiddleware)
-			chat.POST("/rooms/:id/clear", api.ClearChatRoom, chamaChatAccessMiddleware)
-			chat.GET("/rooms/:id/messages", api.GetChatMessages, chamaChatAccessMiddleware)
-			chat.POST("/rooms/:id/messages", api.SendMessage, chamaChatAccessMiddleware)
-			chat.PUT("/rooms/:id/read", api.MarkMessagesAsRead, chamaChatAccessMiddleware)
-		}
 
 			notifications := protected.Group("/notifications")
 			{
@@ -528,15 +443,11 @@ func SetupRoutes(
 				meetings.GET("/", api.GetMeetings)
 				meetings.GET("/user", api.GetUserMeetings)
 				meetings.POST("/", api.CreateMeeting)
-				meetings.POST("/calendar", api.CreateMeetingWithCalendar)
 				meetings.GET("/:id", api.GetMeeting)
 				meetings.PUT("/:id", api.UpdateMeeting)
 				meetings.PATCH("/:id", api.UpdateMeeting)
 				meetings.DELETE("/:id", api.DeleteMeeting)
 				meetings.POST("/:id/join", api.JoinMeeting)
-				meetings.GET("/:id/preview", api.PreviewMeeting)
-				meetings.POST("/:id/start", api.StartMeeting)
-				meetings.POST("/:id/end", api.EndMeeting)
 				meetings.POST("/:id/attendance", api.MarkAttendance)
 				meetings.GET("/:id/attendance", api.GetMeetingAttendance)
 				meetings.POST("/:id/documents", api.UploadMeetingDocument)
@@ -552,15 +463,6 @@ func SetupRoutes(
 			merryGoRounds := protected.Group("/merry-go-rounds")
 			{
 				merryGoRounds.GET("/", api.GetMerryGoRounds)
-				merryGoRounds.POST("/", api.CreateMerryGoRound)
-				merryGoRounds.GET("/:id", api.GetMerryGoRound)
-				merryGoRounds.PUT("/:id", api.UpdateMerryGoRound)
-				merryGoRounds.DELETE("/:id", api.DeleteMerryGoRound)
-				merryGoRounds.POST("/:id/join", api.JoinMerryGoRound)
-				merryGoRounds.POST("/:id/check-advance/:chamaId", api.CheckAndAdvanceRound)
-				merryGoRounds.GET("/contribution-status/:chamaId", api.CheckUserContributionStatus)
-				merryGoRounds.GET("/:id/calendar/add-url", api.GetMerryGoRoundCalendarAddEventURL)
-				merryGoRounds.POST("/:id/calendar/create", api.CreateMerryGoRoundCalendarEvent)
 			}
 
 			welfare := protected.Group("/welfare")

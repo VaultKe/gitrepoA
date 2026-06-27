@@ -76,7 +76,6 @@ func main() {
 
 	// Initialize services
 	authService := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpiration)
-	wsService := services.NewWebSocketService(db)
 
 	// Initialize email service
 	emailService := services.NewEmailService()
@@ -120,9 +119,6 @@ func main() {
 	subwalletHandlers := api.NewSubWalletHandlers(db, cfg)
 	disbursementService := services.NewDisbursementService(db, cfg)
 
-	// Initialize E2EE service
-	e2eeService := services.NewMilitaryGradeE2EEService(db)
-
 	// Initialize Test Data Generator (dev/test only)
 	var testDataGenerator *services.TestDataGenerator
 	if cfg.Environment != "production" || os.Getenv("ENABLE_TEST_DATA_GENERATOR") == "true" {
@@ -133,7 +129,7 @@ func main() {
 	}
 
 	// Register routes and middleware
-	routes.SetupRoutes(router, cfg, db, authService, wsService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, e2eeService, testDataGenerator, subwalletHandlers, disbursementService)
+	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService)
 
 	// Start server
 	port := os.Getenv("PORT")

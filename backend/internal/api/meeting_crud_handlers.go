@@ -1,14 +1,11 @@
 package api
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
-	"vaultke-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -457,94 +454,6 @@ func CreateMeeting(c *gin.Context) {
 			"error":   "Failed to create meeting: " + err.Error(),
 		})
 		return
-	}
-
-	// Notify all chama members about the new meeting
-	if notificationService != nil {
-		log.Printf("Creating notifications for meeting %s in chama %s", meetingID, req.ChamaID)
-		// Use a timeout context to prevent goroutine leaks
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("Recovered from panic in meeting notification goroutine: %v", r)
-				}
-			}()
-
-			select {
-			case <-ctx.Done():
-				log.Printf("Meeting notification cancelled for meeting %s: %v", meetingID, ctx.Err())
-				return
-			default:
-				// Get all chama members
-				rows, err := db.(*sql.DB).Query(`
-					SELECT user_id FROM chama_members
-					WHERE chama_id = $1 AND user_id != $2 AND is_active = TRUE
-				`, req.ChamaID, userID)
-				if err != nil {
-					log.Printf("Failed to get chama members for notification: %v", err)
-					return
-				}
-				defer rows.Close()
-
-				// Get chama name for notification
-				var chamaName string
-				err = db.(*sql.DB).QueryRow("SELECT name FROM chamas WHERE id = $1", req.ChamaID).Scan(&chamaName)
-				if err != nil {
-					log.Printf("Failed to get chama name: %v, using default", err)
-					chamaName = "Chama"
-				}
-
-				memberCount := 0
-				// Send notification to each member
-				for rows.Next() {
-					var memberID string
-					if err := rows.Scan(&memberID); err != nil {
-						log.Printf("Failed to scan member ID: %v", err)
-						continue
-					}
-
-					memberCount++
-					log.Printf("Creating notification for member %s (%d/%d)", memberID, memberCount, 0) // We'll count total later
-
-					// Create notification data
-					data := map[string]interface{}{
-						"meetingId":    meetingID,
-						"chamaId":      req.ChamaID,
-						"chamaName":    chamaName,
-						"meetingTitle": req.Title,
-						"description":  req.Description,
-						"scheduledAt":  req.ScheduledAt,
-						"duration":     duration,
-						"location":     location,
-						"meetingUrl":   req.MeetingURL,
-						"meetingType":  meetingType,
-					}
-
-					// Send notification
-					notification, err := notificationService.CreateNotification(
-						memberID,
-						services.NotificationTypeMeeting,
-						fmt.Sprintf("New Meeting: %s", req.Title),
-						fmt.Sprintf("A new meeting '%s' has been scheduled for %s in %s", req.Title, chamaName, meetingTime.Format("Jan 2, 2006 at 3:04 PM")),
-						data,
-						true,  // sendPush
-						false, // sendEmail
-						false, // sendSMS
-					)
-					if err != nil {
-						log.Printf("Failed to send meeting notification to user %s: %v", memberID, err)
-					} else {
-						log.Printf("Successfully created notification %s for user %s", notification.ID, memberID)
-					}
-				}
-				log.Printf("Finished creating notifications for %d members", memberCount)
-			}
-		}()
-	} else {
-		log.Printf("Notification service is nil, skipping meeting notifications")
 	}
 
 	c.JSON(http.StatusCreated, gin.H{

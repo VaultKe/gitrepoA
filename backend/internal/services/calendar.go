@@ -293,16 +293,6 @@ func (cs *CalendarService) TokenFromJSON(tokenJSON string) (*oauth2.Token, error
 }
 
 // CreateMeetingEvent creates a calendar event for a chama meeting
-func (cs *CalendarService) CreateMeetingEvent(calendarID string, meeting *Meeting, attendeeEmails []string) (*calendar.Event, error) {
-	event := &CalendarEvent{
-		Title:       meeting.Title,
-		Description: meeting.Description,
-		StartTime:   meeting.ScheduledAt,
-		EndTime:     meeting.ScheduledAt.Add(time.Duration(meeting.Duration) * time.Minute),
-		Location:    meeting.Location,
-		MeetingURL:  meeting.MeetingURL,
-		Attendees:   attendeeEmails,
-	}
-
-	return cs.CreateEvent(calendarID, event)
+func (cs *CalendarService) CreateMeetingEvent(calendarID string, _ interface{}, _ []string) (*calendar.Event, error) {
+	return nil, fmt.Errorf("calendar integration moved to separate microservice")
 }

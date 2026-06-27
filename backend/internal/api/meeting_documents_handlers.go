@@ -10,13 +10,18 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
 	"vaultke-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-// GetGoogleCalendarAddEventURL returns a pre-filled Google Calendar event URL for a meeting
+var meetingService *services.MeetingService
+
+func InitializeMeetingService(db *sql.DB, notificationService *services.NotificationService) {
+	meetingService = services.NewMeetingService(db, nil)
+}
 func GetGoogleCalendarAddEventURL(c *gin.Context) {
 	meetingID := c.Param("id")
 	if meetingID == "" {
@@ -54,9 +59,9 @@ func GetGoogleCalendarAddEventURL(c *gin.Context) {
 	}
 	summary = fmt.Sprintf("%s — %s", summary, chamaName)
 
-	description := fmt.Sprintf("%s\n\nLocation: %s.", "Chama meeting.", meeting.Location)
-	if meeting.MeetingURL != "" {
-		description += "\\nJoin: " + meeting.MeetingURL
+	description := fmt.Sprintf("%s\n\nLocation: %s.", "Chama meeting.", *meeting.Location)
+	if meeting.MeetingLink != nil && *meeting.MeetingLink != "" {
+		description += "\\nJoin: " + *meeting.MeetingLink
 	}
 
 	// Compute start/end using scheduled time and duration in EAT
@@ -71,8 +76,8 @@ func GetGoogleCalendarAddEventURL(c *gin.Context) {
 	params.Set("action", "TEMPLATE")
 	params.Set("text", summary)
 	params.Set("details", description)
-	if meeting.Location != "" {
-		params.Set("location", meeting.Location)
+	if meeting.Location != nil && *meeting.Location != "" {
+		params.Set("location", *meeting.Location)
 	}
 
 	// Provide local datetime without Z and set ctz to Africa/Nairobi for accurate display
@@ -150,9 +155,12 @@ func CreateGoogleCalendarEvent(c *gin.Context) {
 
 	// Build event with accurate start/end and chama name in title
 	title := fmt.Sprintf("%s — %s", meeting.Title, chamaName)
-	desc := meeting.Description
-	if meeting.MeetingURL != "" {
-		desc = fmt.Sprintf("%s\n\nJoin: %s", desc, meeting.MeetingURL)
+	desc := ""
+	if meeting.Description != nil {
+		desc = *meeting.Description
+	}
+	if meeting.MeetingLink != nil && *meeting.MeetingLink != "" {
+		desc = fmt.Sprintf("%s\n\nJoin: %s", desc, *meeting.MeetingLink)
 	}
 
 	ev := &services.CalendarEvent{
@@ -160,8 +168,8 @@ func CreateGoogleCalendarEvent(c *gin.Context) {
 		Description: desc,
 		StartTime:   meeting.ScheduledAt,
 		EndTime:     meeting.ScheduledAt.Add(time.Duration(max(1, meeting.Duration)) * time.Minute),
-		Location:    meeting.Location,
-		MeetingURL:  meeting.MeetingURL,
+		Location:    *meeting.Location,
+		MeetingURL:  *meeting.MeetingLink,
 	}
 
 	// Use primary calendar and reminders 30,10,0 minutes
