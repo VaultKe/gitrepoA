@@ -35,13 +35,13 @@ type connWrapper struct {
 }
 
 type Hub struct {
-	clients       map[*Client]bool
-	rooms         map[string]map[*Client]bool
-	broadcast     chan *Message
-	register      chan *Client
-	unregister    chan *Client
-	roomMessages  chan *RoomMessage
-	mu            sync.RWMutex
+	clients      map[*Client]bool
+	rooms        map[string]map[*Client]bool
+	broadcast    chan *Message
+	register     chan *Client
+	unregister   chan *Client
+	roomMessages chan *RoomMessage
+	mu           sync.RWMutex
 }
 
 func NewHub() *Hub {
@@ -59,63 +59,53 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.registerClient(client)
+			h.mu.Lock()
+			h.clients[client] = true
+			if h.rooms[client.roomID] == nil {
+				h.rooms[client.roomID] = make(map[*Client]bool)
+			}
+			h.rooms[client.roomID][client] = true
+			h.mu.Unlock()
+
 		case client := <-h.unregister:
-			h.unregisterClient(client)
+			h.mu.Lock()
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				if h.rooms[client.roomID] != nil {
+					delete(h.rooms[client.roomID], client)
+					if len(h.rooms[client.roomID]) == 0 {
+						delete(h.rooms, client.roomID)
+					}
+				}
+				close(client.send)
+			}
+			h.mu.Unlock()
+
 		case msg := <-h.broadcast:
-			h.broadcastToAll(msg)
+			h.mu.RLock()
+			data := encodeMessage(msg)
+			for client := range h.clients {
+				select {
+				case client.send <- data:
+				default:
+					// Client buffer full; skip and let ping/pong clean up dead connections
+				}
+			}
+			h.mu.RUnlock()
+
 		case rm := <-h.roomMessages:
-			h.broadcastToRoom(rm)
+			h.mu.RLock()
+			data := rm.Content
+			for client := range h.rooms[rm.RoomID] {
+				select {
+				case client.send <- data:
+				default:
+					// Client buffer full; skip
+				}
+			}
+			h.mu.RUnlock()
 		}
 	}
-}
-
-func (h *Hub) registerClient(client *Client) {
-	h.mu.Lock()
-	h.clients[client] = true
-	if h.rooms[client.roomID] == nil {
-		h.rooms[client.roomID] = make(map[*Client]bool)
-	}
-	h.rooms[client.roomID][client] = true
-	h.mu.Unlock()
-}
-
-func (h *Hub) unregisterClient(client *Client) {
-	h.mu.Lock()
-	if _, ok := h.clients[client]; ok {
-		delete(h.clients, client)
-		delete(h.rooms[client.roomID], client)
-		close(client.send)
-	}
-	h.mu.Unlock()
-}
-
-func (h *Hub) broadcastToAll(msg *Message) {
-	h.mu.RLock()
-	for client := range h.clients {
-		select {
-		case client.send <- encodeMessage(msg):
-		default:
-			close(client.send)
-			delete(h.clients, client)
-		}
-	}
-	h.mu.RUnlock()
-}
-
-func (h *Hub) broadcastToRoom(rm *RoomMessage) {
-	h.mu.RLock()
-	clients := h.rooms[rm.RoomID]
-	for client := range clients {
-		select {
-		case client.send <- rm.Content:
-		default:
-			close(client.send)
-			delete(h.clients, client)
-			delete(h.rooms[rm.RoomID], client)
-		}
-	}
-	h.mu.RUnlock()
 }
 
 func (h *Hub) Register(conn *websocket.Conn, userID, roomID string) *Client {
@@ -143,17 +133,17 @@ func (h *Hub) BroadcastToRoom(roomID string, message []byte) {
 
 func (h *Hub) SendToUser(userID string, message []byte) {
 	h.mu.RLock()
+	defer h.mu.RUnlock()
+
 	for client := range h.clients {
 		if client.userID == userID {
 			select {
 			case client.send <- message:
 			default:
-				close(client.send)
-				delete(h.clients, client)
+				// Buffer full; skip
 			}
 		}
 	}
-	h.mu.RUnlock()
 }
 
 func (h *Hub) HandlePingPong() {
@@ -164,7 +154,7 @@ func (h *Hub) HandlePingPong() {
 		for client := range h.clients {
 			if err := client.conn.WriteControl(websocket.PingMessage, []byte{}, time.Time{}); err != nil {
 				h.mu.RUnlock()
-				h.unregisterClient(client)
+				h.Unregister(client)
 				h.mu.RLock()
 			}
 		}
@@ -188,7 +178,7 @@ func (c *Client) WritePump() {
 }
 
 func (c *Client) ReadPump(handleMessage func(*Client, []byte)) {
-	defer c.hub.unregisterClient(c)
+	defer c.hub.Unregister(c)
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {

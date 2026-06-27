@@ -36,7 +36,9 @@ func main() {
 		DB:       cfg.RedisDB,
 	})
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		log.Fatal("redis connection failed:", err)
+		log.Println("redis connection failed, continuing without redis:", err)
+	} else {
+		log.Println("redis connected")
 	}
 
 	roomMgr := room.NewRoomManager(db)
@@ -48,6 +50,11 @@ func main() {
 	h := handler.NewChatHandler(db, hub, roomMgr)
 
 	r := gin.Default()
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "chat"})
+	})
+
 	r.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 
 	api := r.Group("/api/v1")
