@@ -321,3 +321,12 @@ func contains(s []string, v string) bool {
 	}
 	return false
 }
+
+func seedWallets(db *sql.DB, users, chamas []string)         {}
+func seedTransactions(db *sql.DB, users, chamas []string)    {}
+func seedMeetings(db *sql.DB, chamas, users []string)        {}
+func seedLoans(db *sql.DB, chamas, users []string)           {}
+func seedPollsAndVotes(db *sql.DB, chamas, users []string)   {}
+func seedChatRoomsAndMessages(db *sql.DB, chamas, users []string) {}
+func seedWelfareFundsAndRequests(db *sql.DB, chamas, users []string) {}
+func seedMerryGoRounds(db *sql.DB, chamas, users []string)   {}

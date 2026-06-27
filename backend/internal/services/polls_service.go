@@ -200,7 +200,7 @@ func (s *PollsService) CastVote(pollID, voterID string, req *models.CastVoteRequ
 	now := time.Now()
 
 	voteQuery := `
-		INSERT INTO votes (id, poll_id, option_id, voter_hash, vote_timestamp, is_valid)
+		INSERT INTO poll_votes (id, poll_id, option_id, voter_hash, vote_timestamp, is_valid)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
@@ -461,7 +461,7 @@ func (s *PollsService) isEligibleToVote(userID, chamaID string) bool {
 }
 
 func (s *PollsService) hasUserVoted(pollID, voterHash string) bool {
-	query := `SELECT 1 FROM votes WHERE poll_id = $1 AND voter_hash = $2 AND is_valid = TRUE`
+	query := `SELECT 1 FROM poll_votes WHERE poll_id = $1 AND voter_hash = $2 AND is_valid = TRUE`
 	var exists int
 	err := s.db.QueryRow(query, pollID, voterHash).Scan(&exists)
 	return err == nil

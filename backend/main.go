@@ -170,24 +170,12 @@ func main() {
 	certFile := os.Getenv("TLS_CERT_FILE")
 	keyFile := os.Getenv("TLS_KEY_FILE")
 
-	log.Printf("🔍 DEBUG: TLS_CERT_FILE='%s', TLS_KEY_FILE='%s'", certFile, keyFile)
-	log.Printf("🔍 DEBUG: ENVIRONMENT='%s'", os.Getenv("ENVIRONMENT"))
-
 	// Graceful shutdown
 	go func() {
 		var err error
 		if certFile != "" && keyFile != "" {
-			log.Printf("🔒 Starting server with TLS 1.3")
-			log.Printf("Server accessible via:")
-			log.Printf("  - https://localhost:%s", port)
-			log.Printf("  - https://127.0.0.1:%s", port)
 			err = server.ListenAndServeTLS(certFile, keyFile)
 		} else {
-			log.Printf("🔓 Starting server without TLS (development mode)")
-			log.Printf("Server accessible via:")
-			log.Printf("  - http://localhost:%s", port)
-			log.Printf("  - http://127.0.0.1:%s", port)
-			log.Printf("  - http://[::1]:%s", port)
 			err = server.ListenAndServe()
 		}
 
