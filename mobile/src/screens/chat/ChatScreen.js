@@ -13,12 +13,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
-import { formatRelativeTime } from '../../utils/dateUtils';
+import { formatDate } from '../../utils/dateUtils';
+import { useApp } from '../../context/AppContext';
 import chatService from '../../services/chat/ChatService';
 
 const ChatScreen = () => {
   const navigation = useNavigation();
-  const colors = getThemeColors();
+  const { theme } = useApp();
+  const colors = getThemeColors(theme);
 
   // State
   const [rooms, setRooms] = useState([]);
@@ -111,9 +113,9 @@ const ChatScreen = () => {
             <Text style={[styles.roomName, { color: colors.text }]} numberOfLines={1}>
               {room.name || 'Chat'}
             </Text>
-            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-              {formatRelativeTime(room.lastMessageAt || room.updatedAt)}
-            </Text>
+<Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+               {formatDate(room.lastMessageAt || room.updatedAt, 'relative')}
+             </Text>
           </View>
           <View style={styles.messageRow}>
             <Text
@@ -213,7 +215,7 @@ const ChatScreen = () => {
       {/* Create Chat Button */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('CreateChat')}
+        onPress={() => navigation.navigate('UserSearch')}
       >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>

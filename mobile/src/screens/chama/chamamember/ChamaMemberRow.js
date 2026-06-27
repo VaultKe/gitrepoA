@@ -62,7 +62,7 @@ const ChamaMemberRow = ({
 
   return (
     <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: rowBackground, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
-      <View style={{ flex: 3, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
+      <View style={{ flex: 1.5, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
         <Text style={{ fontSize: 12, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{getMemberName(item)}</Text>
       </View>
 
@@ -87,18 +87,6 @@ const ChamaMemberRow = ({
           </TouchableOpacity>
         </ScrollView>
       </View>
-
-      <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 12, fontWeight: 'medium', color: colors.text }}>
-          {item.attendance_rate?.toFixed(1) || 0}%
-        </Text>
-      </View>
-
-      <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}>
-        <Ionicons name="star" size={12} color={colors.warning} />
-        <Text style={{ fontSize: 12, fontWeight: 'medium', color: colors.text }}>{item.reputation_score?.toFixed(1) || 0}</Text>
-      </View>
-
       <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
         <TouchableOpacity
           style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center' }}

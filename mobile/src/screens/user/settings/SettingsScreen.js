@@ -32,7 +32,6 @@ const SettingsScreen = ({ navigation }) => {
       sms: false,
       chama_updates: true,
       financial_alerts: true,
-      marketing: false,
       sound_enabled: true,
       vibration_enabled: true,
       notification_sound_id: 1,
@@ -109,7 +108,6 @@ const SettingsScreen = ({ navigation }) => {
             sms: prefs.sms_notifications,
             chama_updates: prefs.chama_notifications,
             financial_alerts: prefs.transaction_notifications,
-            marketing: prefs.marketing_notifications,
             sound_enabled: prefs.sound_enabled,
             vibration_enabled: prefs.vibration_enabled,
             notification_sound_id: prefs.notification_sound_id,
@@ -827,13 +825,6 @@ const SettingsScreen = ({ navigation }) => {
           (value) => updateNotificationPreference('sms_notifications', value)
         )}
 
-        {renderSettingItem(
-          'Marketing Notifications',
-          'Receive promotional and marketing messages',
-          settings.notifications.marketing,
-          (value) => updateNotificationPreference('marketing_notifications', value)
-        )}
-
         {/* Sound and Vibration Settings */}
         {settings.notifications.push && (
           <>
@@ -940,12 +931,6 @@ const SettingsScreen = ({ navigation }) => {
         Security
       </Text>
 
-      {renderSettingItem(
-        'Biometric Login',
-        'Use fingerprint or face recognition',
-        settings.security.biometric_login,
-        (value) => updateSecuritySetting('biometric_login', value)
-      )}
 
       {renderSettingItem(
         'Two-Factor Authentication',

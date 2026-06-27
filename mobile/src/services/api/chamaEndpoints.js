@@ -53,6 +53,12 @@ const updateChama = async (chamaId, updateData) => {
   });
 };
 
+const createChamaChatRoom = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/create-chat-room`, {
+    method: 'POST',
+  });
+};
+
 const joinChama = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/join`, {
     method: 'POST',
@@ -98,6 +104,72 @@ const createRoleEscalationPoll = async (chamaId, data) => {
   });
 };
 
+const getChamaSubscriptionPayments = async (chamaId) => {
+  const url = `/chamas/${chamaId}/subscription-payments`;
+  console.log('[API Sub] GET', url);
+  return await makeRequest(url);
+};
+
+const paySubscriptionPayment = async (chamaId, paymentId) => {
+  return await makeRequest(`/chamas/${chamaId}/subscription-payments/${paymentId}/pay`, {
+    method: 'POST',
+  });
+};
+
+const getChamaServiceFeePayments = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/service-fee-payments`);
+};
+
+const getMemberServiceFeePayments = async (chamaId, memberId) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}/service-fee-payments`);
+};
+
+const payServiceFeePayment = async (chamaId, paymentId) => {
+  return await makeRequest(`/chamas/${chamaId}/service-fee-payments/${paymentId}/pay`, {
+    method: 'POST',
+  });
+};
+
+const payMemberServiceFee = async (chamaId, memberId) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}/pay-service-fee`, {
+    method: 'POST',
+  });
+};
+
+const addMemberToChama = async (chamaId, userId, role = 'member') => {
+  return await makeRequest(`/chamas/${chamaId}/members`, {
+    method: 'POST',
+    body: { userId, role },
+  });
+};
+
+const removeMemberFromChama = async (chamaId, memberId) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}`, {
+    method: 'DELETE',
+  });
+};
+
+const updateMemberRole = async (chamaId, memberId, newRole) => {
+  return await makeRequest(`/chamas/${chamaId}/members/${memberId}/role`, {
+    method: 'PUT',
+    body: { role: newRole },
+  });
+};
+
+const deleteChama = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}`, {
+    method: 'DELETE',
+  });
+};
+
+const getChama = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}`);
+};
+
+const getChamaWalletBalance = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/wallet/balance`);
+};
+
 export {
   getChamas,
   getAllChamasForAdmin,
@@ -108,8 +180,6 @@ export {
   getChamaTransactions,
   getMerryGoRounds,
   createMerryGoRound,
-  createChama,
-  updateChama,
   joinChama,
   leaveChama,
   getMemberRole,
@@ -118,4 +188,19 @@ export {
   createVote,
   castVote,
   createRoleEscalationPoll,
+  addMemberToChama,
+  removeMemberFromChama,
+  deleteChama,
+  getChama,
+  updateMemberRole,
+  createChama,
+  updateChama,
+  getChamaWalletBalance,
+  createChamaChatRoom,
+  getChamaSubscriptionPayments,
+  paySubscriptionPayment,
+  getChamaServiceFeePayments,
+  getMemberServiceFeePayments,
+  payServiceFeePayment,
+  payMemberServiceFee,
 };

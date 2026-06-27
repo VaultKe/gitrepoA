@@ -151,6 +151,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userMembership, setUserMembership] = useState(null);
+  const [chatRoomLoading, setChatRoomLoading] = useState(false);
 
   // Reset state and reload data when chamaId changes
   useEffect(() => {
@@ -201,7 +202,11 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
       if (membersResponse.success) {
         setMembers(membersResponse.data || []);
-        const membership = membersResponse.data?.find(m => m.user_id === user?.id);
+        const currentUserId = String(user?.id);
+        const membership = membersResponse.data?.find(member =>
+          String(member.user_id) === currentUserId ||
+          String(member.user?.id) === currentUserId
+        );
         setUserMembership(membership);
       }
 
@@ -336,9 +341,94 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     }
   };
 
+  const getExistingChatRoomId = () => {
+    return chama?.chat_room_id || chama?.chatRoomId || chama?.chat_room?.id || chama?.chatRoom?.id;
+  };
+
+  const getGroupLabel = () => {
+    return chama?.category === 'contribution' ? 'Group' : 'Chama';
+  };
+
+  const navigateToChatRoom = (roomId) => {
+    navigation.navigate('ChatRoom', {
+      roomId,
+      roomName: `${chama?.name || getGroupLabel()} Group Chat`,
+      roomType: 'group',
+      chamaId,
+    });
+  };
+
+  const handleCreateChatRoom = () => {
+    console.log('[ChamaDetails] handleCreateChatRoom called');
+    console.log('[ChamaDetails] chamaId:', chamaId);
+    console.log('[ChamaDetails] chama:', chama);
+    console.log('[ChamaDetails] userMembership:', userMembership);
+
+    const existingChatRoomId = getExistingChatRoomId();
+    console.log('[ChamaDetails] existingChatRoomId:', existingChatRoomId);
+
+    if (existingChatRoomId) {
+      console.log('[ChamaDetails] Navigating to existing chat room:', existingChatRoomId);
+      navigateToChatRoom(existingChatRoomId);
+      return;
+    }
+
+    const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
+    console.log('[ChamaDetails] canCreateChatRoom:', canCreateChatRoom, 'role:', userMembership?.role);
+    if (!canCreateChatRoom) {
+      console.log('[ChamaDetails] Create blocked: insufficient permissions');
+        Alert.alert(
+          'Access Denied',
+          'Only chairperson, secretary, and treasurer can create a chat room for this group.'
+        );
+      return;
+    }
+
+    console.log('[ChamaDetails] Creating chat room immediately');
+    confirmCreateChatRoom();
+  };
+
+  const confirmCreateChatRoom = async () => {
+    console.log('[ChamaDetails] confirmCreateChatRoom called');
+    try {
+      setChatRoomLoading(true);
+
+      console.log('[ChamaDetails] Calling ApiService.createChamaChatRoom with chamaId:', chamaId);
+      const response = await ApiService.createChamaChatRoom(chamaId);
+      console.log('[ChamaDetails] ApiService.createChamaChatRoom response:', response);
+
+      if (!response.success) {
+        console.log('[ChamaDetails] API returned failure:', response);
+        throw new Error(response.error || 'Failed to create chat room');
+      }
+
+      const roomId = response.data?.roomId || response.data?.id || getExistingChatRoomId();
+      console.log('[ChamaDetails] resolved roomId:', roomId, 'response.data:', response.data);
+      if (!roomId) {
+        console.log('[ChamaDetails] API success but no roomId returned');
+        throw new Error('Chat room was created but no room ID was returned');
+      }
+
+      setChama(prev => prev ? { ...prev, chat_room_id: roomId } : prev);
+      setSelectedChama(prev => prev && prev.id === chamaId ? { ...prev, chat_room_id: roomId } : prev);
+
+      console.log('[ChamaDetails] Chat room created successfully, navigating to roomId:', roomId);
+      Alert.alert(
+        'Chat Room Created',
+        'Chat room has been created for this group.'
+      );
+
+      navigateToChatRoom(roomId);
+    } catch (error) {
+      console.error('[ChamaDetails] Error creating chat room:', error);
+      Alert.alert('Error', error.message || 'Failed to create chat room');
+    } finally {
+      console.log('[ChamaDetails] Chat room loading finished');
+      setChatRoomLoading(false);
+    }
+  };
+
   const renderChamaHeader = () => {
-    // Debug logging to check category value
-    // Determine if it's a chama or contribution group
     const isContributionGroup = chama?.category === 'contribution';
     const typeConfig = isContributionGroup ? {
       color: colors.success,
@@ -404,12 +494,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const renderStats = () => {
-    // Extract data using the same structure as ChamaDashboard
     const financialStats = statistics?.financial_stats || {};
     const memberStats = statistics?.member_stats || {};
     const activityStats = statistics?.activity_stats || {};
     const chamaInfo = statistics?.chama_info || {};
-    // Calculate values using the same logic as ChamaDashboard
     const walletBalance = chamaInfo.wallet_balance || chamaInfo.total_funds || chama?.total_funds || 0;
     const totalMembers = memberStats.active_members || memberStats.total_members || chamaInfo.current_members || members.length || 0;
     const maxMembers = chama?.max_members || chamaInfo.max_members || 50;
@@ -1038,50 +1126,67 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       </Card>
     );
   };
-  const renderGroupChat = () => (
-  <Card style={styles.section} variant="outlined">
-    <Text style={[styles.sectionTitle, { color: colors.text }]}>
-      Group Communication
-    </Text>
+  const renderGroupChat = () => {
+    const existingChatRoomId = getExistingChatRoomId();
+    const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
+    const groupLabel = getGroupLabel();
 
-    <TouchableOpacity
-      style={[styles.chatButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-      onPress={async () => {
-        if (!chama?.chat_room_id) {
-          try {
-            const response = await ApiService.createChatRoom({
-              type: 'chama',
-              chamaId: chamaId,
-              name: `${chama?.name || 'Chama'} Group Chat`
-            });
+    return (
+      <Card style={styles.section} variant="outlined">
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Group Communication
+        </Text>
 
-            if (response.success) {
-              navigation.navigate('ChatRoom', {
-                roomId: response.data.id,
-                roomName: response.data.name || `${chama?.name || 'Chama'} Group Chat`,
-                roomType: 'group'
-              });
-            } else {
-              Alert.alert('Error', 'Failed to access group chat');
-            }
-          } catch (error) {
-          }
-        } else {
-          navigation.navigate('ChatRoom', {
-            roomId: chama.chat_room_id,
-            roomName: chama.name,
-            roomType: 'group'
-          });
-        }
-      }}
-    >
-      <Ionicons name="chatbubbles" size={24} color={colors.success} />
-      <Text style={[styles.chatButtonText, { color: colors.success }]}>
-        Open Group Chat
-      </Text>
-    </TouchableOpacity>
-  </Card>
-  );
+        {!userMembership ? (
+          <Text style={[styles.emptyText, { color: colors.textSecondary, paddingVertical: spacing.md }]}>
+            Join this {groupLabel.toLowerCase()} to access group chat.
+          </Text>
+        ) : (
+          <>
+            {existingChatRoomId ? (
+              <Button
+                title="Open Group Chat"
+                onPress={() => navigateToChatRoom(existingChatRoomId)}
+                disabled={chatRoomLoading}
+                loading={chatRoomLoading}
+                icon={
+                  <Ionicons
+                    name="chatbubbles"
+                    size={20}
+                    color={colors.white}
+                  />
+                }
+                style={[
+                  styles.chatButton,
+                  { backgroundColor: colors.success, borderColor: colors.success }
+                ]}
+                textStyle={{ color: colors.white }}
+              />
+            ) : canCreateChatRoom ? (
+              <Button
+                title={`Create Chat Room for ${groupLabel}`}
+                onPress={handleCreateChatRoom}
+                disabled={chatRoomLoading}
+                loading={chatRoomLoading}
+                icon={
+                  <Ionicons
+                    name="add-circle"
+                    size={20}
+                    color={colors.white}
+                  />
+                }
+                style={[
+                  styles.chatButton,
+                  { backgroundColor: colors.success, borderColor: colors.success }
+                ]}
+                textStyle={{ color: colors.white }}
+              />
+            ) : null}
+          </>
+        )}
+      </Card>
+    );
+  };
 
   const renderMembershipActions = () => {
     if (!userMembership) {

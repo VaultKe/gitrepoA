@@ -21,6 +21,26 @@ const removeAuthToken = async () => {
   } catch (error) {}
 };
 
+const getRefreshToken = async () => {
+  try {
+    return await AsyncStorage.getItem('refreshToken');
+  } catch (error) {
+    return null;
+  }
+};
+
+const setRefreshToken = async (token) => {
+  try {
+    await AsyncStorage.setItem('refreshToken', token);
+  } catch (error) {}
+};
+
+const removeRefreshToken = async () => {
+  try {
+    await AsyncStorage.removeItem('refreshToken');
+  } catch (error) {}
+};
+
 const sanitizeHeaderValue = (value) => {
   if (!value || typeof value !== 'string') {
     return '';
@@ -190,6 +210,9 @@ export {
   getAuthToken,
   setAuthToken,
   removeAuthToken,
+  getRefreshToken,
+  setRefreshToken,
+  removeRefreshToken,
   sanitizeHeaderValue,
   getDeviceInfo,
   clearLargeUserData,

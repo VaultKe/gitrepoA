@@ -1,0 +1,145 @@
+package migrations
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+)
+
+func MigrateLoans(db *sql.DB) error {
+	queries := []string{
+		createLoansTable,
+		createGuarantorsTable,
+		createLoanPaymentsTable,
+		createLoanTypesTable,
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_chama ON loan_types(chama_id)",
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_status ON loan_types(status)",
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("loans migration failed: %w", err)
+		}
+	}
+
+	if err := addLoanTypeIdColumn(db); err != nil {
+		return err
+	}
+	if err := EnsureLoanTypesTable(db); err != nil {
+		return err
+	}
+
+	log.Println("Loans migrations completed successfully")
+	return nil
+}
+
+const createLoansTable = `
+CREATE TABLE IF NOT EXISTS loans (
+    id TEXT PRIMARY KEY,
+    borrower_id TEXT NOT NULL,
+    chama_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    interest_rate REAL DEFAULT 0,
+    duration INTEGER NOT NULL,
+    purpose TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    approved_by TEXT,
+    approved_at TIMESTAMP,
+    disbursed_at TIMESTAMP,
+    due_date TIMESTAMP,
+    total_amount REAL DEFAULT 0,
+    paid_amount REAL DEFAULT 0,
+    remaining_amount REAL DEFAULT 0,
+    required_guarantors INTEGER NOT NULL,
+    approved_guarantors INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (borrower_id) REFERENCES users(id),
+    FOREIGN KEY (chama_id) REFERENCES chamas(id),
+    FOREIGN KEY (approved_by) REFERENCES users(id)
+);`
+
+const createGuarantorsTable = `
+CREATE TABLE IF NOT EXISTS guarantors (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    message TEXT,
+    responded_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (loan_id) REFERENCES loans(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(loan_id, user_id)
+);`
+
+const createLoanPaymentsTable = `
+CREATE TABLE IF NOT EXISTS loan_payments (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    principal_amount REAL NOT NULL,
+    interest_amount REAL NOT NULL,
+    payment_method TEXT NOT NULL,
+    reference TEXT,
+    paid_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (loan_id) REFERENCES loans(id)
+);`
+
+const createLoanTypesTable = `
+CREATE TABLE IF NOT EXISTS loan_types (
+    id TEXT PRIMARY KEY,
+    chama_id TEXT NOT NULL REFERENCES chamas(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    max_amount NUMERIC NOT NULL,
+    min_amount NUMERIC DEFAULT 0,
+    interest_rate NUMERIC NOT NULL,
+    term_months INTEGER NOT NULL,
+    eligibility_criteria TEXT DEFAULT 'active_members',
+    approval_required BOOLEAN DEFAULT TRUE,
+    grace_period_days INTEGER DEFAULT 0,
+    penalty_rate NUMERIC DEFAULT 0,
+    max_loans_per_member INTEGER DEFAULT 1,
+    requires_collateral BOOLEAN DEFAULT FALSE,
+    collateral_description TEXT,
+    status TEXT DEFAULT 'active',
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`
+
+func addLoanTypeIdColumn(db *sql.DB) error {
+	var exists bool
+	query := `SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'loans' AND column_name = 'loan_type_id'`
+	err := db.QueryRow(query).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check if loan_type_id column exists: %w", err)
+	}
+	if !exists {
+		if _, err := db.Exec("ALTER TABLE loans ADD COLUMN loan_type_id TEXT REFERENCES loan_types(id)"); err != nil {
+			return fmt.Errorf("failed to add loan_type_id column: %w", err)
+		}
+		log.Println("Added loan_type_id column to loans table")
+	} else {
+		log.Println("Column loan_type_id already exists in loans table")
+	}
+	return nil
+}
+
+func EnsureLoanTypesTable(db *sql.DB) error {
+	queries := []string{
+		"CREATE TABLE IF NOT EXISTS loan_types (id TEXT PRIMARY KEY, chama_id TEXT NOT NULL REFERENCES chamas(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT, max_amount NUMERIC NOT NULL, min_amount NUMERIC DEFAULT 0, interest_rate NUMERIC NOT NULL, term_months INTEGER NOT NULL, eligibility_criteria TEXT DEFAULT 'active_members', approval_required BOOLEAN DEFAULT TRUE, grace_period_days INTEGER DEFAULT 0, penalty_rate NUMERIC DEFAULT 0, max_loans_per_member INTEGER DEFAULT 1, requires_collateral BOOLEAN DEFAULT FALSE, collateral_description TEXT, status TEXT DEFAULT 'active', created_by TEXT NOT NULL REFERENCES users(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_chama ON loan_types(chama_id)",
+		"CREATE INDEX IF NOT EXISTS idx_loan_types_status ON loan_types(status)",
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to create loan_types table/index: %w", err)
+		}
+	}
+	log.Println("loan_types schema ready")
+	return nil
+}

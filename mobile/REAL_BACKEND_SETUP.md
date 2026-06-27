@@ -306,3 +306,22 @@ The app will show helpful error messages:
 5. Deploy to production when ready
 
 For production deployment, update the `API_BASE_URL` to point to your production server.
+
+
+## Wallet Setup
+A comprehensive payment and wallet management system for a Chama (group savings/cooperative) platform. This is a complex multi-layer wallet system with:
+
+* Paybill Account - Central collection point for all payments
+* Subscription Wallet - Tracks all chamas as they subscribe
+* Chama Wallet - Each chama has multiple sub-wallets:
+  * Merry-go-round wallet
+  * Welfare wallet
+  * Contribution group wallet
+  * Savings wallet
+  * Shares wallet
+  * Dividend wallet
+  * Loan wallet
+* User Wallet - Personal savings, separate from chama
+STK Push integration - For mobile payments
+Disbursement endpoints - From all wallet types
+Member tracking - Each chama member identified, transactions linked

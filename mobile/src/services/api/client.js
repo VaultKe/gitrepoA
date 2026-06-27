@@ -1,8 +1,64 @@
-import { API_BASE_URL, REQUEST_TIMEOUT, getAuthToken, getDeviceInfo, sanitizeHeaderValue } from './auth';
+import { API_BASE_URL, REQUEST_TIMEOUT, getAuthToken, getRefreshToken, setAuthToken, setRefreshToken, getDeviceInfo, sanitizeHeaderValue } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { triggerAppLogout } from '../../utils/authLogout';
 
+let logoutInProgress = false;
+let isRefreshing = false;
+let refreshPromise = null;
+
+const refreshAccessToken = async () => {
+  if (isRefreshing) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const plainRefreshToken = await getRefreshToken();
+      if (!plainRefreshToken) {
+        throw new Error('No refresh token');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: plainRefreshToken }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data?.error || 'Refresh failed');
+      }
+
+      const newAccessToken = data.data?.token;
+      const newRefreshToken = data.data?.refreshToken;
+
+      if (newAccessToken) {
+        await setAuthToken(newAccessToken);
+      }
+      if (newRefreshToken) {
+        await setRefreshToken(newRefreshToken);
+      }
+
+      return newAccessToken;
+    } catch (error) {
+      await triggerAppLogout();
+      throw error;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+};
+
 const makeRequest = async (endpoint, options = {}) => {
+  if (endpoint === '/auth/refresh') {
+    throw new Error('Use refreshAccessToken instead');
+  }
+
   const token = await getAuthToken();
   const isFormData = options.body instanceof FormData;
   const deviceInfo = getDeviceInfo();
@@ -44,19 +100,73 @@ const makeRequest = async (endpoint, options = {}) => {
       data = await response.json();
     } else {
       const textResponse = await response.text();
-      data = JSON.parse(textResponse);
+      if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
+        throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
+      }
+      try {
+        data = JSON.parse(textResponse);
+      } catch (jsonError) {
+        throw new Error(`Invalid JSON response from server. Status: ${response.status}`);
+      }
     }
   } catch (parseError) {
     if (!response.ok) {
       throw new Error(`Server error: ${response.statusText}`);
     }
-    throw new Error('Invalid response format from server');
+    throw parseError;
   }
 
   if (!response.ok) {
     if (response.status === 401) {
-      await triggerAppLogout();
-      throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+      const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
+      if (isAuthEndpoint) {
+        if (!logoutInProgress) {
+          logoutInProgress = true;
+          await triggerAppLogout();
+          logoutInProgress = false;
+        }
+        throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+      }
+
+      try {
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          const retryHeaders = {
+            ...config.headers,
+            Authorization: `Bearer ${newToken}`,
+          };
+          const retryConfig = { ...config, headers: retryHeaders };
+          if (retryConfig.body && typeof retryConfig.body === 'object' && !isFormData) {
+            retryConfig.body = JSON.stringify(retryConfig.body);
+          }
+
+          const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...retryConfig,
+            signal: controller.signal,
+          });
+
+          const retryContentType = retryResponse.headers.get('content-type');
+          let retryData;
+          if (retryContentType && retryContentType.includes('application/json')) {
+            retryData = await retryResponse.json();
+          } else {
+            retryData = await retryResponse.text();
+          }
+
+          if (!retryResponse.ok) {
+            throw new Error(retryData?.error || retryResponse.statusText || 'Request failed after token refresh');
+          }
+
+          return retryData?.success !== undefined ? retryData : { success: true, data: retryData };
+        }
+      } catch (refreshError) {
+        if (!logoutInProgress) {
+          logoutInProgress = true;
+          await triggerAppLogout();
+          logoutInProgress = false;
+        }
+        throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+      }
     }
     if (response.status === 429) {
       throw new Error('Too many requests. Please wait a moment and try again.');
@@ -70,7 +180,7 @@ const makeRequest = async (endpoint, options = {}) => {
     throw new Error(data.error || `HTTP error! status: ${response.status}`);
   }
 
-  return data;
+  return data?.success !== undefined ? data : { success: true, data };
 };
 
 const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {

@@ -1,5 +1,5 @@
 import { makeRequest, makeRequestWithRetry } from './client';
-import { storeUserData, removeAuthToken } from './auth';
+import { storeUserData, removeAuthToken, setRefreshToken, getRefreshToken } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const login = async (credentials) => {
@@ -12,6 +12,9 @@ const login = async (credentials) => {
     await storeUserData(response.data.user);
     const { setAuthToken } = await import('./auth');
     await setAuthToken(response.data.token);
+    if (response.data.refreshToken) {
+      await setRefreshToken(response.data.refreshToken);
+    }
   }
 
   return response;
@@ -27,6 +30,9 @@ const register = async (userData) => {
     await storeUserData(response.data.user);
     const { setAuthToken } = await import('./auth');
     await setAuthToken(response.data.token);
+    if (response.data.refreshToken) {
+      await setRefreshToken(response.data.refreshToken);
+    }
   }
 
   return response;
@@ -34,10 +40,15 @@ const register = async (userData) => {
 
 const logout = async () => {
   try {
-    await makeRequest('/auth/logout', { method: 'POST' });
+    const refreshToken = await getRefreshToken();
+    await makeRequest('/auth/logout', {
+      method: 'POST',
+      body: refreshToken ? { refreshToken } : undefined,
+    });
   } catch (error) {
   } finally {
     await removeAuthToken();
+    await removeRefreshToken();
     await AsyncStorage.removeItem('userRole');
     await AsyncStorage.removeItem('userData');
   }
@@ -87,7 +98,14 @@ const checkEmailVerificationStatus = async (token) => {
 };
 
 const refreshToken = async () => {
-  return await makeRequest('/auth/refresh', { method: 'POST' });
+  const plainRefreshToken = await getRefreshToken();
+  if (!plainRefreshToken) {
+    throw new Error('No refresh token available');
+  }
+  return await makeRequest('/auth/refresh', {
+    method: 'POST',
+    body: { refreshToken: plainRefreshToken },
+  });
 };
 
 const changePassword = async (passwordData) => {

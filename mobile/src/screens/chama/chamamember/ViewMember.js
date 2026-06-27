@@ -9,13 +9,15 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import Card from '../../../components/common/Card';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing } from '../../../utils/theme';
+import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
+import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
 
 const ViewMember = ({ route, navigation }) => {
   const { memberId, chamaId, userRole } = route.params;
@@ -27,10 +29,59 @@ const ViewMember = ({ route, navigation }) => {
   const [memberData, setMemberData] = useState(null);
   const [memberStats, setMemberStats] = useState(null);
   const [imageExpanded, setImageExpanded] = useState(false);
+  const [serviceFeePayments, setServiceFeePayments] = useState([]);
+  const [feePaymentsLoading, setFeePaymentsLoading] = useState(false);
+  const [payingFee, setPayingFee] = useState(null);
+  const [lastPayAttempt, setLastPayAttempt] = useState(null);
+  const [cooldownActive, setCooldownActive] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const PAY_COOLDOWN_MS = 30000;
+
+  useEffect(() => {
+    let timer;
+    if (lastPayAttempt && cooldownActive) {
+      const updateCooldown = () => {
+        const remaining = Math.ceil((PAY_COOLDOWN_MS - (Date.now() - lastPayAttempt)) / 1000);
+        if (remaining <= 0) {
+          setCooldownActive(false);
+          setCooldownRemaining(0);
+        } else {
+          setCooldownRemaining(remaining);
+        }
+      };
+      updateCooldown();
+      timer = setInterval(updateCooldown, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [lastPayAttempt, cooldownActive]);
+  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  const isDesktop = screenWidth >= breakpoints.lg;
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenWidth(window.width);
+    });
+    return () => subscription?.remove();
+  }, []);
 
   useEffect(() => {
     loadMemberDetails();
-  }, [memberId]);
+    loadServiceFeePayments();
+  }, [memberId, chamaId]);
+
+  const loadServiceFeePayments = async () => {
+    try {
+      setFeePaymentsLoading(true);
+      const response = await getMemberServiceFeePayments(chamaId, memberId);
+      if (response.success && response.data) {
+        setServiceFeePayments(response.data);
+      }
+    } catch (error) {
+      console.log('Service fee payments not available:', error);
+    } finally {
+      setFeePaymentsLoading(false);
+    }
+  };
 
   const loadMemberDetails = async () => {
     try {
@@ -126,6 +177,169 @@ const ViewMember = ({ route, navigation }) => {
     }
   };
 
+  const handlePayServiceFee = async (payment) => {
+    if (userRole !== 'chairperson') {
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Only chairperson can initiate payments',
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Pay Service Fee',
+      `Send STK push to ${payment.userName} for KES ${payment.amount} service fee?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send STK Push',
+          onPress: async () => {
+            try {
+              setPayingFee(payment.id);
+              const response = await payServiceFeePayment(chamaId, payment.id);
+              if (response.success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Payment Initiated',
+                  text2: 'STK push sent to member\'s phone',
+                });
+                loadServiceFeePayments();
+              } else {
+                throw new Error(response.error || 'Failed to initiate payment');
+              }
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Payment Failed',
+                text2: error.message || 'Failed to initiate payment',
+              });
+            } finally {
+              setPayingFee(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePayMemberServiceFee = async () => {
+    if (userRole !== 'chairperson' && userRole !== 'treasurer') {
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Only chairperson or treasurer can initiate payments',
+      });
+      return;
+    }
+
+    const now = Date.now();
+    if (lastPayAttempt && now - lastPayAttempt < PAY_COOLDOWN_MS) {
+      const remaining = Math.ceil((PAY_COOLDOWN_MS - (now - lastPayAttempt)) / 1000);
+      Toast.show({
+        type: 'info',
+        text1: 'Please wait',
+        text2: `Cooldown active. Try again in ${remaining}s`,
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Pay Registration Fee',
+      `Send STK push to ${memberData.user?.first_name || memberData.first_name} ${memberData.user?.last_name || memberData.last_name} for KES 50 registration fee?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send STK Push',
+          onPress: async () => {
+            try {
+              setPayingFee('pending');
+              setLastPayAttempt(Date.now());
+              setCooldownActive(true);
+              const response = await payMemberServiceFee(chamaId, memberId);
+              if (response.success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Payment Initiated',
+                  text2: 'STK push sent to member\'s phone',
+                });
+                loadServiceFeePayments();
+              } else {
+                throw new Error(response.error || 'Failed to initiate payment');
+              }
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Payment Failed',
+                text2: error.message || 'Failed to initiate payment',
+              });
+            } finally {
+              setPayingFee(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePrintReceipt = (member, payment) => {
+    const receiptData = {
+      memberName: `${member.user?.first_name || member.first_name} ${member.user?.last_name || member.last_name}`,
+      amount: 'KES 50',
+      status: 'Paid',
+      date: payment ? formatDate(payment.paidAt || payment.createdAt) : formatDate(member.service_fee_paid_at || member.joined_at),
+      chamaId: chamaId,
+      memberId: memberId,
+      paymentId: payment?.id || 'N/A',
+      transactionId: payment?.transactionId || 'N/A',
+    };
+
+    Alert.alert(
+      'Payment Receipt',
+      `Member: ${receiptData.memberName}\nAmount: ${receiptData.amount}\nStatus: ${receiptData.status}\nDate: ${receiptData.date}\nPayment ID: ${receiptData.paymentId}\nTransaction ID: ${receiptData.transactionId}`,
+      [
+        { text: 'Close', style: 'cancel' },
+        { text: 'Share', onPress: () => {
+          Toast.show({
+            type: 'success',
+            text1: 'Receipt ready to share',
+          });
+        }},
+      ]
+    );
+  };
+
+  const maskPhone = (phone) => {
+    if (!phone) return 'N/A';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 4) {
+      return phone.slice(0, 2) + '****' + phone.slice(-4);
+    }
+    return phone;
+  };
+
+  const maskLocation = (location) => {
+    if (!location) return 'N/A';
+    const parts = location.split(',');
+    if (parts.length >= 2) {
+      const town = parts[0].trim();
+      const county = parts.slice(1).join(',').trim();
+      const maskedTown = town.slice(0, 2) + '****';
+      return `${maskedTown}, ${county}`;
+    }
+    return location.slice(0, 2) + '****';
+  };
+
+  const maskOccupation = (text) => {
+    if (!text) return 'N/A';
+    const words = text.split(' ');
+    return words.map((word, i) => {
+      if (i === 0) return word;
+      if (word.length <= 2) return word;
+      return word.slice(0, 2) + '****';
+    }).join(' ');
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
@@ -134,6 +348,22 @@ const ViewMember = ({ route, navigation }) => {
   const formatCurrency = (amount) => {
     if (!amount) return 'KES 0';
     return `KES ${Number(amount).toLocaleString()}`;
+  };
+
+  const getFeeStatusColor = (status) => {
+    switch (status) {
+      case 'paid': return colors.success;
+      case 'overdue': return colors.error;
+      default: return colors.warning;
+    }
+  };
+
+  const getFeeStatusIcon = (status) => {
+    switch (status) {
+      case 'paid': return 'checkmark-circle';
+      case 'overdue': return 'alert-circle';
+      default: return 'time';
+    }
   };
 
   const handleImagePress = () => {
@@ -293,30 +523,7 @@ const ViewMember = ({ route, navigation }) => {
 
               {/* Profile Info Section - Below the image */}
               <View style={styles.framelessProfileInfo}>
-                <Text style={[styles.memberName, styles.memberNameText]}>
-                  {memberData.user?.first_name || memberData.first_name} {memberData.user?.last_name || memberData.last_name}
-                </Text>
-                <Text style={[styles.memberEmail, styles.memberEmailSecondary]}>
-                  {memberData.user?.email || memberData.email}
-                </Text>
-
-                <View style={[
-                  styles.roleBadge,
-                  ['chairperson', 'secretary', 'treasurer'].includes(memberData.role) ? styles.roleBadgeWarning : styles.roleBadgeMuted,
-                ]}>
-                  <Ionicons
-                    name={getRoleIcon(memberData.role)}
-                    size={16}
-                    color={getRoleColor(memberData.role)}
-                  />
-                  <Text style={[
-                    styles.roleText,
-                    ['chairperson', 'secretary', 'treasurer'].includes(memberData.role) ? styles.roleTextWarning : styles.roleTextMuted,
-                  ]}>
-                    {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
-                  </Text>
-                </View>
-
+                
                 <Text style={[styles.minimizeHint, styles.minimizeHintSecondary]}>
                   Tap the × to minimize
                 </Text>
@@ -405,128 +612,566 @@ const ViewMember = ({ route, navigation }) => {
           </Card>
         )}
 
-        {/* Member Details Table */}
-        <Card variant="outlined" padding="none" style={styles.detailsCard}>
-          <View style={styles.detailsCardContent}>
-            <Text style={styles.detailsTitle}>
-              Member Details
-            </Text>
+        {/* Member Details & Service Fee */}
+        {isDesktop ? (
+          <Card variant="outlined" padding="none" style={styles.desktopCombinedCard}>
+            <View style={styles.desktopCombinedContent}>
+              {/* Member Details Table */}
+              <View style={styles.detailsCardContent}>
+                <Text style={styles.detailsTitle}>
+                  Member Details
+                </Text>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.detailsTableScrollContent}
-            >
-              <View style={styles.detailsTableInner}>
-                <View style={styles.detailsTableHeader}>
-                  <Text style={styles.detailsTableHeaderText}>Item</Text>
-                  <Text style={styles.detailsTableHeaderText}>Details</Text>
-                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.detailsTableScrollContent}
+                >
+                  <View style={styles.detailsTableInner}>
+                    <View style={styles.detailsTableHeader}>
+                      <Text style={styles.detailsTableHeaderText}>Item</Text>
+                      <Text style={styles.detailsTableHeaderText}>Details</Text>
+                    </View>
 
-                <View style={styles.detailsTable}>
-                  <View style={styles.tableRowEven}>
-                    <Text style={styles.tableLabel}>Role</Text>
-                    <View style={styles.tableValue}>
-                      <Ionicons
-                        name={getRoleIcon(memberData.role)}
-                        size={12}
-                        color={getRoleColor(memberData.role)}
-                      />
-                      <Text style={styles.tableValueText}>
-                        {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
-                      </Text>
+                    <View style={styles.detailsTable}>
+                      <View style={styles.tableRowEven}>
+                        <Text style={styles.tableLabel}>Role</Text>
+                        <View style={styles.tableValue}>
+                          <Ionicons
+                            name={getRoleIcon(memberData.role)}
+                            size={12}
+                            color={getRoleColor(memberData.role)}
+                          />
+                          <Text style={styles.tableValueText}>
+                            {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.tableRowOdd}>
+                        <Text style={styles.tableLabel}>Join Date</Text>
+                        <Text style={styles.tableValueText}>
+                          {formatDate(memberData.joined_at)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.tableRowEven}>
+                        <Text style={styles.tableLabel}>Attendance Rate</Text>
+                        <Text style={styles.tableValueTextPrimary}>
+                          {memberData.attendance_rate?.toFixed(1) || 0}%
+                        </Text>
+                      </View>
+
+                      <View style={styles.tableRowOdd}>
+                        <Text style={styles.tableLabel}>Reputation</Text>
+                        <View style={styles.tableValue}>
+                          <Ionicons name="star" size={12} color={colors.warning} />
+                          <Text style={styles.tableValueText}>
+                            {memberData.reputation_score?.toFixed(1) || 0}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.tableRowEven}>
+                        <Text style={styles.tableLabel}>Total Contributions</Text>
+                        <Text style={styles.tableValueTextSuccess}>
+                          {formatCurrency(memberData.total_contributions || 0)}
+                        </Text>
+                      </View>
+
+                      {memberData.loan_balance > 0 && (
+                        <View style={styles.tableRowOdd}>
+                          <Text style={styles.tableLabel}>Loan Balance</Text>
+                          <Text style={styles.tableValueTextError}>
+                            {formatCurrency(memberData.loan_balance)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {memberData.business_type && (
+                        <View style={styles.tableRowOdd}>
+                          <Text style={styles.tableLabel}>Business Type</Text>
+                          <Text style={styles.tableValueText}>
+                            {memberData.business_type}
+                          </Text>
+                        </View>
+                      )}
+
+                      {memberData.location && (
+                        <View style={styles.tableRowEven}>
+                          <Text style={styles.tableLabel}>Location</Text>
+                          <Text style={styles.tableValueText}>
+                            {maskLocation(memberData.location)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {(memberData.user?.phone || memberData.phone_number) && (
+                        <View style={styles.tableRowOdd}>
+                          <Text style={styles.tableLabel}>Phone</Text>
+                          <Text style={styles.tableValueText}>
+                            {maskPhone(memberData.user?.phone || memberData.phone_number)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {(memberData.user?.bio || memberData.user?.occupation) && (
+                        <View style={styles.tableRowEven}>
+                          <Text style={styles.tableLabel}>
+                            {memberData.user?.occupation ? 'Occupation' : 'Bio'}
+                          </Text>
+                          <Text style={styles.tableValueText}>
+                            {maskOccupation(memberData.user?.occupation || memberData.user?.bio)}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
-
-                  <View style={styles.tableRowOdd}>
-                    <Text style={styles.tableLabel}>Join Date</Text>
-                    <Text style={styles.tableValueText}>
-                      {formatDate(memberData.joined_at)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.tableRowEven}>
-                    <Text style={styles.tableLabel}>Attendance Rate</Text>
-                    <Text style={styles.tableValueTextPrimary}>
-                      {memberData.attendance_rate?.toFixed(1) || 0}%
-                    </Text>
-                  </View>
-
-                  <View style={styles.tableRowOdd}>
-                    <Text style={styles.tableLabel}>Reputation</Text>
-                    <View style={styles.tableValue}>
-                      <Ionicons name="star" size={12} color={colors.warning} />
-                      <Text style={styles.tableValueText}>
-                        {memberData.reputation_score?.toFixed(1) || 0}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.tableRowEven}>
-                    <Text style={styles.tableLabel}>Total Contributions</Text>
-                    <Text style={styles.tableValueTextSuccess}>
-                      {formatCurrency(memberData.total_contributions || 0)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.tableRowOdd}>
-                    <Text style={styles.tableLabel}>Savings Balance</Text>
-                    <Text style={styles.tableValueTextPrimary}>
-                      {formatCurrency(memberData.savings_balance || 0)}
-                    </Text>
-                  </View>
-
-                  {memberData.loan_balance > 0 && (
-                    <View style={styles.tableRowEven}>
-                      <Text style={styles.tableLabel}>Loan Balance</Text>
-                      <Text style={styles.tableValueTextError}>
-                        {formatCurrency(memberData.loan_balance)}
-                      </Text>
-                    </View>
-                  )}
-
-                  {memberData.business_type && (
-                    <View style={styles.tableRowOdd}>
-                      <Text style={styles.tableLabel}>Business Type</Text>
-                      <Text style={styles.tableValueText}>
-                        {memberData.business_type}
-                      </Text>
-                    </View>
-                  )}
-
-                  {memberData.location && (
-                    <View style={styles.tableRowEven}>
-                      <Text style={styles.tableLabel}>Location</Text>
-                      <Text style={styles.tableValueText}>
-                        {memberData.location}
-                      </Text>
-                    </View>
-                  )}
-
-                  {(memberData.user?.phone || memberData.phone_number) && (
-                    <View style={styles.tableRowOdd}>
-                      <Text style={styles.tableLabel}>Phone</Text>
-                      <Text style={styles.tableValueText}>
-                        {memberData.user?.phone || memberData.phone_number}
-                      </Text>
-                    </View>
-                  )}
-
-                  {(memberData.user?.bio || memberData.user?.occupation) && (
-                    <View style={styles.tableRowEven}>
-                      <Text style={styles.tableLabel}>
-                        {memberData.user?.occupation ? 'Occupation' : 'Bio'}
-                      </Text>
-                      <Text style={styles.tableValueText}>
-                        {memberData.user?.occupation || memberData.user?.bio}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                </ScrollView>
               </View>
-            </ScrollView>
-          </View>
-        </Card>
+
+              {/* Service Fee Payments Table */}
+              <View style={[styles.feeCardContent, { alignSelf: 'stretch' }]}>
+                <Text style={styles.feeCardTitle}>
+                  Service Fee Payments
+                </Text>
+                {feePaymentsLoading ? (
+                  <View style={styles.feeLoadingContainer}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  </View>
+                ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
+                      )}
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                        {formatDate(memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="time" size={14} color={colors.warning} />
+                        <Text style={[styles.feeStatusText, { color: colors.warning }]}>
+                          Pending
+                        </Text>
+                      </View>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <TouchableOpacity
+                          style={[styles.feePayButton, { backgroundColor: colors.primary }]}
+                          onPress={() => handlePayMemberServiceFee()}
+                          disabled={payingFee === 'pending' || cooldownActive}
+                        >
+                          {payingFee === 'pending' ? (
+                            <ActivityIndicator size="small" color={colors.white} />
+                          ) : cooldownActive ? (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Wait {cooldownRemaining}s
+                            </Text>
+                          ) : (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Pay
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                        {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                        <Text style={[styles.feeStatusText, { color: colors.success }]}>
+                          Paid
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                        onPress={() => handlePrintReceipt(memberData)}
+                      >
+                        <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                          Print Receipt
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
+                    <View style={styles.feeTable}>
+                      <View style={styles.feeTableHeader}>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                        {userRole === 'chairperson' && (
+                          <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
+                        )}
+                      </View>
+                      {serviceFeePayments.map((payment, index) => {
+                        const isEven = index % 2 === 0;
+                        return (
+                          <View
+                            key={payment.id}
+                            style={[
+                              styles.feeTableRow,
+                              { backgroundColor: isEven ? colors.background : colors.surface }
+                            ]}
+                          >
+                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                              {formatDate(payment.dueDate || payment.createdAt)}
+                            </Text>
+                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                              {formatCurrency(payment.amount)}
+                            </Text>
+                            <View style={styles.feeStatusCell}>
+                              <Ionicons
+                                name={getFeeStatusIcon(payment.status)}
+                                size={14}
+                                color={getFeeStatusColor(payment.status)}
+                              />
+                              <Text style={[
+                                styles.feeStatusText,
+                                { color: getFeeStatusColor(payment.status) }
+                              ]}>
+                                {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
+                              </Text>
+                            </View>
+                            {payment.status !== 'paid' && (
+                              <TouchableOpacity
+                                style={[
+                                  styles.feePayButton,
+                                  { backgroundColor: colors.primary }
+                                ]}
+                                onPress={() => handlePayServiceFee(payment)}
+                                disabled={payingFee === payment.id}
+                              >
+                                {payingFee === payment.id ? (
+                                  <ActivityIndicator size="small" color={colors.white} />
+                                ) : (
+                                  <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                                    Pay
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            )}
+                            {payment.status === 'paid' && (
+                              <TouchableOpacity
+                                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                                onPress={() => handlePrintReceipt(memberData, payment)}
+                              >
+                                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                                  Print Receipt
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+            </View>
+          </Card>
+        ) : (
+          <>
+            {/* Member Details Table */}
+            <Card variant="outlined" padding="none" style={styles.detailsCard}>
+              <View style={styles.detailsCardContent}>
+                <Text style={styles.detailsTitle}>
+                  Member Details
+                </Text>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.detailsTableScrollContent}
+                >
+                  <View style={styles.detailsTableInner}>
+                    <View style={styles.detailsTableHeader}>
+                      <Text style={styles.detailsTableHeaderText}>Item</Text>
+                      <Text style={styles.detailsTableHeaderText}>Details</Text>
+                    </View>
+
+                    <View style={styles.detailsTable}>
+                      <View style={styles.tableRowEven}>
+                        <Text style={styles.tableLabel}>Role</Text>
+                        <View style={styles.tableValue}>
+                          <Ionicons
+                            name={getRoleIcon(memberData.role)}
+                            size={12}
+                            color={getRoleColor(memberData.role)}
+                          />
+                          <Text style={styles.tableValueText}>
+                            {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.tableRowOdd}>
+                        <Text style={styles.tableLabel}>Join Date</Text>
+                        <Text style={styles.tableValueText}>
+                          {formatDate(memberData.joined_at)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.tableRowEven}>
+                        <Text style={styles.tableLabel}>Attendance Rate</Text>
+                        <Text style={styles.tableValueTextPrimary}>
+                          {memberData.attendance_rate?.toFixed(1) || 0}%
+                        </Text>
+                      </View>
+
+                      <View style={styles.tableRowOdd}>
+                        <Text style={styles.tableLabel}>Reputation</Text>
+                        <View style={styles.tableValue}>
+                          <Ionicons name="star" size={12} color={colors.warning} />
+                          <Text style={styles.tableValueText}>
+                            {memberData.reputation_score?.toFixed(1) || 0}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.tableRowEven}>
+                        <Text style={styles.tableLabel}>Total Contributions</Text>
+                        <Text style={styles.tableValueTextSuccess}>
+                          {formatCurrency(memberData.total_contributions || 0)}
+                        </Text>
+                      </View>
+
+                      {memberData.loan_balance > 0 && (
+                        <View style={styles.tableRowOdd}>
+                          <Text style={styles.tableLabel}>Loan Balance</Text>
+                          <Text style={styles.tableValueTextError}>
+                            {formatCurrency(memberData.loan_balance)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {memberData.business_type && (
+                        <View style={styles.tableRowOdd}>
+                          <Text style={styles.tableLabel}>Business Type</Text>
+                          <Text style={styles.tableValueText}>
+                            {memberData.business_type}
+                          </Text>
+                        </View>
+                      )}
+
+                      {memberData.location && (
+                        <View style={styles.tableRowEven}>
+                          <Text style={styles.tableLabel}>Location</Text>
+                          <Text style={styles.tableValueText}>
+                            {maskLocation(memberData.location)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {(memberData.user?.phone || memberData.phone_number) && (
+                        <View style={styles.tableRowOdd}>
+                          <Text style={styles.tableLabel}>Phone</Text>
+                          <Text style={styles.tableValueText}>
+                            {maskPhone(memberData.user?.phone || memberData.phone_number)}
+                          </Text>
+                        </View>
+                      )}
+
+                      {(memberData.user?.bio || memberData.user?.occupation) && (
+                        <View style={styles.tableRowEven}>
+                          <Text style={styles.tableLabel}>
+                            {memberData.user?.occupation ? 'Occupation' : 'Bio'}
+                          </Text>
+                          <Text style={styles.tableValueText}>
+                            {maskOccupation(memberData.user?.occupation || memberData.user?.bio)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </ScrollView>
+              </View>
+            </Card>
+
+            {/* Service Fee Payments Card */}
+            <Card variant="outlined" padding="none" style={styles.feeCard}>
+              <View style={styles.feeCardContent}>
+                <Text style={styles.feeCardTitle}>
+                  Service Fee Payments
+                </Text>
+                {feePaymentsLoading ? (
+                  <View style={styles.feeLoadingContainer}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  </View>
+                ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
+                      )}
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                        {formatDate(memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="time" size={14} color={colors.warning} />
+                        <Text style={[styles.feeStatusText, { color: colors.warning }]}>
+                          Pending
+                        </Text>
+                      </View>
+                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                        <TouchableOpacity
+                          style={[styles.feePayButton, { backgroundColor: colors.primary }]}
+                          onPress={() => handlePayMemberServiceFee()}
+                          disabled={payingFee === 'pending' || cooldownActive}
+                        >
+                          {payingFee === 'pending' ? (
+                            <ActivityIndicator size="small" color={colors.white} />
+                          ) : cooldownActive ? (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Wait {cooldownRemaining}s
+                            </Text>
+                          ) : (
+                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                              Pay
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
+                  <View style={styles.feeTableWrapper}>
+                    <View style={styles.feeTableHeader}>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
+                    </View>
+                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                        {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
+                      </Text>
+                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                        KES 50
+                      </Text>
+                      <View style={styles.feeStatusCell}>
+                        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                        <Text style={[styles.feeStatusText, { color: colors.success }]}>
+                          Paid
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                        onPress={() => handlePrintReceipt(memberData)}
+                      >
+                        <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                          Print Receipt
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
+                    <View style={styles.feeTable}>
+                      <View style={styles.feeTableHeader}>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                        {userRole === 'chairperson' && (
+                          <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
+                        )}
+                      </View>
+                      {serviceFeePayments.map((payment, index) => {
+                        const isEven = index % 2 === 0;
+                        return (
+                          <View
+                            key={payment.id}
+                            style={[
+                              styles.feeTableRow,
+                              { backgroundColor: isEven ? colors.background : colors.surface }
+                            ]}
+                          >
+                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                              {formatDate(payment.dueDate || payment.createdAt)}
+                            </Text>
+                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
+                              {formatCurrency(payment.amount)}
+                            </Text>
+                            <View style={styles.feeStatusCell}>
+                              <Ionicons
+                                name={getFeeStatusIcon(payment.status)}
+                                size={14}
+                                color={getFeeStatusColor(payment.status)}
+                              />
+                              <Text style={[
+                                styles.feeStatusText,
+                                { color: getFeeStatusColor(payment.status) }
+                              ]}>
+                                {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
+                              </Text>
+                            </View>
+                            {payment.status !== 'paid' && (
+                              <TouchableOpacity
+                                style={[
+                                  styles.feePayButton,
+                                  { backgroundColor: colors.primary }
+                                ]}
+                                onPress={() => handlePayServiceFee(payment)}
+                                disabled={payingFee === payment.id}
+                              >
+                                {payingFee === payment.id ? (
+                                  <ActivityIndicator size="small" color={colors.white} />
+                                ) : (
+                                  <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                                    Pay
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            )}
+                            {payment.status === 'paid' && (
+                              <TouchableOpacity
+                                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                                onPress={() => handlePrintReceipt(memberData, payment)}
+                              >
+                                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                                  Print Receipt
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+            </Card>
+          </>
+        )}
 
         {/* Actions */}
         {userRole === 'chairperson' && memberData.user_id !== user.id && (
@@ -984,6 +1629,169 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: 12,
     flex: 1,
     color: colors.error,
+  },
+  desktopCombinedCard: {
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  desktopCombinedContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  feeCard: {
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  feeCardContent: {
+    padding: 16,
+  },
+  feeCardTitle: {
+    color: colors.text,
+    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  feeLoadingContainer: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  feeTableWrapper: {
+    minWidth: 320,
+  },
+  feeEmptyRow: {
+    paddingVertical: 24,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  feeEmptyCell: {
+    fontSize: 13,
+    textAlign: 'center',
+    flex: 1,
+  },
+  feeTableScroll: {
+    maxHeight: 300,
+  },
+  feeTable: {
+    minWidth: 380,
+  },
+  feeTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+  },
+  feeTableHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  feeTableRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  feeTableCell: {
+    flex: 1,
+    fontSize: 12,
+  },
+  feeStatusCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  feeTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+  },
+  feeTableHeaderText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  feeTableHeaderDate: {
+    flex: 1.5,
+  },
+  feeTableHeaderAmount: {
+    flex: 1,
+  },
+  feeTableHeaderStatus: {
+    flex: 1.5,
+  },
+  feeTableHeaderAction: {
+    flex: 1,
+    minWidth: 60,
+    textAlign: 'center',
+  },
+  feeTableRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  feeTableCell: {
+    fontSize: 12,
+  },
+  feeTableCellDate: {
+    flex: 1.5,
+  },
+  feeTableCellAmount: {
+    flex: 1,
+  },
+  feeStatusCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  feeStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  feePayButton: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+  },
+  feePayButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  feeReceiptButton: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+    borderWidth: 1,
+  },
+  feeReceiptButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

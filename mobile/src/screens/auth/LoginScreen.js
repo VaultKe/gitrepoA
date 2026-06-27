@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   SafeAreaView,
   Dimensions,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
@@ -16,7 +17,6 @@ import apiService from '../../services/api';
 import MessageBanner from '../../components/MessageBanner';
 import FormField from '../../components/FormField';
 import LoadingButton from '../../components/LoadingButton';
-import AppIcon from '../../components/AppIcon';
 import Card from '../../components/common/Card';
 
 export default function LoginScreen({ navigation }) {
@@ -70,11 +70,17 @@ export default function LoginScreen({ navigation }) {
   // Enhanced validation function
   const validateForm = () => {
     const newErrors = {};
+    const id = identifier.trim();
 
-    if (!identifier.trim()) {
+    if (!id) {
       newErrors.identifier = 'Email or phone number is required';
-    } else if (identifier.trim().length < 3) {
-      newErrors.identifier = 'Please enter a valid email or phone number';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const phoneRegex = /^(\+254|254|0)[17]\d{8}$/;
+
+      if (!emailRegex.test(id) && !phoneRegex.test(id)) {
+        newErrors.identifier = 'Please enter a valid email or Kenyan phone number (+2547XXXXXXXX or 07XXXXXXXX)';
+      }
     }
 
     if (!password) {
@@ -236,7 +242,11 @@ export default function LoginScreen({ navigation }) {
           ]}>
             {/* Logo Section */}
             <View style={styles.logoContainer}>
-              <AppIcon size={isDesktop ? 100 : 80} circular={true} />
+              <Image
+                source={require('../../../assets/chama_logo.png')}
+                style={{ width: isDesktop ? 100 : 80, height: isDesktop ? 100 : 80, borderRadius: isDesktop ? 50 : 40 }}
+                resizeMode="cover"
+              />
               <Text style={[
                 styles.logoText,
                 { color: colors.text },

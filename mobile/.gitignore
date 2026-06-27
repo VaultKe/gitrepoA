@@ -97,8 +97,7 @@ logs/
 Log
 
 # Build outputs
-build/
-dist/
+
 out/
 .gradle/
 *.apk

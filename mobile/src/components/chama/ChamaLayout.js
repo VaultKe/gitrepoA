@@ -27,7 +27,7 @@ const ChamaLayout = ({
   activeRoute,
   onRouteChange
 }) => {
-  const { theme, user } = useApp();
+  const { theme, user, switchToUserDashboard } = useApp();
   const insets = useSafeAreaInsets();
   const colors = getThemeColors(theme);
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -270,17 +270,7 @@ const ChamaLayout = ({
 
         <TouchableOpacity
           style={styles.headerButton}
-          onPress={() => {
-            try {
-              navigation.navigate('UserTabs');
-            } catch (error) {
-              // Use dashboard switching if available
-              const { switchToUserDashboard } = require('../../context/AppContext').useApp();
-              if (switchToUserDashboard) {
-                switchToUserDashboard();
-              }
-            }
-          }}
+          onPress={() => switchToUserDashboard('MyChamas')}
           title="Go to Home"
         >
           <Ionicons name="home" size={24} color={colors.primary} />
@@ -410,7 +400,7 @@ const ChamaLayout = ({
                 style={styles.logoutButton}
                 onPress={() => {
                   setSidebarVisible(false);
-                  navigation.navigate('ChamaList');
+                  switchToUserDashboard('MyChamas');
                 }}
               >
                 <Ionicons name="list" size={20} color={colors.primary} />
@@ -423,15 +413,7 @@ const ChamaLayout = ({
                 style={[styles.logoutButton, { marginTop: spacing.sm }]}
                 onPress={() => {
                   setSidebarVisible(false);
-                  try {
-                    navigation.navigate('UserTabs');
-                  } catch (error) {
-                    // Use dashboard switching if available
-                    const { switchToUserDashboard } = require('../../context/AppContext').useApp();
-                    if (switchToUserDashboard) {
-                      switchToUserDashboard();
-                    }
-                  }
+                  switchToUserDashboard('MyChamas');
                 }}
               >
                 <Ionicons name="exit" size={20} color={colors.error} />

@@ -85,8 +85,9 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
       // Fetch user's role in this chama
       const membersResponse = await api.makeRequest(`/chamas/${chamaId}/members`);
       if (membersResponse.success && membersResponse.data) {
+        const currentUserId = String(user?.id);
         const currentUserMember = membersResponse.data.find(member =>
-          member.user_id === user.id || member.id === user.id
+          String(member.user_id) === currentUserId || String(member.user?.id) === currentUserId
         );
         if (currentUserMember) {
           setUserRole(currentUserMember.role || 'member');
@@ -106,7 +107,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleSaveSettings = async () => {
-    if (userRole !== 'chairperson') {
+    if (userRole?.toLowerCase() !== 'chairperson') {
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -164,7 +165,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
 
   // Real-time setting update function
   const updateSettingRealTime = async (settingType, settingKey, value) => {
-    if (userRole !== 'chairperson') {
+    if (userRole?.toLowerCase() !== 'chairperson') {
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -407,8 +408,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     );
   }
 
-  const isAdmin = userRole === 'chairperson' || userRole === 'treasurer';
-  const isChairperson = userRole === 'chairperson';
+  const isAdmin = ['chairperson', 'treasurer'].includes(userRole?.toLowerCase());
+  const isChairperson = userRole?.toLowerCase() === 'chairperson';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -534,7 +535,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               !isChairperson
             )}
           </>
-        ))}
+        ))}       
 
         {/* Notifications */}
         {renderSection('Notifications', (
@@ -756,6 +757,12 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     borderWidth: 1,
+  },
+
+  sectionDescription: {
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   actionButtonText: {
     fontSize: typography.fontSize.base,

@@ -27,6 +27,7 @@ import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
 
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
 import AccountManagementScreen from '../screens/chama/accountmanagement/AccountManagementScreen';
+import SubscriptionManagementScreen from '../screens/chama/accountmanagement/SubscriptionManagementScreen';
 import LoanManagementScreen from '../screens/chama/loans/LoanManagementScreen';
 import WelfareDisbursementScreen from '../screens/chama/accountmanagement/WelfareDisbursementScreen';
 import LoanTypeCreationScreen from '../screens/chama/accountmanagement/LoanTypeCreationScreen';
@@ -72,14 +73,14 @@ function ChamaTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
 
   // Smart shortcuts for chama dashboard - exactly 6 icons
-  const quickShortcuts = [
-    { name: 'Home', label: 'Home', icon: 'home', onPress: () => navigation.navigate('Home') },
-    { name: 'Members', label: 'Members', icon: 'people', onPress: () => navigation.navigate('ChamaMembersScreen') },
-    { name: 'Contribute', label: 'Pay', icon: 'wallet', onPress: () => navigation.navigate('ContributeScreen') },
-    { name: 'Contributions', label: 'Welfare', icon: 'heart', onPress: () => navigation.navigate('ContributionsScreen') },
-    { name: 'Loans', label: 'Loans', icon: 'card', onPress: () => navigation.navigate('ChamaLoansScreen') },
-    { name: 'Exit', label: 'Exit', icon: 'exit', onPress: () => switchToUserDashboard() },
-  ];
+    const quickShortcuts = [
+      { name: 'Home', label: 'Home', icon: 'home', onPress: () => navigation.navigate('Home') },
+      { name: 'Members', label: 'Members', icon: 'people', onPress: () => navigation.navigate('ChamaMembersScreen') },
+      { name: 'Contribute', label: 'Pay', icon: 'wallet', onPress: () => navigation.navigate('ContributeScreen') },
+      { name: 'Contributions', label: 'Welfare', icon: 'heart', onPress: () => navigation.navigate('ContributionsScreen') },
+      { name: 'Loans', label: 'Loans', icon: 'card', onPress: () => navigation.navigate('ChamaLoansScreen') },
+      { name: 'Exit', label: 'Exit', icon: 'exit', onPress: () => switchToUserDashboard('MyChamas') },
+    ];
 
   // Determine current active tab based on navigation state
   const getCurrentIndex = () => {
@@ -399,6 +400,15 @@ function ChamaTabNavigator({ route }) {
         component={MaryGoRoundDisbursementScreen}
         options={{
           title: 'Merry Go Round Disbursement',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="SubscriptionManagement"
+        component={SubscriptionManagementScreen}
+        options={{
+          title: 'Subscription Management',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={{ chamaId, chamaName, chama }}

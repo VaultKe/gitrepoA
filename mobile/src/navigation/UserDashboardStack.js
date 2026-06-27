@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -486,14 +486,29 @@ function UserTabNavigator() {
           tabBarButton: () => null, // Hide from tab bar
         }}
       />
-
+      <Stack.Screen
+        name="UserSearch"
+        component={UserSearchScreen}
+        options={{ title: 'Search Users' }}
+      />
 
     </Tab.Navigator>
   );
 }
 
 // Main User Dashboard Stack
-export default function UserDashboardStack() {
+export default function UserDashboardStack({ navigation }) {
+  const { currentDashboard, pendingUserRoute, clearPendingUserRoute } = useApp();
+
+  useEffect(() => {
+    if (currentDashboard === 'user' && pendingUserRoute) {
+      navigation.navigate('UserDashboard', {
+        screen: 'UserTabs',
+        params: { screen: pendingUserRoute },
+      });
+      clearPendingUserRoute();
+    }
+  }, [currentDashboard, pendingUserRoute]);
 
   return (
     <Stack.Navigator
@@ -522,12 +537,6 @@ export default function UserDashboardStack() {
         component={withUserFooter(CreateGroupChatScreen)}
         options={{ title: 'New Group Chat' }}
       />
-      <Stack.Screen
-        name="UserSearch"
-        component={withUserFooter(UserSearchScreen)}
-        options={{ title: 'Search Users' }}
-      />
-
       {/* Meeting Summary Screen */}
       <Stack.Screen
         name="MeetingSummary"

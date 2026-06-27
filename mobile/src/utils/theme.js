@@ -24,6 +24,8 @@ export const lightTheme = {
   // Surface colors
   surface: '#F5F5F5',
   surfaceSecondary: '#F9FAFB',    // soft light gray for variation
+  card: '#FFFFFF',
+  divider: '#E2E8F0',
 
   // Text colors
   text: '#0F172A',         // almost-black (Slate 900)
@@ -80,6 +82,8 @@ export const darkTheme = {
   // Surface colors
   surface: '#08324e', // Slate 800
   surfaceSecondary: '#2E8BC0', // Slate 700
+  card: '#1E293B',
+  divider: '#334155',
 
   // Text colors
   text: '#F8FAFC', // Slate 50

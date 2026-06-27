@@ -36,39 +36,39 @@ const WS_EVENTS = {
 };
 
 class ChatService {
-   constructor() {
-     // State
-     this.rooms = new Map(); // roomId → Room
-     this.messages = new Map(); // roomId → Message[]
-     this.pendingMessages = new Map(); // tempId → Message (optimistic)
-     this.processedMessageIds = new Set(); // Deduplication
-     this.readReceipts = new Map(); // roomId → Set<messageId>
-     this.typingUsers = new Map(); // roomId → Set<userId>
-     this._persistTimer = null;
-     this._isOnline = true;
+  constructor() {
+    // State
+    this.rooms = new Map(); // roomId → Room
+    this.messages = new Map(); // roomId → Message[]
+    this.pendingMessages = new Map(); // tempId → Message (optimistic)
+    this.processedMessageIds = new Set(); // Deduplication
+    this.readReceipts = new Map(); // roomId → Set<messageId>
+    this.typingUsers = new Map(); // roomId → Set<userId>
+    this._persistTimer = null;
+    this._isOnline = true;
 
-     // Subscriptions (roomId → Set<callback>)
-     this.roomSubscribers = new Map();
-     this.messageSubscribers = new Map();
+    // Subscriptions (roomId → Set<callback>)
+    this.roomSubscribers = new Map();
+    this.messageSubscribers = new Map();
 
-     // Reconnection state
-     this.reconnectTimer = null;
-     this.reconnectAttempts = 0;
-     this.maxReconnectAttempts = 10;
+    // Reconnection state
+    this.reconnectTimer = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
 
-     // Performance: Debounce typing indicators
-     this.typingTimeout = null;
-     this.typingDebounceMs = 500;
+    // Performance: Debounce typing indicators
+    this.typingTimeout = null;
+    this.typingDebounceMs = 500;
 
-     // Bind WebSocket handlers
-     this._setupWebSocketHandlers();
+    // Bind WebSocket handlers
+    this._setupWebSocketHandlers();
 
-     // Setup online/offline detection
-     this._setupNetworkMonitoring();
+    // Setup online/offline detection
+    this._setupNetworkMonitoring();
 
-     // Cleanup on app termination
-     this._setupCleanup();
-   }
+    // Cleanup on app termination
+    this._setupCleanup();
+  }
 
   // ==================== Initialization ====================
 
@@ -115,51 +115,84 @@ class ChatService {
     };
   }
 
-  // ==================== Room Management ====================
+// ==================== Room Management ====================
 
-   async getRooms(forceRefresh = false) {
-     try {
-       // Request fresh data from backend via WebSocket
-       return new Promise((resolve, reject) => {
-         const requestId = this._generateRequestId();
-         const timeout = setTimeout(() => {
-           reject(new Error('Request timeout'));
-         }, 30000);
-
-        const handler = (response) => {
-          if (response.requestId === requestId) {
-            clearTimeout(timeout);
-            websocketService.unregisterMessageHandler('rooms_list');
-            if (response.success) {
-              this._updateRooms(response.data);
-              resolve(response.data);
-            } else {
-              reject(new Error(response.error || 'Failed to load rooms'));
-            }
-          }
-        };
-
-        // Register response handler BEFORE sending request
-        websocketService.registerMessageHandler('rooms_list', handler);
-
-        // Send request
-        websocketService.send({
-          type: 'get_rooms',
-          requestId,
-          forceRefresh,
-        });
-      });
+  async getRooms(forceRefresh = false) {
+    try {
+      // Request fresh data from backend via WebSocket
+      return await this._getRoomsViaWebSocket(forceRefresh);
     } catch (error) {
-      console.error('getRooms error:', error);
-      // Fallback to cache on error
-      return Array.from(this.rooms.values());
+      console.warn('WebSocket getRooms failed, trying REST fallback:', error.message);
+      // Fallback to REST API
+      return this._getRoomsViaRest(forceRefresh);
     }
   }
 
+  async _getRoomsViaWebSocket(forceRefresh = false) {
+    return new Promise((resolve, reject) => {
+      const requestId = this._generateRequestId();
+      const timeout = setTimeout(() => {
+        reject(new Error('Request timeout'));
+      }, 30000);
+
+      const handler = (response) => {
+        if (response.requestId === requestId) {
+          clearTimeout(timeout);
+          websocketService.unregisterMessageHandler('rooms_list');
+          if (response.success) {
+            this._updateRooms(response.data);
+            resolve(response.data);
+          } else {
+            reject(new Error(response.error || 'Failed to load rooms'));
+          }
+        }
+      };
+
+      // Register response handler BEFORE sending request
+      websocketService.registerMessageHandler('rooms_list', handler);
+
+      // Send request
+      websocketService.send({
+        type: 'get_rooms',
+        requestId,
+        forceRefresh,
+      });
+    });
+  }
+
+  async _getRoomsViaRest(forceRefresh = false) {
+    const ApiService = (await import('../api')).default;
+    const response = await ApiService.makeRequest('/chat/rooms');
+
+    let rooms = [];
+    if (response.success) {
+      rooms = response.data || [];
+    } else {
+      // Fallback: fetch user's chamas and create virtual chat rooms
+      try {
+        const chamasResponse = await ApiService.getUserChamas();
+        if (chamasResponse.success && chamasResponse.data) {
+          rooms = chamasResponse.data.map(chama => ({
+            id: `chama_${chama.id}`,
+            name: chama.name,
+            type: 'chama',
+            lastMessage: null,
+            lastMessageAt: chama.updatedAt || Date.now(),
+            memberCount: chama.memberCount || 0,
+            chamaId: chama.id,
+          }));
+        }
+      } catch (e) {
+        console.warn('Failed to fetch chamas as fallback:', e);
+      }
+    }
+
+    this._updateRooms(rooms);
+    return rooms;
+  }
+
   async sendImage(roomId, imageUri, caption = '') {
-    // Upload image first, then send message with metadata
     try {
-      // Prepare upload metadata (backend handles actual upload)
       const metadata = {
         imageUri,
         type: 'image',
@@ -213,6 +246,67 @@ class ChatService {
     }, this.typingDebounceMs);
   }
 
+  joinRoom(roomId) {
+    websocketService.joinRoom(roomId);
+  }
+
+  leaveRoom(roomId) {
+    websocketService.leaveRoom(roomId);
+  }
+
+  async sendMessage(roomId, content, type = 'text', metadata = {}) {
+    try {
+      return new Promise((resolve, reject) => {
+        const tempId = this._generateTempId();
+        const requestId = this._generateRequestId();
+        const timeout = setTimeout(() => {
+          reject(new Error('Request timeout'));
+        }, 15000);
+
+        const handler = (response) => {
+          if (response.requestId === requestId) {
+            clearTimeout(timeout);
+            websocketService.unregisterMessageHandler('message_sent');
+            if (response.success) {
+              this.pendingMessages.delete(tempId);
+              resolve(response.data);
+            } else {
+              this.pendingMessages.delete(tempId);
+              reject(new Error(response.error || 'Failed to send message'));
+            }
+          }
+        };
+
+        websocketService.registerMessageHandler('message_sent', handler);
+
+        const message = {
+          type: WS_EVENTS.SEND_MESSAGE,
+          requestId,
+          roomId,
+          content,
+          messageType: type,
+          metadata,
+          clientMessageId: tempId,
+        };
+
+        this.pendingMessages.set(tempId, {
+          id: tempId,
+          roomId,
+          content,
+          type,
+          metadata,
+          status: 'sending',
+          createdAt: Date.now(),
+        });
+
+        websocketService.send(message);
+      });
+    } catch (error) {
+      console.error('sendMessage error:', error);
+      throw error;
+    }
+  }
+
   // ==================== Event Subscription ====================
 
   subscribeToRoom(roomId, callback) {
@@ -249,80 +343,48 @@ class ChatService {
     };
   }
 
-  // ==================== Room Management ====================
+// ==================== Room Management ====================
 
   /**
    * Create a new chat room
    */
   async createRoom(roomData) {
     try {
-      return new Promise((resolve, reject) => {
-        const requestId = this._generateRequestId();
-        const timeout = setTimeout(() => {
-          reject(new Error('Request timeout'));
-        }, 10000);
-
-        const handler = (response) => {
-          if (response.requestId === requestId) {
-            clearTimeout(timeout);
-            websocketService.unregisterMessageHandler('room_created');
-            if (response.success) {
-              this._updateRoom(response.data);
-              resolve(response.data);
-            } else {
-              reject(new Error(response.error || 'Failed to create room'));
-            }
-          }
-        };
-
-        websocketService.registerMessageHandler('room_created', handler);
-        websocketService.send({
-          type: 'create_room',
-          requestId,
-          data: roomData,
-        });
+      const ApiService = (await import('../api')).default;
+      const response = await ApiService.makeRequest('/chat/rooms', {
+        method: 'POST',
+        body: roomData,
       });
+
+      if (response.success) {
+        this._updateRoom(response.data);
+        return response.data;
+      }
+      throw new Error(response.error || 'Failed to create room');
     } catch (error) {
       console.error('createRoom error:', error);
       throw error;
     }
   }
 
-   async getRoom(roomId, forceRefresh = false) {
-     // Try cache first unless forceRefresh
-     if (!forceRefresh) {
-       const cached = this.rooms.get(roomId);
-       if (cached) return cached;
-     }
+  async getRoom(roomId, forceRefresh = false) {
+    // Try cache first unless forceRefresh
+    if (!forceRefresh) {
+      const cached = this.rooms.get(roomId);
+      if (cached) return cached;
+    }
 
-     // Fetch from backend
-     try {
-       return new Promise((resolve, reject) => {
-         const requestId = this._generateRequestId();
-         const timeout = setTimeout(() => {
-           reject(new Error('Request timeout'));
-         }, 15000);
+    // Fetch from backend via REST
+    try {
+      const ApiService = (await import('../api')).default;
+      const response = await ApiService.makeRequest(`/chat/rooms/${roomId}`);
 
-        const handler = (response) => {
-          if (response.requestId === requestId) {
-            clearTimeout(timeout);
-            websocketService.unregisterMessageHandler('room_detail');
-            if (response.success) {
-              this._updateRoom(response.data);
-              resolve(response.data);
-            } else {
-              reject(new Error(response.error || 'Failed to load room'));
-            }
-          }
-        };
-
-        websocketService.registerMessageHandler('room_detail', handler);
-        websocketService.send({
-          type: 'get_room',
-          requestId,
-          data: { roomId },
-        });
-      });
+      if (response.success) {
+        this._updateRoom(response.data);
+        return response.data;
+      }
+      // Return from cache if available
+      return this.rooms.get(roomId);
     } catch (error) {
       console.error('getRoom error:', error);
       // Return from cache if available
@@ -330,44 +392,18 @@ class ChatService {
     }
   }
 
-  /**
-   * Get messages for a room (with pagination)
-   * Uses WebSocket request-response pattern for fresh data,
-   * falls back to cache on error.
-   */
-   async getMessages(roomId, limit = 50, offset = 0) {
-     try {
-       // Request messages from backend via WebSocket
-       return new Promise((resolve, reject) => {
-         const requestId = this._generateRequestId();
-         const timeout = setTimeout(() => {
-           reject(new Error('Request timeout'));
-         }, 30000);
+  async getMessages(roomId, limit = 50, offset = 0) {
+    try {
+      const ApiService = (await import('../api')).default;
+      const response = await ApiService.makeRequest(`/chat/rooms/${roomId}/messages?limit=${limit}&offset=${offset}`);
 
-        const handler = (response) => {
-          if (response.requestId === requestId) {
-            clearTimeout(timeout);
-            websocketService.unregisterMessageHandler('messages_list');
-            if (response.success) {
-              this._updateMessages(roomId, response.data);
-              resolve(response.data);
-            } else {
-              reject(new Error(response.error || 'Failed to load messages'));
-            }
-          }
-        };
-
-        websocketService.registerMessageHandler('messages_list', handler);
-        websocketService.send({
-          type: 'get_messages',
-          requestId,
-          roomId,
-          limit,
-          offset,
-        });
-      });
+      if (response.success) {
+        this._updateMessages(roomId, response.data || []);
+        return response.data || [];
+      }
+      throw new Error(response.error || 'Failed to load messages');
     } catch (error) {
-      console.error('getMessages error, falling back to cache:', error);
+      console.error('getMessages error:', error);
       // Return cached messages as fallback
       return this.getRoomMessages(roomId).slice(-limit);
     }

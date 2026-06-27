@@ -9,6 +9,8 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,23 +24,27 @@ import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import apiService from '../../../services/api';
 import { getTransactions } from '../../../services/api/walletEndpoints';
+import { getUserChamas, payMemberServiceFee } from '../../../services/api/chamaEndpoints';
+import KENYA_COUNTIES from '../../../utils/kenyaCounties';
 
 const ProfileScreen = ({ navigation }) => {
-  const { theme, setTheme, user, userRole, updateUser, wallets, chamas, logout, getCachedData, getLightningData, getCachedAvatarData } = useApp();
+  const { theme, user, userRole, updateUser, wallets, chamas, logout, getCachedData, getLightningData, getCachedAvatarData } = useApp();
   const colors = getThemeColors(theme);
+  const styles = createStyles(colors);
 
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [profileData, setProfileData] = useState({
-    first_name: user?.first_name || user?.firstName || '',
-    last_name: user?.last_name || user?.lastName || '',
+    firstName: user?.firstName || '',
+    lastName: user?.lastName || '',
     email: user?.email || '',
+    idNumber: user?.idNumber || '',
     phone: user?.phone || '',
     county: user?.county || '',
     town: user?.town || '',
     bio: user?.bio || '',
     occupation: user?.occupation || '',
-    date_of_birth: user?.date_of_birth || '',
+    dateOfBirth: user?.dateOfBirth || '',
     gender: user?.gender || '',
   });
   const [profileImage, setProfileImage] = useState(
@@ -47,10 +53,32 @@ const ProfileScreen = ({ navigation }) => {
       : null
   );
   const [avatarData, setAvatarData] = useState(null);
+  const [showCountyPicker, setShowCountyPicker] = useState(false);
+  const [countySearch, setCountySearch] = useState('');
+
+  const filteredCounties = KENYA_COUNTIES.filter(county =>
+    county.toLowerCase().includes(countySearch.toLowerCase())
+  );
+
+  const selectCounty = (county) => {
+    setProfileData(prev => ({
+      ...prev,
+      county: county,
+    }));
+    setShowCountyPicker(false);
+    setCountySearch('');
+  };
 
   // Recent Activities state
   const [recentActivities, setRecentActivities] = useState([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+
+  // User Chamas state
+  const [userChamas, setUserChamas] = useState([]);
+  const [chamasLoading, setChamasLoading] = useState(false);
+  const [payingChamaFee, setPayingChamaFee] = useState(null);
+  const [chamasPage, setChamasPage] = useState(1);
+  const CHAMAS_PER_PAGE = 10;
 
   // Helper: format currency
   useEffect(() => {  
@@ -80,25 +108,23 @@ const ProfileScreen = ({ navigation }) => {
   // Helper function to update profile from API response
   const updateProfileFromResponse = (response) => {
     if (response.success && response.data) {
-      const userData = response.data;
+      const userData = response.data.User || response.data.user || response.data;
       setProfileData({
-        first_name: userData.first_name || userData.firstName || '',
-        last_name: userData.last_name || userData.lastName || '',
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
         email: userData.email || '',
+        idNumber: userData.idNumber || '',
         phone: userData.phone || '',
         county: userData.county || '',
         town: userData.town || '',
         bio: userData.bio || '',
         occupation: userData.occupation || '',
-        date_of_birth: userData.date_of_birth || '',
+        dateOfBirth: userData.dateOfBirth || '',
         gender: userData.gender || '',
       });
 
-      if (userData.profile_image && userData.profile_image !== 'avatar://cached-base64-image') {
-        setProfileImage(userData.profile_image);
-      } else if (userData.profile_image === 'avatar://cached-base64-image') {
-        // Don't set the cached identifier as profileImage, let the useEffect handle it
-        setProfileImage(null);
+      if (userData.avatar && userData.avatar !== 'avatar://cached-base64-image') {
+        setProfileImage(userData.avatar.startsWith('http') ? userData.avatar : `${apiService.baseURL}/${userData.avatar.startsWith('/') ? '' : '/'}${userData.avatar}`);
       }
     }
   };
@@ -106,12 +132,8 @@ const ProfileScreen = ({ navigation }) => {
   // Fetch fresh profile data from backend with lightning-fast caching
   const fetchProfileData = async () => {
     try {
-      // console.log('⚡ Fetching profile data with lightning caching...');
-
-      // Try to get cached data first for instant loading
       const cachedResult = await getCachedData('profile');
       if (cachedResult && cachedResult.success) {
-        // console.log('⚡ Using cached profile data for instant load');
         updateProfileFromResponse(cachedResult);
       }
 
@@ -133,9 +155,13 @@ const ProfileScreen = ({ navigation }) => {
           // Check if it's already a complete URL (http/https) or data URL
           if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
             fullAvatarUrl = avatarUrl;
-          } else {
+          } else if (avatarUrl.includes('base64') || avatarUrl.includes('data:')) {
+            fullAvatarUrl = avatarUrl;
+          } else if (apiService.baseURL) {
             // If it's a relative path, make it absolute
             fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+          } else {
+            fullAvatarUrl = avatarUrl;
           }
           setProfileImage(fullAvatarUrl);
         } else {
@@ -153,15 +179,16 @@ const ProfileScreen = ({ navigation }) => {
 
   const updateLocalProfileData = async () => {
     setProfileData({
-      first_name: user?.first_name || user?.firstName || '',
-      last_name: user?.last_name || user?.lastName || '',
+      firstName: user?.firstName || '',
+      lastName: user?.lastName || '',
       email: user?.email || '',
+      idNumber: user?.idNumber || '',
       phone: user?.phone || '',
       county: user?.county || '',
       town: user?.town || '',
       bio: user?.bio || '',
       occupation: user?.occupation || '',
-      date_of_birth: user?.date_of_birth || '',
+      dateOfBirth: user?.dateOfBirth || '',
       gender: user?.gender || '',
     });
 
@@ -170,12 +197,14 @@ const ProfileScreen = ({ navigation }) => {
     if (avatarUrl && avatarUrl !== 'avatar://cached-base64-image') {
       let fullAvatarUrl;
 
-      // Check if it's already a complete URL (http/https) or data URL
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
         fullAvatarUrl = avatarUrl;
-      } else {
-        // If it's a relative path, make it absolute
+      } else if (avatarUrl.includes('base64') || avatarUrl.includes('data:')) {
+        fullAvatarUrl = avatarUrl;
+      } else if (apiService.baseURL) {
         fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+      } else {
+        fullAvatarUrl = avatarUrl;
       }
       setProfileImage(fullAvatarUrl);
     } else if (avatarUrl === 'avatar://cached-base64-image') {
@@ -219,7 +248,10 @@ const ProfileScreen = ({ navigation }) => {
       });
 
       if (!result.canceled) {
-        setProfileImage(result.assets[0].uri);
+        const selectedAsset = result.assets[0];
+
+        // Set profile image - validation happens at backend during upload
+        setProfileImage(selectedAsset.uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -232,78 +264,75 @@ const ProfileScreen = ({ navigation }) => {
       setLoading(true);
 
       const updateData = {
-        // Map frontend field names to backend field names
-        firstName: profileData.first_name,
-        lastName: profileData.last_name,
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        idNumber: profileData.idNumber,
         phone: profileData.phone,
         county: profileData.county,
         town: profileData.town,
         bio: profileData.bio,
         occupation: profileData.occupation,
-        // Only include dateOfBirth if it's not empty
-        ...(profileData.date_of_birth && profileData.date_of_birth.trim() !== '' && {
-          dateOfBirth: profileData.date_of_birth
+        ...(profileData.dateOfBirth && profileData.dateOfBirth.trim() !== '' && {
+          dateOfBirth: profileData.dateOfBirth
         }),
-        // Only include gender if it's not empty
         ...(profileData.gender && profileData.gender.trim() !== '' && {
           gender: profileData.gender
         }),
-        // Send profile_image field for proper image upload detection
         profile_image: profileImage,
-        avatar: profileImage, // Keep both for compatibility
       };
 
       console.log('Updating profile with data:', {
         ...updateData,
-        avatar: profileImage ? 'Image selected' : 'No image'
+        profile_image: profileImage ? 'Image selected' : 'No image'
       });
 
-      // Try API update first
       try {
         const response = await apiService.updateProfile(updateData);
         if (response.success) {
-          // Extract user data from response (API returns { data: { user: {...} } })
           const updatedUserData = response.data?.user || response.data;
           await updateUser(updatedUserData);
 
-          // Update local profileData state with the new values
           setProfileData(prevData => ({
             ...prevData,
-            first_name: updateData.firstName || prevData.first_name,
-            last_name: updateData.lastName || prevData.last_name,
-            phone: updateData.phone || prevData.phone,
-            county: updateData.county || prevData.county,
-            town: updateData.town || prevData.town,
-            bio: updateData.bio || prevData.bio,
-            occupation: updateData.occupation || prevData.occupation,
-            gender: updateData.gender || prevData.gender,
+            firstName: updatedUserData.firstName || prevData.firstName,
+            lastName: updatedUserData.lastName || prevData.lastName,
+            idNumber: updatedUserData.idNumber || prevData.idNumber,
+            phone: updatedUserData.phone || prevData.phone,
+            county: updatedUserData.county || prevData.county,
+            town: updatedUserData.town || prevData.town,
+            bio: updatedUserData.bio || prevData.bio,
+            occupation: updatedUserData.occupation || prevData.occupation,
+            dateOfBirth: updatedUserData.dateOfBirth || prevData.dateOfBirth,
+            gender: updatedUserData.gender || prevData.gender,
           }));
 
-          // Force refresh profile data from updated user context after a short delay
           setTimeout(() => {
             if (updatedUserData) {
               setProfileData(prevData => ({
                 ...prevData,
-                first_name: updatedUserData.firstName || updatedUserData.first_name || prevData.first_name,
-                last_name: updatedUserData.lastName || updatedUserData.last_name || prevData.last_name,
+                firstName: updatedUserData.firstName || prevData.firstName,
+                lastName: updatedUserData.lastName || prevData.lastName,
+                idNumber: updatedUserData.idNumber || prevData.idNumber,
                 phone: updatedUserData.phone || prevData.phone,
                 county: updatedUserData.county || prevData.county,
                 town: updatedUserData.town || prevData.town,
                 bio: updatedUserData.bio || prevData.bio,
                 occupation: updatedUserData.occupation || prevData.occupation,
+                dateOfBirth: updatedUserData.dateOfBirth || prevData.dateOfBirth,
                 gender: updatedUserData.gender || prevData.gender,
               }));
             }
           }, 100);
 
-          // Update profile image display immediately
           const newAvatarUrl = updatedUserData?.avatar || updatedUserData?.profile_image;
           if (newAvatarUrl) {
             let fullAvatarUrl;
-            if (newAvatarUrl.startsWith('http') || newAvatarUrl.startsWith('data:')) {
+            if (newAvatarUrl.startsWith('http') || newAvatarUrl.startsWith('data:') || newAvatarUrl.includes('base64')) {
               fullAvatarUrl = newAvatarUrl;
-            } else {
+            } else if (apiService.baseURL) {
               fullAvatarUrl = `${apiService.baseURL}${newAvatarUrl.startsWith('/') ? '' : '/'}${newAvatarUrl}`;
+            } else {
+              fullAvatarUrl = newAvatarUrl;
             }
             setProfileImage(fullAvatarUrl);
           } else {
@@ -324,12 +353,8 @@ const ProfileScreen = ({ navigation }) => {
           ...user,
           ...profileData,
           avatar: profileImage,
-          profile_image: profileImage, // Keep both for compatibility
-          // Ensure both naming conventions are updated
-          firstName: profileData.first_name,
-          lastName: profileData.last_name,
-          first_name: profileData.first_name,
-          last_name: profileData.last_name,
+          firstName: profileData.firstName,
+          lastName: profileData.lastName,
         };
 
         await updateUser(updatedUserData);
@@ -363,18 +388,19 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleCancel = () => {
     setProfileData({
-      first_name: user?.first_name || user?.firstName || '',
-      last_name: user?.last_name || user?.lastName || '',
+      firstName: user?.firstName || '',
+      lastName: user?.lastName || '',
       email: user?.email || '',
+      idNumber: user?.idNumber || '',
       phone: user?.phone || '',
       county: user?.county || '',
       town: user?.town || '',
       bio: user?.bio || '',
       occupation: user?.occupation || '',
-      date_of_birth: user?.date_of_birth || '',
+      dateOfBirth: user?.dateOfBirth || '',
       gender: user?.gender || '',
     });
-    setProfileImage(user?.profile_image || null);
+    setProfileImage(user?.avatar || null);
     setEditing(false);
   };
 
@@ -422,6 +448,70 @@ const ProfileScreen = ({ navigation }) => {
   useEffect(() => {
     loadRecentActivities();
   }, [loadRecentActivities]);
+
+  useEffect(() => {
+    loadUserChamas();
+  }, []);
+
+  const loadUserChamas = async () => {
+    try {
+      setChamasLoading(true);
+      const response = await getUserChamas(50, 0);
+      if (response.success && response.data) {
+        setUserChamas(response.data);
+      }
+    } catch (error) {
+      console.warn('Failed to load user chamas:', error);
+    } finally {
+      setChamasLoading(false);
+    }
+  };
+
+  const handlePayChamaFee = async (chama) => {
+    if (!chama.memberId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Member ID not found for this chama',
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Pay Registration Fee',
+      `Send STK push to your phone for KES 50 registration fee for ${chama.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Pay KES 50',
+          onPress: async () => {
+            try {
+              setPayingChamaFee(chama.id);
+              const response = await payMemberServiceFee(chama.id, chama.memberId);
+              if (response.success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Payment Initiated',
+                  text2: 'STK push sent to your phone',
+                });
+                loadUserChamas();
+              } else {
+                throw new Error(response.error || 'Failed to initiate payment');
+              }
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Payment Failed',
+                text2: error.message || 'Failed to initiate payment',
+              });
+            } finally {
+              setPayingChamaFee(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const getActivityColor = (type, paymentMethod) => {
     const t = (type || '').toLowerCase();
@@ -535,10 +625,10 @@ const ProfileScreen = ({ navigation }) => {
         <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           {/* Activity Table Header */}
           <View style={[styles.activityTableHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Date</Text>
-            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Type</Text>
-            <Text style={[styles.activityHeaderText, { color: colors.textSecondary }]}>Amount</Text>
-            <Text style={[styles.activityHeaderText, { flex: 2, color: colors.textSecondary }]}>Description</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderDate, { color: colors.textSecondary }]}>Date</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderType, { color: colors.textSecondary }]}>Type</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderAmount, { color: colors.textSecondary }]}>Amount</Text>
+            <Text style={[styles.activityHeaderText, styles.activityHeaderDesc, { color: colors.textSecondary }]}>Description</Text>
           </View>
 
           {/* Activity Table Body */}
@@ -668,11 +758,13 @@ const ProfileScreen = ({ navigation }) => {
 
           {/* Frameless Image Section - touches top, left, and right edges */}
           <View style={styles.framelessImageContainer}>
-            {(profileImage || avatarData) ? (
+            {(profileImage && !profileImage.includes('undefined')) ? (
               <Image
-                source={{ uri: profileImage || avatarData }}
+                source={{ uri: profileImage }}
                 style={styles.framelessImage}
                 onError={(error) => {
+                  console.warn('Profile image load error:', error);
+                  setProfileImage(null);
                 }}
               />
             ) : (
@@ -703,24 +795,7 @@ const ProfileScreen = ({ navigation }) => {
 
           {/* Action Buttons - Below info */}
           <View style={styles.framelessHeaderActions}>
-            {/* Single Theme Toggle Button */}
-            <TouchableOpacity
-              style={[
-                styles.themeButton,
-                {
-                  backgroundColor: colors.primary + '20',
-                  borderColor: colors.primary,
-                }
-              ]}
-              onPress={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={theme === 'light' ? "moon" : "sunny"}
-                size={22}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
+
 
             <TouchableOpacity
               style={[
@@ -830,24 +905,6 @@ const ProfileScreen = ({ navigation }) => {
 
             {/* Action Icons under name and email */}
             <View style={styles.profileActionIcons}>
-              {/* Single Theme Toggle Button */}
-              <TouchableOpacity
-                style={[
-                  styles.themeButton,
-                  {
-                    backgroundColor: colors.primary + '20',
-                    borderColor: colors.primary,
-                  }
-                ]}
-                onPress={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={theme === 'light' ? "moon" : "sunny"}
-                  size={20}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
@@ -908,16 +965,16 @@ const ProfileScreen = ({ navigation }) => {
       <View style={styles.row}>
         <Input
           label="First Name"
-          value={profileData.first_name}
-          onChangeText={(text) => handleInputChange('first_name', text)}
+          value={profileData.firstName}
+          onChangeText={(text) => handleInputChange('firstName', text)}
           editable={editing}
           style={styles.halfInput}
         />
 
         <Input
           label="Last Name"
-          value={profileData.last_name}
-          onChangeText={(text) => handleInputChange('last_name', text)}
+          value={profileData.lastName}
+          onChangeText={(text) => handleInputChange('lastName', text)}
           editable={editing}
           style={styles.halfInput}
         />
@@ -931,22 +988,42 @@ const ProfileScreen = ({ navigation }) => {
         keyboardType="email-address"
       />
 
-      <Input
-        label="Phone Number"
-        value={profileData.phone}
-        onChangeText={(text) => handleInputChange('phone', text)}
-        editable={editing}
-        keyboardType="phone-pad"
-      />
-
       <View style={styles.row}>
         <Input
-          label="County"
-          value={profileData.county}
-          onChangeText={(text) => handleInputChange('county', text)}
+          label="ID Number"
+          value={profileData.idNumber}
+          onChangeText={(text) => handleInputChange('idNumber', text)}
           editable={editing}
+          keyboardType="numeric"
           style={styles.halfInput}
         />
+
+        <Input
+          label="Phone Number"
+          value={profileData.phone}
+          onChangeText={(text) => handleInputChange('phone', text)}
+          editable={editing}
+          keyboardType="phone-pad"
+          style={styles.halfInput}
+        />
+      </View>
+
+      <View style={styles.row}>
+        <View style={styles.halfInput}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: spacing.xs }]}>
+            County {editing && '*'}
+          </Text>
+          <TouchableOpacity
+            style={[styles.countySelector, { borderColor: colors.border }]}
+            onPress={() => editing && setShowCountyPicker(true)}
+            disabled={!editing}
+          >
+            <Text style={[styles.countyText, { color: profileData.county ? colors.text : colors.textSecondary }]}>
+              {profileData.county || 'Select county'}
+            </Text>
+            {editing && <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />}
+          </TouchableOpacity>
+        </View>
 
         <Input
           label="Town"
@@ -956,6 +1033,58 @@ const ProfileScreen = ({ navigation }) => {
           style={styles.halfInput}
         />
       </View>
+
+      <Modal
+        visible={showCountyPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCountyPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCountyPicker(false)}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Select County</Text>
+            <TextInput
+              style={[styles.countySearch, { color: colors.text, borderColor: colors.border }]}
+              placeholder="Search counties..."
+              placeholderTextColor={colors.textSecondary}
+              value={countySearch}
+              onChangeText={setCountySearch}
+            />
+            <ScrollView style={styles.countyList} nestedScrollEnabled>
+              {filteredCounties.map((county) => (
+                <TouchableOpacity
+                  key={county}
+                  style={[
+                    styles.countyOption,
+                    { borderBottomColor: colors.border },
+                    profileData.county === county && { backgroundColor: colors.primary + '20' }
+                  ]}
+                  onPress={() => selectCounty(county)}
+                >
+                  <Text style={[
+                    styles.countyOptionText,
+                    { color: profileData.county === county ? colors.primary : colors.text }
+                  ]}>
+                    {county}
+                  </Text>
+                  {profileData.county === county && (
+                    <Ionicons name="checkmark" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+              {filteredCounties.length === 0 && (
+                <Text style={[styles.noResults, { color: colors.textSecondary }]}>
+                  No counties found
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <Input
         label="Occupation"
@@ -967,8 +1096,8 @@ const ProfileScreen = ({ navigation }) => {
 
       <Input
         label="Date of Birth"
-        value={profileData.date_of_birth}
-        onChangeText={(text) => handleInputChange('date_of_birth', text)}
+        value={profileData.dateOfBirth}
+        onChangeText={(text) => handleInputChange('dateOfBirth', text)}
         editable={editing}
         placeholder="YYYY-MM-DD (e.g., 1990-01-15)"
         keyboardType="numeric"
@@ -1058,6 +1187,134 @@ const ProfileScreen = ({ navigation }) => {
     </Card>
   );
 
+  const renderUserChamasTable = () => {
+    if (chamasLoading) {
+      return (
+        <Card style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            My Chamas & Groups
+          </Text>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </Card>
+      );
+    }
+
+    if (userChamas.length === 0) {
+      return (
+        <Card style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            My Chamas & Groups
+          </Text>
+          <Text style={[styles.activityDescText, { color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.lg }]}>
+            You are not part of any chama or contribution group yet.
+          </Text>
+        </Card>
+      );
+    }
+
+    const totalPages = Math.ceil(userChamas.length / CHAMAS_PER_PAGE);
+    const startIndex = (chamasPage - 1) * CHAMAS_PER_PAGE;
+    const paginatedChamas = userChamas.slice(startIndex, startIndex + CHAMAS_PER_PAGE);
+
+    return (
+      <Card style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          My Chamas & Groups
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.chamasTable}>
+            <View style={[styles.chamasTableHeader, { backgroundColor: colors.primary + '10' }]}>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 2 }]}>Name</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Category</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Role</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Reg. Fee</Text>
+              <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Action</Text>
+            </View>
+            {paginatedChamas.map((chama, index) => {
+              const isEven = index % 2 === 0;
+              const hasUnpaidFee = !chama.serviceFeePaid;
+              const isPaying = payingChamaFee === chama.id;
+              return (
+                <View
+                  key={chama.id}
+                  style={[
+                    styles.chamasTableRow,
+                    { backgroundColor: isEven ? colors.background : colors.surface }
+                  ]}
+                >
+                  <Text style={[styles.chamasTableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>
+                    {chama.name}
+                  </Text>
+                  <Text style={[styles.chamasTableCell, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                    {chama.category?.charAt(0).toUpperCase() + chama.category?.slice(1)}
+                  </Text>
+                  <Text style={[styles.chamasTableCell, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                    {chama.memberRole?.charAt(0).toUpperCase() + chama.memberRole?.slice(1)}
+                  </Text>
+                  <View style={[styles.chamasStatusCell, { flex: 1.2 }]}>
+                    <Ionicons
+                      name={chama.serviceFeePaid ? 'checkmark-circle' : 'time'}
+                      size={14}
+                      color={chama.serviceFeePaid ? colors.success : colors.warning}
+                    />
+                    <Text style={[
+                      styles.chamasStatusText,
+                      { color: chama.serviceFeePaid ? colors.success : colors.warning }
+                    ]}>
+                      {chama.serviceFeePaid ? 'Paid' : 'Pending'}
+                    </Text>
+                  </View>
+                  <View style={[styles.chamasActionCell, { flex: 1 }]}>
+                    {hasUnpaidFee ? (
+                      <TouchableOpacity
+                        style={[styles.chamasPayButton, { backgroundColor: colors.primary }]}
+                        onPress={() => handlePayChamaFee(chama)}
+                        disabled={isPaying}
+                      >
+                        {isPaying ? (
+                          <ActivityIndicator size="small" color={colors.white} />
+                        ) : (
+                          <Text style={[styles.chamasPayButtonText, { color: colors.white }]}>
+                            Pay
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={[styles.chamasPaidBadge, { backgroundColor: colors.success + '20' }]}>
+                        <Ionicons name="checkmark" size={14} color={colors.success} />
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+        {totalPages > 1 && (
+          <View style={styles.chamasPagination}>
+            <TouchableOpacity
+              style={[styles.chamasPageButton, { opacity: chamasPage === 1 ? 0.5 : 1 }]}
+              onPress={() => setChamasPage(p => Math.max(1, p - 1))}
+              disabled={chamasPage === 1}
+            >
+              <Ionicons name="chevron-back" size={16} color={colors.primary} />
+            </TouchableOpacity>
+            <Text style={[styles.chamasPageText, { color: colors.text }]}>
+              {chamasPage} / {totalPages}
+            </Text>
+            <TouchableOpacity
+              style={[styles.chamasPageButton, { opacity: chamasPage === totalPages ? 0.5 : 1 }]}
+              onPress={() => setChamasPage(p => Math.min(totalPages, p + 1))}
+              disabled={chamasPage === totalPages}
+            >
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </Card>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -1068,6 +1325,7 @@ const ProfileScreen = ({ navigation }) => {
       >
         {renderProfileHeader()}
         {renderPersonalInfo()}
+        {renderUserChamasTable()}
         <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.lg }}>
           {renderRecentActivity()}
         </View>
@@ -1076,7 +1334,7 @@ const ProfileScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -1105,12 +1363,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.ss,
     borderBottomWidth: 1,
+    alignItems: 'center',
   },
   activityHeaderText: {
     fontSize: 10,
     fontWeight: typography.fontWeight.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  activityHeaderDate: {
+    width: 85,
+    marginRight: spacing.xs,
+  },
+  activityHeaderType: {
+    width: 105,
+    marginRight: spacing.xs,
+  },
+  activityHeaderAmount: {
+    width: 80,
+    marginRight: spacing.xs,
+    textAlign: 'right',
+  },
+  activityHeaderDesc: {
+    flex: 1,
   },
   activityTableBody: {
     borderBottomWidth: 1,
@@ -1403,6 +1678,152 @@ const styles = StyleSheet.create({
   },
   readOnlyText: {
     fontSize: typography.fontSize.base,
+  },
+  countySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    minHeight: 36,
+    backgroundColor: colors.surface,
+  },
+  countyText: {
+    fontSize: typography.fontSize.base,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    maxWidth: 320,
+    maxHeight: '70%',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    ...shadows.lg,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    marginBottom: spacing.xs,
+  },
+  countySearch: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    fontSize: typography.fontSize.base,
+  },
+  countyList: {
+    maxHeight: 300,
+  },
+  countyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  countyOptionText: {
+    fontSize: typography.fontSize.base,
+    flex: 1,
+  },
+  noResults: {
+    fontSize: typography.fontSize.base,
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
+  },
+  chamasTable: {
+    minWidth: 600,
+  },
+  chamasTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  chamasTableHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  chamasTableRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  chamasTableCell: {
+    flex: 1,
+    fontSize: 12,
+  },
+  chamasStatusCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  chamasStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  chamasActionCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chamasPayButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+  },
+  chamasPayButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chamasPaidBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+  },
+  chamasPagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  chamasPageButton: {
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  chamasPageText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

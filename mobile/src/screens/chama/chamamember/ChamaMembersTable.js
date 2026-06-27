@@ -30,12 +30,10 @@ const ChamaMembersTable = ({
     <View style={{ marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' }}>
       <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, width: '100%' }}>
-          <View style={{ minWidth: 520, width: '100%' }}>
+          <View style={{ minWidth: 320, width: '100%' }}>
             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-              <Text style={{ flex: 3, fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Name</Text>
+              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Name</Text>
               <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Role</Text>
-              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Attendance</Text>
-              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Reputation</Text>
               <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Actions</Text>
             </View>
 

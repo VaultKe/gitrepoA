@@ -29,7 +29,7 @@ const updateProfileWithImage = async (profileData) => {
       const filename = imageUri.split('/').pop() || 'profile.jpg';
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
-      formData.append('avatar', {
+      formData.append('profile_image', {
         uri: imageUri,
         name: filename,
         type: type,
@@ -72,8 +72,12 @@ const getUsers = async (limit = 50, offset = 0, query = '') => {
   return await makeRequest(url);
 };
 
+const searchUserByCredentials = async (phone, nationalId) => {
+  return await makeRequest(`/users/search-by-credentials?phone=${encodeURIComponent(phone)}&nationalId=${encodeURIComponent(nationalId)}`);
+};
+
 const searchUsers = async (query) => {
-  return await makeRequest(`/users/?q=${encodeURIComponent(query)}`);
+  return await makeRequest(`/users/search?q=${encodeURIComponent(query)}`);
 };
 
 const getAllUsersForAdmin = async (limit = 15, offset = 0, query = '') => {
@@ -250,11 +254,51 @@ const calculateSystemAnalytics = (users, chamas, transactions, period) => {
   };
 };
 
+const searchUserByPhoneAndNationalId = async (phone, nationalId) => {
+  return await makeRequest(`/users/search?phone=${encodeURIComponent(phone)}&nationalId=${encodeURIComponent(nationalId)}`);
+};
+
+const sendOnboardingTOTP = async (phone, userId) => {
+  return await makeRequest('/auth/send-onboarding-totp', {
+    method: 'POST',
+    body: { phone, userId },
+  });
+};
+
+const verifyOnboardingTOTP = async (code, userId) => {
+  return await makeRequest('/auth/verify-onboarding-totp', {
+    method: 'POST',
+    body: { code, userId },
+  });
+};
+
+const onboardUser = async (userData) => {
+  return await makeRequest('/users/onboard', {
+    method: 'POST',
+    body: userData,
+  });
+};
+
+const updateUserPhoneVerified = async (userId, verified) => {
+  return await makeRequest(`/users/${userId}/phone-verified`, {
+    method: 'PUT',
+    body: { verified },
+  });
+};
+
+const updateUserPaymentStatus = async (userId, hasPaid) => {
+  return await makeRequest(`/users/${userId}/registration-payment`, {
+    method: 'PUT',
+    body: { hasPaid },
+  });
+};
+
 export {
   getProfile,
   updateProfile,
   getUsers,
   searchUsers,
+  searchUserByCredentials,
   getAllUsersForAdmin,
   getAllUsersComplete,
   getUserStatistics,
@@ -262,4 +306,9 @@ export {
   getSystemAnalytics,
   buildSystemAnalytics,
   calculateSystemAnalytics,
+  sendOnboardingTOTP,
+  verifyOnboardingTOTP,
+  onboardUser,
+  updateUserPhoneVerified,
+  updateUserPaymentStatus,
 };

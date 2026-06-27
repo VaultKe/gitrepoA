@@ -17,16 +17,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
 import { formatTime } from '../../utils/dateUtils';
+import { useApp } from '../../context/AppContext';
 import chatService from '../../services/chat/ChatService';
 
 const ChatRoomScreen = ({ route, navigation }) => {
   const { roomId, roomName } = route.params || {};
-  const colors = getThemeColors();
+  const { theme } = useApp();
+  const colors = getThemeColors(theme);
   const navigationRef = useNavigation();
 
-  // State
+// State
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -49,32 +52,32 @@ const ChatRoomScreen = ({ route, navigation }) => {
   }, [roomId, navigation]);
 
   // Load initial room and messages
+  const loadData = useCallback(async () => {
+    if (!roomId) return;
+
+    try {
+      setLoading(true);
+
+      // Get room details
+      await chatService.joinRoom(roomId);
+
+      // Get messages
+      const roomMessages = await chatService.getMessages(roomId, 100, 0);
+      setMessages(roomMessages);
+
+      // Mark room as read
+      chatService.markRoomAsRead(roomId);
+
+      setError(null);
+    } catch (err) {
+      console.error('Load room error:', err);
+      setError('Failed to load messages');
+    } finally {
+      setLoading(false);
+    }
+  }, [roomId]);
+
   useEffect(() => {
-    const loadData = async () => {
-      if (!roomId) return;
-
-      try {
-        setLoading(true);
-
-        // Get room details
-        await chatService.joinRoom(roomId);
-
-        // Get messages
-        const roomMessages = await chatService.getMessages(roomId, 100, 0);
-        setMessages(roomMessages);
-
-        // Mark room as read
-        chatService.markRoomAsRead(roomId);
-
-        setError(null);
-      } catch (err) {
-        console.error('Load room error:', err);
-        setError('Failed to load messages');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadData();
 
     return () => {
@@ -90,7 +93,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
       }
       chatService.leaveRoom(roomId);
     };
-  }, [roomId]);
+  }, [roomId, loadData]);
 
   // Subscribe to new messages
   useEffect(() => {
@@ -228,6 +231,18 @@ const ChatRoomScreen = ({ route, navigation }) => {
     );
   }
 
+  // Show error screen
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
+        <TouchableOpacity onPress={() => { setError(null); loadData(); }} style={[styles.retryButton, { backgroundColor: colors.primary }]}>
+          <Text style={{ color: 'white' }}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -359,9 +374,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     ...shadows.sm,
   },
-  messageText: {
+messageText: {
     fontSize: typography.fontSize.md,
-     lineHeight: typography.lineHeight.normal,
+    lineHeight: typography.lineHeight.normal,
   },
   messageImage: {
     width: 200,
@@ -391,7 +406,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     flexWrap: 'wrap',
   },
-  imageThumb: {
+imageThumb: {
     width: 60,
     height: 60,
     marginRight: spacing.sm,
@@ -402,12 +417,12 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: borderRadius.sm,
   },
-   removeImage: {
-     position: 'absolute',
-     top: -4,
-     right: -4,
-     borderRadius: 10,
-   },
+  removeImage: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    borderRadius: 10,
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -421,13 +436,22 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     maxHeight: 100,
   },
-   sendButton: {
-     width: 40,
-     height: 40,
-     borderRadius: 20,
-     justifyContent: 'center',
-     alignItems: 'center',
-   },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: typography.fontSize.md,
+    marginBottom: spacing.md,
+  },
+  retryButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
 });
 
 export default ChatRoomScreen;

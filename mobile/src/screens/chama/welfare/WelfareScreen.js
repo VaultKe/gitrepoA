@@ -58,7 +58,7 @@ const WelfareScreen = ({ route, navigation }) => {
     minWidth: 100,
   },
   nameCell: {
-    flex: 3,
+    flex: 1.5,
     alignItems: 'flex-start',
     minWidth: 120,
   },

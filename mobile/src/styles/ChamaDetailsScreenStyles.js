@@ -60,6 +60,10 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.md,
   },
+  sectionDescription: {
+    fontSize: typography.fontSize.sm,
+    lineHeight: 18,
+  },
   chamaHeader: {
     flexDirection: 'row',
     alignItems: 'center',

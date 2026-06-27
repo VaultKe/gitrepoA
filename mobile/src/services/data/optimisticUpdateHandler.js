@@ -15,10 +15,11 @@ class OptimisticUpdateHandler {
     const updateId = `${dataType}_${Date.now()}_${Math.random()}`;
 
     try {
-      const originalData = await dataFetcher.getData(dataType);
-      this.rollbackQueue.set(updateId, originalData.data);
+      const originalResponse = await dataFetcher.getData(dataType);
+      const originalData = originalResponse.success ? originalResponse.data : [];
+      this.rollbackQueue.set(updateId, originalData);
 
-      const optimisticData = this.applyOptimisticUpdate(originalData.data, updateData);
+      const optimisticData = this.applyOptimisticUpdate(originalData, updateData);
       const cacheKey = cacheManager.generateCacheKey(dataType);
       cacheManager.setMemoryCache(cacheKey, optimisticData);
 
@@ -28,12 +29,16 @@ class OptimisticUpdateHandler {
       try {
         const apiResult = await apiCall();
 
-        if (apiResult.success) {
+        // Check if API call was successful (either explicit success property or no error thrown)
+        const isSuccess = apiResult?.success !== false;
+        
+        if (isSuccess) {
+          // Persist the optimistic data to storage FIRST
+          await this.updateAllCaches(dataType, optimisticData);
+          
+          // Then invalidate related caches
           if (updateData.action === 'remove' && dataType === 'notifications') {
             await this.handlePostDeleteCacheInvalidation();
-          }
-          if (apiResult.data) {
-            await this.updateAllCaches(dataType, apiResult.data);
           }
         } else {
           await this.rollbackOptimisticUpdate(updateId, dataType);
@@ -42,7 +47,7 @@ class OptimisticUpdateHandler {
         this.optimisticQueue.delete(updateId);
         this.rollbackQueue.delete(updateId);
 
-        return apiResult;
+        return { success: isSuccess, ...apiResult };
 
       } catch (apiError) {
         await this.rollbackOptimisticUpdate(updateId, dataType);
@@ -65,6 +70,9 @@ class OptimisticUpdateHandler {
   }
 
   applyOptimisticUpdate(originalData, updateData) {
+    if (!originalData) {
+      return updateData.action === 'add' ? [updateData.data] : updateData.data || null;
+    }
     if (Array.isArray(originalData)) {
       if (updateData.action === 'add') {
         return [updateData.data, ...originalData];
@@ -95,14 +103,6 @@ class OptimisticUpdateHandler {
   async handlePostDeleteCacheInvalidation() {
     await this.invalidateCache('notifications');
     await this.invalidateCache('unread-count');
-    
-    setTimeout(async () => {
-      try {
-        await dataFetcher.getData('notifications', { forceRefresh: true });
-        await dataFetcher.getData('unread-count', { forceRefresh: true });
-      } catch (error) {
-      }
-    }, 100);
   }
 
   async invalidateCache(dataType) {
