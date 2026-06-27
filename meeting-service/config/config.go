@@ -26,7 +26,8 @@ type Config struct {
 }
 
 func Load() *Config {
-	godotenv.Load()
+	godotenv.Load(".env")
+	godotenv.Load("../../.env")
 
 	cfg := &Config{
 		ServerPort:          getIntEnv("SERVER_PORT", 8082),
