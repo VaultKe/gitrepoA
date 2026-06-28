@@ -2,12 +2,18 @@ package routes
 
 import (
 	"database/sql"
-	// "log"
+	"fmt"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/google/uuid"
 	"vaultke-backend/config"
 	"vaultke-backend/internal/api"
 	"vaultke-backend/internal/middleware"
@@ -460,6 +466,25 @@ func SetupRoutes(
 				meetings.POST("/:id/calendar/create", api.CreateGoogleCalendarEvent)
 			}
 
+			onlineMeetings := protected.Group("/online-meetings")
+			{
+				onlineMeetings.Use(meetingAuthPassthrough)
+				onlineMeetings.Any("/*path", proxyTo(cfg.MeetingServiceURL, "/online-meetings"))
+			}
+
+		chat := apiGroup.Group("/chat")
+		{
+			chat.Use(authMiddleware.AuthRequired())
+			chat.Use(meetingAuthPassthrough)
+			chat.Any("/*path", proxyTo(cfg.ChatServiceURL, "/chat"))
+		}
+
+		chatWS := apiGroup.Group("/chat-ws")
+		{
+			chatWS.POST("/ws-token", authMiddleware.AuthRequired(), chatWSTokenHandler(cfg))
+			chatWS.GET("/ws", chatWSHandler(cfg))
+		}
+
 			merryGoRounds := protected.Group("/merry-go-rounds")
 			{
 				merryGoRounds.GET("/", api.GetMerryGoRounds)
@@ -524,5 +549,194 @@ func SetupRoutes(
 				}
 			}
 		}
+	}
+}
+
+func isWebSocket(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+}
+
+func proxyTo(targetBase string, _ string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Param("path")
+		query := c.Request.URL.RawQuery
+		
+		// Build target URL: targetBase + path (path already has leading /)
+		targetURL := targetBase + path
+		if query != "" {
+			targetURL += "?" + query
+		}
+
+		if isWebSocket(c.Request) {
+			proxyWebSocket(c, targetURL)
+			return
+		}
+
+		u, _ := url.Parse(targetURL)
+		proxy := httputil.NewSingleHostReverseProxy(u)
+		proxy.FlushInterval = 100 * time.Millisecond
+		proxy.Director = func(req *http.Request) {
+			req.URL.Scheme = u.Scheme
+			req.URL.Host = u.Host
+			req.URL.Path = u.Path
+			req.Host = u.Host
+			if u.RawQuery != "" {
+				req.URL.RawQuery = u.RawQuery
+			}
+			req.Header.Del("Authorization")
+			if userID := c.GetString("userID"); userID != "" {
+				req.Header.Set("X-User-ID", userID)
+			}
+		}
+		proxy.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func proxyWebSocket(c *gin.Context, targetURL string) {
+	headers := make(http.Header)
+	for k, v := range c.Request.Header {
+		headers[k] = v
+	}
+	headers.Del("Host")
+
+	wsURL := targetURL
+	if strings.HasPrefix(wsURL, "http://") {
+		wsURL = "ws://" + strings.TrimPrefix(wsURL, "http://")
+	} else if strings.HasPrefix(wsURL, "https://") {
+		wsURL = "wss://" + strings.TrimPrefix(wsURL, "https://")
+	}
+
+	backendConn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to connect to service"})
+		return
+	}
+	defer backendConn.Close()
+
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	clientConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+	defer clientConn.Close()
+
+	errChan := make(chan error, 2)
+	go copyWebSocketMessages(clientConn, backendConn, errChan)
+	go copyWebSocketMessages(backendConn, clientConn, errChan)
+	<-errChan
+}
+
+func copyWebSocketMessages(dst, src *websocket.Conn, errChan chan<- error) {
+	for {
+		msgType, msg, err := src.ReadMessage()
+		if err != nil {
+			errChan <- err
+			return
+		}
+		if err := dst.WriteMessage(msgType, msg); err != nil {
+			errChan <- err
+			return
+		}
+	}
+}
+
+func meetingAuthPassthrough(c *gin.Context) {
+	c.Next()
+}
+
+var chatSessions = struct {
+	store map[string]string
+	mu    sync.Mutex
+}{store: make(map[string]string)}
+
+var chatSessionStore = struct {
+	store map[string]string
+	mu    sync.Mutex
+}{store: make(map[string]string)}
+
+func chatWSTokenHandler(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		sessionID := uuid.New().String()
+		chatSessionStore.mu.Lock()
+		chatSessionStore.store[sessionID] = userID
+		chatSessionStore.mu.Unlock()
+
+		go func(id string) {
+			time.Sleep(5 * time.Minute)
+			chatSessionStore.mu.Lock()
+			delete(chatSessionStore.store, id)
+			chatSessionStore.mu.Unlock()
+		}(sessionID)
+
+		c.JSON(http.StatusOK, gin.H{
+			"sessionId": sessionID,
+			"expiresIn": 300,
+		})
+	}
+}
+
+func chatWSHandler(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sessionID := c.Query("session")
+		if sessionID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "session required"})
+			return
+		}
+
+		chatSessionStore.mu.Lock()
+		userID, ok := chatSessionStore.store[sessionID]
+		chatSessionStore.mu.Unlock()
+
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})
+			return
+		}
+
+		roomID := c.Query("roomId")
+		if roomID == "" {
+			roomID = "main"
+		}
+
+		targetURL := fmt.Sprintf("%s/rooms/%s/ws?session=%s", cfg.ChatServiceURL, roomID, sessionID)
+		targetURL = strings.Replace(targetURL, "http://", "ws://", 1)
+		targetURL = strings.Replace(targetURL, "https://", "wss://", 1)
+
+		headers := make(http.Header)
+		for k, v := range c.Request.Header {
+			headers[k] = v
+		}
+		headers.Set("X-User-ID", userID)
+		headers.Del("Host")
+		headers.Del("Cookie")
+		headers.Del("Authorization")
+
+		backendConn, _, err := websocket.DefaultDialer.Dial(targetURL, headers)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to connect to chat service"})
+			return
+		}
+		defer backendConn.Close()
+
+		upgrader := websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool { return true },
+		}
+		clientConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			return
+		}
+		defer clientConn.Close()
+
+		errChan := make(chan error, 2)
+		go copyWebSocketMessages(clientConn, backendConn, errChan)
+		go copyWebSocketMessages(backendConn, clientConn, errChan)
+		<-errChan
 	}
 }

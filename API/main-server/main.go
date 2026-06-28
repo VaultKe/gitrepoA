@@ -96,12 +96,6 @@ func main() {
 		log.Fatalf("Failed to initialize email verification table: %v", err)
 	}
 
-	// Initialize notification service
-	notificationService := services.NewNotificationService(db, cfg)
-
-	// Initialize meeting service
-	api.InitializeMeetingService(db, notificationService)
-
 	// Initialize notification scheduler for reminders
 	notificationScheduler := services.NewNotificationScheduler(db)
 	notificationScheduler.Start()

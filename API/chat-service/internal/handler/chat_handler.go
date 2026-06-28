@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,16 +22,19 @@ type ChatHandler struct {
 	hub      *ws.Hub
 	roomMgr  *room.RoomManager
 	upgrader websocket.Upgrader
+	sessions map[string]string // sessionID -> userID
+	mu       sync.Mutex
 }
 
 func NewChatHandler(db *sql.DB, hub *ws.Hub, roomMgr *room.RoomManager) *ChatHandler {
 	return &ChatHandler{
-		db: db,
-		hub: hub,
-		roomMgr: roomMgr,
+		db:       db,
+		hub:      hub,
+		roomMgr:  roomMgr,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
+		sessions: make(map[string]string),
 	}
 }
 
@@ -55,8 +59,8 @@ func (h *ChatHandler) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(`INSERT INTO chat_rooms (id, chama_id, name, type, is_private, created_by, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		room.ID, room.ChamaID, room.Name, room.Type, room.IsPrivate, room.CreatedBy, room.IsActive, room.CreatedAt, room.UpdatedAt)
+	_, err = tx.Exec(`INSERT INTO chat_rooms (id, chama_id, name, type, created_by, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		room.ID, room.ChamaID, room.Name, room.Type, room.CreatedBy, room.IsActive, room.CreatedAt, room.UpdatedAt)
 	if err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
@@ -90,7 +94,7 @@ func (h *ChatHandler) CreateRoom(c *gin.Context) {
 
 	tx.Commit()
 	h.roomMgr.CreateRoom(room, members)
-	c.JSON(http.StatusCreated, room)
+	c.JSON(http.StatusCreated, gin.H{"success": true, "data": room})
 }
 
 func (h *ChatHandler) GetRooms(c *gin.Context) {
@@ -100,7 +104,7 @@ func (h *ChatHandler) GetRooms(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch rooms"})
 		return
 	}
-	c.JSON(http.StatusOK, rooms)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": rooms})
 }
 
 func (h *ChatHandler) GetRoom(c *gin.Context) {
@@ -116,7 +120,7 @@ func (h *ChatHandler) GetRoom(c *gin.Context) {
 	}
 	err = h.db.QueryRow(`SELECT json_agg(row_to_json(m)) FROM (
 		SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata, is_deleted as "isDeleted", 
-		reply_to_id as "replyToId", created_at as "createdAt", edited_at as "editedAt"
+		reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
 		FROM chat_messages WHERE room_id = $1 AND is_deleted = false ORDER BY created_at DESC LIMIT 50
 	) m`, roomID).Scan(&messages.Items)
 
@@ -125,10 +129,10 @@ func (h *ChatHandler) GetRoom(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"room": room,
 		"messages": messages.Items,
-	})
+	}})
 }
 
 func (h *ChatHandler) JoinRoom(c *gin.Context) {
@@ -141,7 +145,7 @@ func (h *ChatHandler) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "joined"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"status": "joined"}})
 }
 
 func (h *ChatHandler) LeaveRoom(c *gin.Context) {
@@ -154,7 +158,7 @@ func (h *ChatHandler) LeaveRoom(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "left"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"status": "left"}})
 }
 
 func (h *ChatHandler) GetMessages(c *gin.Context) {
@@ -166,13 +170,13 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 	var err error
 
 	if before != "" {
-		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata, 
-			reply_to_id as "replyToId", created_at as "createdAt", edited_at as "editedAt"
+		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata,
+			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
 			FROM chat_messages WHERE room_id = $1 AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2) 
 			AND is_deleted = false ORDER BY created_at DESC LIMIT $3`, roomID, before, limit)
 	} else {
 		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata,
-			reply_to_id as "replyToId", created_at as "createdAt", edited_at as "editedAt"
+			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
 			FROM chat_messages WHERE room_id = $1 AND is_deleted = false ORDER BY created_at DESC LIMIT $2`, roomID, limit)
 	}
 
@@ -194,7 +198,7 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 		messages = append(messages, &m)
 	}
 
-	c.JSON(http.StatusOK, messages)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": messages})
 }
 
 func (h *ChatHandler) SendMessage(c *gin.Context) {
@@ -229,13 +233,52 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	data, _ := json.Marshal(msg)
 	h.hub.BroadcastToRoom(roomID, data)
 
-	c.JSON(http.StatusCreated, msg)
+	c.JSON(http.StatusCreated, gin.H{"success": true, "data": msg})
+}
+
+func (h *ChatHandler) GetWSToken(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	sessionID := uuid.New().String()
+	h.mu.Lock()
+	h.sessions[sessionID] = userID
+	h.mu.Unlock()
+
+	_ = time.AfterFunc(5*time.Minute, func() {
+		h.mu.Lock()
+		delete(h.sessions, sessionID)
+		h.mu.Unlock()
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"sessionId": sessionID,
+		"expiresIn": 300,
+	})
 }
 
 func (h *ChatHandler) WebSocketEndpoint(c *gin.Context) {
-	userID := c.GetString("userID")
-	roomID := c.Param("roomId")
+	sessionID := c.Query("session")
+	userID := ""
+	if sessionID != "" {
+		h.mu.Lock()
+		userID, _ = h.sessions[sessionID]
+		h.mu.Unlock()
+	}
 
+	if userID == "" {
+		userID = c.GetHeader("X-User-ID")
+	}
+
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	roomID := c.Param("roomId")
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
@@ -269,7 +312,7 @@ func (h *ChatHandler) MarkAsRead(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "read"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"status": "read"}})
 }
 
 func (h *ChatHandler) DeleteMessage(c *gin.Context) {
@@ -289,7 +332,7 @@ func (h *ChatHandler) DeleteMessage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"status": "deleted"}})
 }
 
 func (h *ChatHandler) SearchMessages(c *gin.Context) {
@@ -319,7 +362,7 @@ func (h *ChatHandler) SearchMessages(c *gin.Context) {
 		messages = append(messages, &m)
 	}
 
-	c.JSON(http.StatusOK, messages)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": messages})
 }
 
 func (h *ChatHandler) UploadFile(c *gin.Context) {

@@ -20,7 +20,7 @@ type ChatRoom struct {
 	ChamaID      sql.NullString `json:"chamaId,omitempty" db:"chama_id"`
 	Name         string       `json:"name" db:"name"`
 	Type         ChatRoomType `json:"type" db:"type"`
-	IsPrivate    bool         `json:"isPrivate" db:"is_private"`
+	IsPrivate    bool         `json:"isPrivate" db:"-"`
 	CreatedBy    string       `json:"createdBy" db:"created_by"`
 	IsActive     bool         `json:"isActive" db:"is_active"`
 	LastMessage  string       `json:"lastMessage,omitempty" db:"last_message"`

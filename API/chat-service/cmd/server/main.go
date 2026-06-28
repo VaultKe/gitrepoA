@@ -51,29 +51,27 @@ func main() {
 
 	r := gin.Default()
 
+	r.Use(middleware.CORSMiddleware())
+
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "chat"})
 	})
 
-	r.Use(middleware.AuthMiddleware(cfg.JWTSecret))
-
-	api := r.Group("/api/v1")
+	rooms := r.Group("/rooms")
+	rooms.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	{
-		rooms := api.Group("/rooms")
-		{
-			rooms.POST("", h.CreateRoom)
-			rooms.GET("", h.GetRooms)
-			rooms.GET("/:roomId", h.GetRoom)
-			rooms.POST("/:roomId/join", h.JoinRoom)
-			rooms.POST("/:roomId/leave", h.LeaveRoom)
-			rooms.GET("/:roomId/messages", h.GetMessages)
-			rooms.POST("/:roomId/messages", h.SendMessage)
-			rooms.GET("/:roomId/ws", h.WebSocketEndpoint)
-			rooms.POST("/:roomId/read", h.MarkAsRead)
-			rooms.DELETE("/messages/:messageId", h.DeleteMessage)
-			rooms.GET("/:roomId/search", h.SearchMessages)
-			rooms.POST("/:roomId/files", h.UploadFile)
-		}
+		rooms.POST("", h.CreateRoom)
+		rooms.GET("", h.GetRooms)
+		rooms.GET("/:roomId", h.GetRoom)
+		rooms.POST("/:roomId/join", h.JoinRoom)
+		rooms.POST("/:roomId/leave", h.LeaveRoom)
+		rooms.GET("/:roomId/messages", h.GetMessages)
+		rooms.POST("/:roomId/messages", h.SendMessage)
+		rooms.GET("/:roomId/ws", h.WebSocketEndpoint)
+		rooms.POST("/:roomId/read", h.MarkAsRead)
+		rooms.DELETE("/messages/:messageId", h.DeleteMessage)
+		rooms.GET("/:roomId/search", h.SearchMessages)
+		rooms.POST("/:roomId/files", h.UploadFile)
 	}
 
 	srv := &http.Server{

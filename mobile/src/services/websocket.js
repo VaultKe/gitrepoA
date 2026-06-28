@@ -34,7 +34,19 @@ class WebSocketService {
       if (!token) return false;
 
       if (!API_BASE_URL) return false;
-      const wsUrl = `${WS_URL}/ws?token=${encodeURIComponent(token)}`;
+
+      const sessionRes = await fetch(`${API_BASE_URL}/chat-ws/ws-token`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!sessionRes.ok) return false;
+      const { sessionId } = await sessionRes.json();
+      if (!sessionId) return false;
+
+      const wsUrl = `${WS_URL}/chat-ws/ws?session=${encodeURIComponent(sessionId)}`;
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = this.onOpen.bind(this);

@@ -10,6 +10,13 @@ import (
 
 func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := c.GetHeader("X-User-ID")
+		if userID != "" {
+			c.Set("userID", userID)
+			c.Next()
+			return
+		}
+
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
@@ -37,15 +44,17 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		userID, _ := claims["user_id"].(string)
+		uid, _ := claims["userId"].(string)
+		email, _ := claims["email"].(string)
 		role, _ := claims["role"].(string)
 
-		if userID == "" {
+		if uid == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user_id not in token"})
 			return
 		}
 
-		c.Set("userID", userID)
+		c.Set("userID", uid)
+		c.Set("email", email)
 		c.Set("role", role)
 		c.Next()
 	}

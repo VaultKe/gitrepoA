@@ -78,10 +78,6 @@ type Config struct {
 	LogLevel string
 	LogFile  string
 
-	// CORS Configuration
-	AllowedOrigins []string
-	AllowAllOrigins bool
-
 	// Metrics and Monitoring Configuration
 	EnableMetrics bool
 	MetricsPort   string
@@ -91,6 +87,14 @@ type Config struct {
 	BackupEnabled  bool
 	BackupInterval int
 	BackupPath     string
+
+	// CORS Configuration
+	AllowedOrigins  []string
+	AllowAllOrigins bool
+
+	// Microservice URLs
+	MeetingServiceURL string
+	ChatServiceURL    string
 }
 
 // Load loads configuration from environment variables
@@ -178,6 +182,10 @@ func Load() *Config {
 		// CORS Configuration
 		AllowedOrigins:  getEnvAsStringSlice("ALLOWED_ORIGINS", []string{}),
 		AllowAllOrigins: getEnvAsBool("ALLOW_ALL_ORIGINS", true), // Default to true for development
+
+// Microservice URLs
+	MeetingServiceURL: getEnv("MEETING_SERVICE_URL", "http://localhost:8086"),
+	ChatServiceURL:    getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
 	}
 }
 

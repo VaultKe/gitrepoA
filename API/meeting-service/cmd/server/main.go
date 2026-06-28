@@ -18,7 +18,6 @@ import (
 	"vaultke-meeting-service/internal/signaling"
 	"vaultke-meeting-service/internal/webrtc"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -53,14 +52,38 @@ func main() {
 
 	r := gin.Default()
 
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Authorization", "Content-Type"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	// CORS middleware for direct microservice access
+	r.Use(func(c *gin.Context) {
+		allowedOrigins := []string{
+			"https://gitrepoa-1.onrender.com",
+			"http://localhost:8081",
+			"https://localhost",
+			"https://127.0.0.1:8081",
+			"http://localhost:8085",
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"https://vault-better1.vercel.app",
+			"http://localhost:19006",
+			"http://127.0.0.1:19006",
+		}
+		origin := c.GetHeader("Origin")
+		allowedOrigin := "*"
+		for _, o := range allowedOrigins {
+			if o == origin {
+				allowedOrigin = origin
+				break
+			}
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	})
 
 	h := handler.NewMeetingHandler(cfg, roomManager, sfuManager, signalingHub)
 
