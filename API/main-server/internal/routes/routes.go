@@ -598,6 +598,11 @@ func proxyWebSocket(c *gin.Context, targetURL string) {
 		headers[k] = v
 	}
 	headers.Del("Host")
+	headers.Del("Upgrade")
+	headers.Del("Connection")
+	headers.Del("Sec-WebSocket-Key")
+	headers.Del("Sec-WebSocket-Version")
+	headers.Del("Sec-WebSocket-Protocol")
 
 	wsURL := targetURL
 	if strings.HasPrefix(wsURL, "http://") {
@@ -717,6 +722,11 @@ func chatWSHandler(cfg *config.Config) gin.HandlerFunc {
 		headers.Del("Host")
 		headers.Del("Cookie")
 		headers.Del("Authorization")
+		headers.Del("Upgrade")
+		headers.Del("Connection")
+		headers.Del("Sec-WebSocket-Key")
+		headers.Del("Sec-WebSocket-Version")
+		headers.Del("Sec-WebSocket-Protocol")
 
 		backendConn, _, err := websocket.DefaultDialer.Dial(targetURL, headers)
 		if err != nil {
