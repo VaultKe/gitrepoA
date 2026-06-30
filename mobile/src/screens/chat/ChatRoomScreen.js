@@ -97,7 +97,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
           return prev.map(m => m.id === message.id || m.tempId === message.id ? { ...m, ...message } : m);
         }
         const filtered = prev.filter(m => m.tempId !== message.tempId && m.id !== message.id);
-        return [...filtered, message];
+        return [...filtered, message].sort((a, b) => a.createdAt - b.createdAt);
       });
     });
 

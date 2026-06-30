@@ -429,7 +429,7 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
 
       if (response.success) {
         this._updateMessages(roomId, response.data || []);
-        return response.data || [];
+        return this.getRoomMessages(roomId);
       }
       throw new Error(response.error || 'Failed to load messages');
     } catch (error) {
