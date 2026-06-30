@@ -257,24 +257,44 @@ joinRoom(roomId) {
      websocketService.joinRoom(roomId);
    }
 
-   leaveRoom(roomId) {
-     websocketService.leaveRoom(roomId);
-   }
+leaveRoom(roomId) {
+      websocketService.leaveRoom(roomId);
+    }
 
-async sendMessage(roomId, content, type = 'text', metadata = {}) {
-      // Generate optimistic message immediately
-      const tempId = this._generateTempId();
-      const optimisticMessage = {
-        id: tempId,
-        tempId,
-        roomId,
-        content,
-        type,
-        metadata,
-        status: 'sending',
-        createdAt: Date.now(),
-        senderId: await this._getCurrentUserId(),
-      };
+    async deleteMessage(roomId, messageId) {
+      try {
+        await websocketService.send({
+          type: 'delete_message',
+          roomId,
+          messageId,
+        });
+
+        // Remove from local state optimistically
+        this._removeMessage(roomId, messageId);
+      } catch (error) {
+        console.error('deleteMessage error:', error);
+        throw error;
+      }
+    }
+
+    async sendMessage(roomId, content, type = 'text', metadata = {}) {
+       // Generate optimistic message immediately
+       const tempId = this._generateTempId();
+       const replyToId = metadata.replyToId;
+       
+       const optimisticMessage = {
+         id: tempId,
+         tempId,
+         roomId,
+         content,
+         type,
+         metadata,
+         ...(replyToId && { replyToId }),
+          ...(metadata.replyToData && { replyTo: metadata.replyToData }),
+         status: 'sending',
+         createdAt: Date.now(),
+         senderId: await this._getCurrentUserId(),
+       };
 
       // Add to local state immediately for instant UI feedback
       this._addMessage(roomId, optimisticMessage);
@@ -307,15 +327,15 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
 
           websocketService.registerMessageHandler('message_sent', handler);
 
-          const message = {
-            type: WS_EVENTS.SEND_MESSAGE,
-            requestId,
-            roomId,
-            content,
-            messageType: type,
-            metadata,
-            clientMessageId: tempId,
-          };
+const message = {
+             type: WS_EVENTS.SEND_MESSAGE,
+             requestId,
+             roomId,
+             content,
+             messageType: type,
+             metadata: { ...metadata, replyToId },
+             clientMessageId: tempId,
+           };
           console.log('[WS DEBUG] Sending message:', JSON.stringify(message));
 
           // Send via WebSocket
@@ -566,11 +586,29 @@ _handleNewMessage(message) {
     const existing = this.messages.get(roomId) || [];
     const existingIds = new Set(existing.map(m => m.id));
 
+    // Build keys from server messages so we can match and remove stale optimistic duplicates.
+    // We bucket timestamps into 3-second windows to tolerate minor clock drift between
+    // the optimistic client-side timestamp and the server-assigned createdAt.
+    const serverKeys = new Set();
+    messages.forEach(m => {
+      const key = `${m.senderId}_${m.content}_${m.type}_${Math.floor((m.createdAt || 0) / 3000)}`;
+      serverKeys.add(key);
+    });
+
+    // Keep non-optimistic messages, and remove optimistic messages whose content/sender/time
+    // matches a confirmed server message. Truly pending messages (status === 'sending') are kept.
+    const filteredExisting = existing.filter(m => {
+      if (!m.tempId || m.tempId === m.id) return true;
+      const key = `${m.senderId}_${m.content}_${m.type}_${Math.floor((m.createdAt || 0) / 3000)}`;
+      if (serverKeys.has(key)) return false;
+      return m.status === 'sending';
+    });
+
     // Append new messages only
     const newMessages = messages.filter(m => !existingIds.has(m.id));
 
     // Sort by createdAt
-    const combined = [...existing, ...newMessages].sort((a, b) => a.createdAt - b.createdAt);
+    const combined = [...filteredExisting, ...newMessages].sort((a, b) => a.createdAt - b.createdAt);
 
     this.messages.set(roomId, combined);
     this._schedulePersist();
@@ -744,7 +782,12 @@ _notifyMessageSubscribers(roomId, message) {
         }
         if (messages) {
           messages.forEach(([roomId, msgs]) => {
-            this.messages.set(roomId, msgs);
+            const deduped = msgs.filter(m => {
+              if (!m.tempId || m.tempId === m.id) return true;
+              if (m.status === 'sending') return true;
+              return false;
+            });
+            this.messages.set(roomId, deduped);
           });
         }
         console.log(`Loaded ${rooms?.length || 0} rooms and ${messages?.length || 0} message threads from cache`);
