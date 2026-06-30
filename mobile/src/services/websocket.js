@@ -18,14 +18,12 @@ class WebSocketService {
   }
 
 async connect() {
-     console.log('[WS DEBUG] connect() called, isRealtimeEnabled:', this.isRealtimeEnabled);
      if (!this.isRealtimeEnabled) {
        console.warn('[WS DEBUG] Realtime disabled, not connecting');
        return false;
      }
 
      if (this.isConnected || this.ws) {
-       console.log('[WS DEBUG] Existing connection found, closing...');
        this.ws.close();
        this.ws = null;
        this.isConnected = false;
@@ -43,7 +41,6 @@ async connect() {
 async _establishConnection() {
      try {
        const token = await AsyncStorage.getItem('authToken');
-       console.log('[WS DEBUG] authToken:', token ? 'present' : 'missing');
        if (!token) {
          console.warn('[WS DEBUG] No auth token, cannot connect');
          return false;
@@ -54,7 +51,6 @@ async _establishConnection() {
          return false;
        }
 
-       console.log('[WS DEBUG] Fetching WS token from:', `${API_BASE_URL}/chat-ws/ws-token`);
        const sessionRes = await fetch(`${API_BASE_URL}/chat-ws/ws-token`, {
          method: 'POST',
          headers: {
@@ -62,17 +58,14 @@ async _establishConnection() {
            'Content-Type': 'application/json',
          },
        });
-       console.log('[WS DEBUG] WS token response status:', sessionRes.status);
        if (!sessionRes.ok) {
          console.warn('[WS DEBUG] WS token request failed');
          return false;
        }
        const { sessionId } = await sessionRes.json();
-       console.log('[WS DEBUG] sessionId received:', sessionId);
        if (!sessionId) return false;
 
        const wsUrl = `${WS_URL}/chat-ws/ws?session=${encodeURIComponent(sessionId)}`;
-       console.log('[WS DEBUG] Connecting to WebSocket URL:', wsUrl);
        this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = this.onOpen.bind(this);
@@ -194,7 +187,6 @@ onMessage(event) {
    }
 
 send(message) {
-     console.log('[WS DEBUG] send() called, message:', JSON.stringify(message), 'isConnected:', this.isConnected);
      if (this.ws && this.isConnected) {
        try {
          this.ws.send(JSON.stringify(message));
@@ -209,7 +201,6 @@ send(message) {
    }
 
 joinRoom(roomId) {
-     console.log('[WS DEBUG] joinRoom called with roomId:', roomId);
      this.roomSubscriptions.add(roomId);
      this.send({ type: 'join_room', roomId });
    }

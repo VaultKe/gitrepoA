@@ -140,8 +140,8 @@ func (rm *RoomManager) GetUserRooms(userID string) ([]*models.ChatRoom, error) {
 	rm.mu.RLock()
 	var cached []*models.ChatRoom
 	for _, room := range rm.rooms {
-		if _, isMember := rm.members[room.ID]; isMember {
-			if _, exists := rm.members[room.ID][userID]; exists {
+		if cachedMembers, ok := rm.members[room.ID]; ok {
+			if _, exists := cachedMembers[userID]; exists {
 				cached = append(cached, room)
 			}
 		}

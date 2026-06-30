@@ -42,7 +42,11 @@ const ChatScreen = () => {
       try {
         await chatService.initialize();
 
-        // Load initial rooms
+        const cachedRooms = chatService.getAllRooms();
+        if (cachedRooms && cachedRooms.length > 0) {
+          setRooms(cachedRooms);
+        }
+
         const roomList = await chatService.getRooms();
         setRooms(roomList);
         setError(null);
@@ -57,7 +61,6 @@ const ChatScreen = () => {
     init();
 
     return () => {
-      // Cleanup
       if (chatService.cleanup) chatService.cleanup();
     };
   }, []);

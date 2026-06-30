@@ -119,12 +119,19 @@ class ChatService {
 
   async getRooms(forceRefresh = false) {
     try {
-      // Request fresh data from backend via WebSocket
-      return await this._getRoomsViaWebSocket(forceRefresh);
+      // Load rooms via REST API first (fast, uses in-memory server cache)
+      const rooms = await this._getRoomsViaRest(forceRefresh);
+      // Establish WebSocket in background for real-time updates
+      this._getRoomsViaWebSocket(forceRefresh).catch(() => {});
+      return rooms;
     } catch (error) {
-      console.warn('WebSocket getRooms failed, trying REST fallback:', error.message);
-      // Fallback to REST API
-      return this._getRoomsViaRest(forceRefresh);
+      console.warn('REST getRooms failed, trying WebSocket fallback:', error.message);
+      try {
+        return await this._getRoomsViaWebSocket(forceRefresh);
+      } catch (wsError) {
+        console.warn('WebSocket fallback also failed:', wsError.message);
+        return Array.from(this.rooms.values());
+      }
     }
   }
 
@@ -254,50 +261,81 @@ joinRoom(roomId) {
      websocketService.leaveRoom(roomId);
    }
 
-   async sendMessage(roomId, content, type = 'text', metadata = {}) {
-     try {
-       return new Promise((resolve, reject) => {
-         const tempId = this._generateTempId();
-         const requestId = this._generateRequestId();
-         const timeout = setTimeout(() => {
-           reject(new Error('Request timeout'));
-         }, 15000);
+async sendMessage(roomId, content, type = 'text', metadata = {}) {
+      // Generate optimistic message immediately
+      const tempId = this._generateTempId();
+      const optimisticMessage = {
+        id: tempId,
+        tempId,
+        roomId,
+        content,
+        type,
+        metadata,
+        status: 'sending',
+        createdAt: Date.now(),
+        senderId: await this._getCurrentUserId(),
+      };
 
-         const handler = (response) => {
-           console.log('[WS DEBUG] message_sent response:', JSON.stringify(response));
-           if (response.requestId === requestId) {
-             clearTimeout(timeout);
-             websocketService.unregisterMessageHandler('message_sent');
-             if (response.success) {
-               this.pendingMessages.delete(tempId);
-               resolve(response.data);
-             } else {
-               this.pendingMessages.delete(tempId);
-               reject(new Error(response.error || 'Failed to send message'));
-             }
-           }
-         };
+      // Add to local state immediately for instant UI feedback
+      this._addMessage(roomId, optimisticMessage);
+      this.pendingMessages.set(tempId, optimisticMessage);
+      this._notifyMessageSubscribers(roomId, optimisticMessage);
 
-         websocketService.registerMessageHandler('message_sent', handler);
+      try {
+        return new Promise((resolve, reject) => {
+          const requestId = this._generateRequestId();
+          const timeout = setTimeout(() => {
+            reject(new Error('Request timeout'));
+          }, 15000);
 
-         const message = {
-           type: WS_EVENTS.SEND_MESSAGE,
-           requestId,
-           roomId,
-           content,
-           messageType: type,
-           metadata,
-           clientMessageId: tempId,
-         };
-         console.log('[WS DEBUG] Sending message:', JSON.stringify(message));
+          const handler = (response) => {
+            console.log('[WS DEBUG] message_sent response:', JSON.stringify(response));
+            if (response.requestId === requestId) {
+              clearTimeout(timeout);
+              websocketService.unregisterMessageHandler('message_sent');
+              if (response.success) {
+                this.pendingMessages.delete(tempId);
+                resolve(response.data);
+              } else {
+                this.pendingMessages.delete(tempId);
+                // Mark message as failed
+                this._updateMessageStatus(roomId, tempId, 'failed', response.error);
+                reject(new Error(response.error || 'Failed to send message'));
+              }
+            }
+          };
 
-         websocketService.send(message);
-       });
-     } catch (error) {
-       console.error('sendMessage error:', error);
-       throw error;
-     }
-   }
+          websocketService.registerMessageHandler('message_sent', handler);
+
+          const message = {
+            type: WS_EVENTS.SEND_MESSAGE,
+            requestId,
+            roomId,
+            content,
+            messageType: type,
+            metadata,
+            clientMessageId: tempId,
+          };
+          console.log('[WS DEBUG] Sending message:', JSON.stringify(message));
+
+          // Send via WebSocket
+          if (!websocketService.send(message)) {
+            // If WebSocket not connected, reject immediately
+            clearTimeout(timeout);
+            websocketService.unregisterMessageHandler('message_sent');
+            this.pendingMessages.delete(tempId);
+            this._removeMessage(roomId, tempId);
+            reject(new Error('WebSocket not connected'));
+          }
+        });
+      } catch (error) {
+        console.error('sendMessage error:', error);
+        // Remove optimistic message on error
+        this.pendingMessages.delete(tempId);
+        this._removeMessage(roomId, tempId);
+        throw error;
+      }
+    }
 
    // ==================== Event Subscription ====================
 
@@ -426,41 +464,37 @@ joinRoom(roomId) {
   // ==================== Private Handlers ====================
 
 _handleNewMessage(message) {
-     console.log('[WS DEBUG] _handleNewMessage called with:', JSON.stringify(message));
-     const { roomId, data } = message;
+      console.log('[WS DEBUG] _handleNewMessage called with:', JSON.stringify(message));
+      const { roomId, data } = message;
 
-     // Deduplication: check if already processed
-     if (this.processedMessageIds.has(data.id)) {
-       console.log('[WS DEBUG] Duplicate message detected, skipping:', data.id);
-       return; // Skip duplicate
-     }
+      // Handle pending message resolution (optimistic update)
+      // The server sends clientMessageId to match optimistic messages
+      const pendingTempId = data.clientMessageId || data.id;
+      const pending = this.pendingMessages.get(pendingTempId);
 
-    // Add to processed set
-    this.processedMessageIds.add(data.id);
+      if (pending) {
+        // Replace optimistic with real message
+        data.status = 'delivered';
+        this._updateMessage(roomId, pendingTempId, data);
+        this.pendingMessages.delete(pendingTempId);
+      } else if (!this.processedMessageIds.has(data.id)) {
+        // Deduplication: check if already processed
+        this.processedMessageIds.add(data.id);
 
-    // Limit processed IDs set size to prevent memory leak
-    if (this.processedMessageIds.size > 10000) {
-      // Remove oldest 1000
-      const toRemove = Array.from(this.processedMessageIds).slice(0, 1000);
-      toRemove.forEach(id => this.processedMessageIds.delete(id));
+        // Limit processed IDs set size to prevent memory leak
+        if (this.processedMessageIds.size > 10000) {
+          const toRemove = Array.from(this.processedMessageIds).slice(0, 1000);
+          toRemove.forEach(id => this.processedMessageIds.delete(id));
+        }
+
+        // New incoming message
+        data.status = 'delivered';
+        this._addMessage(roomId, data);
+      }
+
+      // Notify subscribers
+      this._notifyMessageSubscribers(roomId, data);
     }
-
-    // Handle pending message resolution
-    const pending = this.pendingMessages.get(data.clientMessageId);
-    if (pending) {
-      // Replace optimistic with real message
-      data.status = 'delivered';
-      this._updateMessage(roomId, pending.tempId, data);
-      this.pendingMessages.delete(data.clientMessageId);
-    } else {
-      // New incoming message
-      data.status = 'delivered';
-      this._addMessage(roomId, data);
-    }
-
-    // Notify subscribers
-    this._notifyMessageSubscribers(roomId, data);
-  }
 
   _handleDelivered(message) {
     const { roomId, data } = message;
@@ -542,12 +576,19 @@ _handleNewMessage(message) {
     this._schedulePersist();
   }
 
-  _addMessage(roomId, message) {
-    const roomMessages = this.messages.get(roomId) || [];
-    roomMessages.push(message);
-    this.messages.set(roomId, roomMessages);
-    this._schedulePersist();
-  }
+_addMessage(roomId, message) {
+     const roomMessages = this.messages.get(roomId) || [];
+     roomMessages.push(message);
+     this.messages.set(roomId, roomMessages);
+     this._schedulePersist();
+   }
+
+   _removeMessage(roomId, tempOrId) {
+     const roomMessages = this.messages.get(roomId) || [];
+     const filtered = roomMessages.filter(m => m.tempId !== tempOrId && m.id !== tempOrId);
+     this.messages.set(roomId, filtered);
+     this._notifySubscribersOfRemoval(roomId, tempOrId);
+   }
 
   _schedulePersist() {
     if (this._persistTimer) clearTimeout(this._persistTimer);
@@ -611,18 +652,31 @@ _handleNewMessage(message) {
     }
   }
 
-  _notifyMessageSubscribers(roomId, message) {
-    const callbacks = this.messageSubscribers.get(roomId);
-    if (callbacks) {
-      callbacks.forEach(cb => {
-        try {
-          cb(message);
-        } catch (err) {
-          console.error('Message subscriber error:', err);
-        }
-      });
-    }
-  }
+_notifyMessageSubscribers(roomId, message) {
+     const callbacks = this.messageSubscribers.get(roomId);
+     if (callbacks) {
+       callbacks.forEach(cb => {
+         try {
+           cb(message);
+         } catch (err) {
+           console.error('Message subscriber error:', err);
+         }
+       });
+     }
+   }
+
+   _notifySubscribersOfRemoval(roomId, messageId) {
+     const callbacks = this.messageSubscribers.get(roomId);
+     if (callbacks) {
+       callbacks.forEach(cb => {
+         try {
+           cb({ type: 'remove', id: messageId });
+         } catch (err) {
+           console.error('Removal subscriber error:', err);
+         }
+       });
+     }
+   }
 
   _notifyTypingSubscribers(roomId) {
     const callbacks = this.messageSubscribers.get(roomId);

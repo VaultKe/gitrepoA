@@ -165,6 +165,7 @@ func (h *ChatHandler) LeaveRoom(c *gin.Context) {
 func (h *ChatHandler) GetMessages(c *gin.Context) {
 	roomID := c.Param("roomId")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 	before := c.Query("before")
 
 	var rows *sql.Rows
@@ -174,11 +175,11 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata,
 			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
 			FROM chat_messages WHERE room_id = $1 AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2) 
-			AND is_deleted = false ORDER BY created_at DESC LIMIT $3`, roomID, before, limit)
+			AND is_deleted = false ORDER BY created_at DESC LIMIT $3 OFFSET $4`, roomID, before, limit, offset)
 	} else {
 		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata,
 			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
-			FROM chat_messages WHERE room_id = $1 AND is_deleted = false ORDER BY created_at DESC LIMIT $2`, roomID, limit)
+			FROM chat_messages WHERE room_id = $1 AND is_deleted = false ORDER BY created_at ASC LIMIT $2 OFFSET $3`, roomID, limit, offset)
 	}
 
 	if err != nil {

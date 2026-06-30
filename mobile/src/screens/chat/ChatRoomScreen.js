@@ -12,6 +12,7 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,30 +21,31 @@ import { formatTime } from '../../utils/dateUtils';
 import { useApp } from '../../context/AppContext';
 import chatService from '../../services/chat/ChatService';
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
+// WhatsApp-style: bubble never wider than ~78% of screen, image never wider than the bubble cap
+const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.78;
+const MAX_IMAGE_WIDTH = MAX_BUBBLE_WIDTH - spacing.md * 2;
+
 const ChatRoomScreen = ({ route, navigation }) => {
   const { roomId, roomName } = route.params || {};
-  const { theme } = useApp();
+  const { theme, user } = useApp();
   const colors = getThemeColors(theme);
-  const navigationRef = useNavigation();
 
-// State
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [inputHeight, setInputHeight] = useState(40);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedImages, setSelectedImages] = useState([]);
 
-  // Refs
   const flatListRef = useRef(null);
   const messageUnsubscribeRef = useRef(null);
   const typingUnsubscribeRef = useRef(null);
-  const roomUnsubscribeRef = useRef(null);
   const typingDebounceRef = useRef(null);
 
-  // Safety check
   useEffect(() => {
     if (!roomId) {
       console.error('ChatRoomScreen: roomId is required');
@@ -51,23 +53,15 @@ const ChatRoomScreen = ({ route, navigation }) => {
     }
   }, [roomId, navigation]);
 
-  // Load initial room and messages
   const loadData = useCallback(async () => {
     if (!roomId) return;
 
     try {
       setLoading(true);
-
-      // Get room details
       await chatService.joinRoom(roomId);
-
-      // Get messages
       const roomMessages = await chatService.getMessages(roomId, 100, 0);
       setMessages(roomMessages);
-
-      // Mark room as read
       chatService.markRoomAsRead(roomId);
-
       setError(null);
     } catch (err) {
       console.error('Load room error:', err);
@@ -81,40 +75,33 @@ const ChatRoomScreen = ({ route, navigation }) => {
     loadData();
 
     return () => {
-      // Cleanup subscriptions
       if (messageUnsubscribeRef.current) {
         messageUnsubscribeRef.current();
       }
       if (typingUnsubscribeRef.current) {
         typingUnsubscribeRef.current();
       }
-      if (roomUnsubscribeRef.current) {
-        roomUnsubscribeRef.current();
-      }
       chatService.leaveRoom(roomId);
     };
   }, [roomId, loadData]);
 
-  // Subscribe to new messages
   useEffect(() => {
     if (!roomId) return;
 
     messageUnsubscribeRef.current = chatService.subscribeToMessages(roomId, (message) => {
       setMessages(prev => {
-        // Avoid duplicates
-        if (prev.some(m => m.id === message.id || m.tempId === message.id)) {
-          return prev;
+        if (message.type === 'remove') {
+          return prev.filter(m => m.id !== message.id);
         }
-
+        if (prev.some(m => m.id === message.id || m.tempId === message.id)) {
+          return prev.map(m => m.id === message.id || m.tempId === message.id ? { ...m, ...message } : m);
+        }
         const filtered = prev.filter(m => m.tempId !== message.tempId && m.id !== message.id);
         return [...filtered, message];
       });
     });
 
-    // Subscribe to typing indicators
-    typingUnsubscribeRef.current = chatService.subscribeToRoom(roomId, (room) => {
-      // Could update room info if needed
-    });
+    typingUnsubscribeRef.current = chatService.subscribeToRoom(roomId, (room) => {});
 
     return () => {
       if (messageUnsubscribeRef.current) {
@@ -126,29 +113,49 @@ const ChatRoomScreen = ({ route, navigation }) => {
     };
   }, [roomId]);
 
-  // Handle send message
   const handleSend = useCallback(async () => {
-    if (!messageText.trim() || !roomId || sending) return;
+    if (!messageText.trim() || !roomId) return;
 
     const content = messageText.trim();
     setMessageText('');
-    setSending(true);
 
     try {
-      await chatService.sendMessage(roomId, content, 'text');
+      if (selectedImages.length > 0) {
+        for (const image of selectedImages) {
+          await chatService.sendMessage(roomId, content, 'image', { imageUri: image.uri });
+        }
+        setSelectedImages([]);
+      } else {
+        await chatService.sendMessage(roomId, content, 'text');
+      }
     } catch (err) {
       console.error('Send error:', err);
       Alert.alert('Error', 'Failed to send message. Please try again.');
-      setMessageText(content); // Restore message on failure
-    } finally {
-      setSending(false);
+      setMessageText(content);
     }
-  }, [messageText, roomId, sending]);
+  }, [messageText, roomId, selectedImages]);
 
-  // No image picker yet - future feature
-  // Future: handleImagePicker will use dedicated upload endpoint
+  const handleImagePicker = useCallback(async () => {
+    try {
+      const ImagePicker = (await import('expo-image-picker')).default;
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission required', 'Please allow access to your photo library');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets) {
+        setSelectedImages(result.assets.map(asset => ({ uri: asset.uri })));
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+    }
+  }, []);
 
-  // Handle typing indicator
   const handleTyping = useCallback((text) => {
     setMessageText(text);
 
@@ -164,38 +171,58 @@ const ChatRoomScreen = ({ route, navigation }) => {
     }, 1000);
   }, [isTyping, roomId]);
 
-  // Render message item
   const renderMessage = ({ item: message }) => {
-    const isOwn = message.senderId === chatService._getCurrentUserId();
+    const isOwn = message.senderId === user?.id;
     const status = message.status || 'sent';
+    const hasImage = message.type === 'image' && message.metadata?.imageUri;
+
+    // WhatsApp-style aspect-ratio-aware image sizing so tall/wide photos
+    // never distort or force the bubble wider than MAX_BUBBLE_WIDTH.
+    const imgWidth = message.metadata?.imageWidth;
+    const imgHeight = message.metadata?.imageHeight;
+    const aspectRatio = imgWidth && imgHeight ? imgWidth / imgHeight : 1;
 
     return (
       <View style={[styles.messageRow, isOwn ? styles.ownRow : styles.otherRow]}>
-        <View style={[
-          styles.messageBubble,
-          {
-            backgroundColor: isOwn ? colors.primary : colors.card,
-            borderBottomLeftRadius: isOwn ? borderRadius.lg : 4,
-            borderBottomRightRadius: isOwn ? 4 : borderRadius.lg,
-          },
-        ]}>
-          <Text style={[styles.messageText, { color: isOwn ? 'white' : colors.text }]}>
-            {message.content}
-          </Text>
-
-          {message.type === 'image' && message.metadata?.imageUri && (
+        <View
+          style={[
+            styles.messageBubble,
+            {
+              backgroundColor: isOwn ? colors.primary : colors.card,
+              borderBottomLeftRadius: isOwn ? borderRadius.lg : 4,
+              borderBottomRightRadius: isOwn ? 4 : borderRadius.lg,
+            },
+          ]}
+        >
+          {hasImage && (
             <Image
               source={{ uri: message.metadata.imageUri }}
-              style={styles.messageImage}
+              style={[
+                styles.messageImage,
+                { width: MAX_IMAGE_WIDTH, height: MAX_IMAGE_WIDTH / aspectRatio },
+              ]}
               resizeMode="cover"
             />
           )}
 
+          {!!message.content && (
+            <Text
+              style={[
+                styles.messageText,
+                { color: isOwn ? 'white' : colors.text, marginTop: hasImage ? spacing.xs : 0 },
+              ]}
+            >
+              {message.content}
+            </Text>
+          )}
+
           <View style={styles.messageMeta}>
-            <Text style={[styles.timestamp, {
-              color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textSecondary,
-              fontSize: typography.fontSize.xs,
-            }]}>
+            <Text
+              style={[
+                styles.timestamp,
+                { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textSecondary },
+              ]}
+            >
               {formatTime(message.createdAt)}
             </Text>
             {isOwn && (
@@ -207,7 +234,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
                 }
                 size={14}
                 color={isOwn ? 'rgba(255,255,255,0.8)' : colors.textSecondary}
-                style={styles.statusIcon}
+                style={{ marginLeft: 2 }}
               />
             )}
           </View>
@@ -216,12 +243,28 @@ const ChatRoomScreen = ({ route, navigation }) => {
     );
   };
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     if (messages.length > 0 && flatListRef.current) {
       flatListRef.current.scrollToEnd({ animated: true });
     }
   }, [messages.length]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !roomId || messages.length < 50) return;
+
+    try {
+      setLoadingMore(true);
+      const offset = messages.length;
+      const olderMessages = await chatService.getMessages(roomId, 50, offset);
+      if (olderMessages.length > 0) {
+        setMessages(prev => [...prev, ...olderMessages]);
+      }
+    } catch (err) {
+      console.error('Load more messages error:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [roomId, loadingMore, messages.length]);
 
   if (loading && messages.length === 0) {
     return (
@@ -231,7 +274,6 @@ const ChatRoomScreen = ({ route, navigation }) => {
     );
   }
 
-  // Show error screen
   if (error) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
@@ -270,7 +312,11 @@ const ChatRoomScreen = ({ route, navigation }) => {
         renderItem={renderMessage}
         keyExtractor={(item) => item.id || item.tempId}
         contentContainerStyle={styles.messageList}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 10 }} /> : null}
+        showsVerticalScrollIndicator={false}
       />
 
       {/* Input Area */}
@@ -278,8 +324,28 @@ const ChatRoomScreen = ({ route, navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-         <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.divider }]}>
-           <View style={styles.inputRow}>
+        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.divider }]}>
+          {/* Image Preview */}
+          {selectedImages.length > 0 && (
+            <View style={styles.imagePreview}>
+              {selectedImages.map((image, index) => (
+                <View key={index} style={styles.imageThumb}>
+                  <Image source={{ uri: image.uri }} style={styles.thumbnail} />
+                  <TouchableOpacity
+                    onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== index))}
+                    style={styles.removeImage}
+                  >
+                    <Ionicons name="close-circle" size={20} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.inputRow}>
+            <TouchableOpacity onPress={handleImagePicker} style={styles.attachButton}>
+              <Ionicons name="attach" size={24} color={colors.primary} />
+            </TouchableOpacity>
 
             <TextInput
               style={[
@@ -289,7 +355,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
                   backgroundColor: colors.background,
                   borderRadius: 20,
                   borderColor: colors.border,
-                  height: Math.max(40, inputHeight),
+                  height: Math.max(40, Math.min(inputHeight, 100)),
                 },
               ]}
               placeholder="Type a message..."
@@ -299,25 +365,14 @@ const ChatRoomScreen = ({ route, navigation }) => {
               multiline
               onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
               maxLength={5000}
-              editable={!sending}
             />
 
-            {messageText.trim().length > 0 ? (
-              <TouchableOpacity
-                onPress={handleSend}
-                disabled={sending}
-                style={[styles.sendButton, { opacity: sending ? 0.5 : 1 }]}
-              >
-                <Ionicons name="send" size={20} color="white" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.sendButton, { backgroundColor: colors.divider }]}
-                disabled
-              >
-                <Ionicons name="send" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={handleSend}
+              style={[styles.sendButton, { backgroundColor: colors.primary }]}
+            >
+              <Ionicons name="send" size={20} color="white" />
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -356,45 +411,54 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   messageList: {
-    padding: spacing.md,
-  },
-  messageRow: {
-    flexDirection: 'row',
-    marginVertical: spacing.xs,
-  },
-  ownRow: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexGrow: 1,
     justifyContent: 'flex-end',
   },
+  // Row must span full width so percentage/flex rules inside have something
+  // real to measure against, and so flexShrink can actually take effect.
+  messageRow: {
+    width: '100%',
+    marginBottom: spacing.xs,
+  },
+  ownRow: {
+    alignItems: 'flex-end',
+  },
   otherRow: {
-    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
   },
+  // This is the key fix: flexShrink + maxWidth together let the bubble
+  // grow to fit short text, wrap long text, and grow downward for images,
+  // without ever overflowing past ~78% of the screen (WhatsApp behavior).
   messageBubble: {
-    maxWidth: '80%',
-    padding: spacing.md,
+    maxWidth: MAX_BUBBLE_WIDTH,
+    flexShrink: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.lg,
-    ...shadows.sm,
   },
-messageText: {
+  messageText: {
     fontSize: typography.fontSize.md,
-    lineHeight: typography.lineHeight.normal,
+    // Line height locked to a safe multiple of font size so wrapped lines
+    // stack below each other instead of overlapping.
+    lineHeight: typography.fontSize.md * 1.3,
+    flexWrap: 'wrap',
   },
   messageImage: {
-    width: 200,
-    height: 200,
     borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
+    backgroundColor: '#00000010',
   },
   messageMeta: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
+    alignSelf: 'flex-end',
     marginTop: spacing.xs,
   },
   timestamp: {
-    marginRight: spacing.xs,
-  },
-  statusIcon: {
-    marginLeft: 2,
+    fontSize: typography.fontSize.xs,
+    lineHeight: typography.fontSize.xs * 1.3,
+    marginRight: 2,
   },
   inputContainer: {
     borderTopWidth: 1,
@@ -406,7 +470,7 @@ messageText: {
     marginBottom: spacing.sm,
     flexWrap: 'wrap',
   },
-imageThumb: {
+  imageThumb: {
     width: 60,
     height: 60,
     marginRight: spacing.sm,
@@ -427,6 +491,9 @@ imageThumb: {
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
+  attachButton: {
+    padding: spacing.xs,
+  },
   input: {
     flex: 1,
     marginHorizontal: spacing.sm,
@@ -434,7 +501,6 @@ imageThumb: {
     paddingVertical: spacing.sm,
     borderWidth: 1,
     fontSize: typography.fontSize.md,
-    maxHeight: 100,
   },
   sendButton: {
     width: 40,

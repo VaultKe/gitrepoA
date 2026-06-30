@@ -3,6 +3,7 @@ package routes
 import (
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -729,7 +730,14 @@ func chatWSHandler(cfg *config.Config) gin.HandlerFunc {
 		headers.Del("Sec-WebSocket-Protocol")
 		headers.Del("Sec-WebSocket-Extensions")
 
-		backendConn, _, err := websocket.DefaultDialer.Dial(targetURL, headers)
+		dialer := &websocket.Dialer{
+			HandshakeTimeout: 10 * time.Second,
+			NetDialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+		}
+		backendConn, _, err := dialer.Dial(targetURL, headers)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to connect to chat service"})
 			return
