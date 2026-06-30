@@ -13,9 +13,12 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import EmojiSelector from 'react-native-emoji-selector';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Swipeable } from 'react-native-gesture-handler';
 import { getThemeColors, spacing, typography, borderRadius, shadows, getShadowStyle } from '../../utils/theme';
 import { formatTime } from '../../utils/dateUtils';
@@ -31,6 +34,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const { roomId, roomName } = route.params || {};
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
+  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +47,9 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
   const [openActionId, setOpenActionId] = useState(null);
-
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [reactingToMessage, setReactingToMessage] = useState(null);
   const flatListRef = useRef(null);
   const messageUnsubscribeRef = useRef(null);
   const typingUnsubscribeRef = useRef(null);
@@ -179,6 +185,20 @@ const ChatRoomScreen = ({ route, navigation }) => {
     }, 1000);
   }, [isTyping, roomId]);
 
+  const handleEmojiSelect = useCallback((emoji) => {
+    setMessageText(prev => prev + emoji);
+    setShowEmojiPicker(false);
+  }, []);
+
+  const handleReactionSelect = useCallback((emoji) => {
+    if (reactingToMessage) {
+      // TODO: Send reaction to backend
+      console.log('Reacting to message:', reactingToMessage.id, 'with emoji:', emoji);
+    }
+    setShowReactionPicker(false);
+    setReactingToMessage(null);
+  }, [reactingToMessage]);
+
   const handleReply = useCallback((message) => {
     setReplyTo(message);
   }, []);
@@ -234,7 +254,10 @@ const ChatRoomScreen = ({ route, navigation }) => {
     if (action === 'reply') handleReply(message);
     else if (action === 'delete') handleDelete(message);
     else if (action === 'copy') handleCopy(message);
-    else if (action === 'react') {/* TODO: React */}
+    else if (action === 'react') {
+      setReactingToMessage(message);
+      setShowReactionPicker(true);
+    }
     else if (action === 'report') {/* TODO: Report */}
     closeSwipeable(message.id || message.tempId);
     handleCloseActions();
@@ -519,6 +542,10 @@ const ChatRoomScreen = ({ route, navigation }) => {
           )}
 
           <View style={styles.inputRow}>
+            <TouchableOpacity onPress={() => setShowEmojiPicker(true)} style={styles.emojiButton}>
+              <Ionicons name="happy" size={24} color={colors.primary} />
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={handleImagePicker} style={styles.attachButton}>
               <Ionicons name="attach" size={24} color={colors.primary} />
             </TouchableOpacity>
@@ -550,6 +577,54 @@ const ChatRoomScreen = ({ route, navigation }) => {
               <Ionicons name="send" size={20} color="white" />
             </TouchableOpacity>
           </View>
+
+          <Modal
+            visible={showEmojiPicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowEmojiPicker(false)}
+          >
+            <View style={styles.emojiModalContainer}>
+              <View style={[styles.emojiModalContent, { backgroundColor: colors.card, paddingBottom: Math.max(70, insets.bottom + 20) }]}>
+                <View style={[styles.emojiHeader, { borderBottomColor: colors.divider }]}>
+                  <Text style={[styles.emojiHeaderTitle, { color: colors.text }]}>
+                    Select Emoji
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                    <Ionicons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <EmojiSelector
+                  onEmojiSelected={handleEmojiSelect}
+                  columns={8}
+                />
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={showReactionPicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowReactionPicker(false)}
+          >
+            <View style={styles.emojiModalContainer}>
+              <View style={[styles.emojiModalContent, { backgroundColor: colors.card, paddingBottom: Math.max(70, insets.bottom + 20) }]}>
+                <View style={[styles.emojiHeader, { borderBottomColor: colors.divider }]}>
+                  <Text style={[styles.emojiHeaderTitle, { color: colors.text }]}>
+                    React with Emoji
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowReactionPicker(false)}>
+                    <Ionicons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <EmojiSelector
+                  onEmojiSelected={handleReactionSelect}
+                  columns={8}
+                />
+              </View>
+            </View>
+          </Modal>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -597,6 +672,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     flexGrow: 1,
     justifyContent: 'flex-end',
+    paddingBottom: 70,
   },
   // Row must span full width so percentage/flex rules inside have something
   // real to measure against, and so flexShrink can actually take effect.
@@ -694,13 +770,15 @@ const styles = StyleSheet.create({
   attachButton: {
     padding: spacing.xs,
   },
+  emojiButton: {
+    padding: spacing.xs,
+    paddingLeft: 0,
+  },
   input: {
     flex: 1,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginHorizontal: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    marginHorizontal: spacing.sm,
     borderWidth: 1,
     fontSize: typography.fontSize.md,
   },
@@ -724,13 +802,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 8,
     bottom: '100%',
-    marginBottom: 4,
+    marginBottom: 8,
     flexDirection: 'column',
     alignItems: 'center',
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
     minWidth: 72,
+    maxWidth: 220,
     zIndex: 999,
   },
   actionItem: {
@@ -796,6 +875,28 @@ const styles = StyleSheet.create({
   },
   replyInBubbleText: {
     fontSize: typography.fontSize.sm,
+  },
+  emojiModalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  emojiModalContent: {
+    height: '50%',
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+  },
+  emojiHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  emojiHeaderTitle: {
+    fontSize: typography.fontSize.md,
+    fontWeight: '600',
   },
 });
 

@@ -82,7 +82,6 @@ class ChatService {
         await websocketService.connect();
       }
 
-      console.log('✅ ChatService initialized');
       return true;
     } catch (error) {
       console.error('ChatService init error:', error);
@@ -309,7 +308,6 @@ leaveRoom(roomId) {
           }, 15000);
 
           const handler = (response) => {
-            console.log('[WS DEBUG] message_sent response:', JSON.stringify(response));
             if (response.requestId === requestId) {
               clearTimeout(timeout);
               websocketService.unregisterMessageHandler('message_sent');
@@ -336,7 +334,6 @@ const message = {
              metadata: { ...metadata, replyToId },
              clientMessageId: tempId,
            };
-          console.log('[WS DEBUG] Sending message:', JSON.stringify(message));
 
           // Send via WebSocket
           if (!websocketService.send(message)) {
@@ -484,7 +481,6 @@ const message = {
   // ==================== Private Handlers ====================
 
 _handleNewMessage(message) {
-      console.log('[WS DEBUG] _handleNewMessage called with:', JSON.stringify(message));
       const { roomId, data } = message;
 
       // Handle pending message resolution (optimistic update)
@@ -790,7 +786,6 @@ _notifyMessageSubscribers(roomId, message) {
             this.messages.set(roomId, deduped);
           });
         }
-        console.log(`Loaded ${rooms?.length || 0} rooms and ${messages?.length || 0} message threads from cache`);
       }
     } catch (e) {
       console.error('Failed to load chat cache:', e);
