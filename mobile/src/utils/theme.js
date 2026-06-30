@@ -122,6 +122,7 @@ export const getThemeColors = (themeMode = 'dark') => {
 
 // Common spacing values
 export const spacing = {
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 16,

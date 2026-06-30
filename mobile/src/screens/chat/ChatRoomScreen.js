@@ -17,7 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, shadows, getShadowStyle } from '../../utils/theme';
 import { formatTime } from '../../utils/dateUtils';
 import { useApp } from '../../context/AppContext';
 import chatService from '../../services/chat/ChatService';
@@ -42,6 +42,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
+  const [openActionId, setOpenActionId] = useState(null);
 
   const flatListRef = useRef(null);
   const messageUnsubscribeRef = useRef(null);
@@ -215,7 +216,29 @@ const ChatRoomScreen = ({ route, navigation }) => {
     if (ref) {
       ref.close();
     }
+    if (openActionId === messageId || openActionId === message.tempId) {
+      setOpenActionId(null);
+    }
+  }, [openActionId]);
+
+  const handleOpenActions = useCallback((message) => {
+    setOpenActionId(message.id || message.tempId);
+    Object.values(swipeableRefs.current).forEach(ref => ref.close?.());
   }, []);
+
+  const handleCloseActions = useCallback(() => {
+    setOpenActionId(null);
+  }, []);
+
+  const handleActionPress = useCallback((message, action) => {
+    if (action === 'reply') handleReply(message);
+    else if (action === 'delete') handleDelete(message);
+    else if (action === 'copy') handleCopy(message);
+    else if (action === 'react') {/* TODO: React */}
+    else if (action === 'report') {/* TODO: Report */}
+    closeSwipeable(message.id || message.tempId);
+    handleCloseActions();
+  }, [handleReply, handleDelete, handleCopy, closeSwipeable, handleCloseActions]);
 
   const renderReplyPreview = () => {
     if (!replyTo) return null;
@@ -269,14 +292,13 @@ const ChatRoomScreen = ({ route, navigation }) => {
     const isOwn = message.senderId === user?.id;
     const status = message.status || 'sent';
     const hasImage = message.type === 'image' && message.metadata?.imageUri;
+    const isReply = !!message.replyTo?.id;
 
-    // WhatsApp-style aspect-ratio-aware image sizing so tall/wide photos
-    // never distort or force the bubble wider than MAX_BUBBLE_WIDTH.
     const imgWidth = message.metadata?.imageWidth;
     const imgHeight = message.metadata?.imageHeight;
     const aspectRatio = imgWidth && imgHeight ? imgWidth / imgHeight : 1;
 
-    const renderSwipeableContent = () => (
+    return (
       <View style={[styles.messageRow, isOwn ? styles.ownRow : styles.otherRow]}>
         {!isOwn && (
           <View style={styles.avatarContainer}>
@@ -287,115 +309,114 @@ const ChatRoomScreen = ({ route, navigation }) => {
             </View>
           </View>
         )}
-        <View
-          style={[
+        <Swipeable
+          ref={ref => {
+            if (ref) swipeableRefs.current.set(message.id || message.tempId, ref);
+          }}
+          renderRightActions={() => <View style={{ width: 220 }} />}
+          onSwipeableOpen={() => handleOpenActions(message)}
+          onSwipeableClose={handleCloseActions}
+          rightThreshold={40}
+        >
+          <View style={[
             styles.messageBubble,
             {
-              backgroundColor: isOwn ? colors.primary : colors.card,
+              backgroundColor: isOwn
+                ? (isReply ? colors.primaryDark : colors.primary)
+                : (isReply ? colors.backgroundSecondary : colors.card),
               borderBottomLeftRadius: isOwn ? borderRadius.lg : 4,
               borderBottomRightRadius: isOwn ? 4 : borderRadius.lg,
             },
-          ]}
-        >
-          {renderReplyInBubble({ item: message })}
-          
-          {hasImage && (
-            <Image
-              source={{ uri: message.metadata.imageUri }}
-              style={[
-                styles.messageImage,
-                { width: MAX_IMAGE_WIDTH, height: MAX_IMAGE_WIDTH / aspectRatio },
-              ]}
-              resizeMode="cover"
-            />
-          )}
-
-          {!!message.content && (
-            <Text
-              style={[
-                styles.messageText,
-                { color: isOwn ? 'white' : colors.text, marginTop: hasImage || message.replyTo?.id ? spacing.xs : 0 },
-              ]}
-            >
-              {message.content}
-            </Text>
-          )}
-
-          <View style={styles.messageMeta}>
-            <Text
-              style={[
-                styles.timestamp,
-                { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textSecondary },
-              ]}
-            >
-              {formatTime(message.createdAt)}
-            </Text>
-            {isOwn && (
-              <Ionicons
-                name={
-                  status === 'delivered' ? 'checkmark-done' :
-                  status === 'read' ? 'checkmark-done' :
-                  status === 'sending' ? 'time' : 'checkmark'
-                }
-                size={14}
-                color={isOwn ? 'rgba(255,255,255,0.8)' : colors.textSecondary}
-                style={{ marginLeft: 2 }}
+          ]}>
+            {renderReplyInBubble({ item: message })}
+            
+            {hasImage && (
+              <Image
+                source={{ uri: message.metadata.imageUri }}
+                style={[
+                  styles.messageImage,
+                  { width: MAX_IMAGE_WIDTH, height: MAX_IMAGE_WIDTH / aspectRatio },
+                ]}
+                resizeMode="cover"
               />
             )}
-          </View>
-        </View>
-      </View>
-    );
 
-    return (
-      <Swipeable
-        ref={ref => {
-          if (ref) swipeableRefs.current.set(message.id || message.tempId, ref);
-        }}
-        renderRightActions={() => (
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.primary }]}
-              onPress={() => { handleReply(message); closeSwipeable(message.id || message.tempId); }}
-            >
-              <Ionicons name="reply" size={20} color="white" />
+            {!!message.content && (
+              <Text
+                style={[
+                  styles.messageText,
+                  { color: isOwn ? 'white' : colors.text, marginTop: hasImage || message.replyTo?.id ? spacing.xs : 0 },
+                ]}
+              >
+                {message.content}
+              </Text>
+            )}
+
+            <View style={styles.messageMeta}>
+              <Text
+                style={[
+                  styles.timestamp,
+                  { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textSecondary },
+                ]}
+              >
+                {formatTime(message.createdAt)}
+              </Text>
+              {isOwn && (
+                <Ionicons
+                  name={
+                    status === 'delivered' ? 'checkmark-done' :
+                    status === 'read' ? 'checkmark-done' :
+                    status === 'sending' ? 'time' : 'checkmark'
+                  }
+                  size={14}
+                  color={isOwn ? 'rgba(255,255,255,0.8)' : colors.textSecondary}
+                  style={{ marginLeft: 2 }}
+                />
+              )}
+            </View>
+          </View>
+        </Swipeable>
+        {openActionId === message.id || openActionId === message.tempId ? (
+          <View style={[styles.actionOverlayContainer, { backgroundColor: colors.backgroundSecondary }, getShadowStyle('md')]}>
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'reply')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.primary }]}>
+                <Ionicons name="reply" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Reply</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.error }]}
-              onPress={() => { handleDelete(message); closeSwipeable(message.id || message.tempId); }}
-            >
-              <Ionicons name="trash" size={20} color="white" />
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'delete')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.error }]}>
+                <Ionicons name="trash" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Delete</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.border }]}
-              onPress={() => { handleCopy(message); closeSwipeable(message.id || message.tempId); }}
-            >
-              <Ionicons name="copy" size={20} color="white" />
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'copy')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.border }]}>
+                <Ionicons name="copy" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Copy</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.info || '#17a2b8' }]}
-              onPress={() => { /* TODO: React */ closeSwipeable(message.id || message.tempId); }}
-            >
-              <Ionicons name="heart" size={20} color="white" />
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'react')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.info || '#17a2b8' }]}>
+                <Ionicons name="heart" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>React</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.warning || '#ffc107' }]}
-              onPress={() => { /* TODO: Report */ closeSwipeable(message.id || message.tempId); }}
-            >
-              <Ionicons name="alert-circle" size={20} color="white" />
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'report')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.warning || '#ffc107' }]}>
+                <Ionicons name="alert-circle" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Report</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.cancelButton, { backgroundColor: colors.textSecondary }]}
-              onPress={() => closeSwipeable(message.id || message.tempId)}
-            >
-              <Ionicons name="close" size={16} color="white" />
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'close')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.textSecondary }]}>
+                <Ionicons name="close" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        )}
-        rightThreshold={40}
-      >
-        {renderSwipeableContent()}
-      </Swipeable>
+        ) : null}
+      </View>
     );
   };
 
@@ -445,9 +466,6 @@ const ChatRoomScreen = ({ route, navigation }) => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.divider, backgroundColor: colors.card }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
             {roomName || 'Chat'}
@@ -471,6 +489,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
         maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
+        removeClippedSubviews={false}
         ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 10 }} /> : null}
         showsVerticalScrollIndicator={false}
       />
@@ -584,6 +603,8 @@ const styles = StyleSheet.create({
   messageRow: {
     width: '100%',
     marginBottom: spacing.xs,
+    position: 'relative',
+    overflow: 'visible',
   },
   ownRow: {
     alignItems: 'flex-end',
@@ -699,27 +720,39 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
   },
-  actionsContainer: {
-    flexDirection: 'row',
+  actionOverlayContainer: {
+    position: 'absolute',
+    right: 8,
+    bottom: '100%',
+    marginBottom: 4,
+    flexDirection: 'column',
     alignItems: 'center',
-    marginBottom: spacing.xs,
-    marginLeft: spacing.xs,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    minWidth: 72,
+    zIndex: 999,
   },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  actionItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.xxs,
+  },
+  actionIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.xs,
+    marginBottom: 2,
   },
-  cancelButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing.xs,
+  actionLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'center',
   },
   replyPreview: {
     flexDirection: 'row',
