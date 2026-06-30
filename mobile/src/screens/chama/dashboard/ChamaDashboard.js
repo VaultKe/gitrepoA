@@ -532,6 +532,26 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         },
       },
       {
+        id: 'savings',
+        title: 'Savings',
+        icon: 'cash',
+        color: '#10B981',
+        onPress: () => {
+          if (selectedChama) {
+            if (onRouteChange) {
+              onRouteChange('savings', 'SavingsOverview');
+            } else {
+              navigation.navigate('SavingsOverview', {
+                chamaId: selectedChama.id,
+                chama: selectedChama,
+              });
+            }
+          } else {
+            Alert.alert('No Chama Selected', 'Please select a chama first');
+          }
+        },
+      },
+      {
         id: 'transactions',
         title: 'Transactions',
         icon: 'receipt',

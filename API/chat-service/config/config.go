@@ -8,17 +8,17 @@ import (
 )
 
 type Config struct {
-	ServerPort        string
-	DatabaseURL       string
-	RedisAddr         string
-	RedisPassword     string
-	RedisDB           int
-	JWTSecret         string
-	MaxRoomCapacity   int
-	MessageRetention  int
-	EnableE2EE        bool
-	TLSCertFile       string
-	TLSKeyFile        string
+	ServerPort       string
+	DatabaseURL      string
+	RedisAddr        string
+	RedisPassword    string
+	RedisDB          int
+	JWTSecret        string
+	MaxRoomCapacity  int
+	MessageRetention int
+	EnableE2EE       bool
+	TLSCertFile      string
+	TLSKeyFile       string
 }
 
 func Load() *Config {
@@ -38,17 +38,17 @@ func Load() *Config {
 	tlsKey := getEnv("TLS_KEY_FILE", "")
 
 	return &Config{
-		ServerPort:     port,
-		DatabaseURL:    dbURL,
-		RedisAddr:      redisAddr,
-		RedisPassword:  redisPassword,
-		RedisDB:        redisDB,
-		JWTSecret:      jwtSecret,
-		MaxRoomCapacity: maxRoom,
+		ServerPort:       port,
+		DatabaseURL:      dbURL,
+		RedisAddr:        redisAddr,
+		RedisPassword:    redisPassword,
+		RedisDB:          redisDB,
+		JWTSecret:        jwtSecret,
+		MaxRoomCapacity:  maxRoom,
 		MessageRetention: retention,
-		EnableE2EE:     enableE2EE,
-		TLSCertFile:    tlsCert,
-		TLSKeyFile:     tlsKey,
+		EnableE2EE:       enableE2EE,
+		TLSCertFile:      tlsCert,
+		TLSKeyFile:       tlsKey,
 	}
 }
 

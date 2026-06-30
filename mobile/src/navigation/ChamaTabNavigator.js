@@ -33,6 +33,7 @@ import WelfareDisbursementScreen from '../screens/chama/accountmanagement/Welfar
 import LoanTypeCreationScreen from '../screens/chama/accountmanagement/LoanTypeCreationScreen';
 import SavingsWithdrawalScreen from '../screens/chama/accountmanagement/SavingsWithdrawalScreen';
 import MaryGoRoundDisbursementScreen from '../screens/chama/accountmanagement/MaryGoRoundDisbursementScreen';
+import SavingsOverviewScreen from '../screens/chama/savings/SavingsOverviewScreen';
 import SavingsDetails from '../screens/chama/savings/SavingsDetails';
 import MaryGoRoundDetails from '../screens/chama/merry-go-round/MaryGoRoundDetails';
 import WelfareDetails from '../screens/chama/welfare/WelfareDetails';
@@ -382,6 +383,15 @@ function ChamaTabNavigator({ route }) {
         component={LoanTypeCreationScreen}
         options={{
           title: 'Loan Type Creation',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="SavingsOverview"
+        component={SavingsOverviewScreen}
+        options={{
+          title: 'Savings Overview',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={{ chamaId, chamaName, chama }}

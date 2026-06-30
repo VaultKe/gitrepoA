@@ -29,9 +29,9 @@ type ChatHandler struct {
 
 func NewChatHandler(db *sql.DB, hub *ws.Hub, roomMgr *room.RoomManager) *ChatHandler {
 	return &ChatHandler{
-		db:       db,
-		hub:      hub,
-		roomMgr:  roomMgr,
+		db:      db,
+		hub:     hub,
+		roomMgr: roomMgr,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -42,10 +42,10 @@ func NewChatHandler(db *sql.DB, hub *ws.Hub, roomMgr *room.RoomManager) *ChatHan
 func (h *ChatHandler) CreateRoom(c *gin.Context) {
 	userID := c.GetString("userID")
 	var req struct {
-		Name     string          `json:"name" binding:"required"`
-		Type     models.ChatRoomType `json:"type" binding:"required"`
-		ChamaID  string          `json:"chamaId,omitempty"`
-		MemberIDs []string       `json:"memberIds,omitempty"`
+		Name      string              `json:"name" binding:"required"`
+		Type      models.ChatRoomType `json:"type" binding:"required"`
+		ChamaID   string              `json:"chamaId,omitempty"`
+		MemberIDs []string            `json:"memberIds,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,10 +69,10 @@ func (h *ChatHandler) CreateRoom(c *gin.Context) {
 	}
 
 	members := []*models.ChatRoomMember{{
-		ID: uuid.New().String(),
-		RoomID: room.ID,
-		UserID: userID,
-		Role: models.RoleAdmin,
+		ID:       uuid.New().String(),
+		RoomID:   room.ID,
+		UserID:   userID,
+		Role:     models.RoleAdmin,
 		JoinedAt: time.Now().UTC(),
 		IsActive: true,
 	}}
@@ -131,7 +131,7 @@ func (h *ChatHandler) GetRoom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-		"room": room,
+		"room":     room,
 		"messages": messages.Items,
 	}})
 }
@@ -172,12 +172,12 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 	var err error
 
 	if before != "" {
-		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata,
+		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata, image_url as "imageUrl",
 			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
 			FROM chat_messages WHERE room_id = $1 AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2) 
 			AND is_deleted = false ORDER BY created_at DESC LIMIT $3 OFFSET $4`, roomID, before, limit, offset)
 	} else {
-		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata,
+		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata, image_url as "imageUrl",
 			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
 			FROM chat_messages WHERE room_id = $1 AND is_deleted = false ORDER BY created_at ASC LIMIT $2 OFFSET $3`, roomID, limit, offset)
 	}
@@ -192,11 +192,15 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 	for rows.Next() {
 		var m models.ChatMessage
 		var repliedTo sql.NullString
-		if err := rows.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Content, &m.Type, &m.Metadata, 
+		var imageUrl sql.NullString
+		if err := rows.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Content, &m.Type, &m.Metadata, &imageUrl,
 			&repliedTo, &m.CreatedAt, &m.EditedAt); err != nil {
 			continue
 		}
 		m.ReplyToID = repliedTo
+		if imageUrl.Valid {
+			m.ImageUrl = imageUrl.String
+		}
 		messages = append(messages, &m)
 	}
 
@@ -289,105 +293,121 @@ func (h *ChatHandler) WebSocketEndpoint(c *gin.Context) {
 		return
 	}
 
-client := h.hub.Register(conn, userID, roomID)
- 	go client.WritePump()
- 	client.ReadPump(func(cl *ws.Client, msg []byte) {
-  		var wsMsg struct {
-  			Type       string                   `json:"type"`
-  			RoomID     string                   `json:"roomId,omitempty"`
-  			Content    string                   `json:"content,omitempty"`
-  			MessageType string                  `json:"messageType,omitempty"`
-  			Metadata   map[string]interface{}   `json:"metadata,omitempty"`
-  			ClientMsgID string                  `json:"clientMessageId,omitempty"`
-  			RequestID  string                  `json:"requestId,omitempty"`
-  			MessageID  string                   `json:"messageId,omitempty"`
-  		}
- 		if err := json.Unmarshal(msg, &wsMsg); err != nil {
- 			fmt.Printf("WS ERROR: Failed to unmarshal message: %v\n", err)
- 			return
- 		}
- 		fmt.Printf("WS DEBUG: Received type=%s roomId=%s userId=%s\n", wsMsg.Type, wsMsg.RoomID, userID)
+	client := h.hub.Register(conn, userID, roomID)
+	go client.WritePump()
+	client.ReadPump(func(cl *ws.Client, msg []byte) {
+		var wsMsg struct {
+			Type        string                 `json:"type"`
+			RoomID      string                 `json:"roomId,omitempty"`
+			Content     string                 `json:"content,omitempty"`
+			MessageType string                 `json:"messageType,omitempty"`
+			Metadata    map[string]interface{} `json:"metadata,omitempty"`
+			ClientMsgID string                 `json:"clientMessageId,omitempty"`
+			RequestID   string                 `json:"requestId,omitempty"`
+			MessageID   string                 `json:"messageId,omitempty"`
+		}
+		if err := json.Unmarshal(msg, &wsMsg); err != nil {
+			fmt.Printf("WS ERROR: Failed to unmarshal message: %v\n", err)
+			return
+		}
+		fmt.Printf("WS DEBUG: Received type=%s roomId=%s userId=%s\n", wsMsg.Type, wsMsg.RoomID, userID)
 
- 		switch wsMsg.Type {
- 		case "join_room":
- 			// Handle dynamic room joining for the shared WebSocket connection
- 			if wsMsg.RoomID != "" {
- 				h.hub.RegisterToRoom(userID, wsMsg.RoomID, cl)
- 			}
- 		case "mark_read":
- 			// Handle read receipts via WebSocket
- 			if wsMsg.RoomID != "" && wsMsg.MessageID != "" {
- 				h.roomMgr.MarkAsRead(wsMsg.RoomID, userID)
- 				readResp := gin.H{
- 					"type": "message_read",
- 					"roomId": wsMsg.RoomID,
- 					"data": gin.H{
- 						"messageId": wsMsg.MessageID,
- 						"userId": userID,
- 					},
- 				}
- 				readData, _ := json.Marshal(readResp)
- 				h.hub.BroadcastToRoom(wsMsg.RoomID, readData)
- 			}
- 		case "message", "send_message":
- 			roomIDToUse := roomID
- 			if wsMsg.RoomID != "" {
- 				roomIDToUse = wsMsg.RoomID
- 			}
- 			chatMsg := models.NewChatMessage(roomIDToUse, userID, wsMsg.Content, models.MessageTypeText)
- 			if wsMsg.MessageType != "" {
- 				chatMsg.Type = models.MessageType(wsMsg.MessageType)
- 			}
- 			chatMsg.Metadata = wsMsg.Metadata
+		switch wsMsg.Type {
+		case "join_room":
+			// Handle dynamic room joining for the shared WebSocket connection
+			if wsMsg.RoomID != "" {
+				h.hub.RegisterToRoom(userID, wsMsg.RoomID, cl)
+			}
+		case "mark_read":
+			// Handle read receipts via WebSocket
+			if wsMsg.RoomID != "" && wsMsg.MessageID != "" {
+				h.roomMgr.MarkAsRead(wsMsg.RoomID, userID)
+				readResp := gin.H{
+					"type":   "message_read",
+					"roomId": wsMsg.RoomID,
+					"data": gin.H{
+						"messageId": wsMsg.MessageID,
+						"userId":    userID,
+					},
+				}
+				readData, _ := json.Marshal(readResp)
+				h.hub.BroadcastToRoom(wsMsg.RoomID, readData)
+			}
+		case "message", "send_message":
+			roomIDToUse := roomID
+			if wsMsg.RoomID != "" {
+				roomIDToUse = wsMsg.RoomID
+			}
+			chatMsg := models.NewChatMessage(roomIDToUse, userID, wsMsg.Content, models.MessageTypeText)
+			if wsMsg.MessageType != "" {
+				chatMsg.Type = models.MessageType(wsMsg.MessageType)
+			}
+			chatMsg.Metadata = wsMsg.Metadata
 
-  			metadataJSON, _ := json.Marshal(chatMsg.Metadata)
-  			_, dbErr := h.db.Exec(`INSERT INTO chat_messages (id, room_id, sender_id, message, content, type, metadata, is_deleted, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-  				chatMsg.ID, chatMsg.RoomID, chatMsg.SenderID, chatMsg.Content, chatMsg.Content, chatMsg.Type, metadataJSON, chatMsg.IsDeleted, chatMsg.CreatedAt)
- 			if dbErr != nil {
- 				fmt.Printf("WS INSERT ERROR room=%s user=%s err=%v\n", roomIDToUse, userID, dbErr)
- 				return
- 			}
- 			fmt.Printf("WS MESSAGE SAVED id=%s room=%s user=%s content=%s\n", chatMsg.ID, roomIDToUse, userID, chatMsg.Content)
- 			h.roomMgr.UpdateLastMessage(roomIDToUse, chatMsg.Content)
+			// Extract image URLs from metadata for dedicated storage
+			if wsMsg.Metadata != nil {
+				if imageUrl, ok := wsMsg.Metadata["imageUrl"].(string); ok && imageUrl != "" {
+					chatMsg.ImageUrl = imageUrl
+				}
+				if imageUri, ok := wsMsg.Metadata["imageUri"].(string); ok && imageUri != "" {
+					chatMsg.ImageUrl = imageUri
+				}
+				if imageUrls, ok := wsMsg.Metadata["imageUrls"]; ok {
+					chatMsg.ImageUrls = imageUrls
+				}
+			}
 
-  			// Send acknowledgment back to sender
-  			ackResp := gin.H{
-  				"type": "message_sent",
-  				"requestId": wsMsg.RequestID,
- 				"data": gin.H{
- 					"id": chatMsg.ID,
- 					"roomId": chatMsg.RoomID,
- 					"senderId": chatMsg.SenderID,
- 					"content": chatMsg.Content,
- 					"type": chatMsg.Type,
- 					"metadata": chatMsg.Metadata,
- 					"createdAt": chatMsg.CreatedAt,
- 				},
- 				"success": true,
- 			}
- 			ackData, _ := json.Marshal(ackResp)
- 			h.hub.SendToUser(userID, ackData)
+			metadataJSON, _ := json.Marshal(chatMsg.Metadata)
+			_, dbErr := h.db.Exec(`INSERT INTO chat_messages (id, room_id, sender_id, content, type, metadata, image_url, is_deleted, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+				chatMsg.ID, chatMsg.RoomID, chatMsg.SenderID, chatMsg.Content, chatMsg.Type, metadataJSON, chatMsg.ImageUrl, chatMsg.IsDeleted, chatMsg.CreatedAt)
+			if dbErr != nil {
+				fmt.Printf("WS INSERT ERROR room=%s user=%s err=%v\n", roomIDToUse, userID, dbErr)
+				return
+			}
+			fmt.Printf("WS MESSAGE SAVED id=%s room=%s user=%s content=%s type=%s\n", chatMsg.ID, roomIDToUse, userID, chatMsg.Content, chatMsg.Type)
+			h.roomMgr.UpdateLastMessage(roomIDToUse, chatMsg.Content)
 
- 			// Broadcast to other room members
- 			broadcastResp := gin.H{
- 				"type": "new_message",
- 				"roomId": roomIDToUse,
- 				"data": gin.H{
- 					"id": chatMsg.ID,
- 					"roomId": chatMsg.RoomID,
- 					"senderId": chatMsg.SenderID,
- 					"content": chatMsg.Content,
- 					"type": chatMsg.Type,
- 					"metadata": chatMsg.Metadata,
- 					"createdAt": chatMsg.CreatedAt,
- 					"clientMessageId": wsMsg.ClientMsgID,
- 				},
- 			}
- 			broadcastData, _ := json.Marshal(broadcastResp)
- 			h.hub.BroadcastToRoom(roomIDToUse, broadcastData)
- 			fmt.Printf("WS ACK sent to userId=%s for msgId=%s\n", userID, chatMsg.ID)
- 		}
- 	})
+			// Send acknowledgment back to sender with clientMessageId
+			ackResp := gin.H{
+				"type":      "message_sent",
+				"requestId": wsMsg.RequestID,
+				"data": gin.H{
+					"id":              chatMsg.ID,
+					"roomId":          chatMsg.RoomID,
+					"senderId":        chatMsg.SenderID,
+					"content":         chatMsg.Content,
+					"type":            chatMsg.Type,
+					"metadata":        chatMsg.Metadata,
+					"imageUrl":        chatMsg.ImageUrl,
+					"createdAt":       chatMsg.CreatedAt,
+					"clientMessageId": wsMsg.ClientMsgID,
+				},
+				"success": true,
+			}
+			ackData, _ := json.Marshal(ackResp)
+			h.hub.SendToUser(userID, ackData)
+
+			// Broadcast to other room members
+			broadcastResp := gin.H{
+				"type":   "new_message",
+				"roomId": roomIDToUse,
+				"data": gin.H{
+					"id":              chatMsg.ID,
+					"roomId":          chatMsg.RoomID,
+					"senderId":        chatMsg.SenderID,
+					"content":         chatMsg.Content,
+					"type":            chatMsg.Type,
+					"metadata":        chatMsg.Metadata,
+					"imageUrl":        chatMsg.ImageUrl,
+					"createdAt":       chatMsg.CreatedAt,
+					"clientMessageId": wsMsg.ClientMsgID,
+				},
+			}
+			broadcastData, _ := json.Marshal(broadcastResp)
+			h.hub.BroadcastToRoom(roomIDToUse, broadcastData)
+			fmt.Printf("WS ACK sent to userId=%s for msgId=%s\n", userID, chatMsg.ID)
+		}
+	})
 }
 
 func (h *ChatHandler) MarkAsRead(c *gin.Context) {

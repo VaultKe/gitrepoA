@@ -276,83 +276,80 @@ leaveRoom(roomId) {
       }
     }
 
-    async sendMessage(roomId, content, type = 'text', metadata = {}) {
-       // Generate optimistic message immediately
-       const tempId = this._generateTempId();
-       const replyToId = metadata.replyToId;
-       
-       const optimisticMessage = {
-         id: tempId,
-         tempId,
-         roomId,
-         content,
-         type,
-         metadata,
-         ...(replyToId && { replyToId }),
+async sendMessage(roomId, content, type = 'text', metadata = {}) {
+        // Generate optimistic message immediately
+        const tempId = this._generateTempId();
+        const replyToId = metadata.replyToId;
+
+        const optimisticMessage = {
+          id: tempId,
+          tempId,
+          roomId,
+          content,
+          type,
+          metadata,
+          ...(replyToId && { replyToId }),
           ...(metadata.replyToData && { replyTo: metadata.replyToData }),
-         status: 'sending',
-         createdAt: Date.now(),
-         senderId: await this._getCurrentUserId(),
-       };
+          status: 'sending',
+          createdAt: Date.now(),
+          senderId: await this._getCurrentUserId(),
+        };
 
-      // Add to local state immediately for instant UI feedback
-      this._addMessage(roomId, optimisticMessage);
-      this.pendingMessages.set(tempId, optimisticMessage);
-      this._notifyMessageSubscribers(roomId, optimisticMessage);
+        // Add to local state immediately for instant UI feedback
+        this._addMessage(roomId, optimisticMessage);
+        this.pendingMessages.set(tempId, optimisticMessage);
+        this._notifyMessageSubscribers(roomId, optimisticMessage);
 
-      try {
-        return new Promise((resolve, reject) => {
-          const requestId = this._generateRequestId();
-          const timeout = setTimeout(() => {
-            reject(new Error('Request timeout'));
-          }, 15000);
+        try {
+          return new Promise((resolve, reject) => {
+            const requestId = this._generateRequestId();
+            const timeout = setTimeout(() => {
+              reject(new Error('Request timeout'));
+            }, 15000);
 
-          const handler = (response) => {
-            if (response.requestId === requestId) {
+            const handler = (response) => {
+              if (response.requestId === requestId) {
+                clearTimeout(timeout);
+                websocketService.unregisterMessageHandler('message_sent');
+                if (response.success) {
+                  this.pendingMessages.delete(tempId);
+                  resolve(response.data);
+                } else {
+                  this.pendingMessages.delete(tempId);
+                  this._updateMessageStatus(roomId, tempId, 'failed', response.error);
+                  reject(new Error(response.error || 'Failed to send message'));
+                }
+              }
+            };
+
+            websocketService.registerMessageHandler('message_sent', handler);
+
+            const message = {
+              type: WS_EVENTS.SEND_MESSAGE,
+              requestId,
+              roomId,
+              content,
+              messageType: type,
+              metadata: { ...metadata, replyToId },
+              clientMessageId: tempId,
+            };
+            console.log('[WS DEBUG] Sending message to backend:', JSON.stringify(message));
+
+            if (!websocketService.send(message)) {
               clearTimeout(timeout);
               websocketService.unregisterMessageHandler('message_sent');
-              if (response.success) {
-                this.pendingMessages.delete(tempId);
-                resolve(response.data);
-              } else {
-                this.pendingMessages.delete(tempId);
-                // Mark message as failed
-                this._updateMessageStatus(roomId, tempId, 'failed', response.error);
-                reject(new Error(response.error || 'Failed to send message'));
-              }
+              this.pendingMessages.delete(tempId);
+              this._removeMessage(roomId, tempId);
+              reject(new Error('WebSocket not connected'));
             }
-          };
-
-          websocketService.registerMessageHandler('message_sent', handler);
-
-const message = {
-             type: WS_EVENTS.SEND_MESSAGE,
-             requestId,
-             roomId,
-             content,
-             messageType: type,
-             metadata: { ...metadata, replyToId },
-             clientMessageId: tempId,
-           };
-
-          // Send via WebSocket
-          if (!websocketService.send(message)) {
-            // If WebSocket not connected, reject immediately
-            clearTimeout(timeout);
-            websocketService.unregisterMessageHandler('message_sent');
-            this.pendingMessages.delete(tempId);
-            this._removeMessage(roomId, tempId);
-            reject(new Error('WebSocket not connected'));
-          }
-        });
-      } catch (error) {
-        console.error('sendMessage error:', error);
-        // Remove optimistic message on error
-        this.pendingMessages.delete(tempId);
-        this._removeMessage(roomId, tempId);
-        throw error;
+          });
+        } catch (error) {
+          console.error('sendMessage error:', error);
+          this.pendingMessages.delete(tempId);
+          this._removeMessage(roomId, tempId);
+          throw error;
+        }
       }
-    }
 
    // ==================== Event Subscription ====================
 
@@ -489,8 +486,21 @@ _handleNewMessage(message) {
       const pending = this.pendingMessages.get(pendingTempId);
 
       if (pending) {
-        // Replace optimistic with real message
+        // Replace optimistic with real message, preserve imageUri/imageUrl for display
         data.status = 'delivered';
+        // Preserve imageUri or imageUrl from optimistic message if server doesn't provide one
+        const hasImageInData = data.metadata?.imageUri || data.metadata?.imageUrl || data.imageUrl;
+        if (!hasImageInData) {
+          const pendingImageUrl = pending.metadata?.imageUrl || pending.metadata?.imageUri;
+          if (pendingImageUrl) {
+            data.metadata = { ...data.metadata, imageUrl: pendingImageUrl };
+          }
+        }
+        // If server sent imageUrl at top-level, move to metadata for rendering
+        if (data.imageUrl && !data.metadata?.imageUri && !data.metadata?.imageUrl) {
+          data.metadata = { ...data.metadata, imageUrl: data.imageUrl };
+          delete data.imageUrl;
+        }
         this._updateMessage(roomId, pendingTempId, data);
         this.pendingMessages.delete(pendingTempId);
       } else if (!this.processedMessageIds.has(data.id)) {
@@ -505,6 +515,11 @@ _handleNewMessage(message) {
 
         // New incoming message
         data.status = 'delivered';
+        // Normalize imageUrl to metadata if provided at top level
+        if (data.imageUrl && !data.metadata?.imageUri && !data.metadata?.imageUrl) {
+          data.metadata = { ...data.metadata, imageUrl: data.imageUrl };
+          delete data.imageUrl;
+        }
         this._addMessage(roomId, data);
       }
 
@@ -582,11 +597,19 @@ _handleNewMessage(message) {
     const existing = this.messages.get(roomId) || [];
     const existingIds = new Set(existing.map(m => m.id));
 
+    // Normalize imageUrl to metadata if provided at top level
+    const normalizedMessages = messages.map(m => {
+      if (m.imageUrl && !m.metadata?.imageUri && !m.metadata?.imageUrl) {
+        return { ...m, metadata: { ...m.metadata, imageUrl: m.imageUrl }, imageUrl: undefined };
+      }
+      return m;
+    });
+
     // Build keys from server messages so we can match and remove stale optimistic duplicates.
     // We bucket timestamps into 3-second windows to tolerate minor clock drift between
     // the optimistic client-side timestamp and the server-assigned createdAt.
     const serverKeys = new Set();
-    messages.forEach(m => {
+    normalizedMessages.forEach(m => {
       const key = `${m.senderId}_${m.content}_${m.type}_${Math.floor((m.createdAt || 0) / 3000)}`;
       serverKeys.add(key);
     });
@@ -601,7 +624,7 @@ _handleNewMessage(message) {
     });
 
     // Append new messages only
-    const newMessages = messages.filter(m => !existingIds.has(m.id));
+    const newMessages = normalizedMessages.filter(m => !existingIds.has(m.id));
 
     // Sort by createdAt
     const combined = [...filteredExisting, ...newMessages].sort((a, b) => a.createdAt - b.createdAt);
@@ -629,17 +652,22 @@ _addMessage(roomId, message) {
     this._persistTimer = setTimeout(() => this._persistToStorage(), 1000);
   }
 
-  _updateMessage(roomId, tempOrId, updates) {
-    const messages = this.messages.get(roomId) || [];
-    const index = messages.findIndex(m => m.tempId === tempOrId || m.id === tempOrId);
-    if (index !== -1) {
-      messages[index] = { ...messages[index], ...updates };
-      if (updates.tempId !== undefined) {
-        messages[index].tempId = updates.tempId;
-      }
-      this.messages.set(roomId, messages);
-    }
-  }
+_updateMessage(roomId, tempOrId, updates) {
+     const messages = this.messages.get(roomId) || [];
+     const index = messages.findIndex(m => m.tempId === tempOrId || m.id === tempOrId);
+     if (index !== -1) {
+       const existingMessage = messages[index];
+       // Merge metadata to preserve imageUri from optimistic message
+       const mergedMetadata = updates.metadata 
+         ? { ...existingMessage.metadata, ...updates.metadata }
+         : existingMessage.metadata;
+       messages[index] = { ...existingMessage, ...updates, metadata: mergedMetadata, type: updates.type || existingMessage.type };
+       if (updates.tempId !== undefined) {
+         messages[index].tempId = updates.tempId;
+       }
+       this.messages.set(roomId, messages);
+     }
+   }
 
   _updateMessageStatus(roomId, messageId, status, error = null) {
     const messages = this.messages.get(roomId) || [];
@@ -812,7 +840,26 @@ _notifyMessageSubscribers(roomId, message) {
         messages: Array.from(this.messages.entries()),
         timestamp: Date.now(),
       };
-      await AsyncStorage.setItem('chat_cache', JSON.stringify(data));
+
+      let json = JSON.stringify(data);
+      const MAX_CACHE_SIZE = 1024 * 1024; // 1MB
+
+      if (json.length > MAX_CACHE_SIZE) {
+        const trimmedMessages = Array.from(data.messages).map(([roomId, msgs]) => {
+          const sorted = msgs.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          return [roomId, sorted.slice(0, 50)];
+        });
+
+        const trimmedData = { ...data, messages: trimmedMessages };
+        json = JSON.stringify(trimmedData);
+      }
+
+      if (json.length > MAX_CACHE_SIZE) {
+        console.warn('Chat cache still too large after trimming, skipping persistence');
+        return;
+      }
+
+      await AsyncStorage.setItem('chat_cache', json);
     } catch (e) {
       console.error('Failed to persist chat cache:', e);
     }

@@ -16,17 +16,17 @@ const (
 )
 
 type ChatRoom struct {
-	ID           string       `json:"id" db:"id"`
-	ChamaID      sql.NullString `json:"chamaId,omitempty" db:"chama_id"`
-	Name         string       `json:"name" db:"name"`
-	Type         ChatRoomType `json:"type" db:"type"`
-	IsPrivate    bool         `json:"isPrivate" db:"-"`
-	CreatedBy    string       `json:"createdBy" db:"created_by"`
-	IsActive     bool         `json:"isActive" db:"is_active"`
-	LastMessage  string       `json:"lastMessage,omitempty" db:"last_message"`
-	LastMessageAt time.Time   `json:"lastMessageAt,omitempty" db:"last_message_at"`
-	CreatedAt    time.Time    `json:"createdAt" db:"created_at"`
-	UpdatedAt    time.Time    `json:"updatedAt" db:"updated_at"`
+	ID            string         `json:"id" db:"id"`
+	ChamaID       sql.NullString `json:"chamaId,omitempty" db:"chama_id"`
+	Name          string         `json:"name" db:"name"`
+	Type          ChatRoomType   `json:"type" db:"type"`
+	IsPrivate     bool           `json:"isPrivate" db:"-"`
+	CreatedBy     string         `json:"createdBy" db:"created_by"`
+	IsActive      bool           `json:"isActive" db:"is_active"`
+	LastMessage   string         `json:"lastMessage,omitempty" db:"last_message"`
+	LastMessageAt time.Time      `json:"lastMessageAt,omitempty" db:"last_message_at"`
+	CreatedAt     time.Time      `json:"createdAt" db:"created_at"`
+	UpdatedAt     time.Time      `json:"updatedAt" db:"updated_at"`
 }
 
 func NewChatRoom(chamaID, name string, roomType ChatRoomType, createdBy string) *ChatRoom {
@@ -53,13 +53,13 @@ const (
 )
 
 type ChatRoomMember struct {
-	ID        string    `json:"id" db:"id"`
-	RoomID    string    `json:"roomId" db:"room_id"`
-	UserID    string    `json:"userId" db:"user_id"`
-	Role      MemberRole `json:"role" db:"role"`
-	JoinedAt  time.Time `json:"joinedAt" db:"joined_at"`
-	LastReadAt time.Time `json:"lastReadAt,omitempty" db:"last_read_at"`
-	IsActive  bool      `json:"isActive" db:"is_active"`
+	ID         string     `json:"id" db:"id"`
+	RoomID     string     `json:"roomId" db:"room_id"`
+	UserID     string     `json:"userId" db:"user_id"`
+	Role       MemberRole `json:"role" db:"role"`
+	JoinedAt   time.Time  `json:"joinedAt" db:"joined_at"`
+	LastReadAt time.Time  `json:"lastReadAt,omitempty" db:"last_read_at"`
+	IsActive   bool       `json:"isActive" db:"is_active"`
 }
 
 func NewChatRoomMember(roomID, userID string, role MemberRole) *ChatRoomMember {
@@ -83,16 +83,18 @@ const (
 )
 
 type ChatMessage struct {
-	ID        string          `json:"id" db:"id"`
-	RoomID    string          `json:"roomId" db:"room_id"`
-	SenderID  string          `json:"senderId" db:"sender_id"`
-	Content   string          `json:"content" db:"content"`
-	Type      MessageType     `json:"type" db:"type"`
-	Metadata  interface{}     `json:"metadata,omitempty" db:"metadata"`
-	IsDeleted bool            `json:"isDeleted" db:"is_deleted"`
+	ID        string         `json:"id" db:"id"`
+	RoomID    string         `json:"roomId" db:"room_id"`
+	SenderID  string         `json:"senderId" db:"sender_id"`
+	Content   string         `json:"content" db:"content"`
+	Type      MessageType    `json:"type" db:"type"`
+	Metadata  interface{}    `json:"metadata,omitempty" db:"metadata"`
+	ImageUrl  string         `json:"imageUrl,omitempty" db:"image_url"`
+	ImageUrls interface{}    `json:"imageUrls,omitempty" db:"image_urls"`
+	IsDeleted bool           `json:"isDeleted" db:"is_deleted"`
 	ReplyToID sql.NullString `json:"replyToId,omitempty" db:"reply_to_id"`
-	CreatedAt time.Time       `json:"createdAt" db:"created_at"`
-	EditedAt  sql.NullTime    `json:"editedAt,omitempty" db:"edited_at"`
+	CreatedAt time.Time      `json:"createdAt" db:"created_at"`
+	EditedAt  sql.NullTime   `json:"editedAt,omitempty" db:"edited_at"`
 }
 
 func NewChatMessage(roomID, senderID, content string, msgType MessageType) *ChatMessage {
@@ -116,8 +118,8 @@ const (
 )
 
 type UserPresence struct {
-	UserID       string       `json:"userId" db:"user_id"`
-	Status       PresenceStatus `json:"status" db:"status"`
-	LastSeen     time.Time    `json:"lastSeen" db:"last_seen"`
+	UserID        string         `json:"userId" db:"user_id"`
+	Status        PresenceStatus `json:"status" db:"status"`
+	LastSeen      time.Time      `json:"lastSeen" db:"last_seen"`
 	CurrentRoomID sql.NullString `json:"currentRoomId,omitempty" db:"current_room_id"`
 }

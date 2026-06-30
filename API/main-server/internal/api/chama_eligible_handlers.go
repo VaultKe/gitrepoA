@@ -3,7 +3,7 @@ package api
 import (
 	"database/sql"
 	"net/http"
-
+	"fmt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -250,22 +250,24 @@ func GetEligibleSavingsMembers(c *gin.Context) {
 		return
 	}
 
-	// Query eligible savings members (members with savings balance)
+	// Get all active chama members with their savings balance in the chama's savings subwallet
+	savingsWalletID := fmt.Sprintf("wallet-%s-savings", chamaID)
+
 	query := `
-		SELECT DISTINCT cm.user_id, u.first_name, u.last_name,
-			   COALESCE(w.balance, 0) as available_savings,
-			   COALESCE(SUM(t.amount), 0) as total_deposits
+		SELECT cm.user_id, u.first_name, u.last_name,
+			   COALESCE(SUM(t.amount), 0) as savings_balance,
+			   COALESCE(MAX(t.created_at), '') as last_activity
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
-		LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
-		LEFT JOIN transactions t ON cm.user_id = t.initiated_by AND t.type = 'savings_deposit'
+		LEFT JOIN transactions t ON t.initiated_by = cm.user_id
+			AND t.to_wallet_id = $2
+			AND t.status = 'completed'
 		WHERE cm.chama_id = $1 AND cm.is_active = true
-		GROUP BY cm.user_id, u.first_name, u.last_name, w.balance
-		HAVING available_savings > 0
-		ORDER BY available_savings DESC
+		GROUP BY cm.user_id, u.first_name, u.last_name
+		ORDER BY savings_balance DESC
 	`
 
-	rows, err := db.(*sql.DB).Query(query, chamaID)
+	rows, err := db.(*sql.DB).Query(query, chamaID, savingsWalletID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -278,9 +280,10 @@ func GetEligibleSavingsMembers(c *gin.Context) {
 	var members []map[string]interface{}
 	for rows.Next() {
 		var userID, firstName, lastName string
-		var availableSavings, totalDeposits float64
+		var savingsBalance float64
+		var lastActivityStr string
 
-		err := rows.Scan(&userID, &firstName, &lastName, &availableSavings, &totalDeposits)
+		err := rows.Scan(&userID, &firstName, &lastName, &savingsBalance, &lastActivityStr)
 		if err != nil {
 			continue
 		}
@@ -288,8 +291,8 @@ func GetEligibleSavingsMembers(c *gin.Context) {
 		member := map[string]interface{}{
 			"id":               userID,
 			"name":             firstName + " " + lastName,
-			"availableSavings": availableSavings,
-			"totalDeposits":    totalDeposits,
+			"savingsBalance":   savingsBalance,
+			"lastActivity":     lastActivityStr,
 		}
 		members = append(members, member)
 	}

@@ -12,11 +12,11 @@ import (
 )
 
 type RoomManager struct {
-	rooms      map[string]*models.ChatRoom
-	members    map[string]map[string]*models.ChatRoomMember
-	userRooms  map[string]string
-	mu         sync.RWMutex
-	db         *sql.DB
+	rooms     map[string]*models.ChatRoom
+	members   map[string]map[string]*models.ChatRoomMember
+	userRooms map[string]string
+	mu        sync.RWMutex
+	db        *sql.DB
 }
 
 func NewRoomManager(db *sql.DB) *RoomManager {
@@ -202,10 +202,10 @@ func (rm *RoomManager) JoinRoom(roomID, userID, role string) error {
 	}
 
 	rm.members[roomID][userID] = &models.ChatRoomMember{
-		ID:      roomID + "_" + userID,
-		RoomID:  roomID,
-		UserID:  userID,
-		Role:    models.MemberRole(role),
+		ID:       roomID + "_" + userID,
+		RoomID:   roomID,
+		UserID:   userID,
+		Role:     models.MemberRole(role),
 		JoinedAt: time.Now().UTC(),
 		IsActive: true,
 	}
@@ -295,7 +295,7 @@ func (rm *RoomManager) IsMember(roomID, userID string) bool {
 			RoomID:   roomID,
 			UserID:   userID,
 			IsActive: true,
-			JoinedAt:  time.Now().UTC(),
+			JoinedAt: time.Now().UTC(),
 		}
 	}
 	return exists
@@ -342,25 +342,25 @@ func (rm *RoomManager) FindPrivateRoom(userA, userB string) (*models.ChatRoom, e
 }
 
 func (rm *RoomManager) UpdateLastMessage(roomID, content string) error {
- 	rm.mu.Lock()
- 	defer rm.mu.Unlock()
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
 
- 	room, exists := rm.rooms[roomID]
- 	if !exists {
- 		return sql.ErrNoRows
- 	}
+	room, exists := rm.rooms[roomID]
+	if !exists {
+		return sql.ErrNoRows
+	}
 
- 	room.LastMessage = content
- 	room.LastMessageAt = time.Now().UTC()
- 	room.UpdatedAt = time.Now().UTC()
+	room.LastMessage = content
+	room.LastMessageAt = time.Now().UTC()
+	room.UpdatedAt = time.Now().UTC()
 
- 	_, err := rm.db.Exec(`UPDATE chat_rooms SET last_message = $1, last_message_at = $2, updated_at = $3 WHERE id = $4`,
- 		content, room.LastMessageAt, room.UpdatedAt, roomID)
- 	if err != nil {
- 		return err
- 	}
- 	return nil
- }
+	_, err := rm.db.Exec(`UPDATE chat_rooms SET last_message = $1, last_message_at = $2, updated_at = $3 WHERE id = $4`,
+		content, room.LastMessageAt, room.UpdatedAt, roomID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func (rm *RoomManager) MarkAsRead(roomID, userID string) error {
 	rm.mu.Lock()

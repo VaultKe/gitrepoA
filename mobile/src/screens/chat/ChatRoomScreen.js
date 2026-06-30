@@ -29,6 +29,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 // WhatsApp-style: bubble never wider than ~78% of screen, image never wider than the bubble cap
 const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.78;
 const MAX_IMAGE_WIDTH = MAX_BUBBLE_WIDTH - spacing.md * 2;
+const MAX_IMAGE_HEIGHT = 280;
 
 const ChatRoomScreen = ({ route, navigation }) => {
   const { roomId, roomName } = route.params || {};
@@ -131,13 +132,14 @@ const ChatRoomScreen = ({ route, navigation }) => {
     const replyToData = replyTo ? { id: replyTo.id, senderName: replyTo.senderName, content: replyTo.content, type: replyTo.type } : null;
     setMessageText('');
     setReplyTo(null);
+    const imagesToSend = [...selectedImages];
+    setSelectedImages([]);
 
     try {
-      if (selectedImages.length > 0) {
-        for (const image of selectedImages) {
+      if (imagesToSend.length > 0) {
+        for (const image of imagesToSend) {
           await chatService.sendMessage(roomId, content, 'image', { imageUri: image.uri, replyToId, replyToData });
         }
-        setSelectedImages([]);
       } else {
         await chatService.sendMessage(roomId, content, 'text', { replyToId, replyToData });
       }
@@ -145,13 +147,14 @@ const ChatRoomScreen = ({ route, navigation }) => {
       console.error('Send error:', err);
       Alert.alert('Error', 'Failed to send message. Please try again.');
       setMessageText(content);
-      setReplyTo({ ...replyTo, ...replyToData });
+      setReplyTo(replyToData ? { ...replyTo, ...replyToData } : null);
+      setSelectedImages(imagesToSend);
     }
-  }, [messageText, roomId, selectedImages, replyTo]);
+  }, [messageText, roomId, replyTo, selectedImages]);
 
   const handleImagePicker = useCallback(async () => {
     try {
-      const ImagePicker = (await import('expo-image-picker')).default;
+      const ImagePicker = await import('expo-image-picker');
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         Alert.alert('Permission required', 'Please allow access to your photo library');
@@ -314,12 +317,19 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const renderMessage = ({ item: message }) => {
     const isOwn = message.senderId === user?.id;
     const status = message.status || 'sent';
-    const hasImage = message.type === 'image' && message.metadata?.imageUri;
+    const hasImage = message.type === 'image' && (message.imageUrl || message.metadata?.imageUri || message.metadata?.imageUrl);
     const isReply = !!message.replyTo?.id;
 
-    const imgWidth = message.metadata?.imageWidth;
-    const imgHeight = message.metadata?.imageHeight;
+    const imgWidth = message.metadata?.imageWidth || message.metadata?.width;
+    const imgHeight = message.metadata?.imageHeight || message.metadata?.height;
     const aspectRatio = imgWidth && imgHeight ? imgWidth / imgHeight : 1;
+
+    let imageWidth = MAX_IMAGE_WIDTH;
+    let imageHeight = imageWidth / aspectRatio;
+    if (imageHeight > MAX_IMAGE_HEIGHT) {
+      imageHeight = MAX_IMAGE_HEIGHT;
+      imageWidth = imageHeight * aspectRatio;
+    }
 
     return (
       <View style={[styles.messageRow, isOwn ? styles.ownRow : styles.otherRow]}>
@@ -355,10 +365,10 @@ const ChatRoomScreen = ({ route, navigation }) => {
             
             {hasImage && (
               <Image
-                source={{ uri: message.metadata.imageUri }}
+                source={{ uri: message.imageUrl || message.metadata?.imageUri || message.metadata?.imageUrl }}
                 style={[
                   styles.messageImage,
-                  { width: MAX_IMAGE_WIDTH, height: MAX_IMAGE_WIDTH / aspectRatio },
+                  { width: imageWidth, height: imageHeight },
                 ]}
                 resizeMode="cover"
               />

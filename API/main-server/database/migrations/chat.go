@@ -61,10 +61,12 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     id TEXT PRIMARY KEY,
     room_id TEXT NOT NULL,
     sender_id TEXT NOT NULL,
-    message TEXT NOT NULL,
-    content TEXT NOT NULL,
+    message TEXT,
+    content TEXT,
     type TEXT DEFAULT 'text',
     message_type TEXT DEFAULT 'text', -- 'text', 'image', 'file', 'voice'
+    image_url TEXT,
+    image_urls JSONB,
     metadata TEXT DEFAULT '{}',
     file_url TEXT,
     is_edited BOOLEAN DEFAULT FALSE,
@@ -263,13 +265,13 @@ func refactorChatMessageContent(db *sql.DB) error {
 					}
 				}
 
-			metaBytes, _ := json.Marshal(encryptionMeta)
-			updateQuery := `UPDATE chat_messages SET content = $1, metadata = $2 WHERE id = $3`
-			if _, err := db.Exec(updateQuery, cipherStr, string(metaBytes), id); err != nil {
-				return fmt.Errorf("failed to update message %s: %w", id, err)
+				metaBytes, _ := json.Marshal(encryptionMeta)
+				updateQuery := `UPDATE chat_messages SET content = $1, metadata = $2 WHERE id = $3`
+				if _, err := db.Exec(updateQuery, cipherStr, string(metaBytes), id); err != nil {
+					return fmt.Errorf("failed to update message %s: %w", id, err)
+				}
 			}
 		}
-	}
 	}
 
 	log.Printf("Refactored chat message content to store only ciphertext")

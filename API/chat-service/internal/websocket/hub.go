@@ -36,14 +36,14 @@ type connWrapper struct {
 }
 
 type Hub struct {
-	clients         map[*Client]bool
-	rooms           map[string]map[*Client]bool
-	broadcast       chan *Message
-	register        chan *Client
-	unregister      chan *Client
-	roomMessages    chan *RoomMessage
-	roomSubscribe   chan *RoomSubscription
-	mu              sync.RWMutex
+	clients       map[*Client]bool
+	rooms         map[string]map[*Client]bool
+	broadcast     chan *Message
+	register      chan *Client
+	unregister    chan *Client
+	roomMessages  chan *RoomMessage
+	roomSubscribe chan *RoomSubscription
+	mu            sync.RWMutex
 }
 
 type RoomSubscription struct {

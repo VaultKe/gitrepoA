@@ -296,134 +296,15 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
   const loadSavingsAccounts = async (page = 1, search = '') => {
     try {
       setLoading(true);
-      const offset = (page - 1) * pageSize;
-      const response = await ApiService.getEligibleSavingsMembers(currentChamaId, pageSize, offset);
+      const response = await ApiService.getEligibleSavingsMembers(currentChamaId);
 
       if (response.success) {
         let accountsData = response.data || [];
 
-        // Enrich savings accounts with member user information
-        const enrichedAccounts = await Promise.all(
-          accountsData.map(async (account) => {
-            try {
-              // Get member user ID from various possible field names
-              const userId = account.user_id || account.memberId || account.userId || account.id;
-              if (userId) {
-                console.log(`🔍 Enriching savings account ${account.id} with member user ID: ${userId}`);
-                const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                console.log(`🔍 User response for member ${userId}:`, userResponse);
-
-                if (userResponse.success && userResponse.data) {
-                  const userData = userResponse.data;
-                  const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-                  console.log(`✅ Enriched savings account ${account.id} with member: ${fullName}`);
-
-                  return {
-                    ...account,
-                    user_id: userId,
-                    member_name: fullName,
-                    memberName: fullName,
-                    memberId: userId,
-                    user: {
-                      id: userId,
-                      first_name: userData.firstName || userData.first_name,
-                      last_name: userData.lastName || userData.last_name,
-                      name: fullName,
-                      username: userData.username || userData.email
-                    }
-                  };
-                }
-              }
-
-              // Return account with placeholder member data
-              return {
-                ...account,
-                user_id: userId,
-                member_name: account.member_name || account.memberName || 'Unknown Member',
-                memberName: account.member_name || account.memberName || 'Unknown Member',
-                memberId: userId,
-                user: {
-                  id: userId,
-                  name: account.member_name || account.memberName || 'Unknown Member',
-                  first_name: 'Unknown',
-                  last_name: 'Member',
-                  username: 'unknown'
-                }
-              };
-            } catch (error) {
-              console.warn(`❌ Failed to enrich savings account ${account.id}:`, error);
-              return {
-                ...account,
-                member_name: account.member_name || account.memberName || 'Unknown Member',
-                memberName: account.member_name || account.memberName || 'Unknown Member',
-              };
-            }
-          })
-        );
-
-        setSavingsAccounts(enrichedAccounts);
-
-        // For search functionality, if searching, load all data
-        if (search.trim()) {
-          const allResponse = await ApiService.getEligibleSavingsMembers(currentChamaId, 1000, 0); // Load more for search
-          if (allResponse.success) {
-            let allAccountsData = allResponse.data || [];
-
-            // Enrich all savings accounts data as well
-            const enrichedAllAccounts = await Promise.all(
-              allAccountsData.map(async (account) => {
-                try {
-                  const userId = account.user_id || account.memberId || account.userId || account.id;
-                  if (userId) {
-                    const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                    if (userResponse.success && userResponse.data) {
-                      const userData = userResponse.data;
-                      const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-
-                      return {
-                        ...account,
-                        user_id: userId,
-                        member_name: fullName,
-                        memberName: fullName,
-                        memberId: userId,
-                        user: {
-                          id: userId,
-                          first_name: userData.firstName || userData.first_name,
-                          last_name: userData.lastName || userData.last_name,
-                          name: fullName,
-                          username: userData.username || userData.email
-                        }
-                      };
-                    }
-                  }
-
-                  return {
-                    ...account,
-                    member_name: account.member_name || account.memberName || 'Unknown Member',
-                    memberName: account.member_name || account.memberName || 'Unknown Member',
-                  };
-                } catch (error) {
-                  return {
-                    ...account,
-                    member_name: account.member_name || account.memberName || 'Unknown Member',
-                    memberName: account.member_name || account.memberName || 'Unknown Member',
-                  };
-                }
-              })
-            );
-
-            setAllSavingsAccounts(enrichedAllAccounts);
-            // Calculate pagination info from all data
-            const filteredData = filterSavingsAccountsData(enrichedAllAccounts, search, selectedFilter);
-            setTotalItems(filteredData.length);
-            setTotalPages(Math.ceil(filteredData.length / pageSize));
-          }
-        } else {
-          setAllSavingsAccounts(enrichedAccounts);
-          // Use pagination info from API if available, otherwise estimate
-          setTotalItems(response.totalCount || response.data?.length || enrichedAccounts.length);
-          setTotalPages(Math.ceil((response.totalCount || enrichedAccounts.length) / pageSize));
-        }
+        setSavingsAccounts(accountsData);
+        setAllSavingsAccounts(accountsData);
+        setTotalItems(accountsData.length);
+        setTotalPages(Math.ceil(accountsData.length / pageSize));
       } else {
         console.error('Failed to load savings accounts:', response.error);
         setSavingsAccounts([]);
