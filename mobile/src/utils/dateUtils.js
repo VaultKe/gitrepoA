@@ -250,6 +250,14 @@ export const formatCurrency = (amount, currency = 'KES') => {
  * Get timezone info for East Africa
  * @returns {object} Timezone information
  */
+export const formatTime = (date) => {
+  return formatDate(date, 'time');
+};
+
+/**
+ * Get timezone info for East Africa
+ * @returns {object} Timezone information
+ */
 export const getTimezoneInfo = () => {
   return {
     name: 'East Africa Time',
@@ -263,6 +271,7 @@ export default {
   nowEAT,
   toEAT,
   formatDate,
+  formatTime,
   getTimeAgo,
   isToday,
   isYesterday,

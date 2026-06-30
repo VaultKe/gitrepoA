@@ -10,7 +10,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	allowedOrigins := []string{
 		"https://gitrepoa-1.onrender.com",
 		"http://localhost:8081",
-		"https://localhost:8083",
+		"https://localhost:8084",
 		"https://127.0.0.1:8081",
 		"http://localhost:8085",
 		"http://localhost:3000",

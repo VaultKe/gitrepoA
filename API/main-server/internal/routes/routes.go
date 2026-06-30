@@ -727,6 +727,7 @@ func chatWSHandler(cfg *config.Config) gin.HandlerFunc {
 		headers.Del("Sec-WebSocket-Key")
 		headers.Del("Sec-WebSocket-Version")
 		headers.Del("Sec-WebSocket-Protocol")
+		headers.Del("Sec-WebSocket-Extensions")
 
 		backendConn, _, err := websocket.DefaultDialer.Dial(targetURL, headers)
 		if err != nil {

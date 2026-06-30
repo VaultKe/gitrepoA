@@ -246,108 +246,100 @@ class ChatService {
     }, this.typingDebounceMs);
   }
 
-  joinRoom(roomId) {
-    websocketService.joinRoom(roomId);
-  }
+joinRoom(roomId) {
+     websocketService.joinRoom(roomId);
+   }
 
-  leaveRoom(roomId) {
-    websocketService.leaveRoom(roomId);
-  }
+   leaveRoom(roomId) {
+     websocketService.leaveRoom(roomId);
+   }
 
-  async sendMessage(roomId, content, type = 'text', metadata = {}) {
-    try {
-      return new Promise((resolve, reject) => {
-        const tempId = this._generateTempId();
-        const requestId = this._generateRequestId();
-        const timeout = setTimeout(() => {
-          reject(new Error('Request timeout'));
-        }, 15000);
+   async sendMessage(roomId, content, type = 'text', metadata = {}) {
+     try {
+       return new Promise((resolve, reject) => {
+         const tempId = this._generateTempId();
+         const requestId = this._generateRequestId();
+         const timeout = setTimeout(() => {
+           reject(new Error('Request timeout'));
+         }, 15000);
 
-        const handler = (response) => {
-          if (response.requestId === requestId) {
-            clearTimeout(timeout);
-            websocketService.unregisterMessageHandler('message_sent');
-            if (response.success) {
-              this.pendingMessages.delete(tempId);
-              resolve(response.data);
-            } else {
-              this.pendingMessages.delete(tempId);
-              reject(new Error(response.error || 'Failed to send message'));
-            }
-          }
-        };
+         const handler = (response) => {
+           console.log('[WS DEBUG] message_sent response:', JSON.stringify(response));
+           if (response.requestId === requestId) {
+             clearTimeout(timeout);
+             websocketService.unregisterMessageHandler('message_sent');
+             if (response.success) {
+               this.pendingMessages.delete(tempId);
+               resolve(response.data);
+             } else {
+               this.pendingMessages.delete(tempId);
+               reject(new Error(response.error || 'Failed to send message'));
+             }
+           }
+         };
 
-        websocketService.registerMessageHandler('message_sent', handler);
+         websocketService.registerMessageHandler('message_sent', handler);
 
-        const message = {
-          type: WS_EVENTS.SEND_MESSAGE,
-          requestId,
-          roomId,
-          content,
-          messageType: type,
-          metadata,
-          clientMessageId: tempId,
-        };
+         const message = {
+           type: WS_EVENTS.SEND_MESSAGE,
+           requestId,
+           roomId,
+           content,
+           messageType: type,
+           metadata,
+           clientMessageId: tempId,
+         };
+         console.log('[WS DEBUG] Sending message:', JSON.stringify(message));
 
-        this.pendingMessages.set(tempId, {
-          id: tempId,
-          roomId,
-          content,
-          type,
-          metadata,
-          status: 'sending',
-          createdAt: Date.now(),
-        });
+         websocketService.send(message);
+       });
+     } catch (error) {
+       console.error('sendMessage error:', error);
+       throw error;
+     }
+   }
 
-        websocketService.send(message);
-      });
-    } catch (error) {
-      console.error('sendMessage error:', error);
-      throw error;
-    }
-  }
+   // ==================== Event Subscription ====================
 
-  // ==================== Event Subscription ====================
+   subscribeToRoom(roomId, callback) {
+     if (!this.roomSubscribers.has(roomId)) {
+       this.roomSubscribers.set(roomId, new Set());
+     }
+     this.roomSubscribers.get(roomId).add(callback);
 
-  subscribeToRoom(roomId, callback) {
-    if (!this.roomSubscribers.has(roomId)) {
-      this.roomSubscribers.set(roomId, new Set());
-    }
-    this.roomSubscribers.get(roomId).add(callback);
+     // Auto-join room when first subscriber added
+     this.joinRoom(roomId);
 
-    // Auto-join room when first subscriber added
-    this.joinRoom(roomId);
+     // Return unsubscribe function
+     return () => {
+       const callbacks = this.roomSubscribers.get(roomId);
+       if (callbacks) {
+         callbacks.delete(callback);
+         if (callbacks.size === 0) {
+           this.leaveRoom(roomId);
+         }
+       }
+     };
+   }
 
-    // Return unsubscribe function
-    return () => {
-      const callbacks = this.roomSubscribers.get(roomId);
-      if (callbacks) {
-        callbacks.delete(callback);
-        if (callbacks.size === 0) {
-          this.leaveRoom(roomId);
-        }
-      }
-    };
-  }
+   subscribeToMessages(roomId, callback) {
+     if (!this.messageSubscribers.has(roomId)) {
+       this.messageSubscribers.set(roomId, new Set());
+     }
+     this.messageSubscribers.get(roomId).add(callback);
+     return () => {
+       const callbacks = this.messageSubscribers.get(roomId);
+       if (callbacks) {
+         callbacks.delete(callback);
+       }
+     };
+   }
 
-  subscribeToMessages(roomId, callback) {
-    if (!this.messageSubscribers.has(roomId)) {
-      this.messageSubscribers.set(roomId, new Set());
-    }
-    this.messageSubscribers.get(roomId).add(callback);
-    return () => {
-      const callbacks = this.messageSubscribers.get(roomId);
-      if (callbacks) {
-        callbacks.delete(callback);
-      }
-    };
-  }
+   // ==================== Room Management ====================
 
-// ==================== Room Management ====================
-
-  /**
-   * Create a new chat room
-   */
+   /**
+    * Create a new chat room
+    */
   async createRoom(roomData) {
     try {
       const ApiService = (await import('../api')).default;
@@ -433,13 +425,15 @@ class ChatService {
 
   // ==================== Private Handlers ====================
 
-  _handleNewMessage(message) {
-    const { roomId, data } = message;
+_handleNewMessage(message) {
+     console.log('[WS DEBUG] _handleNewMessage called with:', JSON.stringify(message));
+     const { roomId, data } = message;
 
-    // Deduplication: check if already processed
-    if (this.processedMessageIds.has(data.id)) {
-      return; // Skip duplicate
-    }
+     // Deduplication: check if already processed
+     if (this.processedMessageIds.has(data.id)) {
+       console.log('[WS DEBUG] Duplicate message detected, skipping:', data.id);
+       return; // Skip duplicate
+     }
 
     // Add to processed set
     this.processedMessageIds.add(data.id);

@@ -342,19 +342,25 @@ func (rm *RoomManager) FindPrivateRoom(userA, userB string) (*models.ChatRoom, e
 }
 
 func (rm *RoomManager) UpdateLastMessage(roomID, content string) error {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
+ 	rm.mu.Lock()
+ 	defer rm.mu.Unlock()
 
-	room, exists := rm.rooms[roomID]
-	if !exists {
-		return sql.ErrNoRows
-	}
+ 	room, exists := rm.rooms[roomID]
+ 	if !exists {
+ 		return sql.ErrNoRows
+ 	}
 
-	room.LastMessage = content
-	room.LastMessageAt = time.Now().UTC()
-	room.UpdatedAt = time.Now().UTC()
-	return nil
-}
+ 	room.LastMessage = content
+ 	room.LastMessageAt = time.Now().UTC()
+ 	room.UpdatedAt = time.Now().UTC()
+
+ 	_, err := rm.db.Exec(`UPDATE chat_rooms SET last_message = $1, last_message_at = $2, updated_at = $3 WHERE id = $4`,
+ 		content, room.LastMessageAt, room.UpdatedAt, roomID)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	return nil
+ }
 
 func (rm *RoomManager) MarkAsRead(roomID, userID string) error {
 	rm.mu.Lock()

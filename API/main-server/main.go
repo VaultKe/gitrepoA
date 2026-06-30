@@ -122,6 +122,9 @@ func main() {
 		}
 	}
 
+	// Initialize meeting service for attendance endpoints
+	api.InitializeMeetingService(db, nil)
+
 	// Register routes and middleware
 	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService)
 

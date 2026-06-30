@@ -49,10 +49,10 @@ func (s *MeetingService) GetMeeting(meetingID string) (*models.Meeting, error) {
 // MarkAttendance marks a user's attendance for a meeting
 func (s *MeetingService) MarkAttendance(meetingID, userID, attendanceType string, isPresent bool) error {
 	query := `
-		INSERT INTO meeting_attendance (id, meeting_id, user_id, chama_id, status, notes, created_at)
-		VALUES ($1, $2, $3, (SELECT chama_id FROM meetings WHERE id = $2), $4, $5, $6)
+		INSERT INTO meeting_attendance (id, meeting_id, user_id, attendance_type, is_present, notes, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (meeting_id, user_id)
-		DO UPDATE SET status = EXCLUDED.status, notes = EXCLUDED.notes
+		DO UPDATE SET is_present = EXCLUDED.is_present, notes = EXCLUDED.notes, updated_at = EXCLUDED.updated_at
 	`
 
 	notes := ""
@@ -60,7 +60,7 @@ func (s *MeetingService) MarkAttendance(meetingID, userID, attendanceType string
 		notes = "Absent"
 	}
 
-	_, err := s.db.Exec(query, fmt.Sprintf("att_%s_%s", meetingID, userID), meetingID, userID, attendanceType, notes, time.Now())
+	_, err := s.db.Exec(query, fmt.Sprintf("att_%s_%s", meetingID, userID), meetingID, userID, attendanceType, isPresent, notes, time.Now(), time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to mark attendance: %w", err)
 	}
@@ -71,7 +71,7 @@ func (s *MeetingService) MarkAttendance(meetingID, userID, attendanceType string
 // GetMeetingAttendance retrieves attendance records for a meeting
 func (s *MeetingService) GetMeetingAttendance(meetingID string) ([]*models.MeetingAttendance, error) {
 	query := `
-		SELECT ma.id, ma.meeting_id, ma.user_id, ma.status, ma.notes, ma.created_at
+		SELECT ma.id, ma.meeting_id, ma.user_id, ma.attendance_type, ma.is_present, ma.notes, ma.joined_at, ma.left_at, ma.duration_minutes, ma.created_at, ma.updated_at
 		FROM meeting_attendance ma
 		WHERE ma.meeting_id = $1
 		ORDER BY ma.created_at DESC
@@ -87,7 +87,7 @@ func (s *MeetingService) GetMeetingAttendance(meetingID string) ([]*models.Meeti
 	for rows.Next() {
 		att := &models.MeetingAttendance{}
 		err := rows.Scan(
-			&att.ID, &att.MeetingID, &att.UserID, &att.Status, &att.Notes, &att.CreatedAt,
+			&att.ID, &att.MeetingID, &att.UserID, &att.AttendanceType, &att.IsPresent, &att.Notes, &att.JoinedAt, &att.LeftAt, &att.DurationMinutes, &att.CreatedAt, &att.UpdatedAt,
 		)
 		if err != nil {
 			continue

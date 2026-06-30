@@ -719,68 +719,6 @@ const SettingsScreen = ({ navigation }) => {
     </Card>
   );
 
-  const renderThemeSelector = () => (
-    <Card style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        Appearance
-      </Text>
-
-      <View style={styles.themeContainer}>
-        <TouchableOpacity
-          style={[
-            styles.themeOption,
-            {
-              backgroundColor: theme === 'light' ? colors.primary + '20' : colors.backgroundSecondary,
-              borderColor: theme === 'light' ? colors.primary : colors.border,
-            }
-          ]}
-          onPress={() => setTheme('light')}
-          activeOpacity={0.8}
-          delayPressIn={0}
-        >
-          <Ionicons
-            name="sunny"
-            size={24}
-            color={theme === 'light' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[
-            styles.themeText,
-            { color: theme === 'light' ? colors.primary : colors.text }
-          ]}>
-            Light
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.themeOption,
-            {
-              backgroundColor: theme === 'dark' ? colors.primary + '20' : colors.backgroundSecondary,
-              borderColor: theme === 'dark' ? colors.primary : colors.border,
-            }
-          ]}
-          onPress={() => setTheme('dark')}
-          activeOpacity={0.8}
-          delayPressIn={0}
-        >
-          <Ionicons
-            name="moon"
-            size={24}
-            color={theme === 'dark' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[
-            styles.themeText,
-            { color: theme === 'dark' ? colors.primary : colors.text }
-          ]}>
-            Dark
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-
-    </Card>
-  );
-
   const renderNotificationSettings = () => {
     const selectedSound = availableSounds.find(s => s.id === settings.notifications.notification_sound_id);
 
@@ -1396,7 +1334,6 @@ const SettingsScreen = ({ navigation }) => {
         scrollEventThrottle={16}
         removeClippedSubviews={false}
       >
-        {renderThemeSelector()}
         {renderNotificationSettings()}
         {renderPrivacySettings()}
         {renderSecuritySettings()}

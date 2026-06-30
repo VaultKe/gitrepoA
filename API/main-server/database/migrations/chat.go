@@ -222,7 +222,7 @@ func updateChatMessageStorage(db *sql.DB) error {
 				return fmt.Errorf("failed to update message %s: %w", id, err)
 			}
 		} else if content, ok := msgData["content"]; ok {
-			updateQuery := `UPDATE chat_messages SET message = ? WHERE id = $1`
+			updateQuery := `UPDATE chat_messages SET message = $1 WHERE id = $2`
 			if _, err := db.Exec(updateQuery, content, id); err != nil {
 				return fmt.Errorf("failed to update message %s: %w", id, err)
 			}
@@ -263,13 +263,13 @@ func refactorChatMessageContent(db *sql.DB) error {
 					}
 				}
 
-				metaBytes, _ := json.Marshal(encryptionMeta)
-				updateQuery := `UPDATE chat_messages SET content = ?, metadata = $1 WHERE id = $2`
-				if _, err := db.Exec(updateQuery, cipherStr, string(metaBytes), id); err != nil {
-					return fmt.Errorf("failed to update message %s: %w", id, err)
-				}
+			metaBytes, _ := json.Marshal(encryptionMeta)
+			updateQuery := `UPDATE chat_messages SET content = $1, metadata = $2 WHERE id = $3`
+			if _, err := db.Exec(updateQuery, cipherStr, string(metaBytes), id); err != nil {
+				return fmt.Errorf("failed to update message %s: %w", id, err)
 			}
 		}
+	}
 	}
 
 	log.Printf("Refactored chat message content to store only ciphertext")

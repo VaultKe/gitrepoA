@@ -17,37 +17,63 @@ class WebSocketService {
     this.pollingInterval = null;
   }
 
-  async connect() {
-    if (!this.isRealtimeEnabled) return false;
+async connect() {
+     console.log('[WS DEBUG] connect() called, isRealtimeEnabled:', this.isRealtimeEnabled);
+     if (!this.isRealtimeEnabled) {
+       console.warn('[WS DEBUG] Realtime disabled, not connecting');
+       return false;
+     }
 
-    try {
-      return await this._establishConnection();
-    } catch (error) {
-      this.startPollingFallback();
-      return false;
-    }
-  }
+     if (this.isConnected || this.ws) {
+       console.log('[WS DEBUG] Existing connection found, closing...');
+       this.ws.close();
+       this.ws = null;
+       this.isConnected = false;
+     }
 
-  async _establishConnection() {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) return false;
+     try {
+       return await this._establishConnection();
+     } catch (error) {
+       console.error('[WS DEBUG] connect() failed:', error);
+       this.startPollingFallback();
+       return false;
+     }
+   }
 
-      if (!API_BASE_URL) return false;
+async _establishConnection() {
+     try {
+       const token = await AsyncStorage.getItem('authToken');
+       console.log('[WS DEBUG] authToken:', token ? 'present' : 'missing');
+       if (!token) {
+         console.warn('[WS DEBUG] No auth token, cannot connect');
+         return false;
+       }
 
-      const sessionRes = await fetch(`${API_BASE_URL}/chat-ws/ws-token`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!sessionRes.ok) return false;
-      const { sessionId } = await sessionRes.json();
-      if (!sessionId) return false;
+       if (!API_BASE_URL) {
+         console.warn('[WS DEBUG] No API_BASE_URL configured');
+         return false;
+       }
 
-      const wsUrl = `${WS_URL}/chat-ws/ws?session=${encodeURIComponent(sessionId)}`;
-      this.ws = new WebSocket(wsUrl);
+       console.log('[WS DEBUG] Fetching WS token from:', `${API_BASE_URL}/chat-ws/ws-token`);
+       const sessionRes = await fetch(`${API_BASE_URL}/chat-ws/ws-token`, {
+         method: 'POST',
+         headers: {
+           Authorization: `Bearer ${token}`,
+           'Content-Type': 'application/json',
+         },
+       });
+       console.log('[WS DEBUG] WS token response status:', sessionRes.status);
+       if (!sessionRes.ok) {
+         console.warn('[WS DEBUG] WS token request failed');
+         return false;
+       }
+       const { sessionId } = await sessionRes.json();
+       console.log('[WS DEBUG] sessionId received:', sessionId);
+       if (!sessionId) return false;
+
+       const wsUrl = `${WS_URL}/chat-ws/ws?session=${encodeURIComponent(sessionId)}`;
+       console.log('[WS DEBUG] Connecting to WebSocket URL:', wsUrl);
+       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = this.onOpen.bind(this);
       this.ws.onmessage = this.onMessage.bind(this);
@@ -80,56 +106,58 @@ class WebSocketService {
     }
   }
 
-  onOpen() {
-    this.isConnected = true;
-    this.reconnectAttempts = 0;
+onOpen() {
+     console.log('[WS DEBUG] WebSocket connected');
+     this.isConnected = true;
+     this.reconnectAttempts = 0;
 
-    this.pingInterval = setInterval(() => {
-      this.send({ type: 'ping' });
-    }, 30000);
+     this.pingInterval = setInterval(() => {
+       this.send({ type: 'ping' });
+     }, 30000);
 
-    this.roomSubscriptions.forEach(roomId => {
-      this.joinRoom(roomId);
-    });
-  }
+     this.roomSubscriptions.forEach(roomId => {
+       this.joinRoom(roomId);
+     });
+   }
 
-  onMessage(event) {
-    try {
-      if (!event || event.data === undefined || event.data === null) return;
-      if (typeof event.data !== 'string') return;
-      if (!event.data.trim()) return;
+onMessage(event) {
+     try {
+       if (!event || event.data === undefined || event.data === null) return;
+       if (typeof event.data !== 'string') return;
+       if (!event.data.trim()) return;
 
-      const message = JSON.parse(event.data);
+       const message = JSON.parse(event.data);
+       console.log('[WS DEBUG] Received message:', JSON.stringify(message));
 
-      switch (message.type) {
-        case 'connected':
-          this.subscribeToDataUpdates();
-          break;
-        case 'pong':
-          break;
-        case 'new_message':
-          this.handleNewMessage(message);
-          break;
-        case 'message_read':
-          break;
-        case 'user_typing':
-          break;
-        case 'data_update':
-          this.handleDataUpdate(message);
-          break;
-        case 'notification_update':
-          this.handleNotificationUpdate(message);
-          break;
-        case 'wallet_update':
-          this.handleWalletUpdate(message);
-          break;
-        case 'chama_update':
-          this.handleChamaUpdate(message);
-          break;
-        case 'transaction_update':
-          this.handleTransactionUpdate(message);
-          break;
-      }
+       switch (message.type) {
+         case 'connected':
+           this.subscribeToDataUpdates();
+           break;
+         case 'pong':
+           break;
+         case 'new_message':
+           this.handleNewMessage(message);
+           break;
+         case 'message_read':
+           break;
+         case 'user_typing':
+           break;
+         case 'data_update':
+           this.handleDataUpdate(message);
+           break;
+         case 'notification_update':
+           this.handleNotificationUpdate(message);
+           break;
+         case 'wallet_update':
+           this.handleWalletUpdate(message);
+           break;
+         case 'chama_update':
+           this.handleChamaUpdate(message);
+           break;
+         case 'transaction_update':
+           this.handleTransactionUpdate(message);
+           break;
+       }
 
       this.messageHandlers.forEach((handler, type) => {
         if (message.type === type) {
@@ -156,30 +184,35 @@ class WebSocketService {
   }
 
   onError(error) {
-    if (typeof window !== 'undefined' && window.location &&
-        window.location.hostname.includes('tunnelmole.net')) {
-      if (this.reconnectAttempts >= 2) {
-        this.maxReconnectAttempts = 0;
-      }
-    }
-  }
+     console.error('[WS DEBUG] WebSocket error:', error.message || error);
+     if (typeof window !== 'undefined' && window.location &&
+         window.location.hostname.includes('tunnelmole.net')) {
+       if (this.reconnectAttempts >= 2) {
+         this.maxReconnectAttempts = 0;
+       }
+     }
+   }
 
-  send(message) {
-    if (this.ws && this.isConnected) {
-      try {
-        this.ws.send(JSON.stringify(message));
-        return true;
-      } catch (error) {
-        return false;
-      }
-    }
-    return false;
-  }
+send(message) {
+     console.log('[WS DEBUG] send() called, message:', JSON.stringify(message), 'isConnected:', this.isConnected);
+     if (this.ws && this.isConnected) {
+       try {
+         this.ws.send(JSON.stringify(message));
+         return true;
+       } catch (error) {
+         console.error('[WS DEBUG] send() error:', error);
+         return false;
+       }
+     }
+     console.warn('[WS DEBUG] WebSocket not connected, cannot send');
+     return false;
+   }
 
-  joinRoom(roomId) {
-    this.roomSubscriptions.add(roomId);
-    this.send({ type: 'join_room', roomId });
-  }
+joinRoom(roomId) {
+     console.log('[WS DEBUG] joinRoom called with roomId:', roomId);
+     this.roomSubscriptions.add(roomId);
+     this.send({ type: 'join_room', roomId });
+   }
 
   leaveRoom(roomId) {
     this.roomSubscriptions.delete(roomId);
