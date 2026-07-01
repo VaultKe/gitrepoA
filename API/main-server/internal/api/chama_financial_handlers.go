@@ -560,15 +560,15 @@ func PaySubscriptionPayment(c *gin.Context) {
 
 	now := time.Now()
 	_, err = database.Exec(
-		"UPDATE subscription_payments SET status = 'paid', paid_at = $1, updated_at = $2, transaction_id = $3 WHERE id = $4",
-		now, now, stkResponse.CheckoutRequestID, paymentID,
+		"UPDATE subscription_payments SET transaction_id = $1, updated_at = $2 WHERE id = $3",
+		stkResponse.CheckoutRequestID, now, paymentID,
 	)
 	if err != nil {
-		log.Printf("Error updating subscription payment: %v", err)
+		log.Printf("Error updating subscription payment checkout request id: %v", err)
 	}
 
 	_, err = database.Exec(
-		"UPDATE chamas SET subscription_fee_paid = true WHERE id = $1",
+		"UPDATE chamas SET subscription_fee_paid = false WHERE id = $1",
 		chamaID,
 	)
 	if err != nil {
@@ -852,19 +852,19 @@ func PayServiceFeePayment(c *gin.Context) {
 	// Update checkout request ID on payment record
 	updateTransactionCheckoutRequestID(database, paymentID, stkResponse.CheckoutRequestID)
 
-	// Mark as paid immediately (callback will confirm later)
+	// Mark as pending - callback will confirm later
 	now := time.Now()
 	_, err = database.Exec(
-		"UPDATE service_fee_payments SET status = 'paid', paid_at = $1, updated_at = $2, transaction_id = $3 WHERE id = $4",
-		now, now, stkResponse.CheckoutRequestID, paymentID,
+		"UPDATE service_fee_payments SET transaction_id = $1, updated_at = $2 WHERE id = $3",
+		stkResponse.CheckoutRequestID, now, paymentID,
 	)
 	if err != nil {
 		log.Printf("Error updating service fee payment: %v", err)
 	}
 
 	_, err = database.Exec(
-		"UPDATE chama_members SET service_fee_paid = true, service_fee_paid_at = $1, service_fee_status = 'paid' WHERE chama_id = $2 AND user_id = $3",
-		now, chamaID, payment.UserID,
+		"UPDATE chama_members SET service_fee_paid = false, service_fee_paid_at = NULL, service_fee_status = 'pending' WHERE chama_id = $1 AND user_id = $2",
+		chamaID, payment.UserID,
 	)
 	if err != nil {
 		log.Printf("Error updating member service fee status: %v", err)
@@ -968,19 +968,19 @@ func PayMemberServiceFee(c *gin.Context) {
 
 	now := time.Now()
 
-	// Create service fee payment record
+	// Create service fee payment record with pending status
 	_, err = database.Exec(
-		"INSERT INTO service_fee_payments (id, chama_id, user_id, amount, status, due_date, transaction_id, paid_at, created_at, updated_at) VALUES ($1, $2, $3, $4, 'paid', $5, $6, $7, $8, $9)",
-		paymentID, chamaID, memberID, 50, now, stkResponse.CheckoutRequestID, now, now, now,
+		"INSERT INTO service_fee_payments (id, chama_id, user_id, amount, status, due_date, transaction_id, created_at, updated_at) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8)",
+		paymentID, chamaID, memberID, 50, now, stkResponse.CheckoutRequestID, now, now,
 	)
 	if err != nil {
 		log.Printf("Error creating service fee payment: %v", err)
 	}
 
-	// Update member status
+	// Update member status as pending - will be confirmed by callback
 	_, err = database.Exec(
-		"UPDATE chama_members SET service_fee_paid = true, service_fee_paid_at = $1, service_fee_status = 'paid' WHERE chama_id = $2 AND user_id = $3",
-		now, chamaID, memberID,
+		"UPDATE chama_members SET service_fee_paid = false, service_fee_paid_at = NULL, service_fee_status = 'pending' WHERE chama_id = $1 AND user_id = $2",
+		chamaID, memberID,
 	)
 	if err != nil {
 		log.Printf("Error updating member service fee status: %v", err)

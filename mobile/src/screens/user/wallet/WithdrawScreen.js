@@ -29,11 +29,6 @@ export default function WithdrawScreen({ navigation }) {
       return;
     }
 
-    if (parseFloat(amount) > 15750.50) {
-      Alert.alert('Insufficient Balance', 'You do not have enough funds to complete this withdrawal.');
-      return;
-    }
-
     if (!phoneNumber || phoneNumber.length < 10) {
       Alert.alert('Invalid Phone', 'Please enter a valid M-Pesa phone number');
       return;

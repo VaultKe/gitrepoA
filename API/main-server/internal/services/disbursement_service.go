@@ -148,13 +148,9 @@ func (s *DisbursementService) DisburseFromUserWallet(userWalletID string, amount
 		return nil, fmt.Errorf("failed to get wallet balance: %w", err)
 	}
 
-	if balance < amount {
+	totalAmount := amount
+	if balance < totalAmount {
 		return nil, fmt.Errorf("insufficient balance in user wallet")
-	}
-
-	_, err = tx.Exec("UPDATE wallets SET balance = balance - $1 WHERE id = $2", amount, userWalletID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to debit user wallet: %w", err)
 	}
 
 	transactionID := "TXN_" + uuid.New().String()
@@ -174,9 +170,14 @@ func (s *DisbursementService) DisburseFromUserWallet(userWalletID string, amount
 	b2cResp, err := s.mpesaService.InitiateB2C(recipientPhone, amount, description)
 	if err != nil {
 		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+		if err := tx.Commit(); err != nil {
+			log.Printf("Failed to commit failed B2C transaction %s: %v", transactionID, err)
+		}
 		return nil, fmt.Errorf("failed to initiate B2C payment: %w", err)
 	}
 
+	// B2C request succeeded - mark as processing. Wallet will be debited on callback/timeout confirmation.
+	// The callback/timeout handler will update status to completed (and already refund if failed).
 	_, err = tx.Exec(
 		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
 		fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID),
@@ -187,10 +188,10 @@ func (s *DisbursementService) DisburseFromUserWallet(userWalletID string, amount
 	}
 
 	if err = tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, fmt.Errorf("failed to commit B2C initiation transaction: %w", err)
 	}
 
-	log.Printf("B2C disbursement initiated for KES %.2f to phone %s", amount, recipientPhone)
+	log.Printf("B2C disbursement initiated for KES %.2f to phone %s - awaiting callback for wallet deduction", amount, recipientPhone)
 
 	return &models.Transaction{
 		ID:           transactionID,
@@ -234,24 +235,16 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 	}
 
 	chamaWalletID := fmt.Sprintf("wallet-%s-contribution", loan.ChamaID)
-	_, err = tx.Exec(
-		"UPDATE wallets SET balance = balance - $1 WHERE owner_id = $2 AND type = 'chama' AND (subwallet_type = 'contribution' OR id = $3)",
-		loan.TotalAmount, loan.ChamaID, chamaWalletID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to debit chama wallet: %w", err)
-	}
-
 	transactionID := "TXN_" + uuid.New().String()
 	now := time.Now()
 	reference := fmt.Sprintf("LOAN-DISB-%s", loanID)
 
 	_, err = tx.Exec(`
 		INSERT INTO transactions (
-			id, from_wallet_id, to_wallet_id, chama_id, member_id, type, status, amount,
+			id, from_wallet_id, chama_id, member_id, type, status, amount,
 			currency, description, reference, payment_method, initiated_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, 'loan', 'pending', $6, 'KES', $7, $8, 'mobile_money', $9, $10, $11, $12)
-	`, transactionID, chamaWalletID, nil, loan.ChamaID, loan.BorrowerID, loan.TotalAmount,
+		) VALUES ($1, $2, $3, $4, 'loan', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10, $11)
+	`, transactionID, chamaWalletID, loan.ChamaID, loan.BorrowerID, loan.TotalAmount,
 		fmt.Sprintf("Loan disbursement for loan %s", loanID), reference, loan.ChamaID, loan.BorrowerID, now, now)
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %w", err)
@@ -260,9 +253,13 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 	b2cResp, err := s.mpesaService.InitiateB2C(borrowerPhone, loan.TotalAmount, fmt.Sprintf("Loan disbursement from chama"))
 	if err != nil {
 		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+		if err := tx.Commit(); err != nil {
+			log.Printf("Failed to commit failed loan disbursement %s: %v", transactionID, err)
+		}
 		return fmt.Errorf("failed to initiate B2C payment: %w", err)
 	}
 
+	// Wallet will be debited by B2C callback/timeout confirmation.
 	_, err = tx.Exec(
 		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
 		fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID),
@@ -271,12 +268,15 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to update transaction: %w", err)
 	}
-
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+	if err != nil {
+		return fmt.Errorf("failed to update transaction: %w", err)
 	}
 
-	log.Printf("Loan disbursement initiated for loan %s to borrower %s", loanID, loan.BorrowerID)
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit loan disbursement transaction: %w", err)
+	}
+
+	log.Printf("Loan disbursement initiated for loan %s to borrower %s - awaiting callback", loanID, loan.BorrowerID)
 
 	return nil
 }
@@ -313,7 +313,7 @@ func (s *DisbursementService) DisburseDividends(chamaID, dividendDeclarationID s
 			INSERT INTO transactions (
 				id, from_wallet_id, chama_id, member_id, type, status, amount,
 				currency, description, reference, payment_method, initiated_by, created_at, updated_at
-			) VALUES ($1, $2, $3, $4, 'transfer', 'pending', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
+			) VALUES ($1, $2, $3, $4, 'transfer', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
 		`, transactionID, fmt.Sprintf("wallet-%s-dividends", chamaID), chamaID, d.MemberID,
 			d.Amount, "Dividend payment", reference, chamaID, now, now)
 		if err != nil {
@@ -321,31 +321,26 @@ func (s *DisbursementService) DisburseDividends(chamaID, dividendDeclarationID s
 			continue
 		}
 
-		_, err = tx.Exec(
-			"UPDATE wallets SET balance = balance - $1 WHERE id = $2",
-			d.Amount, fmt.Sprintf("wallet-%s-dividends", chamaID),
-		)
+		b2cResp, err := s.mpesaService.InitiateB2C(memberPhone, d.Amount, "Dividend payment")
 		if err != nil {
-			log.Printf("Failed to debit dividends wallet: %v", err)
+			_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+			log.Printf("Failed to initiate B2C for dividend %s: %v", transactionID, err)
 			continue
 		}
 
-		_, err = tx.Exec(`
-			UPDATE dividend_payments SET payment_status = 'paid', payment_date = $1, transaction_reference = $2
-			WHERE id = $3
-		`, now, reference, d.ID)
-		if err != nil {
-			log.Printf("Failed to update dividend payment: %v", err)
-			continue
-		}
-
-		_, _ = tx.Exec(`
-			UPDATE transactions SET status = 'processing', updated_at = $1 WHERE id = $2
-		`, now, transactionID)
+	// Wallet will be debited by B2C callback/timeout confirmation.
+	_, err = tx.Exec(
+		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+		fmt.Sprintf(`{"conversation_id": "%s"}`, b2cResp.ConversationID),
+		now, transactionID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update transaction: %w", err)
+	}
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit dividend disbursement transaction: %w", err)
 	}
 
 	return nil
@@ -381,28 +376,23 @@ func (s *DisbursementService) DisburseMerryGoRound(merryGoRoundID, recipientUser
 		INSERT INTO transactions (
 			id, from_wallet_id, chama_id, member_id, type, status, amount,
 			currency, description, reference, payment_method, initiated_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, 'transfer', 'pending', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
+		) VALUES ($1, $2, $3, $4, 'transfer', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
 	`, transactionID, fmt.Sprintf("wallet-%s-merry_go_round", mgr.ChamaID), mgr.ChamaID, recipientUserID,
 		mgr.AmountPerRound, "Merry-go-round payout", reference, mgr.ChamaID, now, now)
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	walletID := fmt.Sprintf("wallet-%s-merry_go_round", mgr.ChamaID)
-	_, err = tx.Exec(
-		"UPDATE wallets SET balance = balance - $1 WHERE id = $2",
-		mgr.AmountPerRound, walletID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to debit merry-go-round wallet: %w", err)
-	}
-
 	b2cResp, err := s.mpesaService.InitiateB2C(recipientPhone, mgr.AmountPerRound, "Merry-go-round payout")
 	if err != nil {
 		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+		if err := tx.Commit(); err != nil {
+			log.Printf("Failed to commit failed MGR disbursement %s: %v", transactionID, err)
+		}
 		return fmt.Errorf("failed to initiate B2C payment: %w", err)
 	}
 
+	// Wallet will be debited by B2C callback/timeout confirmation.
 	_, err = tx.Exec(
 		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
 		fmt.Sprintf(`{"conversation_id": "%s"}`, b2cResp.ConversationID),
@@ -421,10 +411,10 @@ func (s *DisbursementService) DisburseMerryGoRound(merryGoRoundID, recipientUser
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit MGR disbursement transaction: %w", err)
 	}
 
-	log.Printf("Merry-go-round disbursement initiated for participant %s", recipientUserID)
+	log.Printf("Merry-go-round disbursement initiated for participant %s - awaiting callback", recipientUserID)
 
 	return nil
 }
@@ -448,14 +438,6 @@ func (s *DisbursementService) DisburseWelfare(welfareFundID, beneficiaryUserID s
 	defer tx.Rollback()
 
 	walletID := fmt.Sprintf("wallet-%s-welfare", wf.ChamaID)
-	_, err = tx.Exec(
-		"UPDATE wallets SET balance = balance - $1 WHERE id = $2",
-		amount, walletID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to debit welfare wallet: %w", err)
-	}
-
 	transactionID := "TXN_" + uuid.New().String()
 	now := time.Now()
 	reference := fmt.Sprintf("WEL-%s-%s", welfareFundID, beneficiaryUserID)
@@ -464,7 +446,7 @@ func (s *DisbursementService) DisburseWelfare(welfareFundID, beneficiaryUserID s
 		INSERT INTO transactions (
 			id, from_wallet_id, chama_id, member_id, type, status, amount,
 			currency, description, reference, payment_method, initiated_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, 'transfer', 'pending', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
+		) VALUES ($1, $2, $3, $4, 'transfer', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
 	`, transactionID, walletID, wf.ChamaID, beneficiaryUserID,
 		amount, "Welfare fund disbursement", reference, wf.ChamaID, now, now)
 	if err != nil {
@@ -473,10 +455,14 @@ func (s *DisbursementService) DisburseWelfare(welfareFundID, beneficiaryUserID s
 
 	b2cResp, err := s.mpesaService.InitiateB2C(beneficiaryPhone, amount, "Welfare fund payout")
 	if err != nil {
-		_, _ = tx.Exec("UPDATE transaction SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+		if err := tx.Commit(); err != nil {
+			log.Printf("Failed to commit failed welfare disbursement %s: %v", transactionID, err)
+		}
 		return fmt.Errorf("failed to initiate B2C payment: %w", err)
 	}
 
+	// Wallet will be debited by B2C callback/timeout confirmation.
 	_, err = tx.Exec(
 		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
 		fmt.Sprintf(`{"conversation_id": "%s"}`, b2cResp.ConversationID),
@@ -487,10 +473,10 @@ func (s *DisbursementService) DisburseWelfare(welfareFundID, beneficiaryUserID s
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit welfare disbursement transaction: %w", err)
 	}
 
-	log.Printf("Welfare disbursement initiated for beneficiary %s", beneficiaryUserID)
+	log.Printf("Welfare disbursement initiated for beneficiary %s - awaiting callback", beneficiaryUserID)
 
 	return nil
 }
@@ -524,15 +510,39 @@ func (s *DisbursementService) ProcessDisbursementBatch(batchID string) error {
 			continue
 		}
 
-		_, err = s.mpesaService.InitiateB2C(recipientPhone, d.Amount, d.Purpose)
+		_, err := s.mpesaService.InitiateB2C(recipientPhone, d.Amount, d.Purpose)
 		if err != nil {
 			log.Printf("Failed to process disbursement %s: %v", d.ID, err)
+			continue
+		}
+
+		transactionID := "TXN_" + uuid.New().String()
+		now := time.Now()
+		reference := fmt.Sprintf("BATCH-%s-%s", batchID, d.ID)
+
+		_, err = tx.Exec(`
+			INSERT INTO transactions (
+				id, type, status, amount, currency, description, reference, payment_method,
+				initiated_by, created_at, updated_at
+			) VALUES ($1, 'withdrawal', 'processing', $2, 'KES', $3, $4, 'mobile_money', $5, $6, $7)
+		`, transactionID, d.Amount, d.Purpose, reference, d.RecipientID, now, now)
+		if err != nil {
+			log.Printf("Failed to create batch disbursement transaction %s: %v", transactionID, err)
+			continue
+		}
+
+		_, err = tx.Exec(
+			"UPDATE disbursements SET status = 'processing', updated_at = $1 WHERE id = $2",
+			now, d.ID,
+		)
+		if err != nil {
+			log.Printf("Failed to update disbursement %s: %v", d.ID, err)
 			continue
 		}
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit batch disbursement transaction: %w", err)
 	}
 
 	return nil

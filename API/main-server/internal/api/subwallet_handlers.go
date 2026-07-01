@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -150,6 +151,36 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 
 	reference := h.paybillService.GetPaybillReference(chamaID, userID.(string), models.ChamaWalletType(subwalletType), subwalletType)
 
+	_, err := h.paybillService.GetChamaSubWallet(chamaID, models.ChamaWalletType(subwalletType))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Sub-wallet not found for chama",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	targetWalletID := fmt.Sprintf("wallet-%s-%s", chamaID, subwalletType)
+	transactionID, err := createPendingMpesaTransaction(database, req.Amount, reference, targetWalletID, chamaID, subwalletType, subwalletType, userID.(string))
+	if err != nil {
+		log.Printf("Failed to create pending subwallet transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create transaction record",
+		})
+		return
+	}
+
 	mpesaReq := &models.MpesaTransaction{
 		PhoneNumber:      phoneNumber,
 		Amount:           req.Amount,
@@ -159,13 +190,16 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 
 	stkResponse, err := h.mpesaService.InitiateSTKPush(mpesaReq)
 	if err != nil {
-		log.Printf("STK Push failed: %v", err)
+		log.Printf("STK Push failed for subwallet: %v", err)
+		updateTransactionStatus(database, transactionID, models.TransactionStatusFailed)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to initiate M-Pesa payment: " + err.Error(),
 		})
 		return
 	}
+
+	updateTransactionCheckoutRequestID(database, transactionID, stkResponse.CheckoutRequestID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -210,6 +244,35 @@ func (h *SubWalletHandlers) WithdrawFromSubWallet(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	var memberRole string
+	err := database.QueryRow(
+		"SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = true",
+		chamaID, userID,
+	).Scan(&memberRole)
+
+	canWithdraw := false
+	if err == nil && (memberRole == "chairperson" || memberRole == "treasurer") {
+		canWithdraw = true
+	}
+
+	if !canWithdraw {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Access denied - only chairperson or treasurer can withdraw from chama sub-wallets",
 		})
 		return
 	}

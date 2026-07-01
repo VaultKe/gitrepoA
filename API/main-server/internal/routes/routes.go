@@ -161,6 +161,8 @@ func SetupRoutes(
 		publicPayments.Use(configMiddleware)
 		{
 			publicPayments.POST("/mpesa/callback", api.HandleMpesaCallback)
+			publicPayments.POST("/mpesa/b2c/callback", api.HandleMpesaB2CCallback)
+			publicPayments.POST("/mpesa/b2c/timeout", api.HandleMpesaB2CTimeout)
 		}
 
 		publicAuth := apiGroup.Group("/auth")
