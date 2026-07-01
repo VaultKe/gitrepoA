@@ -23,6 +23,7 @@ const SharesManagementScreen = ({ route, navigation }) => {
   const { theme } = useApp();
   const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
+  const chamaId = currentChamaId || route?.params?.chamaId;
 
   const [offerings, setOfferings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,9 +32,9 @@ const SharesManagementScreen = ({ route, navigation }) => {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchOfferings = useCallback(async () => {
-    if (!currentChamaId) return;
+    if (!chamaId) return;
     try {
-      const response = await ApiService.getEligibleSharesMembers(currentChamaId);
+      const response = await ApiService.getChamaShareOfferings(chamaId);
       if (response.success) {
         setOfferings(response.data || []);
       }
@@ -42,7 +43,7 @@ const SharesManagementScreen = ({ route, navigation }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentChamaId]);
+  }, [chamaId]);
 
   useEffect(() => {
     fetchOfferings();
@@ -51,6 +52,11 @@ const SharesManagementScreen = ({ route, navigation }) => {
   const handleCreateOffering = async () => {
     if (!form.name || !form.totalShares || !form.pricePerShare) {
       Alert.alert('Validation', 'Please fill all required fields.');
+      return;
+    }
+
+    if (!chamaId) {
+      Alert.alert('Error', 'Missing chama ID.');
       return;
     }
 
@@ -66,7 +72,7 @@ const SharesManagementScreen = ({ route, navigation }) => {
         status: 'open',
       };
 
-      const response = await ApiService.createChamaShares(currentChamaId, payload);
+      const response = await ApiService.createChamaShares(chamaId, payload);
 
       if (response.success) {
         Alert.alert('Success', 'Share offering created successfully.');
@@ -102,14 +108,17 @@ const SharesManagementScreen = ({ route, navigation }) => {
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
       <View style={styles.rowLeft}>
-        <Text style={[styles.rowTitle, { color: colors.text }]}>{item.name || item.member_name || 'Share Holder'}</Text>
+        <Text style={[styles.rowTitle, { color: colors.text }]}>{item.name || 'Share Offering'}</Text>
         <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
-          Shares Owned: {item.sharesOwned ?? item.shares_owned ?? 0}
+          Total: {item.totalShares ?? '-'} | Available: {item.availableShares ?? item.totalShares ?? '-'}
+        </Text>
+        <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
+          {item.status ? item.status.toUpperCase() : 'OPEN'}
         </Text>
       </View>
       <View style={styles.rowRight}>
         <Text style={[styles.rowAmount, { color: colors.primary }]}>
-          {formatCurrency(item.totalValue || (item.sharesOwned * (item.pricePerShare || 0)))}
+          KES {(item.pricePerShare ?? 0).toLocaleString()}
         </Text>
       </View>
     </View>
@@ -118,7 +127,7 @@ const SharesManagementScreen = ({ route, navigation }) => {
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="cube-outline" size={64} color={colors.textTertiary} />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>No Share Holdings</Text>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>No Share Offerings</Text>
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         Create an offering to start issuing shares.
       </Text>

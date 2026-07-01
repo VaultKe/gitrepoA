@@ -1037,10 +1037,18 @@ func CreateChamaShares(c *gin.Context) {
 
 	offeringID := fmt.Sprintf("SHARE_OFFER_%d", time.Now().UnixNano())
 
-	// Use share_offerings table schema from migration
+	userID, _ := c.Get("userID")
+	if userID == "" || userID == nil {
+		userID = "system"
+	}
+	userIDStr := fmt.Sprintf("%v", userID)
+
+	transactionID := fmt.Sprintf("TXN_%d", time.Now().UnixNano())
+	securityHash := fmt.Sprintf("SHA256_%d", time.Now().UnixNano())
+
 	_, err := database.Exec(
-		"INSERT INTO share_offerings (id, chama_id, name, total_shares, price_per_share, total_value, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-		offeringID, chamaID, req.Name, req.TotalShares, req.PricePerShare, float64(req.TotalShares)*req.PricePerShare, "active", now, now,
+		"INSERT INTO share_offerings (id, chama_id, name, share_type, total_shares, price_per_share, minimum_purchase, description, eligibility_criteria, approval_required, total_value, created_by, created_by_id, timestamp, status, transaction_id, security_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)",
+		offeringID, chamaID, req.Name, "ordinary", req.TotalShares, req.PricePerShare, 1, "", "", false, float64(req.TotalShares)*req.PricePerShare, userIDStr, userIDStr, now, "active", transactionID, securityHash, now, now,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1050,7 +1058,6 @@ func CreateChamaShares(c *gin.Context) {
 		return
 	}
 
-	// Ensure shares subwallet exists
 	_, _ = database.Exec(
 		"INSERT INTO wallets (id, type, owner_id, subwallet_type, chama_id, balance, currency, is_active, is_locked, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (id) DO NOTHING",
 		fmt.Sprintf("wallet-%s-shares", chamaID), "chama", chamaID, "shares", chamaID, 0, "KES", true, false, now, now,
@@ -1058,13 +1065,93 @@ func CreateChamaShares(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"message": "Share offering created successfully",
-		"data": gin.H{
-			"id":            offeringID,
-			"name":          req.Name,
-			"totalShares":   req.TotalShares,
-			"pricePerShare": req.PricePerShare,
-		},
+ 	"message": "Share offering created successfully",
+ 		"data": gin.H{
+ 			"id":            offeringID,
+ 			"name":          req.Name,
+ 			"totalShares":   req.TotalShares,
+ 			"pricePerShare": req.PricePerShare,
+ 		},
+ 	})
+ }
+
+// GetChamaShareOfferingsList retrieves all share offerings for a chama
+func GetChamaShareOfferingsList(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	query := `
+		SELECT id, chama_id, name, share_type, total_shares, price_per_share, minimum_purchase, description, eligibility_criteria, approval_required, total_value, status, created_by, created_by_id, timestamp, transaction_id, security_hash, created_at, updated_at
+		FROM share_offerings
+		WHERE chama_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := db.(*sql.DB).Query(query, chamaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch share offerings: " + err.Error(),
+		})
+		return
+	}
+	defer rows.Close()
+
+	var offerings []map[string]interface{}
+	for rows.Next() {
+		var id, chamaIDCol, name, shareType, createdBy, createdByID, transactionID, securityHash, status, description, eligibilityCriteria string
+		var totalShares, minimumPurchase int
+		var pricePerShare, totalValue float64
+		var approvalRequired bool
+		var timestamp, createdAt, updatedAt interface{}
+
+		err := rows.Scan(&id, &chamaIDCol, &name, &shareType, &totalShares, &pricePerShare, &minimumPurchase, &description, &eligibilityCriteria, &approvalRequired, &totalValue, &status, &createdBy, &createdByID, &timestamp, &transactionID, &securityHash, &createdAt, &updatedAt)
+		if err != nil {
+			continue
+		}
+
+		offering := map[string]interface{}{
+			"id":              id,
+			"chamaId":         chamaIDCol,
+			"name":            name,
+			"shareType":       shareType,
+			"totalShares":     totalShares,
+			"pricePerShare":   pricePerShare,
+			"minimumPurchase": minimumPurchase,
+			"description":     description,
+			"eligibilityCriteria": eligibilityCriteria,
+			"approvalRequired": approvalRequired,
+			"totalValue":      totalValue,
+			"status":          status,
+			"createdBy":       createdBy,
+			"createdById":     createdByID,
+			"timestamp":       timestamp,
+			"transactionId":   transactionID,
+			"securityHash":    securityHash,
+			"createdAt":       createdAt,
+			"updatedAt":       updatedAt,
+		}
+		offerings = append(offerings, offering)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    offerings,
 	})
 }
 

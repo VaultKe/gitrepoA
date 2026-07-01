@@ -15,7 +15,7 @@ import { getThemeColors, spacing, typography, borderRadius } from '../../../util
 import Card from '../../../components/common/Card';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
-import { getWalletBalance } from '../../../services/api/walletEndpoints';
+import { getWalletBalance, transferMoney } from '../../../services/api/walletEndpoints';
 
 const DividendsScreen = ({ navigation, route }) => {
   const { theme } = useApp();
@@ -23,10 +23,15 @@ const DividendsScreen = ({ navigation, route }) => {
   const colors = getThemeColors(theme);
 
   const [records, setRecords] = useState([]);
+  const [declarations, setDeclarations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [personalBalance, setPersonalBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(false);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('mpesa');
+  const [buyForm, setBuyForm] = useState({ amount: '', phone: '' });
+  const [submitting, setSubmitting] = useState(false);
 
   const chamaId = currentChamaId || route?.params?.chamaId;
 
@@ -40,6 +45,21 @@ const DividendsScreen = ({ navigation, route }) => {
       console.warn('Failed to fetch personal wallet balance:', e);
     }
   }, []);
+
+  const fetchDeclarations = useCallback(async () => {
+    if (!chamaId) return;
+    try {
+      const response = await ApiService.makeRequest(
+        `/chamas/${chamaId}/disbursements`,
+        { method: 'GET' }
+      );
+      if (response.success) {
+        setDeclarations(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching dividend declarations:', error);
+    }
+  }, [chamaId]);
 
   const fetchDividends = useCallback(async (isRefresh = false) => {
     if (!chamaId) return;
@@ -70,16 +90,64 @@ const DividendsScreen = ({ navigation, route }) => {
     }
   }, [chamaId]);
 
-  useEffect(() => {
-    fetchDividends();
-    fetchPersonalBalance();
-  }, [fetchDividends, fetchPersonalBalance]);
+  const handleBuyDividends = async () => {
+    const amount = parseFloat(buyForm.amount);
+    if (!amount || amount <= 0) {
+      Alert.alert('Validation', 'Enter a valid amount.');
+      return;
+    }
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchDividends(true);
-    fetchPersonalBalance();
-  }, [fetchDividends, fetchPersonalBalance]);
+    setSubmitting(true);
+    try {
+      if (paymentMethod === 'personal') {
+        if (amount > personalBalance) {
+          Alert.alert('Insufficient Balance', 'Your personal wallet balance is too low for this purchase.');
+          setSubmitting(false);
+          return;
+        }
+
+        const response = await transferMoney({
+          amount,
+          recipientId: `wallet-${chamaId}-dividends`,
+          description: 'Dividend purchase',
+        });
+
+        if (response.success) {
+          Alert.alert('Success', `Dividends purchased for KES ${amount.toLocaleString()} from your personal wallet.`);
+        } else {
+          Alert.alert('Error', response.error || 'Failed to purchase dividends from personal wallet.');
+        }
+      } else {
+        const payload = {
+          phoneNumber: buyForm.phone || '',
+          amount,
+          description: 'Dividend purchase',
+        };
+        const response = await ApiService.makeRequest(
+          `/chamas/${chamaId}/subwallets/dividends/pay`,
+          {
+            method: 'POST',
+            body: payload,
+          }
+        );
+
+        if (response.success) {
+          Alert.alert('Success', 'Dividend purchase initiated successfully.');
+        } else {
+          Alert.alert('Error', response.error || 'Failed to purchase dividends.');
+        }
+      }
+
+      setShowBuyModal(false);
+      setBuyForm({ amount: '', phone: '' });
+      fetchDividends(true);
+      fetchPersonalBalance();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to purchase dividends. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const formatCurrency = (amount) => {
     const val = amount || 0;
@@ -117,6 +185,39 @@ const DividendsScreen = ({ navigation, route }) => {
         return colors.textSecondary;
     }
   };
+
+  const renderDeclarationRow = ({ item }) => (
+    <View style={[styles.row, { borderBottomColor: colors.border }]}>
+      <View style={styles.rowLeft}>
+        <Text style={[styles.rowTitle, { color: colors.text }]}>
+          {item.description || 'Dividend Declaration'}
+        </Text>
+        <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
+          {formatDate(item.timestamp || item.createdAt || item.created_at)}
+        </Text>
+      </View>
+      <View style={styles.rowRight}>
+        <Text style={[styles.rowAmount, { color: colors.success }]}>
+          {formatCurrency(item.totalAmount || item.amount)}
+        </Text>
+        <View style={[styles.statusBadge, { backgroundColor: (colors[item.status] || colors.textSecondary) + '20' }]}>
+          <Text style={[styles.statusText, { color: colors[item.status] || colors.textSecondary }]}>
+            {(item.status || 'pending').toUpperCase()}
+          </Text>
+        </View>
+        <Button
+          title="Buy"
+          size="small"
+          onPress={() => {
+            setBuyForm({ amount: '', phone: '' });
+            setPaymentMethod('mpesa');
+            setShowBuyModal(true);
+          }}
+          style={{ marginTop: spacing.xs }}
+        />
+      </View>
+    </View>
+  );
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
@@ -166,16 +267,45 @@ const DividendsScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+        {declarations.length > 0 && (
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginBottom: spacing.md }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm }}>
+              Dividend Declarations
+            </Text>
+            <FlatList
+              data={declarations}
+              renderItem={renderDeclarationRow}
+              keyExtractor={(item) => item.id?.toString()}
+              contentContainerStyle={{ paddingBottom: spacing.sm }}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={false}
+              ListEmptyComponent={null}
+            />
+          </Card>
+        )}
+
         <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           <View style={styles.headerRow}>
             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
               Dividend Records
             </Text>
-            {!loadingBalance && (
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                Wallet: {formatCurrency(personalBalance)}
-              </Text>
-            )}
+            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+              {!loadingBalance && (
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  Wallet: {formatCurrency(personalBalance)}
+                </Text>
+              )}
+              <Button
+                title="Buy"
+                size="small"
+                icon={<Ionicons name="cash" size={14} color={colors.white} />}
+                onPress={() => {
+                  setShowBuyModal(true);
+                  setPaymentMethod('mpesa');
+                  setBuyForm({ amount: '', phone: '' });
+                }}
+              />
+            </View>
           </View>
 
           <FlatList

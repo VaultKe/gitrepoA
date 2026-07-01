@@ -131,6 +131,10 @@ const createChamaShares = async (chamaId, shareData) => {
   });
 };
 
+const getChamaShareOfferings = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/shares/offerings`);
+};
+
 const declareChamaDividends = async (chamaId, dividendData) => {
   return await makeRequest(`/chamas/${chamaId}/dividends/`, {
     method: 'POST',
@@ -173,6 +177,7 @@ export {
   sendSystemNotification,
   getMemberRole,
   createChamaShares,
+  getChamaShareOfferings,
   declareChamaDividends,
   validateSystemSecurity,
   logSecurityEvent,

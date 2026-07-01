@@ -27,6 +27,7 @@ const SharesScreen = ({ navigation, route }) => {
   const colors = getThemeColors(theme);
 
   const [shares, setShares] = useState([]);
+  const [offerings, setOfferings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [personalBalance, setPersonalBalance] = useState(0);
@@ -37,6 +38,18 @@ const SharesScreen = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
 
   const chamaId = currentChamaId || route?.params?.chamaId;
+
+  const fetchOfferings = useCallback(async () => {
+    if (!chamaId) return;
+    try {
+      const response = await ApiService.getChamaShareOfferings(chamaId);
+      if (response.success) {
+        setOfferings(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching share offerings:', error);
+    }
+  }, [chamaId]);
 
   const fetchPersonalBalance = useCallback(async () => {
     try {
@@ -72,7 +85,6 @@ const SharesScreen = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Error fetching shares:', error);
-      Alert.alert('Error', 'Failed to load shares.');
     } finally {
       if (!isRefresh) setLoading(false);
       setRefreshing(false);
@@ -82,13 +94,15 @@ const SharesScreen = ({ navigation, route }) => {
   useEffect(() => {
     fetchShares();
     fetchPersonalBalance();
-  }, [fetchShares, fetchPersonalBalance]);
+    fetchOfferings();
+  }, [fetchShares, fetchPersonalBalance, fetchOfferings]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchShares(true);
     fetchPersonalBalance();
-  }, [fetchShares, fetchPersonalBalance]);
+    fetchOfferings();
+  }, [fetchShares, fetchPersonalBalance, fetchOfferings]);
 
   const handleBuyShares = async () => {
     const amount = parseFloat(buyForm.amount);
@@ -173,6 +187,15 @@ const SharesScreen = ({ navigation, route }) => {
     }
   };
 
+  const formatSharePrice = (price) => {
+    const val = price || 0;
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 0,
+    }).format(val);
+  };
+
   const getStatusColor = (status) => {
     switch ((status || '').toLowerCase()) {
       case 'completed':
@@ -185,6 +208,37 @@ const SharesScreen = ({ navigation, route }) => {
         return colors.textSecondary;
     }
   };
+
+  const renderOfferingRow = ({ item }) => (
+    <View style={[styles.row, { borderBottomColor: colors.border }]}>
+      <View style={styles.rowLeft}>
+        <Text style={[styles.rowTitle, { color: colors.text }]}>
+          {item.name || 'Share Offering'}
+        </Text>
+        <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
+          Total: {item.totalShares ?? '-'} | Available: {item.availableShares ?? item.totalShares ?? '-'}
+        </Text>
+        <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
+          {item.status ? item.status.toUpperCase() : 'OPEN'}
+        </Text>
+      </View>
+      <View style={styles.rowRight}>
+        <Text style={[styles.rowAmount, { color: colors.primary }]}>
+          {formatSharePrice(item.pricePerShare)}/share
+        </Text>
+        <Button
+          title="Buy"
+          size="small"
+          onPress={() => {
+            setBuyForm({ amount: String(item.pricePerShare ?? ''), phone: '' });
+            setPaymentMethod('mpesa');
+            setShowBuyModal(true);
+          }}
+          style={{ marginTop: spacing.xs }}
+        />
+      </View>
+    </View>
+  );
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
@@ -234,10 +288,27 @@ const SharesScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+        {offerings.length > 0 && (
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginBottom: spacing.md }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm }}>
+              Available Shares
+            </Text>
+            <FlatList
+              data={offerings}
+              renderItem={renderOfferingRow}
+              keyExtractor={(item) => item.id?.toString() || item.name}
+              contentContainerStyle={{ paddingBottom: spacing.sm }}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={false}
+              ListEmptyComponent={null}
+            />
+          </Card>
+        )}
+
         <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           <View style={styles.headerRow}>
             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-              Shares Records
+              Your Records
             </Text>
             <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
               {!loadingBalance && (

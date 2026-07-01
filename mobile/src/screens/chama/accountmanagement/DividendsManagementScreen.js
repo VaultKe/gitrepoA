@@ -23,6 +23,7 @@ const DividendsManagementScreen = ({ route, navigation }) => {
   const { theme } = useApp();
   const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
+  const chamaId = currentChamaId || route?.params?.chamaId;
 
   const [declarations, setDeclarations] = useState([]);
   const [eligibleMembers, setEligibleMembers] = useState([]);
@@ -32,11 +33,11 @@ const DividendsManagementScreen = ({ route, navigation }) => {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!currentChamaId) return;
+    if (!chamaId) return;
     try {
       const [declRes, eligibleRes] = await Promise.all([
-        ApiService.makeRequest(`/chamas/${currentChamaId}/disbursements`, { method: 'GET' }),
-        ApiService.getEligibleDividendMembers(currentChamaId),
+        ApiService.makeRequest(`/chamas/${chamaId}/disbursements`, { method: 'GET' }),
+        ApiService.getEligibleDividendMembers(chamaId),
       ]);
 
       if (declRes.success) setDeclarations(declRes.data || []);
@@ -46,7 +47,7 @@ const DividendsManagementScreen = ({ route, navigation }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentChamaId]);
+  }, [chamaId]);
 
   useEffect(() => {
     fetchData();
@@ -58,28 +59,35 @@ const DividendsManagementScreen = ({ route, navigation }) => {
       return;
     }
 
+    if (!chamaId) {
+      Alert.alert('Error', 'Missing chama ID.');
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const eligibleMembersPayload = (eligibleMembers || []).map(m => ({
+        id: m.user_id || m.id || '',
+        name: m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : (m.name || m.member_name || 'Member'),
+        sharesOwned: m.shares_owned || 1,
+      }));
+
       const payload = {
         type: 'dividend',
         category: 'bulk',
         dividendPerShare: parseFloat(form.dividendPerShare),
         totalAmount: parseFloat(form.totalAmount),
         description: form.description || 'Dividend declaration',
-        eligibleMembers,
-        fromAccount: form.fromAccount || `wallet-${currentChamaId}-dividends`,
+        eligibleMembers: eligibleMembersPayload,
+        fromAccount: form.fromAccount || `wallet-${chamaId}-dividends`,
         initiatedBy: 'Admin',
         initiatedById: 'admin',
         timestamp: new Date().toISOString(),
-        status: 'pending',
         transactionId: `TXN_${Date.now()}`,
         securityHash: 'hash',
       };
 
-      const response = await ApiService.makeRequest(`/chamas/${currentChamaId}/disbursements/bulk`, {
-        method: 'POST',
-        body: payload,
-      });
+      const response = await ApiService.declareChamaDividends(chamaId, payload);
 
       if (response.success) {
         Alert.alert('Success', 'Dividend declaration created successfully.');
@@ -115,10 +123,7 @@ const DividendsManagementScreen = ({ route, navigation }) => {
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
       <View style={styles.rowLeft}>
-        <Text style={[styles.rowTitle, { color: colors.text }]}>{item.type || 'Dividend'}</Text>
-        <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
-          {item.description || `Bulk disbursement ${item.id}`}
-        </Text>
+        <Text style={[styles.rowTitle, { color: colors.text }]}>{item.description || item.type || 'Dividend Declaration'}</Text>
         <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
           {formatDate(item.timestamp || item.createdAt || item.created_at)}
         </Text>
@@ -193,7 +198,7 @@ const DividendsManagementScreen = ({ route, navigation }) => {
 
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: colors.text }]}>Source Wallet</Text>
-              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={form.fromAccount} onChangeText={(t) => setForm((p) => ({ ...p, fromAccount: t }))} placeholder={`wallet-${currentChamaId}-dividends`} placeholderTextColor={colors.textSecondary} />
+              <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} value={form.fromAccount} onChangeText={(t) => setForm((p) => ({ ...p, fromAccount: t }))} placeholder={`wallet-${chamaId}-dividends`} placeholderTextColor={colors.textSecondary} />
             </View>
 
             <View style={styles.formGroup}>
