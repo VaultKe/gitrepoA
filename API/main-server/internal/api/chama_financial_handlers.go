@@ -820,6 +820,32 @@ func PayServiceFeePayment(c *gin.Context) {
 		phoneNumber = phoneNumber[1:]
 	}
 
+	// Get or create registration wallet
+	walletService := services.NewWalletService(database)
+	registrationWallet, err := walletService.GetWalletByOwnerAndType("subscription", models.WalletTypeBusiness)
+	if err != nil {
+		registrationWallet, err = walletService.CreateWallet("subscription", models.WalletTypeBusiness)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to create registration wallet",
+			})
+			return
+		}
+	}
+
+	// Create pending transaction for STK push tracking
+	reference := fmt.Sprintf("REG-%s-%s", chamaID[:8], time.Now().Format("20060102150405"))
+	transactionID, err := createPendingMpesaTransaction(database, payment.Amount, reference, registrationWallet.ID, chamaID, "fees", "registration", payment.UserID)
+	if err != nil {
+		log.Printf("Failed to create pending transaction for service fee: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create transaction record",
+		})
+		return
+	}
+
 	// Initiate M-Pesa STK push
 	cfg, exists := c.Get("config")
 	if !exists {
@@ -842,6 +868,7 @@ func PayServiceFeePayment(c *gin.Context) {
 	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
 	if err != nil {
 		log.Printf("STK Push failed for registration fee: %v", err)
+		updateTransactionStatus(database, transactionID, models.TransactionStatusFailed)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to initiate STK push: " + err.Error(),
@@ -849,14 +876,14 @@ func PayServiceFeePayment(c *gin.Context) {
 		return
 	}
 
-	// Update checkout request ID on payment record
-	updateTransactionCheckoutRequestID(database, paymentID, stkResponse.CheckoutRequestID)
+	// Update transaction with checkout request ID
+	updateTransactionCheckoutRequestID(database, transactionID, stkResponse.CheckoutRequestID)
 
-	// Mark as pending - callback will confirm later
+	// Update service fee payment with transaction ID
 	now := time.Now()
 	_, err = database.Exec(
 		"UPDATE service_fee_payments SET transaction_id = $1, updated_at = $2 WHERE id = $3",
-		stkResponse.CheckoutRequestID, now, paymentID,
+		transactionID, now, paymentID,
 	)
 	if err != nil {
 		log.Printf("Error updating service fee payment: %v", err)
@@ -875,6 +902,7 @@ func PayServiceFeePayment(c *gin.Context) {
 		"message": "STK push initiated successfully",
 		"data": gin.H{
 			"checkoutRequestId": stkResponse.CheckoutRequestID,
+			"transactionId":     transactionID,
 			"customerMessage":   stkResponse.CustomerMessage,
 		},
 	})
@@ -947,7 +975,32 @@ func PayMemberServiceFee(c *gin.Context) {
 
 	mpesaService := services.NewMpesaService(database, cfg.(*config.Config))
 
+	// Get or create registration wallet
+	walletService := services.NewWalletService(database)
+	registrationWallet, err := walletService.GetWalletByOwnerAndType("subscription", models.WalletTypeBusiness)
+	if err != nil {
+		registrationWallet, err = walletService.CreateWallet("subscription", models.WalletTypeBusiness)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to create registration wallet",
+			})
+			return
+		}
+	}
+
 	paymentID := fmt.Sprintf("SFP_%d", time.Now().UnixNano())
+	reference := fmt.Sprintf("REG-%s-%s", chamaID[:8], time.Now().Format("20060102150405"))
+	transactionID, err := createPendingMpesaTransaction(database, 50, reference, registrationWallet.ID, chamaID, "fees", "registration", memberID)
+	if err != nil {
+		log.Printf("Failed to create pending transaction for service fee: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create transaction record",
+		})
+		return
+	}
+
 	mpesaReq := models.MpesaTransaction{
 		PhoneNumber:      phoneNumber,
 		Amount:           50,
@@ -958,6 +1011,7 @@ func PayMemberServiceFee(c *gin.Context) {
 	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
 	if err != nil {
 		log.Printf("STK Push failed for registration fee: %v", err)
+		updateTransactionStatus(database, transactionID, models.TransactionStatusFailed)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to initiate STK push: " + err.Error(),
@@ -966,12 +1020,15 @@ func PayMemberServiceFee(c *gin.Context) {
 	}
 	log.Printf("STK Push success: checkoutRequestId=%s customerMessage=%s", stkResponse.CheckoutRequestID, stkResponse.CustomerMessage)
 
+	// Update transaction with checkout request ID
+	updateTransactionCheckoutRequestID(database, transactionID, stkResponse.CheckoutRequestID)
+
 	now := time.Now()
 
 	// Create service fee payment record with pending status
 	_, err = database.Exec(
 		"INSERT INTO service_fee_payments (id, chama_id, user_id, amount, status, due_date, transaction_id, created_at, updated_at) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8)",
-		paymentID, chamaID, memberID, 50, now, stkResponse.CheckoutRequestID, now, now,
+		paymentID, chamaID, memberID, 50, now, transactionID, now, now,
 	)
 	if err != nil {
 		log.Printf("Error creating service fee payment: %v", err)
@@ -991,6 +1048,7 @@ func PayMemberServiceFee(c *gin.Context) {
 		"message": "STK push initiated successfully",
 		"data": gin.H{
 			"checkoutRequestId": stkResponse.CheckoutRequestID,
+			"transactionId":     transactionID,
 			"customerMessage":   stkResponse.CustomerMessage,
 		},
 	})
