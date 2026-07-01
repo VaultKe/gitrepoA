@@ -18,6 +18,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
+import { getChamaDividendDeclarations } from '../../../services/api/settingsEndpoints';
 
 const DividendsManagementScreen = ({ route, navigation }) => {
   const { theme } = useApp();
@@ -36,7 +37,7 @@ const DividendsManagementScreen = ({ route, navigation }) => {
     if (!chamaId) return;
     try {
       const [declRes, eligibleRes] = await Promise.all([
-        ApiService.makeRequest(`/chamas/${chamaId}/disbursements`, { method: 'GET' }),
+        getChamaDividendDeclarations(chamaId),
         ApiService.getEligibleDividendMembers(chamaId),
       ]);
 

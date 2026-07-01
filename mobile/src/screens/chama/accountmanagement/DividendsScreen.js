@@ -7,15 +7,20 @@ import {
   SafeAreaView,
   RefreshControl,
   TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
+import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
 import { getWalletBalance, transferMoney } from '../../../services/api/walletEndpoints';
+import { getChamaDividendDeclarations } from '../../../services/api/settingsEndpoints';
 
 const DividendsScreen = ({ navigation, route }) => {
   const { theme } = useApp();
@@ -49,10 +54,7 @@ const DividendsScreen = ({ navigation, route }) => {
   const fetchDeclarations = useCallback(async () => {
     if (!chamaId) return;
     try {
-      const response = await ApiService.makeRequest(
-        `/chamas/${chamaId}/disbursements`,
-        { method: 'GET' }
-      );
+      const response = await getChamaDividendDeclarations(chamaId);
       if (response.success) {
         setDeclarations(response.data || []);
       }
@@ -89,6 +91,12 @@ const DividendsScreen = ({ navigation, route }) => {
       setRefreshing(false);
     }
   }, [chamaId]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchDividends(true);
+    fetchDeclarations();
+  }, [fetchDividends, fetchDeclarations]);
 
   const handleBuyDividends = async () => {
     const amount = parseFloat(buyForm.amount);

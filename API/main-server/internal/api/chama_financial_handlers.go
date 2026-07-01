@@ -1199,6 +1199,12 @@ func DeclareChamaDividends(c *gin.Context) {
 	}
 	database := db.(*sql.DB)
 
+	userID, _ := c.Get("userID")
+	if userID == "" || userID == nil {
+		userID = "system"
+	}
+	userIDStr := fmt.Sprintf("%v", userID)
+
 	now := time.Now()
 	timestamp := now
 	if req.Timestamp != "" {
@@ -1215,7 +1221,7 @@ func DeclareChamaDividends(c *gin.Context) {
 
 	_, err := database.Exec(
 		"INSERT INTO dividend_declarations (id, chama_id, dividend_per_share, total_amount, status, description, created_by, created_by_id, timestamp, transaction_id, security_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
-		declarationID, chamaID, req.DividendPerShare, req.TotalAmount, "declared", req.Description, req.InitiatedBy, req.InitiatedByID, timestamp, req.TransactionID, req.SecurityHash, now, now,
+		declarationID, chamaID, req.DividendPerShare, req.TotalAmount, "declared", req.Description, req.InitiatedBy, userIDStr, timestamp, req.TransactionID, req.SecurityHash, now, now,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1257,5 +1263,76 @@ func DeclareChamaDividends(c *gin.Context) {
 		"data": gin.H{
 			"id": declarationID,
 		},
+	})
+}
+
+// GetChamaDividendDeclarations retrieves dividend declarations for a chama
+func GetChamaDividendDeclarations(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	query := `
+		SELECT id, chama_id, dividend_per_share, total_amount, status, description, 
+			   created_by, created_by_id, timestamp, created_at, updated_at
+		FROM dividend_declarations 
+		WHERE chama_id = $1 
+		ORDER BY created_at DESC
+	`
+
+	rows, err := database.Query(query, chamaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to retrieve dividend declarations: " + err.Error(),
+		})
+		return
+	}
+	defer rows.Close()
+
+	var declarations []map[string]interface{}
+	for rows.Next() {
+		var id, chamaId, status, description, createdBy, createdByID string
+		var dividendPerShare, totalAmount float64
+		var timestamp, createdAt, updatedAt time.Time
+
+		err := rows.Scan(&id, &chamaId, &dividendPerShare, &totalAmount, &status, &description, &createdBy, &createdByID, &timestamp, &createdAt, &updatedAt)
+		if err != nil {
+			log.Printf("Failed to scan dividend declaration: %v", err)
+			continue
+		}
+
+		declaration := map[string]interface{}{
+			"id":              id,
+			"chamaId":         chamaId,
+			"dividendPerShare": dividendPerShare,
+			"totalAmount":     totalAmount,
+			"status":          status,
+			"description":     description,
+			"createdBy":       createdBy,
+			"createdAt":       createdAt,
+			"updatedAt":       updatedAt,
+		}
+		declarations = append(declarations, declaration)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    declarations,
 	})
 }

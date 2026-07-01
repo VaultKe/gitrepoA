@@ -253,6 +253,7 @@ func SetupRoutes(
 			chamas.GET("/:id/eligible-other-members", api.GetEligibleOtherMembers)
 			chamas.POST("/:id/shares/offering/", api.CreateChamaShares)
 			chamas.GET("/:id/shares/offerings", api.GetChamaShareOfferingsList)
+			chamas.GET("/:id/dividends/", api.GetChamaDividendDeclarations)
 			chamas.POST("/:id/dividends/", api.DeclareChamaDividends)
 			chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
 			chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)

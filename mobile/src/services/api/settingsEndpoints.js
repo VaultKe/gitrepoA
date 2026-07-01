@@ -89,6 +89,10 @@ const getEligibleDividendMembers = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/eligible-dividend-members`);
 };
 
+const getChamaDividendDeclarations = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/dividends/`);
+};
+
 const getEligibleSharesMembers = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/eligible-shares-members`);
 };
@@ -169,6 +173,7 @@ export {
   getEligibleLoanMembers,
   getEligibleWelfareMembers,
   getEligibleDividendMembers,
+  getChamaDividendDeclarations,
   getEligibleSharesMembers,
   getEligibleSavingsMembers,
   getEligibleOtherMembers,
