@@ -193,13 +193,18 @@ func OnboardUser(c *gin.Context) {
 	var emailStr sql.NullString
 	if req.Email != nil && *req.Email != "" {
 		emailStr = sql.NullString{String: *req.Email, Valid: true}
-		emailStr = sql.NullString{Valid: false}
 	}
 
 	var genderStr sql.NullString
 	if req.Gender != nil && *req.Gender != "" {
 		genderStr = sql.NullString{String: *req.Gender, Valid: true}
-		genderStr = sql.NullString{Valid: false}
+	}
+
+	if !emailStr.Valid {
+		emailStr = sql.NullString{
+			String: uuid.New().String() + "@noemail.local",
+			Valid:  true,
+		}
 	}
 
 	if emailStr.Valid {

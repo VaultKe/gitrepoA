@@ -243,6 +243,7 @@ func DepositMoney(c *gin.Context) {
 	}
 
 	// For M-Pesa deposits, use real M-Pesa STK push
+	var transactionID string
 	if req.PaymentMethod == "mpesa" {
 		// Get user's phone number
 		db, exists := c.Get("db")
@@ -304,11 +305,11 @@ func DepositMoney(c *gin.Context) {
 		mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
 
 		walletService := services.NewWalletService(db.(*sql.DB))
-		targetWalletID := "wallet-personal-" + userID.(string)
-		_, err := walletService.GetWalletByID(targetWalletID)
+		personalUserID := userID.(string)
+		targetWallet, err := walletService.GetWalletByOwnerAndType(personalUserID, models.WalletTypePersonal)
 		if err != nil {
-			_, createErr := walletService.CreateWallet(userID.(string), models.WalletTypePersonal)
-			if createErr != nil {
+			targetWallet, err = walletService.CreateWallet(personalUserID, models.WalletTypePersonal)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"success": false,
 					"error":   "Failed to create personal wallet",
@@ -316,8 +317,9 @@ func DepositMoney(c *gin.Context) {
 				return
 			}
 		}
+		targetWalletID := targetWallet.ID
 
-		transactionID, err := createPendingMpesaTransaction(db.(*sql.DB), req.Amount, reference, targetWalletID, "", "deposit", "personal", userID.(string))
+		transactionID, err = createPendingMpesaTransaction(db.(*sql.DB), req.Amount, reference, targetWalletID, "", "deposit", "personal", personalUserID)
 		if err != nil {
 			log.Printf("Failed to create pending transaction: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -455,7 +457,7 @@ func DepositMoney(c *gin.Context) {
 	}
 
 	// Record the transaction
-	transactionID := fmt.Sprintf("txn-%d", time.Now().UnixNano())
+	transactionID = fmt.Sprintf("txn-%d", time.Now().UnixNano())
 	paymentMethod := req.PaymentMethod
 
 	description := req.Description
