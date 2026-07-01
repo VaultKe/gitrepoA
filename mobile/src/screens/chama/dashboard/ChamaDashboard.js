@@ -572,6 +572,46 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         },
       },
       {
+        id: 'shares',
+        title: 'Shares',
+        icon: 'cube',
+        color: '#8B5CF6',
+        onPress: () => {
+          if (selectedChama) {
+            if (onRouteChange) {
+              onRouteChange('shares', 'SharesScreen');
+            } else {
+              navigation.navigate('SharesScreen', {
+                chamaId: selectedChama.id,
+                chama: selectedChama,
+              });
+            }
+          } else {
+            Alert.alert('No Chama Selected', 'Please select a chama first');
+          }
+        },
+      },
+      {
+        id: 'dividends',
+        title: 'Dividends',
+        icon: 'cash',
+        color: colors.success,
+        onPress: () => {
+          if (selectedChama) {
+            if (onRouteChange) {
+              onRouteChange('dividends', 'DividendsScreen');
+            } else {
+              navigation.navigate('DividendsScreen', {
+                chamaId: selectedChama.id,
+                chama: selectedChama,
+              });
+            }
+          } else {
+            Alert.alert('No Chama Selected', 'Please select a chama first');
+          }
+        },
+      },
+      {
         id: 'loans',
         title: 'Loans',
         icon: 'card',

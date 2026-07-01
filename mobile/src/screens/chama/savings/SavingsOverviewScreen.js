@@ -53,7 +53,7 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
 
         if (isActiveRef.current) {
           setSavingsData(enriched);
-          const total = enriched.reduce((sum, acc) => sum + (acc.savingsBalance || 0), 0);
+          const total = enriched.reduce((sum, acc) => sum + (acc.balance || 0), 0);
           setTotalBalance(total);
           setMemberCount(enriched.length);
         }
@@ -156,7 +156,7 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
         </View>
         <View style={[styles.cell, styles.balanceCell]}>
           <Text style={[styles.cellText, { color: colors.success, fontWeight: '600' }]}>
-            {formatCurrency(item.savingsBalance)}
+            {formatCurrency(item.balance)}
           </Text>
         </View>
         <View style={[styles.cell, styles.statusCell]}>

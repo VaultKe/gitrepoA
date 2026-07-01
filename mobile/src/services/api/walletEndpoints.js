@@ -44,6 +44,13 @@ const getChamaWalletBalance = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/wallet/balance`);
 };
 
+const transferMoney = ({ amount, recipientId, description = '', pin = '' }) => {
+  return makeRequest('/wallets/transfer', {
+    method: 'POST',
+    body: { amount, recipientId, description, pin },
+  });
+};
+
 const initiateRegistrationPayment = async (amount = 50, phoneNumber = '', paymentType = 'chama', targetId = '') => {
   return await makeRequest('/wallets/registration-payment', {
     method: 'POST',

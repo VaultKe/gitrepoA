@@ -35,6 +35,10 @@ import SavingsWithdrawalScreen from '../screens/chama/accountmanagement/SavingsW
 import MaryGoRoundDisbursementScreen from '../screens/chama/accountmanagement/MaryGoRoundDisbursementScreen';
 import SavingsOverviewScreen from '../screens/chama/savings/SavingsOverviewScreen';
 import SavingsDetails from '../screens/chama/savings/SavingsDetails';
+import SharesScreen from '../screens/chama/accountmanagement/SharesScreen';
+import DividendsScreen from '../screens/chama/accountmanagement/DividendsScreen';
+import SharesManagementScreen from '../screens/chama/accountmanagement/SharesManagementScreen';
+import DividendsManagementScreen from '../screens/chama/accountmanagement/DividendsManagementScreen';
 import MaryGoRoundDetails from '../screens/chama/merry-go-round/MaryGoRoundDetails';
 import WelfareDetails from '../screens/chama/welfare/WelfareDetails';
 import LoanDetails from '../screens/chama/loans/LoanDetails';
@@ -401,6 +405,42 @@ function ChamaTabNavigator({ route }) {
         component={SavingsWithdrawalScreen}
         options={{
           title: 'Savings Withdrawal',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="SharesScreen"
+        component={SharesScreen}
+        options={{
+          title: 'Shares',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="SharesManagement"
+        component={SharesManagementScreen}
+        options={{
+          title: 'Shares Management',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="DividendsScreen"
+        component={DividendsScreen}
+        options={{
+          title: 'Dividends',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
+        name="DividendsManagement"
+        component={DividendsManagementScreen}
+        options={{
+          title: 'Dividends Management',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={{ chamaId, chamaName, chama }}

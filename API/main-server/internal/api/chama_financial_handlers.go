@@ -190,6 +190,19 @@ func CreateBulkDisbursement(c *gin.Context) {
 		return
 	}
 
+	// Parse timestamp to time.Time
+	var timestamp time.Time
+	if req.Timestamp != "" {
+		parsedTime, err := time.Parse(time.RFC3339, req.Timestamp)
+		if err != nil {
+			timestamp = time.Now()
+		} else {
+			timestamp = parsedTime
+		}
+	} else {
+		timestamp = time.Now()
+	}
+
 	// Get database connection
 	db, exists := c.Get("db")
 	if !exists {
@@ -227,10 +240,11 @@ func CreateBulkDisbursement(c *gin.Context) {
 		bulkQuery,
 		bulkID, chamaID, req.Type, req.Category, req.DividendPerShare, req.TotalAmount,
 		req.Description, req.FromAccount, req.InitiatedBy, req.InitiatedByID,
-		req.Timestamp, req.Status, req.TransactionID, req.SecurityHash, now, now,
+		timestamp, req.Status, req.TransactionID, req.SecurityHash, now, now,
 	)
 
 	if err != nil {
+		log.Printf("Failed to create bulk disbursement: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to create bulk disbursement: " + err.Error(),
@@ -978,6 +992,183 @@ func PayMemberServiceFee(c *gin.Context) {
 		"data": gin.H{
 			"checkoutRequestId": stkResponse.CheckoutRequestID,
 			"customerMessage":   stkResponse.CustomerMessage,
+		},
+	})
+}
+
+// CreateChamaShares creates a new share offering for a chama
+func CreateChamaShares(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	var req struct {
+		Name         string  `json:"name" binding:"required"`
+		TotalShares  int     `json:"totalShares" binding:"required"`
+		PricePerShare float64 `json:"pricePerShare" binding:"required"`
+		OpenDate     string  `json:"openDate"`
+		CloseDate    string  `json:"closeDate"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	now := time.Now()
+
+	offeringID := fmt.Sprintf("SHARE_OFFER_%d", time.Now().UnixNano())
+
+	// Use share_offerings table schema from migration
+	_, err := database.Exec(
+		"INSERT INTO share_offerings (id, chama_id, name, total_shares, price_per_share, total_value, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+		offeringID, chamaID, req.Name, req.TotalShares, req.PricePerShare, float64(req.TotalShares)*req.PricePerShare, "active", now, now,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create share offering: " + err.Error(),
+		})
+		return
+	}
+
+	// Ensure shares subwallet exists
+	_, _ = database.Exec(
+		"INSERT INTO wallets (id, type, owner_id, subwallet_type, chama_id, balance, currency, is_active, is_locked, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (id) DO NOTHING",
+		fmt.Sprintf("wallet-%s-shares", chamaID), "chama", chamaID, "shares", chamaID, 0, "KES", true, false, now, now,
+	)
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Share offering created successfully",
+		"data": gin.H{
+			"id":            offeringID,
+			"name":          req.Name,
+			"totalShares":   req.TotalShares,
+			"pricePerShare": req.PricePerShare,
+		},
+	})
+}
+
+// DeclareChamaDividends creates a dividend declaration for a chama
+func DeclareChamaDividends(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	var req struct {
+		Type             string                   `json:"type" binding:"required"`
+		Category         string                   `json:"category" binding:"required"`
+		DividendPerShare float64                  `json:"dividendPerShare" binding:"required"`
+		TotalAmount      float64                  `json:"totalAmount" binding:"required"`
+		Description      string                   `json:"description"`
+		EligibleMembers  []map[string]interface{} `json:"eligibleMembers" binding:"required"`
+		FromAccount      string                   `json:"fromAccount"`
+		InitiatedBy      string                   `json:"initiatedBy" binding:"required"`
+		InitiatedByID    string                   `json:"initiatedById" binding:"required"`
+		Timestamp        string                   `json:"timestamp"`
+		TransactionID    string                   `json:"transactionId" binding:"required"`
+		SecurityHash     string                   `json:"securityHash" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	now := time.Now()
+	timestamp := now
+	if req.Timestamp != "" {
+		if parsed, err := time.Parse(time.RFC3339, req.Timestamp); err == nil {
+			timestamp = parsed
+		}
+	}
+
+	declarationID := fmt.Sprintf("DIV_DEC_%d", time.Now().UnixNano())
+	fromAccount := req.FromAccount
+	if fromAccount == "" {
+		fromAccount = fmt.Sprintf("wallet-%s-dividends", chamaID)
+	}
+
+	_, err := database.Exec(
+		"INSERT INTO dividend_declarations (id, chama_id, dividend_per_share, total_amount, status, description, created_by, created_by_id, timestamp, transaction_id, security_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+		declarationID, chamaID, req.DividendPerShare, req.TotalAmount, "declared", req.Description, req.InitiatedBy, req.InitiatedByID, timestamp, req.TransactionID, req.SecurityHash, now, now,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create dividend declaration: " + err.Error(),
+		})
+		return
+	}
+
+	// Ensure dividends subwallet exists
+	_, _ = database.Exec(
+		"INSERT INTO wallets (id, type, owner_id, subwallet_type, chama_id, balance, currency, is_active, is_locked, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (id) DO NOTHING",
+		fromAccount, "chama", chamaID, "dividends", chamaID, 0, "KES", true, false, now, now,
+	)
+
+	// Create individual dividend records using dividends table
+	dividendQuery := "INSERT INTO dividends (id, bulk_disbursement_id, chama_id, member_id, member_name, shares_owned, dividend_per_share, amount, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
+
+	for _, member := range req.EligibleMembers {
+		memberID, _ := member["id"].(string)
+		memberName, _ := member["name"].(string)
+		sharesOwned, _ := member["sharesOwned"].(float64)
+
+		dividendID := fmt.Sprintf("DIV_%d_%s", time.Now().UnixNano(), memberID)
+		amount := sharesOwned * req.DividendPerShare
+
+		_, err = database.Exec(
+			dividendQuery,
+			dividendID, declarationID, chamaID, memberID, memberName, int(sharesOwned), req.DividendPerShare, amount, "pending", now, now,
+		)
+		if err != nil {
+			log.Printf("Failed to create dividend record for member %s: %v", memberID, err)
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Dividend declaration created successfully",
+		"data": gin.H{
+			"id": declarationID,
 		},
 	})
 }
