@@ -57,6 +57,8 @@ const DividendsScreen = ({ navigation, route }) => {
       const response = await getChamaDividendDeclarations(chamaId);
       if (response.success) {
         setDeclarations(response.data || []);
+      } else {
+        console.error('Failed to fetch declarations:', response.error);
       }
     } catch (error) {
       console.error('Error fetching dividend declarations:', error);
@@ -97,6 +99,20 @@ const DividendsScreen = ({ navigation, route }) => {
     fetchDividends(true);
     fetchDeclarations();
   }, [fetchDividends, fetchDeclarations]);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (chamaId) {
+        await Promise.all([
+          fetchDeclarations(),
+          fetchDividends(),
+          fetchPersonalBalance(),
+        ]);
+        setLoading(false);
+      }
+    };
+    loadInitialData();
+  }, [chamaId, fetchDeclarations, fetchDividends, fetchPersonalBalance]);
 
   const handleBuyDividends = async () => {
     const amount = parseFloat(buyForm.amount);
