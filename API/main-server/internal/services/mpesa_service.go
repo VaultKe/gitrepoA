@@ -196,6 +196,8 @@ func (s *MpesaService) InitiateSTKPush(transaction *models.MpesaTransaction) (*M
 		return nil, fmt.Errorf("failed to read STK response: %w", err)
 	}
 
+	log.Printf("[STK Push] Status: %d | Body: %s", resp.StatusCode, string(body))
+
 	// Parse response
 	var stkResp MpesaSTKPushResponse
 	if err := json.Unmarshal(body, &stkResp); err != nil {
@@ -204,7 +206,7 @@ func (s *MpesaService) InitiateSTKPush(transaction *models.MpesaTransaction) (*M
 
 	// Check if request was successful
 	if stkResp.ResponseCode != "0" {
-		return nil, fmt.Errorf("STK push failed: %s", stkResp.ResponseDescription)
+		return nil, fmt.Errorf("STK push failed [ResponseCode=%s]: %s", stkResp.ResponseCode, stkResp.ResponseDescription)
 	}
 
 	return &stkResp, nil

@@ -28,7 +28,6 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
   const { chamaId } = route.params;
   const { theme, userRole, user } = useApp();
   const colors = getThemeColors(theme);
-  console.log('[DEBUG Sub] userRole from context:', userRole, 'theme:', theme);
   const styles = createStyles(colors);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const isDesktop = screenWidth >= breakpoints.lg;
@@ -62,38 +61,34 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
         if (currentUser) {
           const role = (currentUser.role || currentUser.memberRole || '').toLowerCase();
           setMemberRole(role || null);
-          console.log('[DEBUG Sub] Loaded member role:', role, 'for user:', user?.id);
         } else {
-          console.log('[DEBUG Sub] Current user not found in members list');
         }
       }
     } catch (error) {
-      console.log('Could not load member role:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to load member role',
+        text2: error.message || 'Please try again',
+      });
     }
   };
 
   const loadSubscriptions = async () => {
-    console.log('[DEBUG Sub] loadSubscriptions called for chamaId:', chamaId);
     try {
       setLoading(true);
       const response = await getChamaSubscriptionPayments(chamaId);
-      console.log('[DEBUG Sub] API response:', JSON.stringify(response, null, 2));
       if (response.success && response.data) {
-        console.log('[DEBUG Sub] Received', response.data.length, 'subscriptions');
         setSubscriptions(response.data);
       } else {
-        console.log('[DEBUG Sub] No data in response or failed');
         setSubscriptions([]);
       }
     } catch (error) {
-      console.error('[DEBUG Sub] Error loading subscriptions:', error);
       Toast.show({
         type: 'error',
         text1: 'Failed to load subscriptions',
         text2: error.message || 'Please try again',
       });
     } finally {
-      console.log('[DEBUG Sub] loadSubscriptions done, loading set to false');
       setLoading(false);
     }
   };
@@ -102,10 +97,8 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
     const normalizedUserRole = (userRole || '').toLowerCase();
     const normalizedMemberRole = (memberRole || '').toLowerCase();
     const canPay = ['admin'].includes(normalizedUserRole) || ['chairperson', 'treasurer'].includes(normalizedMemberRole);
-    console.log('[DEBUG Sub] handlePaySubscription called for payment:', payment.id, 'amount:', payment.amount, 'status:', payment.status, 'userRole:', userRole, 'memberRole:', memberRole, 'canPay:', canPay);
 
     if (!canPay) {
-      console.log('[DEBUG Sub] Access denied - userRole:', userRole, 'normalized:', normalizedUserRole, 'memberRole:', memberRole);
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -116,9 +109,7 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
 
     try {
       setPayingId(payment.id);
-      console.log('[DEBUG Sub] Calling paySubscriptionPayment for', payment.id);
       const response = await paySubscriptionPayment(chamaId, payment.id);
-      console.log('[DEBUG Sub] Payment response:', JSON.stringify(response, null, 2));
       if (response.success) {
         Toast.show({
           type: 'success',
@@ -128,11 +119,33 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
         loadSubscriptions();
       } else {
         const errorMsg = response.error || 'Failed to initiate payment';
-        console.log('[DEBUG Sub] Payment failed:', errorMsg);
         throw new Error(errorMsg);
       }
     } catch (error) {
-      console.error('[DEBUG Sub] Payment error:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Payment Failed',
+        text2: error.message || 'Failed to initiate payment',
+      });
+    } finally {
+      setPayingId(null);
+    }
+
+    try {
+      setPayingId(payment.id);
+      const response = await paySubscriptionPayment(chamaId, payment.id);
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Payment Initiated',
+          text2: 'STK push sent to your phone',
+        });
+        loadSubscriptions();
+      } else {
+        const errorMsg = response.error || 'Failed to initiate payment';
+        throw new Error(errorMsg);
+      }
+    } catch (error) {
       Toast.show({
         type: 'error',
         text1: 'Payment Failed',
@@ -550,10 +563,7 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
   const paginatedSubscriptions = subscriptions.slice(startIndex, startIndex + PER_PAGE);
 
   const renderSubscriptionTable = () => {
-    console.log('[DEBUG Sub] renderSubscriptionTable called. loading:', loading, 'subscriptions.length:', subscriptions.length, 'page:', page, 'PER_PAGE:', PER_PAGE);
-
     if (loading) {
-      console.log('[DEBUG Sub] Showing loading spinner');
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
@@ -562,7 +572,6 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
     }
 
     if (subscriptions.length === 0) {
-      console.log('[DEBUG Sub] No subscriptions - showing empty state');
       return (
         <View style={styles.emptyContainer}>
           <Ionicons name="repeat-outline" size={40} color={colors.textSecondary} />
@@ -572,11 +581,6 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
         </View>
       );
     }
-
-    console.log('[DEBUG Sub] Rendering table with', paginatedSubscriptions.length, 'items on page', page, 'of', totalPages);
-    paginatedSubscriptions.forEach((sub, i) => {
-      console.log('[DEBUG Sub] Row', i, '- id:', sub.id, 'status:', sub.status, 'amount:', sub.amount, 'dueDate:', sub.dueDate, 'isUnpaid:', sub.status !== 'paid');
-    });
 
     return (
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -601,7 +605,6 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
             const isEven = index % 2 === 0;
             const isPaying = payingId === sub.id;
             const isUnpaid = sub.status !== 'paid';
-            console.log('[DEBUG Sub] Rendering row', index, 'id:', sub.id, 'status:', sub.status, 'isUnpaid:', isUnpaid, 'payButton visible:', isUnpaid);
             return (
               <View
                 key={sub.id}
