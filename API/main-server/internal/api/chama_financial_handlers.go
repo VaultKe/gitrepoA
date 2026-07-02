@@ -16,6 +16,39 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func getDisbursementSourceWalletID(db *sql.DB, chamaID, category string) (string, error) {
+	var subwalletType models.ChamaWalletType
+	if category == "welfare" {
+		subwalletType = models.ChamaWalletTypeWelfare
+	} else if category == "merry_go_round" {
+		subwalletType = models.ChamaWalletTypeMerryGo
+	} else {
+		return "", fmt.Errorf("unsupported disbursement category: %s", category)
+	}
+
+	sourceWalletID := fmt.Sprintf("wallet-%s-%s", chamaID, subwalletType)
+	paybillService := services.NewPaybillTrackingService(db)
+	_, err := paybillService.ValidateDisbursementSource(sourceWalletID, chamaID)
+	if err != nil {
+		return "", err
+	}
+
+	return sourceWalletID, nil
+}
+
+func normalizePhoneNumber(phone string) (string, error) {
+	if strings.HasPrefix(phone, "07") {
+		return "254" + phone[1:], nil
+	}
+	if strings.HasPrefix(phone, "+254") {
+		return phone[1:], nil
+	}
+	if strings.HasPrefix(phone, "254") {
+		return phone, nil
+	}
+	return "", fmt.Errorf("invalid phone number format. must start with 254 or 07")
+}
+
 // CreateIndividualDisbursement creates an individual disbursement (welfare)
 // Sends funds directly to member's MPesa number via B2C
 func CreateIndividualDisbursement(c *gin.Context) {
@@ -75,19 +108,25 @@ func CreateIndividualDisbursement(c *gin.Context) {
 	}
 	database := db.(*sql.DB)
 
-	cfg, exists := c.Get("config")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	if req.Category != "welfare" && req.Category != "merry_go_round" {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Configuration not available",
+			"error":   "Unsupported disbursement category for approval gating",
 		})
 		return
 	}
-	config := cfg.(*config.Config)
 
-	// Get recipient's phone number
+	sourceWalletID, err := getDisbursementSourceWalletID(database, chamaID, req.Category)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid source wallet: " + err.Error(),
+		})
+		return
+	}
+
 	var recipientPhone string
-	err := database.QueryRow("SELECT phone FROM users WHERE id = $1", req.RecipientID).Scan(&recipientPhone)
+	err = database.QueryRow("SELECT phone FROM users WHERE id = $1", req.RecipientID).Scan(&recipientPhone)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -96,21 +135,31 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		return
 	}
 
-	// Format phone number for M-Pesa
-	phoneNumber := recipientPhone
-	if strings.HasPrefix(phoneNumber, "07") {
-		phoneNumber = "254" + phoneNumber[1:]
-	} else if strings.HasPrefix(phoneNumber, "+254") {
-		phoneNumber = phoneNumber[1:]
-	} else if !strings.HasPrefix(phoneNumber, "254") {
+	phoneNumber, err := normalizePhoneNumber(recipientPhone)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Invalid phone number format. Must start with 254 or 07",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	// Start transaction for record keeping
+	now := time.Now()
+	transactionID := req.TransactionID
+	if transactionID == "" {
+		transactionID = fmt.Sprintf("TXN_%d", now.UnixNano())
+	}
+
+	var timestamp time.Time
+	if req.Timestamp != "" {
+		timestamp, err = time.Parse(time.RFC3339, req.Timestamp)
+		if err != nil {
+			timestamp = now
+		}
+	} else {
+		timestamp = now
+	}
+
 	tx, err := database.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -121,20 +170,29 @@ func CreateIndividualDisbursement(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	now := time.Now()
-	transactionID := req.TransactionID
-	if transactionID == "" {
-		transactionID = fmt.Sprintf("TXN_%d", now.UnixNano())
+	batchID := fmt.Sprintf("BATCH_%d", now.UnixNano())
+	batchTitle := strings.Title(strings.ReplaceAll(req.Category, "_", " ")) + " disbursement"
+	_, err = tx.Exec(`
+		INSERT INTO disbursement_batches (
+			id, chama_id, batch_type, title, description, total_amount,
+			total_recipients, initiated_by, status, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+	`, batchID, chamaID, req.Category, batchTitle, req.Purpose, req.Amount, 1, userID, now, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create disbursement batch: " + err.Error(),
+		})
+		return
 	}
 
-	// Create transaction record
-	walletID := fmt.Sprintf("wallet-%s-welfare", chamaID)
 	_, err = tx.Exec(`
 		INSERT INTO transactions (
-			id, from_wallet_id, to_wallet_id, chama_id, member_id, type, status, amount,
-			currency, description, reference, payment_method, initiated_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, 'welfare_disbursement', 'processing', $6, 'KES', $7, $8, 'mobile_money', $9, $10, $11)
-	`, transactionID, walletID, nil, chamaID, req.RecipientID, req.Amount, req.Purpose, req.TransactionID, req.InitiatedBy, now, now)
+			id, from_wallet_id, chama_id, recipient_id, member_id, type,
+			status, amount, currency, description, reference, payment_method,
+			initiated_by, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, 'KES', $8, $9, 'mobile_money', $10, $11, $12)
+	`, transactionID, sourceWalletID, chamaID, req.RecipientID, req.MemberID, req.Type, req.Amount, req.Purpose, fmt.Sprintf("PENDING-%s-%s", batchID, req.RecipientID), userID, now, now)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -143,46 +201,20 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		return
 	}
 
-	// Initiate B2C payment to recipient's MPesa number
-	mpesaService := services.NewMpesaService(database, config)
-	b2cResp, err := mpesaService.InitiateB2C(phoneNumber, req.Amount, req.Purpose)
-	if err != nil {
-		log.Printf("Failed to initiate B2C for welfare disbursement: %v", err)
-		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
-		_ = tx.Commit()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to initiate B2C payment: " + err.Error(),
-		})
-		return
-	}
-
-	// Update transaction with B2C metadata
-	metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
-	_, err = tx.Exec(
-		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
-		metadata, now, transactionID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to update transaction: " + err.Error(),
-		})
-		return
-	}
-
-	// Also create record in disbursements table for tracking
 	disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
 	_, err = tx.Exec(`
 		INSERT INTO disbursements (
-			id, chama_id, type, category, member_id, member_name, amount, purpose,
-			private_note, from_account, to_account, initiated_by, initiated_by_id,
-			timestamp, status, transaction_id, security_hash, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-	`, disburseID, chamaID, req.Type, req.Category, req.MemberID, req.MemberName,
-		req.Amount, req.Purpose, req.PrivateNote, req.FromAccount, req.ToAccount,
-		req.InitiatedBy, req.InitiatedByID, req.Timestamp, "processing",
-		req.TransactionID, req.SecurityHash, now, now)
+			id, batch_id, chama_id, type, category, recipient_id,
+			member_id, member_name, amount, purpose, private_note,
+			from_account, to_account, initiated_by, initiated_by_id,
+			timestamp, status, transaction_id, security_hash,
+			created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+			$11, $12, $13, $14, $15, $16, 'pending', $17, $18, $19, $20)
+	`, disburseID, batchID, chamaID, req.Type, req.Category, req.RecipientID,
+		req.MemberID, req.MemberName, req.Amount, req.Purpose, req.PrivateNote,
+		sourceWalletID, fmt.Sprintf("mpesa-%s", phoneNumber), req.InitiatedBy, req.InitiatedByID,
+		timestamp, transactionID, req.SecurityHash, now, now)
 	if err != nil {
 		log.Printf("Failed to create disbursement record: %v", err)
 	}
@@ -197,14 +229,14 @@ func CreateIndividualDisbursement(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Individual disbursement initiated successfully - funds sent to MPesa",
+		"message": "Individual disbursement created and pending approval",
 		"data": gin.H{
-			"id":             disburseID,
+			"batchId":        batchID,
+			"disbursementId": disburseID,
 			"recipientId":    req.RecipientID,
-			"recipientPhone": phoneNumber,
+			"recipientPhone": utils.MaskPhone(phoneNumber),
 			"amount":         req.Amount,
 			"transactionId":  transactionID,
-			"conversationId": b2cResp.ConversationID,
 		},
 	})
 }
@@ -266,17 +298,6 @@ func CreateBulkDisbursement(c *gin.Context) {
 	}
 	database := db.(*sql.DB)
 
-	cfg, exists := c.Get("config")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Configuration not available",
-		})
-		return
-	}
-	config := cfg.(*config.Config)
-
-	// Parse timestamp
 	var timestamp time.Time
 	if req.Timestamp != "" {
 		parsedTime, err := time.Parse(time.RFC3339, req.Timestamp)
@@ -304,6 +325,10 @@ func CreateBulkDisbursement(c *gin.Context) {
 
 	// Insert bulk disbursement record
 	bulkID := fmt.Sprintf("BULK_%d", now.UnixNano())
+	bulkStatus := req.Status
+	if req.Category == "welfare" || req.Category == "merry_go_round" {
+		bulkStatus = "pending"
+	}
 
 	bulkQuery := `
 		INSERT INTO bulk_disbursements (
@@ -317,7 +342,7 @@ func CreateBulkDisbursement(c *gin.Context) {
 		bulkQuery,
 		bulkID, chamaID, req.Type, req.Category, req.DividendPerShare, req.TotalAmount,
 		req.Description, req.FromAccount, req.InitiatedBy, req.InitiatedByID,
-		timestamp, req.Status, req.TransactionID, req.SecurityHash, now, now,
+		timestamp, bulkStatus, req.TransactionID, req.SecurityHash, now, now,
 	)
 
 	if err != nil {
@@ -329,27 +354,55 @@ func CreateBulkDisbursement(c *gin.Context) {
 		return
 	}
 
-	// For welfare/mgr categories - initiate B2C payments to members' MPesa numbers
-	// For dividends - just create records (dividend disbursement handled separately via DisburseDividends)
+	// For welfare/mgr categories, we create a pending approval batch and disbursement records.
+	// For dividends, we continue with existing dividend record creation flow.
 	isWelfareOrMGR := req.Category == "welfare" || req.Category == "merry_go_round"
 
 	var successfulDisbursements int
 	var failedDisbursements int
+	var batchID string
 
 	if isWelfareOrMGR {
-		// Initiate B2C payments for each member
+		sourceWalletID, err := getDisbursementSourceWalletID(database, chamaID, req.Category)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid source wallet: " + err.Error(),
+			})
+			return
+		}
+
+		batchID = fmt.Sprintf("BATCH_%d", now.UnixNano())
+		batchTitle := strings.Title(strings.ReplaceAll(req.Category, "_", " ")) + " bulk disbursement"
+		_, err = tx.Exec(`
+			INSERT INTO disbursement_batches (
+				id, chama_id, batch_type, title, description, total_amount,
+				total_recipients, initiated_by, status, created_at, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+		`, batchID, chamaID, req.Category, batchTitle, req.Description, req.TotalAmount, len(req.EligibleMembers), userID, now, now)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to create disbursement batch: " + err.Error(),
+			})
+			return
+		}
+
 		for _, member := range req.EligibleMembers {
 			memberID, ok := member["id"].(string)
 			if !ok {
+				failedDisbursements++
 				continue
 			}
 			memberName, _ := member["name"].(string)
 			var memberAmount float64
 			if amt, ok := member["amount"].(float64); ok {
 				memberAmount = amt
+			} else {
+				failedDisbursements++
+				continue
 			}
 
-			// Get member's phone number
 			var memberPhone string
 			err = tx.QueryRow("SELECT phone FROM users WHERE id = $1", memberID).Scan(&memberPhone)
 			if err != nil {
@@ -358,68 +411,44 @@ func CreateBulkDisbursement(c *gin.Context) {
 				continue
 			}
 
-			// Format phone number
-			phoneNumber := memberPhone
-			if strings.HasPrefix(phoneNumber, "07") {
-				phoneNumber = "254" + phoneNumber[1:]
-			} else if strings.HasPrefix(phoneNumber, "+254") {
-				phoneNumber = phoneNumber[1:]
-			} else if !strings.HasPrefix(phoneNumber, "254") {
+			phoneNumber, err := normalizePhoneNumber(memberPhone)
+			if err != nil {
 				log.Printf("Skipping member %s - invalid phone format: %s", memberID, memberPhone)
 				failedDisbursements++
 				continue
 			}
 
-			// Create transaction record
 			transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
-			memberWalletID := fmt.Sprintf("wallet-%s-%s", chamaID, req.Category)
 			description := "Bulk " + req.Category + " disbursement"
 
 			_, err = tx.Exec(`
 				INSERT INTO transactions (
-					id, from_wallet_id, chama_id, member_id, type, status, amount,
+					id, from_wallet_id, chama_id, recipient_id, member_id, type, status, amount,
 					currency, description, reference, payment_method, initiated_by, created_at, updated_at
-				) VALUES ($1, $2, $3, $4, 'transfer', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
-			`, transactionID, memberWalletID, chamaID, memberID, memberAmount, description, fmt.Sprintf("BULK-%s-%s", chamaID, memberID), req.InitiatedBy, now, now)
+				) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, 'KES', $8, $9, 'mobile_money', $10, $11, $12)
+			`, transactionID, sourceWalletID, chamaID, memberID, memberID, req.Type, memberAmount, description, fmt.Sprintf("PENDING-%s-%s", batchID, memberID), userID, now, now)
 			if err != nil {
 				log.Printf("Failed to create transaction for member %s: %v", memberID, err)
 				failedDisbursements++
 				continue
 			}
 
-			// Create individual disbursement record
 			disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
 			_, err = tx.Exec(`
 				INSERT INTO disbursements (
-					id, chama_id, type, category, member_id, member_name, amount, purpose,
-					from_account, to_account, initiated_by, initiated_by_id, timestamp, status,
-					transaction_id, created_at, updated_at
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'processing', $14, $15, $16)
-			`, disburseID, chamaID, req.Type, req.Category, memberID, memberName, memberAmount, req.Description,
-				req.FromAccount, fmt.Sprintf("mpesa-%s", phoneNumber), req.InitiatedBy, req.InitiatedByID, timestamp,
-				transactionID, now, now)
+					id, batch_id, chama_id, type, category, recipient_id,
+					member_id, member_name, amount, purpose, private_note,
+					from_account, to_account, initiated_by, initiated_by_id,
+					timestamp, status, transaction_id, security_hash,
+					created_at, updated_at
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+					$11, $12, $13, $14, $15, $16, 'pending', $17, $18, $19, $20)
+			`, disburseID, batchID, chamaID, req.Type, req.Category, memberID,
+				memberID, memberName, memberAmount, req.Description, "",
+				sourceWalletID, fmt.Sprintf("mpesa-%s", phoneNumber), req.InitiatedBy, req.InitiatedByID,
+				timestamp, transactionID, req.SecurityHash, now, now)
 			if err != nil {
 				log.Printf("Failed to create disbursement record for member %s: %v", memberID, err)
-			}
-
-			// Initiate B2C payment
-			mpesaService := services.NewMpesaService(database, config)
-			b2cResp, err := mpesaService.InitiateB2C(phoneNumber, memberAmount, description)
-			if err != nil {
-				log.Printf("Failed to initiate B2C for member %s: %v", memberID, err)
-				failedDisbursements++
-				_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
-				continue
-			}
-
-			// Update transaction with B2C metadata
-			metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
-			_, err = tx.Exec(
-				"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
-				metadata, now, transactionID,
-			)
-			if err != nil {
-				log.Printf("Failed to update transaction for member %s: %v", memberID, err)
 			}
 
 			successfulDisbursements++
@@ -483,11 +512,11 @@ func CreateBulkDisbursement(c *gin.Context) {
 			"successfulDisbursements": successfulDisbursements,
 			"failedDisbursements":     failedDisbursements,
 			"totalAmount":             req.TotalAmount,
+			"batchStatus":             bulkStatus,
 		},
 	})
 }
 
-// GetChamaSubscriptionPayments gets subscription payments for a chama
 func GetChamaSubscriptionPayments(c *gin.Context) {
 	chamaID := c.Param("id")
 	log.Printf("[DEBUG BACKEND] GetChamaSubscriptionPayments called with chamaID: %s", chamaID)
@@ -1652,17 +1681,6 @@ func DisburseMerryGoRoundCycle(c *gin.Context) {
 	}
 	database := db.(*sql.DB)
 
-	cfg, exists := c.Get("config")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Configuration not available",
-		})
-		return
-	}
-	config := cfg.(*config.Config)
-
-	// Get recipient's phone number
 	var recipientPhone string
 	err := database.QueryRow("SELECT phone FROM users WHERE id = $1", req.RecipientId).Scan(&recipientPhone)
 	if err != nil {
@@ -1673,23 +1691,17 @@ func DisburseMerryGoRoundCycle(c *gin.Context) {
 		return
 	}
 
-	// Format phone number
-	phoneNumber := recipientPhone
-	if strings.HasPrefix(phoneNumber, "07") {
-		phoneNumber = "254" + phoneNumber[1:]
-	} else if strings.HasPrefix(phoneNumber, "+254") {
-		phoneNumber = phoneNumber[1:]
-	} else if !strings.HasPrefix(phoneNumber, "254") {
+	phoneNumber, err := normalizePhoneNumber(recipientPhone)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Invalid phone number format. Must start with 254 or 07",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	now := time.Now()
 	transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
-	memberWalletID := fmt.Sprintf("wallet-%s-merry_go_round", chamaID)
 
 	tx, err := database.Begin()
 	if err != nil {
@@ -1701,14 +1713,37 @@ func DisburseMerryGoRoundCycle(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Create transaction record
+	sourceWalletID, err := getDisbursementSourceWalletID(database, chamaID, "merry_go_round")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid source wallet: " + err.Error(),
+		})
+		return
+	}
+
+	batchID := fmt.Sprintf("BATCH_%d", now.UnixNano())
+	batchTitle := "Merry go round disbursement"
+	_, err = tx.Exec(`
+		INSERT INTO disbursement_batches (
+			id, chama_id, batch_type, title, description, total_amount,
+			total_recipients, initiated_by, status, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+	`, batchID, chamaID, "merry_go_round", batchTitle, req.Description, req.Amount, 1, userID, now, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create disbursement batch: " + err.Error(),
+		})
+		return
+	}
+
 	_, err = tx.Exec(`
 		INSERT INTO transactions (
-			id, from_wallet_id, chama_id, member_id, type, status, amount,
+			id, from_wallet_id, chama_id, recipient_id, member_id, type, status, amount,
 			currency, description, reference, payment_method, initiated_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, 'mgr_disbursement', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
-	`, transactionID, memberWalletID, chamaID, req.RecipientId, req.Amount, req.Description,
-		fmt.Sprintf("MGR-%s-%s", cycleID, req.RecipientId), req.DisbursedBy, now, now)
+		) VALUES ($1, $2, $3, $4, $5, 'mgr_disbursement', 'pending', $6, 'KES', $7, $8, 'mobile_money', $9, $10, $11)
+	`, transactionID, sourceWalletID, chamaID, req.RecipientId, req.RecipientId, req.Amount, req.Description, fmt.Sprintf("PENDING-%s-%s", batchID, req.RecipientId), req.DisbursedBy, now, now)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1717,53 +1752,20 @@ func DisburseMerryGoRoundCycle(c *gin.Context) {
 		return
 	}
 
-	// Create disbursement record
 	disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
 	_, err = tx.Exec(`
 		INSERT INTO disbursements (
-			id, chama_id, type, category, member_id, member_name, amount, purpose,
-			from_account, to_account, initiated_by, initiated_by_id, timestamp, status, transaction_id, created_at, updated_at
-		) VALUES ($1, $2, 'merry_go_round', 'merry_go_round', $3, $4, $5, $6, $7, $8, $9, $10, $11, 'processing', $12, $13, $14)
-	`, disburseID, chamaID, req.RecipientId, req.RecipientName, req.Amount, req.Description,
-		memberWalletID, "mpesa-"+phoneNumber, req.DisbursedBy, req.DisbursedById,
-		now, transactionID, now)
+			id, batch_id, chama_id, type, category, member_id, member_name, amount, purpose,
+			from_account, to_account, initiated_by, initiated_by_id, timestamp, status, transaction_id, security_hash,
+			created_at, updated_at
+		) VALUES ($1, $2, $3, 'merry_go_round', 'merry_go_round', $4, $5, $6, $7,
+			$8, $9, $10, $11, $12, 'pending', $13, $14, $15, $16)
+	`, disburseID, batchID, chamaID, req.RecipientId, req.RecipientName, req.Amount, req.Description,
+		sourceWalletID, fmt.Sprintf("mpesa-%s", phoneNumber), req.DisbursedBy, req.DisbursedById,
+		now, transactionID, "", now, now)
 	if err != nil {
 		log.Printf("Failed to create disbursement record: %v", err)
 	}
-
-	// Initiate B2C payment
-	mpesaService := services.NewMpesaService(database, config)
-	b2cResp, err := mpesaService.InitiateB2C(phoneNumber, req.Amount, req.Description)
-	if err != nil {
-		log.Printf("Failed to initiate B2C for MGR disbursement: %v", err)
-		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
-		_ = tx.Commit()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to initiate B2C payment: " + err.Error(),
-		})
-		return
-	}
-
-	// Update transaction with B2C metadata
-	metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
-	_, err = tx.Exec(
-		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
-		metadata, now, transactionID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to update transaction: " + err.Error(),
-		})
-		return
-	}
-
-	// Update merry-go-round participant status
-	_, _ = tx.Exec(
-		"UPDATE merry_go_round_participants SET has_received = true, received_at = $1 WHERE merry_go_round_id = $2 AND user_id = $3",
-		now, cycleID, req.RecipientId,
-	)
 
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -1775,9 +1777,10 @@ func DisburseMerryGoRoundCycle(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "MGR disbursement initiated successfully - funds sent to MPesa",
+		"message": "MGR disbursement created and pending approval",
 		"data": gin.H{
-			"id":             disburseID,
+			"batchId":        batchID,
+			"disbursementId": disburseID,
 			"recipientId":    req.RecipientId,
 			"recipientPhone": utils.MaskPhone(phoneNumber),
 			"amount":         req.Amount,
@@ -1839,23 +1842,38 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 	}
 	database := db.(*sql.DB)
 
-	cfg, exists := c.Get("config")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Configuration not available",
-		})
-		return
-	}
-	config := cfg.(*config.Config)
-
 	now := time.Now()
 	var successfulDisbursements int
 	var failedDisbursements int
 
-	// Process each disbursement
+	batchID := fmt.Sprintf("BATCH_%d", now.UnixNano())
+	batchTitle := "Merry go round bulk disbursement"
+
+	sourceWalletID, err := getDisbursementSourceWalletID(database, chamaID, "merry_go_round")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid source wallet: " + err.Error(),
+		})
+		return
+	}
+
+	_, err = database.Exec(`
+		INSERT INTO disbursement_batches (
+			id, chama_id, batch_type, title, description, total_amount,
+			total_recipients, initiated_by, status, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+	`, batchID, chamaID, "merry_go_round", batchTitle, req.Description, 0.0, len(req.Disbursements), userID, now, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create disbursement batch: " + err.Error(),
+		})
+		return
+	}
+
+	var totalAmount float64
 	for _, disb := range req.Disbursements {
-		// Get recipient's phone number
 		var recipientPhone string
 		err := database.QueryRow("SELECT phone FROM users WHERE id = $1", disb.RecipientId).Scan(&recipientPhone)
 		if err != nil {
@@ -1864,81 +1882,61 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 			continue
 		}
 
-		// Format phone number
-		phoneNumber := recipientPhone
-		if strings.HasPrefix(phoneNumber, "07") {
-			phoneNumber = "254" + phoneNumber[1:]
-		} else if strings.HasPrefix(phoneNumber, "+254") {
-			phoneNumber = phoneNumber[1:]
-		} else if !strings.HasPrefix(phoneNumber, "254") {
+		phoneNumber, err := normalizePhoneNumber(recipientPhone)
+		if err != nil {
 			log.Printf("Skipping MGR disbursement for member %s - invalid phone format: %s", disb.RecipientId, recipientPhone)
 			failedDisbursements++
 			continue
 		}
 
-		// Create transaction record
 		transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
-		memberWalletID := fmt.Sprintf("wallet-%s-merry_go_round", chamaID)
-
 		_, err = database.Exec(`
 			INSERT INTO transactions (
-				id, from_wallet_id, chama_id, member_id, type, status, amount,
+				id, from_wallet_id, chama_id, recipient_id, member_id, type, status, amount,
 				currency, description, reference, payment_method, initiated_by, created_at, updated_at
-			) VALUES ($1, $2, $3, $4, 'mgr_disbursement', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
-		`, transactionID, memberWalletID, chamaID, disb.RecipientId, disb.Amount, req.Description,
-			fmt.Sprintf("MGR-BULK-%s", disb.RecipientId), req.DisbursedBy, now, now)
+			) VALUES ($1, $2, $3, $4, $5, 'mgr_disbursement', 'pending', $6, 'KES', $7, $8, 'mobile_money', $9, $10, $11)
+		`, transactionID, sourceWalletID, chamaID, disb.RecipientId, disb.RecipientId, disb.Amount, req.Description, fmt.Sprintf("PENDING-%s-%s", batchID, disb.RecipientId), req.DisbursedBy, now, now)
 		if err != nil {
 			log.Printf("Failed to create transaction for MGR disbursement: %v", err)
 			failedDisbursements++
 			continue
 		}
 
-		// Create disbursement record
 		disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
-		_, _ = database.Exec(`
+		_, err = database.Exec(`
 			INSERT INTO disbursements (
-				id, chama_id, type, category, member_id, member_name, amount, purpose,
-				from_account, to_account, initiated_by, initiated_by_id, timestamp, status, transaction_id, created_at, updated_at
-			) VALUES ($1, $2, 'merry_go_round', 'merry_go_round', $3, $4, $5, $6, $7, $8, $9, $10, $11, 'processing', $12, $13, $14)
-		`, disburseID, chamaID, disb.RecipientId, disb.RecipientName, disb.Amount, req.Description,
-			memberWalletID, "mpesa-"+phoneNumber, req.DisbursedBy, req.DisbursedById,
-			now, transactionID, now)
-
-		// Initiate B2C payment
-		mpesaService := services.NewMpesaService(database, config)
-		b2cResp, err := mpesaService.InitiateB2C(phoneNumber, disb.Amount, req.Description)
+				id, batch_id, chama_id, type, category, member_id, member_name, amount, purpose,
+				from_account, to_account, initiated_by, initiated_by_id, timestamp, status, transaction_id, security_hash,
+				created_at, updated_at
+			) VALUES ($1, $2, $3, 'merry_go_round', 'merry_go_round', $4, $5, $6, $7,
+				$8, $9, $10, $11, $12, 'pending', $13, $14, $15, $16)
+		`, disburseID, batchID, chamaID, disb.RecipientId, disb.RecipientName, disb.Amount, req.Description,
+			sourceWalletID, fmt.Sprintf("mpesa-%s", phoneNumber), req.DisbursedBy, req.DisbursedById,
+			now, transactionID, "", now, now)
 		if err != nil {
-			log.Printf("Failed to initiate B2C for MGR disbursement for %s: %v", disb.RecipientId, err)
-			_, _ = database.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
-			failedDisbursements++
-			continue
+			log.Printf("Failed to create disbursement record: %v", err)
 		}
 
-		// Update transaction with B2C metadata
-		metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
-		_, _ = database.Exec(
-			"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
-			metadata, now, transactionID,
-		)
-
-		// Update participant status
-		if disb.CycleId != "" {
-			_, _ = database.Exec(
-				"UPDATE merry_go_round_participants SET has_received = true, received_at = $1 WHERE merry_go_round_id = $2 AND user_id = $3",
-				now, disb.CycleId, disb.RecipientId,
-			)
-		}
-
+		totalAmount += disb.Amount
 		successfulDisbursements++
+	}
+
+	_, err = database.Exec(
+		"UPDATE disbursement_batches SET total_amount = $1 WHERE id = $2",
+		totalAmount, batchID,
+	)
+	if err != nil {
+		log.Printf("Failed to update batch total amount: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Bulk MGR disbursement processed",
+		"message": "Bulk MGR disbursement created and pending approval",
 		"data": gin.H{
+			"batchId":                 batchID,
 			"successfulDisbursements": successfulDisbursements,
 			"failedDisbursements":     failedDisbursements,
-			"totalAmount":             req.Disbursements[0].Amount * float64(len(req.Disbursements)),
+			"totalAmount":             totalAmount,
 		},
 	})
 }

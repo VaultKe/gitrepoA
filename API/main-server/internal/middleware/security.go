@@ -116,8 +116,6 @@ func SecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-
-			fmt.Printf("✅ Valid Content-Type: '%s'\n", contentType)
 		}
 
 		// 4. Security headers
