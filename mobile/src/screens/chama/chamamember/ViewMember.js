@@ -339,6 +339,7 @@ const ViewMember = ({ route, navigation }) => {
   };
 
   const openReceiptPrintWindow = (html, title, receiptId) => {
+    console.log('[Receipt][openReceiptPrintWindow] start', { title, receiptId, isWeb: Platform.OS, hasWindow: typeof window, canOpen: typeof window !== 'undefined' && !!window.open });
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.open) {
       return { success: false, error: 'Print is not available on this device' };
     }
@@ -347,6 +348,7 @@ const ViewMember = ({ route, navigation }) => {
     if (!printWindow) {
       return { success: false, error: 'Popup blocked. Allow popups to print receipts.' };
     }
+    console.log('[Receipt][openReceiptPrintWindow] popup opened', printWindow);
 
     const isFullHTMLDocument = /<!DOCTYPE html>[\s\S]*<\/html>/i.test(html) || /<html[\s\S]*<\/html>/i.test(html);
     const documentHTML = isFullHTMLDocument
@@ -372,6 +374,7 @@ const ViewMember = ({ route, navigation }) => {
     printWindow.focus();
 
     setTimeout(() => {
+      console.log('[Receipt][openReceiptPrintWindow] calling print()');
       printWindow.print();
     }, 500);
 
@@ -379,8 +382,11 @@ const ViewMember = ({ route, navigation }) => {
   };
 
   const printReceiptHTML = async (html, title, receiptId) => {
+    console.log('[Receipt][printReceiptHTML] start', { platform: Platform.OS, receiptId });
     if (Platform.OS === 'web') {
-      return openReceiptPrintWindow(getReceiptBodyHTML(html), title, receiptId);
+      const res = openReceiptPrintWindow(getReceiptBodyHTML(html), title, receiptId);
+      console.log('[Receipt][printReceiptHTML] web result', res);
+      return res;
     }
 
     if (!Print?.printAsync) {
@@ -388,10 +394,12 @@ const ViewMember = ({ route, navigation }) => {
     }
 
     await Print.printAsync({ html, base64: false });
+    console.log('[Receipt][printReceiptHTML] native printAsync done');
     return { success: true, fileName: getReceiptFileName(receiptId) };
   };
 
   const downloadReceiptHTML = async (html, fileName) => {
+    console.log('[Receipt][downloadReceiptHTML] start', { platform: Platform.OS, fileName });
     if (Platform.OS === 'web') {
       const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
@@ -407,12 +415,12 @@ const ViewMember = ({ route, navigation }) => {
     }
 
     if (!FileSystem?.documentDirectory || !Sharing?.isAvailableAsync) {
-      throw new Error('Download is not available on this device');
+      return { success: false, error: 'Download is not available on this device' };
     }
 
     const isAvailable = await Sharing.isAvailableAsync();
     if (!isAvailable) {
-      throw new Error('Download is not available on this device');
+      return { success: false, error: 'Download is not available on this device' };
     }
 
     const uri = `${FileSystem.documentDirectory}${fileName}`;
@@ -438,16 +446,18 @@ const ViewMember = ({ route, navigation }) => {
       reference: payment?.transactionId || payment?.id || member?.transactionId || 'N/A',
       fees: 0,
     };
-
+    console.log('[Receipt][buildReceiptHTML] member=', member && member.id, 'payment=', payment && payment.id, 'transaction=', JSON.stringify(transaction));
     return generatePDFOptimizedReceiptHTML(transaction, 'Service Fee Payment', `${member?.user?.first_name || member?.first_name} ${member?.user?.last_name || member?.last_name}`, COMPANY_INFO);
   };
 
   const handlePrintReceipt = async (member, payment) => {
     if (!member) return;
+    console.log('[Receipt][handlePrintReceipt] start', { memberId: member?.id, paymentId: payment?.id, paymentStatus: payment?.status });
     try {
       const receiptId = getReceiptId(payment, member);
       const html = buildReceiptHTML(member, payment);
       const fileName = getReceiptFileName(receiptId);
+      console.log('[Receipt][handlePrintReceipt] built', { receiptId, fileName });
 
       Alert.alert(
         'Receipt Actions',
@@ -459,6 +469,7 @@ const ViewMember = ({ route, navigation }) => {
               setReceiptLoading(true);
               try {
                 const result = await downloadReceiptHTML(html, fileName);
+                console.log('[Receipt][handlePrintReceipt] share result', result);
                 if (result.success) {
                   Alert.alert('Receipt Shared', `Receipt ready to share as ${result.fileName}`, [{ text: 'OK', style: 'default' }], { cancelable: true });
                 } else {
@@ -477,6 +488,7 @@ const ViewMember = ({ route, navigation }) => {
               setReceiptLoading(true);
               try {
                 const result = await printReceiptHTML(html, `Transaction Receipt - ${receiptId}`, receiptId);
+                console.log('[Receipt][handlePrintReceipt] print result', result);
                 if (!result.success) {
                   throw new Error(result.error || 'Failed to print receipt');
                 }
