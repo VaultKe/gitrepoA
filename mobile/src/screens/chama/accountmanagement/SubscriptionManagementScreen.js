@@ -292,20 +292,146 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
     return generatePDFOptimizedReceiptHTML(transaction, 'Chama Subscription', user?.chamaName || 'Chama', COMPANY_INFO);
   };
 
+  const VERSION = '3.0.0';
   const buildInvoiceHTML = (sub) => {
-    const transaction = {
-      id: sub?.id,
-      date: sub?.paidAt || sub?.createdAt || sub?.dueDate,
-      amount: sub?.amount || 0,
-      status: sub?.status || 'pending',
-      type: 'payment',
-      description: 'Monthly Subscription Payment',
-      reference: sub?.transactionId || sub?.id || 'N/A',
-      fees: 0,
+    const invoiceId = getReceiptId(sub);
+    const invoiceDate = new Date(sub?.paidAt || sub?.createdAt || sub?.dueDate || Date.now());
+    const dueDate = sub?.dueDate ? new Date(sub.dueDate) : null;
+    const amount = parseFloat(sub?.amount || 0);
+    const taxRate = 0.16;
+    const taxAmount = amount * taxRate;
+    const total = amount + taxAmount;
+
+    const formatDateValue = (date) => {
+      if (!date) return 'N/A';
+      return new Date(date).toLocaleDateString('en-KE', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'Africa/Nairobi'
+      });
     };
 
-    const receiptHTML = generatePDFOptimizedReceiptHTML(transaction, 'Chama Subscription', user?.chamaName || 'Chama', COMPANY_INFO);
-    return receiptHTML.replace(/TRANSACTION RECEIPT/g, 'INVOICE').replace(/Transaction Receipt/g, 'Invoice').replace(/RECEIPT/g, 'INVOICE').replace(/Receipt/g, 'Invoice');
+    const escapeHTML = (value) => {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      }[char]));
+    };
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Invoice ${invoiceId}</title>
+        <style>
+          @page { size: A4; margin: 15mm; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif !important; font-size: 12px !important; line-height: 1.4 !important; color: #000 !important; background: white !important; }
+          .container { width: 100% !important; max-width: 180mm !important; margin: 0 auto !important; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+          .title { font-size: 22px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+          .meta { text-align: right; font-size: 12px; }
+          .panel { border: 1px solid #000; padding: 10px; margin-bottom: 15px; }
+          .panel-title { font-weight: bold; margin-bottom: 6px; text-transform: uppercase; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 12px; }
+          th { background: #e8e8e8; font-weight: bold; text-transform: uppercase; }
+          .numbers { width: 100%; max-width: 280px; margin-left: auto; border-collapse: collapse; }
+          .numbers td { border: 1px solid #000; padding: 8px; }
+          .numbers .total td { font-weight: bold; background: #f5f5f5; }
+          .footer { margin-top: 15px; font-size: 11px; text-align: center; }
+          .watermark { opacity: 0.08; position: fixed; top: 40px; right: 40px; font-size: 80px; font-weight: bold; transform: rotate(-25deg); }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="watermark">INVOICE</div>
+          <div class="header">
+            <div>
+              <div class="title">Invoice</div>
+              <div style="margin-top:4px;">${COMPANY_INFO.name}</div>
+              <div>${COMPANY_INFO.address}</div>
+              <div>Tel: ${COMPANY_INFO.phone} | Email: ${COMPANY_INFO.email}</div>
+            </div>
+            <div class="meta">
+              <div><strong>Invoice #:</strong> ${escapeHTML(invoiceId)}</div>
+              <div><strong>Date:</strong> ${formatDateValue(invoiceDate)}</div>
+              ${dueDate ? `<div><strong>Due Date:</strong> ${formatDateValue(dueDate)}</div>` : ''}
+            </div>
+          </div>
+
+          <div style="display:flex;gap:15px;">
+            <div class="panel" style="flex:1;">
+              <div class="panel-title">Bill From</div>
+              <div><strong>${COMPANY_INFO.name}</strong></div>
+              <div>${COMPANY_INFO.address}</div>
+              <div>${COMPANY_INFO.email}</div>
+              <div>${COMPANY_INFO.phone}</div>
+            </div>
+            <div class="panel" style="flex:1;">
+              <div class="panel-title">Bill To</div>
+              <div><strong>${escapeHTML(user?.chamaName || 'Chama')}</div>
+              <div>KRA PIN: P05123456K</div>
+              <div>VAT Reg: A05123456B</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 12%;">Invoice</th>
+                <th style="width: 18%;">Date</th>
+                <th>Item</th>
+                <th style="width: 14%;">Amount (KES)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${escapeHTML(invoiceId)}</td>
+                <td>${formatDateValue(invoiceDate)}</td>
+                <td>
+                  <strong>Monthly Subscription Payment</strong><br>
+                  Chama: ${escapeHTML(user?.chamaName || 'N/A')}<br>
+                  Month/Year: ${escapeHTML(sub?.monthYear || 'N/A')}
+                </td>
+                <td style="text-align: right;">${amount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table class="numbers">
+            <tbody>
+              <tr>
+                <td>Subtotal</td>
+                <td style="text-align: right;">${amount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td>VAT (16%)</td>
+                <td style="text-align: right;">${taxAmount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr class="total">
+                <td>Total</td>
+                <td style="text-align: right;">${total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div>VAT Quantity: 1 | VAT Rate: 16%</div>
+            <div style="margin-top:6px;">This is a computer-generated invoice and does not require a signature.</div>
+            <div>For inquiries, contact us at ${COMPANY_INFO.phone} or ${COMPANY_INFO.email}</div>
+            <div style="margin-top:6px;">Generated on ${new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' })} | Total Records: 1 | Version: ${VERSION}</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   };
 
   const handlePrintSubscriptionReceipt = async (sub) => {
