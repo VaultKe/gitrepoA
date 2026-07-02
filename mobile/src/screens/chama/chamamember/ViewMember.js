@@ -36,7 +36,11 @@ const ViewMember = ({ route, navigation }) => {
   const [lastPayAttempt, setLastPayAttempt] = useState(null);
   const [cooldownActive, setCooldownActive] = useState(false);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const [serviceFeePaid, setServiceFeePaid] = useState(false);
   const PAY_COOLDOWN_MS = 30000;
+
+  const isSelf = memberId === user?.id;
+  const hasPaidServiceFee = serviceFeePaid || memberData?.service_fee_paid || serviceFeePayments.some(p => p.status === 'paid');
 
   useEffect(() => {
     let timer;
@@ -83,6 +87,8 @@ const ViewMember = ({ route, navigation }) => {
       setFeePaymentsLoading(false);
     }
   };
+  const isEligible =
+    userRole === 'chairperson' || userRole === 'treasurer';
 
   const loadMemberDetails = async () => {
     try {
@@ -202,6 +208,17 @@ const ViewMember = ({ route, navigation }) => {
         throw new Error(response.error || 'Failed to initiate payment');
       }
     } catch (error) {
+      if (error.message && error.message.includes('Service fee already paid')) {
+        setServiceFeePaid(true);
+        loadMemberDetails();
+        loadServiceFeePayments();
+        Toast.show({
+          type: 'info',
+          text1: 'Already Paid',
+          text2: 'This service fee was already paid',
+        });
+        return;
+      }
       Toast.show({
         type: 'error',
         text1: 'Payment Failed',
@@ -249,6 +266,17 @@ const ViewMember = ({ route, navigation }) => {
         throw new Error(response.error || 'Failed to initiate payment');
       }
     } catch (error) {
+      if (error.message && error.message.includes('Service fee already paid')) {
+        setServiceFeePaid(true);
+        loadMemberDetails();
+        loadServiceFeePayments();
+        Toast.show({
+          type: 'info',
+          text1: 'Already Paid',
+          text2: 'This service fee was already paid',
+        });
+        return;
+      }
       Toast.show({
         type: 'error',
         text1: 'Payment Failed',
@@ -716,7 +744,7 @@ const ViewMember = ({ route, navigation }) => {
                   <View style={styles.feeLoadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
                   </View>
-                ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
+                ) : serviceFeePayments.length === 0 && !hasPaidServiceFee ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
                       <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
@@ -760,7 +788,7 @@ const ViewMember = ({ route, navigation }) => {
                       )}
                     </View>
                   </View>
-                ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
+                ) : serviceFeePayments.length === 0 && hasPaidServiceFee ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
                       <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
@@ -989,17 +1017,14 @@ const ViewMember = ({ route, navigation }) => {
             {/* Service Fee Payments Card */}
               <Card variant="outlined" padding="none" style={styles.feeCard}>
                 <View style={styles.feeCardContent}>
-                  <Text style={styles.feeCardTitle}>
+<Text style={styles.feeCardTitle}>
                     Service Fee Payments
                   </Text>
-                  <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 2 }}>
-                    DEBUG role={userRole} memberId={memberId}
-                  </Text>
-                {feePaymentsLoading ? (
+                  {feePaymentsLoading ? (
                   <View style={styles.feeLoadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
                   </View>
-                ) : serviceFeePayments.length === 0 && !memberData?.service_fee_paid ? (
+                ) : serviceFeePayments.length === 0 && !hasPaidServiceFee ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
                       <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
@@ -1043,7 +1068,7 @@ const ViewMember = ({ route, navigation }) => {
                       )}
                     </View>
                   </View>
-                ) : serviceFeePayments.length === 0 && memberData?.service_fee_paid ? (
+                ) : serviceFeePayments.length === 0 && hasPaidServiceFee ? (
                   <View style={styles.feeTableWrapper}>
                     <View style={styles.feeTableHeader}>
                       <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
