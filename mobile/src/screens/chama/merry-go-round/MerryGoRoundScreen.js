@@ -128,7 +128,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
 
     if (participants.length === 0) {
       return (
-        <Card style={styles.section} variant="outlined">
+      <Card style={styles.statsCard} variant="outlined">
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Member Order
           </Text>
@@ -143,7 +143,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     }
 
     return (
-      <Card style={styles.section} variant="outlined">
+      <Card style={styles.statsCard} variant="outlined">
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Member Order ({participants.length} participants)
         </Text>
@@ -250,6 +250,21 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     );
   };
 
+  const StatTile = ({ icon, label, value, color, subtext }) => (
+    <View style={{ flex: 1, marginHorizontal: spacing.xs }}>
+      <View style={{ padding: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+          <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+            <Ionicons name={icon} size={20} color={color} />
+          </View>
+          <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, flex: 1 }}>{label}</Text>
+        </View>
+        <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'bold', color: colors.text }}>{value}</Text>
+        {subtext && <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }}>{subtext}</Text>}
+      </View>
+    </View>
+  );
+
   const renderCompactTop = () => {
     if (!selectedRound) return null;
     const participants = selectedRound.members || selectedRound.participants || [];
@@ -259,18 +274,21 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     const totalPayoutPerPerson = amountPerRound * participants.length;
 
     return (
-      <View style={styles.compactTopRow}>
-        <Card style={[styles.compactCard, { marginRight: spacing.sm }]} variant="outlined">
-          <Text style={[styles.compactLabel, { color: colors.textSecondary }]}>Active Round</Text>
-          <Text style={[styles.compactValue, { color: colors.text }]} numberOfLines={1}>{selectedRound.name}</Text>
-          <Text style={[styles.compactSub, { color: colors.textSecondary }]}>{participants.length} members</Text>
-        </Card>
-        <Card style={[styles.compactCard, { marginLeft: spacing.sm }]} variant="outlined">
-          <Text style={[styles.compactLabel, { color: colors.textSecondary }]}>Current Recipient</Text>
-          <Text style={[styles.compactValue, { color: colors.primary }]} numberOfLines={1}>{getMemberShortName(currentMember)}</Text>
-          <Text style={[styles.compactSub, { color: colors.textSecondary }]}>Round {currentPosition}</Text>
-        </Card>
-      </View>
+      <Card style={styles.statsCard} variant="outlined">
+        <View style={{ paddingHorizontal: spacing.sm, paddingVertical: spacing.md }}>
+          <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'semibold', color: colors.text, marginBottom: spacing.md }}>
+            {selectedRound.name} Overview
+          </Text>
+          <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
+            <StatTile icon="cash" label="Amount Per Period" value={formatCurrency(amountPerRound)} color={colors.primary} />
+            <StatTile icon="people" label="Members" value={participants.length} color={colors.secondary} />
+          </View>
+          <View style={{ flexDirection: 'row' }}>
+            <StatTile icon="wallet" label="Total Payout" value={formatCurrency(totalPayoutPerPerson)} color={colors.success} />
+            <StatTile icon="person" label="Current Recipient" value={getMemberShortName(currentMember)} color={colors.warning} />
+          </View>
+        </View>
+      </Card>
     );
   };
 
@@ -326,7 +344,8 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     };
 
     return (
-      <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
+
+      <Card variant="outlined" style={styles.statsCard,{ borderRadius: 8, overflow: 'hidden' }}>
         <View style={styles.tableSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ minWidth: width - 32 }}>
@@ -384,8 +403,10 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     );
   };
 
+  const cardStyle = { marginHorizontal: spacing.md, marginVertical: spacing.xs };
+
   const renderRoundSelector = () => (
-    <Card style={styles.section} variant="outlined">
+    <Card style={styles.statsCard} variant="outlined">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Merry-Go-Rounds</Text>
       </View>
@@ -428,48 +449,18 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     const nextPayoutDate = new Date(selectedRound.next_payout_date || selectedRound.nextPayoutDate);
     const daysUntilPayout = Math.ceil((nextPayoutDate - new Date()) / (1000 * 60 * 60 * 24));
 
-    return (
-      <View>
-        <View style={styles.statusRowCards}>
-          <Card style={[styles.statusHalfCard, { marginRight: spacing.sm }]} variant="outlined">
-            <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>Amount Per Period</Text>
-            <Text style={[styles.statusValue, { color: colors.primary }]}>{formatCurrency(amountPerRound)}</Text>
-            <Text style={[styles.statusSubtext, { color: colors.textSecondary }]}>{selectedRound.frequency || 'monthly'}</Text>
-
-            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.sm }} />
-
-            <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>Total Payout Per Person</Text>
-            <Text style={[styles.statusValue, { color: colors.success }]}>{formatCurrency(totalPayoutPerPerson)}</Text>
-            <Text style={[styles.statusSubtext, { color: colors.textSecondary }]}>per round winner</Text>
-          </Card>
-
-          <Card style={[styles.statusHalfCard, { marginLeft: spacing.sm }]} variant="outlined">
-            <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>Circle Progress</Text>
-            <Text style={[styles.statusValue, { color: colors.text }]}>Round {currentPosition} of {totalParticipants}</Text>
-            <Text style={[styles.statusSubtext, { color: colors.textSecondary }]}>
-              {totalParticipants > 0 ? `${totalParticipants - currentPosition} rounds remaining` : 'No participants'}
-            </Text>
-
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { backgroundColor: roundComplete ? colors.success : colors.primary, width: roundComplete ? '100%' : `${progressPercentage}%` }]} />
+    const StatTile = ({ icon, label, value, color, subtext }) => (
+      <View style={{ flex: 1, marginHorizontal: spacing.xs }}>
+        <View style={{ padding: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+            <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+              <Ionicons name={icon} size={20} color={color} />
             </View>
-
-            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.sm }} />
-
-            <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>Current Recipient</Text>
-            <Text style={[styles.statusValue, { color: colors.text }]}>{currentMember?.user?.first_name || currentMember?.first_name || 'Round ' + currentPosition} {currentMember?.user?.last_name || currentMember?.last_name || ''}</Text>
-            <Text style={[styles.statusSubtext, { color: colors.textSecondary }]}>Next: {daysUntilPayout > 0 ? `${daysUntilPayout} days` : 'Today'}</Text>
-          </Card>
-        </View>
-
-        {roundComplete && (
-          <View style={[styles.roundCompleteNotice, { backgroundColor: colors.success + '20', borderColor: colors.success, marginTop: spacing.sm }]}>
-            <Ionicons name="trophy" size={16} color={colors.success} />
-            <Text style={[styles.roundCompleteText, { color: colors.success }]}>
-              🎉 Round {currentPosition} Complete! All members have contributed. The merry-go-round will advance automatically.
-            </Text>
+            <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, flex: 1 }}>{label}</Text>
           </View>
-        )}
+          <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'bold', color: colors.text }}>{value}</Text>
+          {subtext && <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }}>{subtext}</Text>}
+        </View>
       </View>
     );
   };
@@ -481,7 +472,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     const isCurrentRecipient = selectedRound.current_position === selectedRound.members?.findIndex(m => m.user_id === user?.id);
 
     return (
-      <Card style={styles.section} variant="outlined">
+      <Card style={styles.statsCard} variant="outlined">
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Actions</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.actionsRow}>
@@ -608,7 +599,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
             {renderCurrentRoundInfo()}
             {renderMemberOrderList()}
 
-            <View style={styles.contributorsSection}>
+            <View style={styles.statsCard,styles.contributorsSection}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Contributors</Text>
               </View>
@@ -627,8 +618,9 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
                       <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
                     </TouchableOpacity>
                   ) : null}
-                </View>
-                <View style={{ flexDirection: 'row' }}>
+                </View> 
+
+                <View style={styles.statsCard,{ flexDirection: 'row' }}>
                   {['all', 'contributed', 'pending'].map(tab => (
                     <TouchableOpacity
                       key={tab}
@@ -664,39 +656,33 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  section: { margin: spacing.md },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  sectionTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm },
-  compactTopRow: { flexDirection: 'row', marginHorizontal: spacing.md, marginBottom: spacing.md },
-  compactCard: { flex: 1, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1 },
-  compactLabel: { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium },
-  compactValue: { fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, marginTop: spacing.xs },
-  compactSub: { fontSize: typography.fontSize.xs, marginTop: spacing.xs, color: 'gray' },
-  statusRowCards: { flexDirection: 'row', marginHorizontal: spacing.md, marginBottom: spacing.md },
-  statusHalfCard: { flex: 1, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1 },
-  roundChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg, borderWidth: 1, marginRight: spacing.sm, alignItems: 'center', minWidth: 110 },
-  roundName: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.xs, textAlign: 'center' },
-  roundMeta: { fontSize: typography.fontSize.xs },
-  statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.md },
-  statusItem: { flex: 1, minWidth: '45%', alignItems: 'center' },
-  statusLabel: { fontSize: typography.fontSize.sm, marginBottom: spacing.xs },
-  statusValue: { fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, textAlign: 'center' },
-  statusSubtext: { fontSize: typography.fontSize.xs, textAlign: 'center', marginTop: spacing.xs, fontStyle: 'italic' },
-  progressBar: { height: 8, backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 4 },
-  roundCompleteNotice: { marginTop: spacing.sm, padding: spacing.sm, borderRadius: borderRadius.sm, flexDirection: 'row', alignItems: 'center' },
-  roundCompleteText: { fontSize: typography.fontSize.sm, marginLeft: spacing.xs },
-  actionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: spacing.sm },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
-  emptyTitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.semibold, marginTop: spacing.lg, marginBottom: spacing.sm },
-  emptySubtitle: { fontSize: typography.fontSize.base, textAlign: 'center', marginBottom: spacing.xl },
-  createButton: { marginTop: spacing.md },
-  fab: { position: 'absolute', bottom: spacing.xl, right: spacing.xl, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
-  loadingContainer: { flex: 1, padding: 16 },
-  skeletonCard: { height: 120, borderRadius: 8, borderWidth: 1, marginBottom: 16, padding: 16 },
-  skeletonLine: { height: 12, borderRadius: 6, marginBottom: 8 },
+   container: { flex: 1 },
+   scrollView: { flex: 1 },
+   section: { margin: spacing.md },
+   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+   sectionTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm },
+   statusHalfCard: { flex: 1, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1 },
+   roundChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg, borderWidth: 1, marginRight: spacing.sm, alignItems: 'center', minWidth: 110 },
+   roundName: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.xs, textAlign: 'center' },
+   roundMeta: { fontSize: typography.fontSize.xs },
+   statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.md },
+   statusItem: { flex: 1, minWidth: '45%', alignItems: 'center' },
+   statusLabel: { fontSize: typography.fontSize.sm, marginBottom: spacing.xs },
+   statusValue: { fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, textAlign: 'center' },
+   statusSubtext: { fontSize: typography.fontSize.xs, textAlign: 'center', marginTop: spacing.xs, fontStyle: 'italic' },
+   progressBar: { height: 8, backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 4, overflow: 'hidden' },
+   progressFill: { height: '100%', borderRadius: 4 },
+   roundCompleteNotice: { marginTop: spacing.sm, padding: spacing.sm, borderRadius: borderRadius.sm, flexDirection: 'row', alignItems: 'center' },
+   roundCompleteText: { fontSize: typography.fontSize.sm, marginLeft: spacing.xs },
+   actionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: spacing.sm },
+   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+   emptyTitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.semibold, marginTop: spacing.lg, marginBottom: spacing.sm },
+   emptySubtitle: { fontSize: typography.fontSize.base, textAlign: 'center', marginBottom: spacing.xl },
+   createButton: { marginTop: spacing.md },
+   fab: { position: 'absolute', bottom: spacing.xl, right: spacing.xl, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
+   loadingContainer: { flex: 1, padding: 16 },
+   skeletonCard: { height: 120, borderRadius: 8, borderWidth: 1, marginBottom: 16, padding: 16 },
+   skeletonLine: { height: 12, borderRadius: 6, marginBottom: 8 },
 
   emptyMembersList: { alignItems: 'center', paddingVertical: spacing.xl },
   emptyMembersText: { fontSize: typography.fontSize.base, marginTop: spacing.md, textAlign: 'center' },
@@ -728,6 +714,7 @@ const styles = StyleSheet.create({
   statusBadgeCell: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, flex: 1.5, alignItems: 'center' },
   tableFooter: { paddingVertical: spacing.sm, paddingHorizontal: spacing.sm, borderTopWidth: 1 },
   tableFooterText: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium },
+  statsCard: { marginHorizontal: spacing.md, marginVertical: spacing.xs, },
 });
 
 export default MerryGoRoundScreen;

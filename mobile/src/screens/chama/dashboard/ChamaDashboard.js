@@ -397,7 +397,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     // If we have a selected chama but userChamas is still loading, show a simple header
     if (userChamas.length === 0 && selectedChama) {
       return (
-        <Card style={[styles.selectorCard, { marginVertical: spacing.xs }]}>
+        <Card style={[styles.selectorCard, { marginVertical: spacing.xs }]} variant="outlined">
           <Text style={[styles.selectorTitle, { color: colors.text }]}>
             {selectedChama.name}
           </Text>
@@ -410,7 +410,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
     // Show full selector when we have multiple chamas
     return (
-      <Card style={[styles.selectorCard, { marginVertical: spacing.xs }]}>
+      <Card style={[styles.selectorCard, { marginVertical: spacing.xs }]} variant="outlined">
         <Text style={[styles.selectorTitle, { color: colors.text }]}>
           Select Chama
         </Text>
@@ -846,23 +846,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         Join or create a chama to start managing group finances
       </Text>
-
-      <View style={styles.emptyActions}>
-        <Button
-          title="Create Chama"
-          onPress={() => navigation.navigate('CreateChama')}
-          style={styles.emptyButton}
-          icon={<Ionicons name="add" size={20} color={colors.white} />}
-        />
-
-        <Button
-          title="Browse Chamas"
-          variant="outline"
-          onPress={() => navigation.navigate('ChamaList')}
-          style={styles.emptyButton}
-          icon={<Ionicons name="search" size={20} color={colors.primary} />}
-        />
-      </View>
     </View>
   );
 
@@ -906,7 +889,6 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
-    ...shadows.sm,
   },
   headerContent: {
     flexDirection: 'row',
@@ -933,6 +915,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   selectorCard: {
+    paddingTop: 32,
     marginHorizontal: spacing.md,
     marginVertical: spacing.xs,
   },

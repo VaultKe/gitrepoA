@@ -316,16 +316,6 @@ const SharesScreen = ({ navigation, route }) => {
                   Wallet: {formatCurrency(personalBalance)}
                 </Text>
               )}
-              <Button
-                title="Buy"
-                size="small"
-                icon={<Ionicons name="add" size={14} color={colors.white} />}
-                onPress={() => {
-                  setShowBuyModal(true);
-                  setPaymentMethod('mpesa');
-                  setBuyForm({ amount: '', phone: '' });
-                }}
-              />
             </View>
           </View>
 

@@ -319,16 +319,6 @@ const DividendsScreen = ({ navigation, route }) => {
                   Wallet: {formatCurrency(personalBalance)}
                 </Text>
               )}
-              <Button
-                title="Buy"
-                size="small"
-                icon={<Ionicons name="cash" size={14} color={colors.white} />}
-                onPress={() => {
-                  setShowBuyModal(true);
-                  setPaymentMethod('mpesa');
-                  setBuyForm({ amount: '', phone: '' });
-                }}
-              />
             </View>
           </View>
 
