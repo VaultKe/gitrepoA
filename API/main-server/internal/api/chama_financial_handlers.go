@@ -784,7 +784,6 @@ func PayServiceFeePayment(c *gin.Context) {
 		"SELECT amount, status, user_id FROM service_fee_payments WHERE id = $1 AND chama_id = $2",
 		paymentID, chamaID,
 	).Scan(&payment.Amount, &payment.Status, &payment.UserID)
-
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -801,7 +800,6 @@ func PayServiceFeePayment(c *gin.Context) {
 		return
 	}
 
-	// Get member's phone number
 	var memberPhone string
 	err = database.QueryRow("SELECT phone FROM users WHERE id = $1", payment.UserID).Scan(&memberPhone)
 	if err != nil {
@@ -812,7 +810,6 @@ func PayServiceFeePayment(c *gin.Context) {
 		return
 	}
 
-	// Convert phone number to M-Pesa format
 	phoneNumber := memberPhone
 	if strings.HasPrefix(phoneNumber, "07") {
 		phoneNumber = "254" + phoneNumber[1:]
@@ -820,7 +817,6 @@ func PayServiceFeePayment(c *gin.Context) {
 		phoneNumber = phoneNumber[1:]
 	}
 
-	// Get or create registration wallet
 	walletService := services.NewWalletService(database)
 	registrationWallet, err := walletService.GetWalletByOwnerAndType("subscription", models.WalletTypeBusiness)
 	if err != nil {
@@ -834,11 +830,10 @@ func PayServiceFeePayment(c *gin.Context) {
 		}
 	}
 
-	// Create pending transaction for STK push tracking
 	reference := fmt.Sprintf("REG-%s-%s", chamaID[:8], time.Now().Format("20060102150405"))
 	transactionID, err := createPendingMpesaTransaction(database, payment.Amount, reference, registrationWallet.ID, chamaID, "fees", "registration", payment.UserID)
 	if err != nil {
-		log.Printf("Failed to create pending transaction for service fee: %v", err)
+		log.Printf("[DEBUG PayServiceFeePayment] Failed to create pending transaction: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to create transaction record",
@@ -846,7 +841,6 @@ func PayServiceFeePayment(c *gin.Context) {
 		return
 	}
 
-	// Initiate M-Pesa STK push
 	cfg, exists := c.Get("config")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -867,7 +861,7 @@ func PayServiceFeePayment(c *gin.Context) {
 
 	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
 	if err != nil {
-		log.Printf("STK Push failed for registration fee: %v", err)
+		log.Printf("[DEBUG PayServiceFeePayment] STK Push failed: payment=%s amount=%.2f phone=%s err=%v", paymentID, payment.Amount, phoneNumber, err)
 		updateTransactionStatus(database, transactionID, models.TransactionStatusFailed)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -875,11 +869,10 @@ func PayServiceFeePayment(c *gin.Context) {
 		})
 		return
 	}
+	log.Printf("[DEBUG PayServiceFeePayment] STK Push success: payment=%s transaction=%s checkout=%s phone=%s amount=%.2f msg=%s", paymentID, transactionID, stkResponse.CheckoutRequestID, phoneNumber, payment.Amount, stkResponse.CustomerMessage)
 
-	// Update transaction with checkout request ID
 	updateTransactionCheckoutRequestID(database, transactionID, stkResponse.CheckoutRequestID)
 
-	// Update service fee payment with transaction ID
 	now := time.Now()
 	_, err = database.Exec(
 		"UPDATE service_fee_payments SET transaction_id = $1, updated_at = $2 WHERE id = $3",
@@ -912,7 +905,7 @@ func PayServiceFeePayment(c *gin.Context) {
 func PayMemberServiceFee(c *gin.Context) {
 	chamaID := c.Param("id")
 	memberID := c.Param("memberId")
-	log.Printf("PayMemberServiceFee called: chama=%s member=%s", chamaID, memberID)
+	log.Printf("[DEBUG PayMemberServiceFee] called chama=%s member=%s", chamaID, memberID)
 	if chamaID == "" || memberID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -1010,7 +1003,7 @@ func PayMemberServiceFee(c *gin.Context) {
 
 	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
 	if err != nil {
-		log.Printf("STK Push failed for registration fee: %v", err)
+		log.Printf("[DEBUG PayMemberServiceFee] STK Push failed: member=%s phone=%s amount=%.2f err=%v", memberID, phoneNumber, 50.0, err)
 		updateTransactionStatus(database, transactionID, models.TransactionStatusFailed)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1018,7 +1011,7 @@ func PayMemberServiceFee(c *gin.Context) {
 		})
 		return
 	}
-	log.Printf("STK Push success: checkoutRequestId=%s customerMessage=%s", stkResponse.CheckoutRequestID, stkResponse.CustomerMessage)
+	log.Printf("[DEBUG PayMemberServiceFee] STK Push success: member=%s payment=%s transaction=%s checkout=%s phone=%s amount=%.2f msg=%s", memberID, paymentID, transactionID, stkResponse.CheckoutRequestID, phoneNumber, 50.0, stkResponse.CustomerMessage)
 
 	// Update transaction with checkout request ID
 	updateTransactionCheckoutRequestID(database, transactionID, stkResponse.CheckoutRequestID)

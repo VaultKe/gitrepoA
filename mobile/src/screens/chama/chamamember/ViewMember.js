@@ -20,6 +20,7 @@ import api from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
 
 const ViewMember = ({ route, navigation }) => {
+  console.log('[ViewMember] component rendered', { memberId: route.params?.memberId, chamaId: route.params?.chamaId, userRole: route.params?.userRole });
   const { memberId, chamaId, userRole } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
@@ -187,40 +188,28 @@ const ViewMember = ({ route, navigation }) => {
       return;
     }
 
-    Alert.alert(
-      'Pay Service Fee',
-      `Send STK push to ${payment.userName} for KES ${payment.amount} service fee?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send STK Push',
-          onPress: async () => {
-            try {
-              setPayingFee(payment.id);
-              const response = await payServiceFeePayment(chamaId, payment.id);
-              if (response.success) {
-                Toast.show({
-                  type: 'success',
-                  text1: 'Payment Initiated',
-                  text2: 'STK push sent to member\'s phone',
-                });
-                loadServiceFeePayments();
-              } else {
-                throw new Error(response.error || 'Failed to initiate payment');
-              }
-            } catch (error) {
-              Toast.show({
-                type: 'error',
-                text1: 'Payment Failed',
-                text2: error.message || 'Failed to initiate payment',
-              });
-            } finally {
-              setPayingFee(null);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      setPayingFee(payment.id);
+      const response = await payServiceFeePayment(chamaId, payment.id);
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Payment Initiated',
+          text2: 'STK push sent to member\'s phone',
+        });
+        loadServiceFeePayments();
+      } else {
+        throw new Error(response.error || 'Failed to initiate payment');
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Payment Failed',
+        text2: error.message || 'Failed to initiate payment',
+      });
+    } finally {
+      setPayingFee(null);
+    }
   };
 
   const handlePayMemberServiceFee = async () => {
@@ -244,42 +233,30 @@ const ViewMember = ({ route, navigation }) => {
       return;
     }
 
-    Alert.alert(
-      'Pay Registration Fee',
-      `Send STK push to ${memberData.user?.first_name || memberData.first_name} ${memberData.user?.last_name || memberData.last_name} for KES 50 registration fee?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send STK Push',
-          onPress: async () => {
-            try {
-              setPayingFee('pending');
-              setLastPayAttempt(Date.now());
-              setCooldownActive(true);
-              const response = await payMemberServiceFee(chamaId, memberId);
-              if (response.success) {
-                Toast.show({
-                  type: 'success',
-                  text1: 'Payment Initiated',
-                  text2: 'STK push sent to member\'s phone',
-                });
-                loadServiceFeePayments();
-              } else {
-                throw new Error(response.error || 'Failed to initiate payment');
-              }
-            } catch (error) {
-              Toast.show({
-                type: 'error',
-                text1: 'Payment Failed',
-                text2: error.message || 'Failed to initiate payment',
-              });
-            } finally {
-              setPayingFee(null);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      setPayingFee('pending');
+      setLastPayAttempt(Date.now());
+      setCooldownActive(true);
+      const response = await payMemberServiceFee(chamaId, memberId);
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Payment Initiated',
+          text2: 'STK push sent to member\'s phone',
+        });
+        loadServiceFeePayments();
+      } else {
+        throw new Error(response.error || 'Failed to initiate payment');
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Payment Failed',
+        text2: error.message || 'Failed to initiate payment',
+      });
+    } finally {
+      setPayingFee(null);
+    }
   };
 
   const handlePrintReceipt = (member, payment) => {
@@ -765,7 +742,7 @@ const ViewMember = ({ route, navigation }) => {
                       {(userRole === 'chairperson' || userRole === 'treasurer') && (
                         <TouchableOpacity
                           style={[styles.feePayButton, { backgroundColor: colors.primary }]}
-                          onPress={() => handlePayMemberServiceFee()}
+                          onPress={() => { Alert.alert('DEBUG', 'pending pay button pressed userRole=' + userRole + ' payingFee=' + payingFee + ' cooldown=' + cooldownActive); console.log('[ViewMember] pending pay button pressed', { userRole, payingFee, cooldownActive }); handlePayMemberServiceFee(); }}
                           disabled={payingFee === 'pending' || cooldownActive}
                         >
                           {payingFee === 'pending' ? (
@@ -860,7 +837,7 @@ const ViewMember = ({ route, navigation }) => {
                                   styles.feePayButton,
                                   { backgroundColor: colors.primary }
                                 ]}
-                                onPress={() => handlePayServiceFee(payment)}
+                                onPress={() => { Alert.alert("DEBUG", "existing pay button pressed payment=" + payment.id + " status=" + payment.status); handlePayServiceFee(payment); }}
                                 disabled={payingFee === payment.id}
                               >
                                 {payingFee === payment.id ? (
@@ -1010,11 +987,14 @@ const ViewMember = ({ route, navigation }) => {
             </Card>
 
             {/* Service Fee Payments Card */}
-            <Card variant="outlined" padding="none" style={styles.feeCard}>
-              <View style={styles.feeCardContent}>
-                <Text style={styles.feeCardTitle}>
-                  Service Fee Payments
-                </Text>
+              <Card variant="outlined" padding="none" style={styles.feeCard}>
+                <View style={styles.feeCardContent}>
+                  <Text style={styles.feeCardTitle}>
+                    Service Fee Payments
+                  </Text>
+                  <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 2 }}>
+                    DEBUG role={userRole} memberId={memberId}
+                  </Text>
                 {feePaymentsLoading ? (
                   <View style={styles.feeLoadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -1045,7 +1025,7 @@ const ViewMember = ({ route, navigation }) => {
                       {(userRole === 'chairperson' || userRole === 'treasurer') && (
                         <TouchableOpacity
                           style={[styles.feePayButton, { backgroundColor: colors.primary }]}
-                          onPress={() => handlePayMemberServiceFee()}
+                          onPress={() => { Alert.alert('DEBUG', 'pending pay button pressed userRole=' + userRole + ' payingFee=' + payingFee + ' cooldown=' + cooldownActive); console.log('[ViewMember] pending pay button pressed', { userRole, payingFee, cooldownActive }); handlePayMemberServiceFee(); }}
                           disabled={payingFee === 'pending' || cooldownActive}
                         >
                           {payingFee === 'pending' ? (
@@ -1140,7 +1120,7 @@ const ViewMember = ({ route, navigation }) => {
                                   styles.feePayButton,
                                   { backgroundColor: colors.primary }
                                 ]}
-                                onPress={() => handlePayServiceFee(payment)}
+                                onPress={() => { Alert.alert("DEBUG", "existing pay button pressed payment=" + payment.id + " status=" + payment.status); handlePayServiceFee(payment); }}
                                 disabled={payingFee === payment.id}
                               >
                                 {payingFee === payment.id ? (
