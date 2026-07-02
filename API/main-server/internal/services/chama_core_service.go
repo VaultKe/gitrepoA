@@ -52,7 +52,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 	// Create chama
 	chama := &models.Chama{
 		ID:                     uuid.New().String(),
-		Name:                   creation.Name,
+Name:                   creation.Name,
 		Description:            creation.Description,
 		Category:               creation.Category,
 		Type:                   creation.Type,
@@ -65,11 +65,6 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		ContributionFrequency:  creation.ContributionFrequency,
 		TargetAmount:           creation.TargetAmount,
 		TargetDeadline:         creation.TargetDeadline,
-		PaymentMethod:          creation.PaymentMethod,
-		TillNumber:             creation.TillNumber,
-		PaybillBusinessNumber:  creation.PaybillBusinessNumber,
-		PaybillAccountNumber:   creation.PaybillAccountNumber,
-		PaymentRecipientName:   creation.PaymentRecipientName,
 		MaxMembers:             creation.MaxMembers,
 		CurrentMembers:         1,
 		TotalFunds:             0,
@@ -107,11 +102,10 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		INSERT INTO chamas (
 			id, name, description, category, type, status, county, town, latitude, longitude,
 			contribution_amount, contribution_frequency, target_amount, target_deadline,
-			payment_method, till_number, paybill_business_number, paybill_account_number, payment_recipient_name,
 			max_members, current_members, total_funds, is_public, requires_approval, rules,
 			meeting_frequency, meeting_day_of_week, meeting_day_of_month, meeting_time,
 			registration_fee_paid, created_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
 	`
 
 	var meetingFreq, meetingTime *string
@@ -128,7 +122,6 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 		chama.ID, chama.Name, chama.Description, chama.Category, chama.Type, chama.Status,
 		chama.County, chama.Town, chama.Latitude, chama.Longitude,
 		chama.ContributionAmount, chama.ContributionFrequency, chama.TargetAmount, chama.TargetDeadline,
-		chama.PaymentMethod, chama.TillNumber, chama.PaybillBusinessNumber, chama.PaybillAccountNumber, chama.PaymentRecipientName,
 		chama.MaxMembers, chama.CurrentMembers, chama.TotalFunds, chama.IsPublic, chama.RequiresApproval,
 		rulesJSON, meetingFreq, meetingDayOfWeek, meetingDayOfMonth, meetingTime,
 		chama.RegistrationFeePaid, chama.CreatedBy, chama.CreatedAt, chama.UpdatedAt,

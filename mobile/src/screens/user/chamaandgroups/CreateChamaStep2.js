@@ -176,141 +176,17 @@ const CreateChamaStep2 = ({
         </>
       )}
 
-      <View style={styles.paymentMethodSection}>
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-          Payment Method (Optional)
-        </Text>
-        <View style={styles.descriptionContainer}>
-          <Text
-            style={[styles.sectionDescription, { color: colors.textSecondary }]}
-            adjustsFontSizeToFit={false}
-            allowFontScaling={true}
-          >
-            Configure how members will send payments to this {chamaData.group_type === 'contribution' ? 'contribution group' : 'chama'}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.paymentMethodRow}>
-        <TouchableOpacity
-          style={[
-            styles.paymentMethodCard,
-            styles.paymentMethodCardLeft,
-            {
-              backgroundColor: chamaData.payment_method === 'till' ? colors.primary + '20' : colors.backgroundSecondary,
-              borderColor: chamaData.payment_method === 'till' ? colors.primary : colors.border,
-            }
-          ]}
-          onPress={() => handleInputChange('payment_method', chamaData.payment_method === 'till' ? '' : 'till')}
-        >
-          {chamaData.payment_method === 'till' && (
-            <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
-              <Ionicons name="checkmark" size={10} color={colors.white} />
-            </View>
-          )}
-          <Ionicons
-            name="card"
-            size={24}
-            color={chamaData.payment_method === 'till' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[
-            styles.paymentMethodText,
-            { color: chamaData.payment_method === 'till' ? colors.primary : colors.text }
-          ]}>
-            TILL
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.paymentMethodCard,
-            styles.paymentMethodCardRight,
-            {
-              backgroundColor: chamaData.payment_method === 'paybill' ? colors.primary + '20' : colors.backgroundSecondary,
-              borderColor: chamaData.payment_method === 'paybill' ? colors.primary : colors.border,
-            }
-          ]}
-          onPress={() => handleInputChange('payment_method', chamaData.payment_method === 'paybill' ? '' : 'paybill')}
-        >
-          {chamaData.payment_method === 'paybill' && (
-            <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
-              <Ionicons name="checkmark" size={10} color={colors.white} />
-            </View>
-          )}
-          <Ionicons
-            name="business"
-            size={24}
-            color={chamaData.payment_method === 'paybill' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[
-            styles.paymentMethodText,
-            { color: chamaData.payment_method === 'paybill' ? colors.primary : colors.text }
-          ]}>
-            PAYBILL
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {chamaData.payment_method === 'till' && (
-        <View>
-          <Input
-            label="TILL Number *"
-            value={chamaData.till_number}
-            onChangeText={(text) => handleInputChange('till_number', text)}
-            placeholder="e.g., 123456"
-            keyboardType="numeric"
-            maxLength={10}
-            error={showErrors && formErrors.till_number}
-          />
-          <Input
-            label="Recipient Name *"
-            value={chamaData.payment_recipient_name}
-            onChangeText={(text) => handleInputChange('payment_recipient_name', text)}
-            placeholder="Name members will see when paying"
-            error={showErrors && formErrors.payment_recipient_name}
-          />
-        </View>
-      )}
-
-      {chamaData.payment_method === 'paybill' && (
-        <View>
-          <Input
-            label="Business Number *"
-            value={chamaData.paybill_business_number}
-            onChangeText={(text) => handleInputChange('paybill_business_number', text)}
-            placeholder="e.g., 123456"
-            keyboardType="numeric"
-            maxLength={10}
-            error={showErrors && formErrors.paybill_business_number}
-          />
-          <Input
-            label="Account Number *"
-            value={chamaData.paybill_account_number}
-            onChangeText={(text) => handleInputChange('paybill_account_number', text)}
-            placeholder="Account number for payments"
-            error={showErrors && formErrors.paybill_account_number}
-          />
-          <Input
-            label="Recipient Name *"
-            value={chamaData.payment_recipient_name}
-            onChangeText={(text) => handleInputChange('payment_recipient_name', text)}
-            placeholder="Name members will see when paying"
-            error={showErrors && formErrors.payment_recipient_name}
-          />
-        </View>
-      )}
-
       <Input
-        label="Maximum Members *"
-        value={chamaData.max_members}
-        onChangeText={(text) => handleInputChange('max_members', text)}
-        placeholder="e.g., 20"
-        keyboardType="numeric"
-        error={showErrors && formErrors.max_members}
-        style={{ marginTop: spacing.lg }}
-      />
-    </Card>
-  );
+         label="Maximum Members *"
+         value={chamaData.max_members}
+         onChangeText={(text) => handleInputChange('max_members', text)}
+         placeholder="e.g., 20"
+         keyboardType="numeric"
+         error={showErrors && formErrors.max_members}
+         style={{ marginTop: spacing.lg }}
+       />
+     </Card>
+   );
 };
 
 const styles = StyleSheet.create({
@@ -404,90 +280,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     textAlign: 'center',
     lineHeight: typography.lineHeight.normal,
-  },
-  checkBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentMethodCardLeft: {
-    flex: 1,
-    marginRight: spacing.xs,
-  },
-  paymentMethodCardRight: {
-    flex: 1,
-    marginLeft: spacing.xs,
-  },
-  countySelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    minHeight: 36,
-  },
-  countyText: {
-    fontSize: typography.fontSize.base,
-    flex: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '80%',
-    maxWidth: 320,
-    maxHeight: '70%',
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    ...shadows.lg,
-  },
-  modalTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    marginBottom: spacing.xs,
-  },
-  countySearch: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    fontSize: typography.fontSize.base,
-  },
-  countyList: {
-    maxHeight: 300,
-  },
-  countyOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-  },
-  countyOptionText: {
-    fontSize: typography.fontSize.base,
-    flex: 1,
-  },
-  noResults: {
-    fontSize: typography.fontSize.base,
-    textAlign: 'center',
-    paddingVertical: spacing.lg,
   },
 });
 
