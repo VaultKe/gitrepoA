@@ -259,6 +259,8 @@ func SetupRoutes(
 			chamas.POST("/:id/dividends/", api.DeclareChamaDividends)
 			chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
 			chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
+			chamas.POST("/:id/mgr-disbursements/:cycleId", api.DisburseMerryGoRoundCycle)
+			chamas.POST("/:id/mgr-disbursements/bulk", api.DisburseMerryGoRoundCyclesBulk)
 			chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
 				chamas.POST("/:id/subscription-payments/:paymentId/pay", api.PaySubscriptionPayment)
 				chamas.GET("/:id/service-fee-payments", api.GetChamaServiceFeePayments)

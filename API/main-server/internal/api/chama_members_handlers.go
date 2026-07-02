@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -160,8 +161,8 @@ func GetChamaMembers(c *gin.Context) {
 				"id":         userID,
 				"first_name": firstName,
 				"last_name":  lastName,
-				"email":      email,
-				"phone":      phone,
+				"email":      utils.MaskEmail(email),
+				"phone":      utils.MaskPhone(phone),
 				"avatar_url": avatar,
 				"bio":        bio,
 				"occupation": occupation,

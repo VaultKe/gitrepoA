@@ -197,7 +197,7 @@ func TransferMoney(c *gin.Context) {
 			"transactionId":  processedTransaction.ID,
 			"amount":         req.Amount,
 			"recipientName":  recipientName,
-			"recipientPhone": recipientPhone,
+			"recipientPhone": utils.MaskPhone(recipientPhone),
 			"description":    description,
 			"status":         processedTransaction.Status,
 			"transactionRef": processedTransaction.Reference,
@@ -330,18 +330,18 @@ func DepositMoney(c *gin.Context) {
 		}
 
 		// Initiate STK push
-	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
-	if err != nil {
-		log.Printf("STK Push failed: %v", err)
+		stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
+		if err != nil {
+			log.Printf("STK Push failed: %v", err)
 
-		failureReason := fmt.Sprintf("M-Pesa STK Push failed: %v", err)
+			failureReason := fmt.Sprintf("M-Pesa STK Push failed: %v", err)
 
-		updateErr := updateTransactionStatus(db.(*sql.DB), transactionID, models.TransactionStatusFailed)
-		if updateErr != nil {
-			log.Printf("Failed to update transaction status to failed: %v", updateErr)
-		}
+			updateErr := updateTransactionStatus(db.(*sql.DB), transactionID, models.TransactionStatusFailed)
+			if updateErr != nil {
+				log.Printf("Failed to update transaction status to failed: %v", updateErr)
+			}
 
-		_, updateErr = db.(*sql.DB).Exec(`
+			_, updateErr = db.(*sql.DB).Exec(`
 			UPDATE transactions
 			SET reference = $1,
 			    description = COALESCE(description, '') || ' - ' || $2,
@@ -349,42 +349,42 @@ func DepositMoney(c *gin.Context) {
 			WHERE id = $3
 		`, fmt.Sprintf("FAILED_%d", time.Now().UnixNano()), failureReason, transactionID)
 
-		if updateErr != nil {
-			log.Printf("Failed to update transaction failure details: %v", updateErr)
+			if updateErr != nil {
+				log.Printf("Failed to update transaction failure details: %v", updateErr)
+			}
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to initiate M-Pesa payment: STK push failed",
+				"details": err.Error(),
+				"data": map[string]interface{}{
+					"transactionId": transactionID,
+					"status":        "failed",
+					"reason":        failureReason,
+				},
+			})
+			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to initiate M-Pesa payment: STK push failed",
-			"details": err.Error(),
-			"data": map[string]interface{}{
-				"transactionId": transactionID,
-				"status":        "failed",
-				"reason":        failureReason,
+		updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "M-Pesa STK push initiated successfully",
+			"data": gin.H{
+				"id":                  transactionID,
+				"checkoutRequestId":   stkResponse.CheckoutRequestID,
+				"customerMessage":     stkResponse.CustomerMessage,
+				"merchantRequestId":   stkResponse.MerchantRequestID,
+				"responseDescription": stkResponse.ResponseDescription,
+				"phoneNumber":         phoneNumber,
+				"amount":              req.Amount,
 			},
 		})
 		return
 	}
 
-	updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "M-Pesa STK push initiated successfully",
-		"data": gin.H{
-			"id":                  transactionID,
-			"checkoutRequestId":   stkResponse.CheckoutRequestID,
-			"customerMessage":     stkResponse.CustomerMessage,
-			"merchantRequestId":   stkResponse.MerchantRequestID,
-			"responseDescription": stkResponse.ResponseDescription,
-			"phoneNumber":         phoneNumber,
-			"amount":              req.Amount,
-		},
-	})
-	return
-}
-
-// Validate and sanitize string inputs
+	// Validate and sanitize string inputs
 	if len(req.PaymentMethod) > 50 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,

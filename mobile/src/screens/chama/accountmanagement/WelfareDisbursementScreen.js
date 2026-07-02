@@ -498,7 +498,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       };
       const response = await ApiService.disburseWelfareFund(currentChamaId, disbursementData);
       if (response.success) {
-        Alert.alert('Success', 'Welfare fund disbursed successfully.');
+        Alert.alert('Success', 'Welfare fund disbursed successfully - funds sent to recipient MPesa.');
         setShowDisburseModal(false);
         const updatedAll = allWelfareFunds.map(f =>
           f.id === selectedFund.id ? { ...f, status: 'disbursed' } : f
@@ -529,7 +529,7 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       };
       const response = await ApiService.bulkDisburseWelfareFunds(currentChamaId, bulkData);
       if (response.success) {
-        Alert.alert('Success', `Bulk disbursement completed for ${bulkDisburseData.selectedFunds.length} members.`);
+        Alert.alert('Success', `Bulk disbursement completed for ${bulkDisburseData.selectedFunds.length} members - funds sent to recipients MPesa.`);
         setShowBulkDisburseModal(false);
         const disbursedIds = new Set(bulkDisburseData.selectedFunds.map(f => f.id));
         const updatedAll = allWelfareFunds.map(f =>

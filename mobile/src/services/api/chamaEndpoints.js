@@ -170,6 +170,20 @@ const getChamaWalletBalance = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/wallet/balance`);
 };
 
+const disburseMerryGoRoundCycle = async (chamaId, cycleId, data) => {
+  return await makeRequest(`/chamas/${chamaId}/mgr-disbursements/${cycleId}`, {
+    method: 'POST',
+    body: data,
+  });
+};
+
+const disburseMerryGoRoundCyclesBulk = async (chamaId, data) => {
+  return await makeRequest(`/chamas/${chamaId}/mgr-disbursements/bulk`, {
+    method: 'POST',
+    body: data,
+  });
+};
+
 export {
   getChamas,
   getAllChamasForAdmin,
@@ -203,4 +217,6 @@ export {
   getMemberServiceFeePayments,
   payServiceFeePayment,
   payMemberServiceFee,
+  disburseMerryGoRoundCycle,
+  disburseMerryGoRoundCyclesBulk,
 };

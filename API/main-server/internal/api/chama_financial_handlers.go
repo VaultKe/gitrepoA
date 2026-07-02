@@ -11,17 +11,28 @@ import (
 	"vaultke-backend/config"
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
-// CreateIndividualDisbursement creates an individual disbursement
+// CreateIndividualDisbursement creates an individual disbursement (welfare)
+// Sends funds directly to member's MPesa number via B2C
 func CreateIndividualDisbursement(c *gin.Context) {
 	chamaID := c.Param("id")
 	if chamaID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
 		})
 		return
 	}
@@ -54,7 +65,6 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		return
 	}
 
-	// Get database connection
 	db, exists := c.Get("db")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -63,9 +73,45 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
 
-	// Start transaction
-	tx, err := db.(*sql.DB).Begin()
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+	config := cfg.(*config.Config)
+
+	// Get recipient's phone number
+	var recipientPhone string
+	err := database.QueryRow("SELECT phone FROM users WHERE id = $1", req.RecipientID).Scan(&recipientPhone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Recipient not found or phone number not available",
+		})
+		return
+	}
+
+	// Format phone number for M-Pesa
+	phoneNumber := recipientPhone
+	if strings.HasPrefix(phoneNumber, "07") {
+		phoneNumber = "254" + phoneNumber[1:]
+	} else if strings.HasPrefix(phoneNumber, "+254") {
+		phoneNumber = phoneNumber[1:]
+	} else if !strings.HasPrefix(phoneNumber, "254") {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid phone number format. Must start with 254 or 07",
+		})
+		return
+	}
+
+	// Start transaction for record keeping
+	tx, err := database.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -75,66 +121,73 @@ func CreateIndividualDisbursement(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	query := `
+	now := time.Now()
+	transactionID := req.TransactionID
+	if transactionID == "" {
+		transactionID = fmt.Sprintf("TXN_%d", now.UnixNano())
+	}
+
+	// Create transaction record
+	walletID := fmt.Sprintf("wallet-%s-welfare", chamaID)
+	_, err = tx.Exec(`
+		INSERT INTO transactions (
+			id, from_wallet_id, to_wallet_id, chama_id, member_id, type, status, amount,
+			currency, description, reference, payment_method, initiated_by, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, 'welfare_disbursement', 'processing', $6, 'KES', $7, $8, 'mobile_money', $9, $10, $11)
+	`, transactionID, walletID, nil, chamaID, req.RecipientID, req.Amount, req.Purpose, req.TransactionID, req.InitiatedBy, now, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create transaction record: " + err.Error(),
+		})
+		return
+	}
+
+	// Initiate B2C payment to recipient's MPesa number
+	mpesaService := services.NewMpesaService(database, config)
+	b2cResp, err := mpesaService.InitiateB2C(phoneNumber, req.Amount, req.Purpose)
+	if err != nil {
+		log.Printf("Failed to initiate B2C for welfare disbursement: %v", err)
+		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+		_ = tx.Commit()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to initiate B2C payment: " + err.Error(),
+		})
+		return
+	}
+
+	// Update transaction with B2C metadata
+	metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
+	_, err = tx.Exec(
+		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+		metadata, now, transactionID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update transaction: " + err.Error(),
+		})
+		return
+	}
+
+	// Also create record in disbursements table for tracking
+	disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
+	_, err = tx.Exec(`
 		INSERT INTO disbursements (
 			id, chama_id, type, category, member_id, member_name, amount, purpose,
 			private_note, from_account, to_account, initiated_by, initiated_by_id,
 			timestamp, status, transaction_id, security_hash, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-	`
-
-	disburseID := fmt.Sprintf("DISB_%d", time.Now().UnixNano())
-	now := time.Now()
-
-	recipientWalletID := fmt.Sprintf("wallet-personal-%s", req.RecipientID)
-
-	_, err = tx.Exec(query,
-		disburseID, chamaID, req.Type, req.Category, req.MemberID, req.MemberName,
+	`, disburseID, chamaID, req.Type, req.Category, req.MemberID, req.MemberName,
 		req.Amount, req.Purpose, req.PrivateNote, req.FromAccount, req.ToAccount,
-		req.InitiatedBy, req.InitiatedByID, req.Timestamp, req.Status,
-		req.TransactionID, req.SecurityHash, now, now,
-	)
+		req.InitiatedBy, req.InitiatedByID, req.Timestamp, "processing",
+		req.TransactionID, req.SecurityHash, now, now)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to create disbursement: " + err.Error(),
-		})
-		return
+		log.Printf("Failed to create disbursement record: %v", err)
 	}
 
-	var currentBalance float64
-	err = tx.QueryRow("SELECT balance FROM wallets WHERE id = $1", recipientWalletID).Scan(&currentBalance)
-	if err == sql.ErrNoRows {
-		_, err = tx.Exec(
-			"INSERT INTO wallets (id, type, owner_id, balance, currency, is_active, is_locked, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-			recipientWalletID, models.WalletTypePersonal, req.RecipientID, req.Amount, "KES", true, false, now, now,
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to create recipient wallet: " + err.Error(),
-			})
-			return
-		}
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to check recipient wallet: " + err.Error(),
-		})
-		return
-	} else {
-		_, err = tx.Exec("UPDATE wallets SET balance = $1, updated_at = $2 WHERE id = $3", currentBalance+req.Amount, now, recipientWalletID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to credit recipient wallet: " + err.Error(),
-			})
-			return
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
+	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to commit transaction: " + err.Error(),
@@ -142,20 +195,33 @@ func CreateIndividualDisbursement(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Individual disbursement created successfully",
+		"message": "Individual disbursement initiated successfully - funds sent to MPesa",
 		"data": gin.H{
 			"id":             disburseID,
 			"recipientId":    req.RecipientID,
-			"creditedAmount": req.Amount,
-			"walletId":       recipientWalletID,
+			"recipientPhone": phoneNumber,
+			"amount":         req.Amount,
+			"transactionId":  transactionID,
+			"conversationId": b2cResp.ConversationID,
 		},
 	})
 }
 
-// CreateBulkDisbursement creates a bulk disbursement (dividends)
+// CreateBulkDisbursement creates a bulk disbursement (welfare bulk, dividends, etc.)
+// For welfare/mgr categories - sends funds directly to members' MPesa numbers via B2C
+// For dividends - just creates records (dividend disbursement handled separately)
 func CreateBulkDisbursement(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
 	chamaID := c.Param("id")
 	if chamaID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -169,14 +235,14 @@ func CreateBulkDisbursement(c *gin.Context) {
 	var req struct {
 		Type             string                   `json:"type" binding:"required"`
 		Category         string                   `json:"category" binding:"required"`
-		DividendPerShare float64                  `json:"dividendPerShare" binding:"required"`
+		DividendPerShare float64                  `json:"dividendPerShare"`
 		TotalAmount      float64                  `json:"totalAmount" binding:"required"`
 		Description      string                   `json:"description"`
 		EligibleMembers  []map[string]interface{} `json:"eligibleMembers" binding:"required"`
 		FromAccount      string                   `json:"fromAccount" binding:"required"`
 		InitiatedBy      string                   `json:"initiatedBy" binding:"required"`
 		InitiatedByID    string                   `json:"initiatedById" binding:"required"`
-		Timestamp        string                   `json:"timestamp" binding:"required"`
+		Timestamp        string                   `json:"timestamp"`
 		Status           string                   `json:"status" binding:"required"`
 		TransactionID    string                   `json:"transactionId" binding:"required"`
 		SecurityHash     string                   `json:"securityHash" binding:"required"`
@@ -190,7 +256,27 @@ func CreateBulkDisbursement(c *gin.Context) {
 		return
 	}
 
-	// Parse timestamp to time.Time
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+	config := cfg.(*config.Config)
+
+	// Parse timestamp
 	var timestamp time.Time
 	if req.Timestamp != "" {
 		parsedTime, err := time.Parse(time.RFC3339, req.Timestamp)
@@ -203,18 +289,10 @@ func CreateBulkDisbursement(c *gin.Context) {
 		timestamp = time.Now()
 	}
 
-	// Get database connection
-	db, exists := c.Get("db")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Database connection not available",
-		})
-		return
-	}
+	now := time.Now()
 
 	// Start transaction
-	tx, err := db.(*sql.DB).Begin()
+	tx, err := database.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -225,8 +303,7 @@ func CreateBulkDisbursement(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Insert bulk disbursement record
-	bulkID := fmt.Sprintf("BULK_%d", time.Now().Unix())
-	now := time.Now()
+	bulkID := fmt.Sprintf("BULK_%d", now.UnixNano())
 
 	bulkQuery := `
 		INSERT INTO bulk_disbursements (
@@ -252,37 +329,139 @@ func CreateBulkDisbursement(c *gin.Context) {
 		return
 	}
 
-	// Insert individual dividend records
-	dividendQuery := `
-		INSERT INTO dividends (
-			id, bulk_disbursement_id, chama_id, member_id, member_name, shares_owned,
-			dividend_per_share, amount, status, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	`
+	// For welfare/mgr categories - initiate B2C payments to members' MPesa numbers
+	// For dividends - just create records (dividend disbursement handled separately via DisburseDividends)
+	isWelfareOrMGR := req.Category == "welfare" || req.Category == "merry_go_round"
 
-	for _, member := range req.EligibleMembers {
-		memberID, ok := member["id"].(string)
-		if !ok {
-			continue
+	var successfulDisbursements int
+	var failedDisbursements int
+
+	if isWelfareOrMGR {
+		// Initiate B2C payments for each member
+		for _, member := range req.EligibleMembers {
+			memberID, ok := member["id"].(string)
+			if !ok {
+				continue
+			}
+			memberName, _ := member["name"].(string)
+			var memberAmount float64
+			if amt, ok := member["amount"].(float64); ok {
+				memberAmount = amt
+			}
+
+			// Get member's phone number
+			var memberPhone string
+			err = tx.QueryRow("SELECT phone FROM users WHERE id = $1", memberID).Scan(&memberPhone)
+			if err != nil {
+				log.Printf("Skipping member %s - phone not found: %v", memberID, err)
+				failedDisbursements++
+				continue
+			}
+
+			// Format phone number
+			phoneNumber := memberPhone
+			if strings.HasPrefix(phoneNumber, "07") {
+				phoneNumber = "254" + phoneNumber[1:]
+			} else if strings.HasPrefix(phoneNumber, "+254") {
+				phoneNumber = phoneNumber[1:]
+			} else if !strings.HasPrefix(phoneNumber, "254") {
+				log.Printf("Skipping member %s - invalid phone format: %s", memberID, memberPhone)
+				failedDisbursements++
+				continue
+			}
+
+			// Create transaction record
+			transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
+			memberWalletID := fmt.Sprintf("wallet-%s-%s", chamaID, req.Category)
+			description := "Bulk " + req.Category + " disbursement"
+
+			_, err = tx.Exec(`
+				INSERT INTO transactions (
+					id, from_wallet_id, chama_id, member_id, type, status, amount,
+					currency, description, reference, payment_method, initiated_by, created_at, updated_at
+				) VALUES ($1, $2, $3, $4, 'transfer', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
+			`, transactionID, memberWalletID, chamaID, memberID, memberAmount, description, fmt.Sprintf("BULK-%s-%s", chamaID, memberID), req.InitiatedBy, now, now)
+			if err != nil {
+				log.Printf("Failed to create transaction for member %s: %v", memberID, err)
+				failedDisbursements++
+				continue
+			}
+
+			// Create individual disbursement record
+			disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
+			_, err = tx.Exec(`
+				INSERT INTO disbursements (
+					id, chama_id, type, category, member_id, member_name, amount, purpose,
+					from_account, to_account, initiated_by, initiated_by_id, timestamp, status,
+					transaction_id, created_at, updated_at
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'processing', $14, $15, $16)
+			`, disburseID, chamaID, req.Type, req.Category, memberID, memberName, memberAmount, req.Description,
+				req.FromAccount, fmt.Sprintf("mpesa-%s", phoneNumber), req.InitiatedBy, req.InitiatedByID, timestamp,
+				transactionID, now, now)
+			if err != nil {
+				log.Printf("Failed to create disbursement record for member %s: %v", memberID, err)
+			}
+
+			// Initiate B2C payment
+			mpesaService := services.NewMpesaService(database, config)
+			b2cResp, err := mpesaService.InitiateB2C(phoneNumber, memberAmount, description)
+			if err != nil {
+				log.Printf("Failed to initiate B2C for member %s: %v", memberID, err)
+				failedDisbursements++
+				_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+				continue
+			}
+
+			// Update transaction with B2C metadata
+			metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
+			_, err = tx.Exec(
+				"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+				metadata, now, transactionID,
+			)
+			if err != nil {
+				log.Printf("Failed to update transaction for member %s: %v", memberID, err)
+			}
+
+			successfulDisbursements++
 		}
-		memberName, _ := member["name"].(string)
-		sharesOwned, _ := member["sharesOwned"].(float64)
+	} else {
+		// For dividends - just create dividend records
+		dividendQuery := `
+			INSERT INTO dividends (
+				id, bulk_disbursement_id, chama_id, member_id, member_name, shares_owned,
+				dividend_per_share, amount, status, created_at, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		`
 
-		dividendID := fmt.Sprintf("DIV_%d_%s", time.Now().UnixNano(), memberID)
-		amount := sharesOwned * req.DividendPerShare
+		for _, member := range req.EligibleMembers {
+			memberID, ok := member["id"].(string)
+			if !ok {
+				continue
+			}
+			memberName, _ := member["name"].(string)
+			sharesOwned, _ := member["sharesOwned"].(float64)
 
-		_, err = tx.Exec(
-			dividendQuery,
-			dividendID, bulkID, chamaID, memberID, memberName, int(sharesOwned),
-			req.DividendPerShare, amount, "pending", now, now,
-		)
+			// Calculate amount from shares if not provided
+			var memberAmount float64
+			if amt, ok := member["amount"].(float64); ok {
+				memberAmount = amt
+			} else {
+				memberAmount = sharesOwned * req.DividendPerShare
+			}
 
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to create dividend record: " + err.Error(),
-			})
-			return
+			dividendID := fmt.Sprintf("DIV_%d_%s", now.UnixNano(), memberID)
+
+			_, err = tx.Exec(
+				dividendQuery,
+				dividendID, bulkID, chamaID, memberID, memberName, int(sharesOwned),
+				req.DividendPerShare, memberAmount, "pending", now, now,
+			)
+
+			if err != nil {
+				log.Printf("Failed to create dividend record for member %s: %v", memberID, err)
+				continue
+			}
+			successfulDisbursements++
 		}
 	}
 
@@ -298,9 +477,12 @@ func CreateBulkDisbursement(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"message": "Bulk disbursement created successfully",
+		"message": "Bulk disbursement processed successfully",
 		"data": gin.H{
-			"id": bulkID,
+			"id":                      bulkID,
+			"successfulDisbursements": successfulDisbursements,
+			"failedDisbursements":     failedDisbursements,
+			"totalAmount":             req.TotalAmount,
 		},
 	})
 }
@@ -672,7 +854,7 @@ func GetMemberServiceFeePayments(c *gin.Context) {
 			"chamaId":       chamaID,
 			"userId":        userID,
 			"userName":      firstName + " " + lastName,
-			"userPhone":     phone,
+			"userPhone":     utils.MaskPhone(phone),
 			"amount":        amount,
 			"status":        status,
 			"dueDate":       dueDate,
@@ -753,7 +935,7 @@ func GetChamaServiceFeePayments(c *gin.Context) {
 			"chamaId":       chamaID,
 			"userId":        userID,
 			"userName":      firstName + " " + lastName,
-			"userPhone":     phone,
+			"userPhone":     utils.MaskPhone(phone),
 			"amount":        amount,
 			"status":        status,
 			"dueDate":       dueDate,
@@ -1088,11 +1270,11 @@ func CreateChamaShares(c *gin.Context) {
 	}
 
 	var req struct {
-		Name         string  `json:"name" binding:"required"`
-		TotalShares  int     `json:"totalShares" binding:"required"`
+		Name          string  `json:"name" binding:"required"`
+		TotalShares   int     `json:"totalShares" binding:"required"`
 		PricePerShare float64 `json:"pricePerShare" binding:"required"`
-		OpenDate     string  `json:"openDate"`
-		CloseDate    string  `json:"closeDate"`
+		OpenDate      string  `json:"openDate"`
+		CloseDate     string  `json:"closeDate"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1145,15 +1327,15 @@ func CreateChamaShares(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
- 	"message": "Share offering created successfully",
- 		"data": gin.H{
- 			"id":            offeringID,
- 			"name":          req.Name,
- 			"totalShares":   req.TotalShares,
- 			"pricePerShare": req.PricePerShare,
- 		},
- 	})
- }
+		"message": "Share offering created successfully",
+		"data": gin.H{
+			"id":            offeringID,
+			"name":          req.Name,
+			"totalShares":   req.TotalShares,
+			"pricePerShare": req.PricePerShare,
+		},
+	})
+}
 
 // GetChamaShareOfferingsList retrieves all share offerings for a chama
 func GetChamaShareOfferingsList(c *gin.Context) {
@@ -1206,25 +1388,25 @@ func GetChamaShareOfferingsList(c *gin.Context) {
 		}
 
 		offering := map[string]interface{}{
-			"id":              id,
-			"chamaId":         chamaIDCol,
-			"name":            name,
-			"shareType":       shareType,
-			"totalShares":     totalShares,
-			"pricePerShare":   pricePerShare,
-			"minimumPurchase": minimumPurchase,
-			"description":     description,
+			"id":                  id,
+			"chamaId":             chamaIDCol,
+			"name":                name,
+			"shareType":           shareType,
+			"totalShares":         totalShares,
+			"pricePerShare":       pricePerShare,
+			"minimumPurchase":     minimumPurchase,
+			"description":         description,
 			"eligibilityCriteria": eligibilityCriteria,
-			"approvalRequired": approvalRequired,
-			"totalValue":      totalValue,
-			"status":          status,
-			"createdBy":       createdBy,
-			"createdById":     createdByID,
-			"timestamp":       timestamp,
-			"transactionId":   transactionID,
-			"securityHash":    securityHash,
-			"createdAt":       createdAt,
-			"updatedAt":       updatedAt,
+			"approvalRequired":    approvalRequired,
+			"totalValue":          totalValue,
+			"status":              status,
+			"createdBy":           createdBy,
+			"createdById":         createdByID,
+			"timestamp":           timestamp,
+			"transactionId":       transactionID,
+			"securityHash":        securityHash,
+			"createdAt":           createdAt,
+			"updatedAt":           updatedAt,
 		}
 		offerings = append(offerings, offering)
 	}
@@ -1398,15 +1580,15 @@ func GetChamaDividendDeclarations(c *gin.Context) {
 		}
 
 		declaration := map[string]interface{}{
-			"id":              id,
-			"chamaId":         chamaId,
+			"id":               id,
+			"chamaId":          chamaId,
 			"dividendPerShare": dividendPerShare,
-			"totalAmount":     totalAmount,
-			"status":          status,
-			"description":     description,
-			"createdBy":       createdBy,
-			"createdAt":       createdAt,
-			"updatedAt":       updatedAt,
+			"totalAmount":      totalAmount,
+			"status":           status,
+			"description":      description,
+			"createdBy":        createdBy,
+			"createdAt":        createdAt,
+			"updatedAt":        updatedAt,
 		}
 		declarations = append(declarations, declaration)
 	}
@@ -1414,5 +1596,349 @@ func GetChamaDividendDeclarations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    declarations,
+	})
+}
+
+// DisburseMerryGoRoundCycle handles individual MGR disbursement
+// Sends funds directly to recipient's MPesa number via B2C
+func DisburseMerryGoRoundCycle(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	chamaID := c.Param("id")
+	cycleID := c.Param("cycleId")
+	if chamaID == "" || cycleID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID and Cycle ID are required",
+		})
+		return
+	}
+
+	var req struct {
+		CycleId       string  `json:"cycleId" binding:"required"`
+		RecipientId   string  `json:"recipientId" binding:"required"`
+		RecipientName string  `json:"recipientName" binding:"required"`
+		CycleNumber   int     `json:"cycleNumber"`
+		Amount        float64 `json:"amount" binding:"required"`
+		Description   string  `json:"description" binding:"required"`
+		PrivateNote   string  `json:"privateNote"`
+		DisbursedBy   string  `json:"disbursedBy" binding:"required"`
+		DisbursedById string  `json:"disbursedById" binding:"required"`
+		Timestamp     string  `json:"timestamp"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+	config := cfg.(*config.Config)
+
+	// Get recipient's phone number
+	var recipientPhone string
+	err := database.QueryRow("SELECT phone FROM users WHERE id = $1", req.RecipientId).Scan(&recipientPhone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Recipient not found or phone number not available",
+		})
+		return
+	}
+
+	// Format phone number
+	phoneNumber := recipientPhone
+	if strings.HasPrefix(phoneNumber, "07") {
+		phoneNumber = "254" + phoneNumber[1:]
+	} else if strings.HasPrefix(phoneNumber, "+254") {
+		phoneNumber = phoneNumber[1:]
+	} else if !strings.HasPrefix(phoneNumber, "254") {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid phone number format. Must start with 254 or 07",
+		})
+		return
+	}
+
+	now := time.Now()
+	transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
+	memberWalletID := fmt.Sprintf("wallet-%s-merry_go_round", chamaID)
+
+	tx, err := database.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to start transaction",
+		})
+		return
+	}
+	defer tx.Rollback()
+
+	// Create transaction record
+	_, err = tx.Exec(`
+		INSERT INTO transactions (
+			id, from_wallet_id, chama_id, member_id, type, status, amount,
+			currency, description, reference, payment_method, initiated_by, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, 'mgr_disbursement', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
+	`, transactionID, memberWalletID, chamaID, req.RecipientId, req.Amount, req.Description,
+		fmt.Sprintf("MGR-%s-%s", cycleID, req.RecipientId), req.DisbursedBy, now, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create transaction record: " + err.Error(),
+		})
+		return
+	}
+
+	// Create disbursement record
+	disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
+	_, err = tx.Exec(`
+		INSERT INTO disbursements (
+			id, chama_id, type, category, member_id, member_name, amount, purpose,
+			from_account, to_account, initiated_by, initiated_by_id, timestamp, status, transaction_id, created_at, updated_at
+		) VALUES ($1, $2, 'merry_go_round', 'merry_go_round', $3, $4, $5, $6, $7, $8, $9, $10, $11, 'processing', $12, $13, $14)
+	`, disburseID, chamaID, req.RecipientId, req.RecipientName, req.Amount, req.Description,
+		memberWalletID, "mpesa-"+phoneNumber, req.DisbursedBy, req.DisbursedById,
+		now, transactionID, now)
+	if err != nil {
+		log.Printf("Failed to create disbursement record: %v", err)
+	}
+
+	// Initiate B2C payment
+	mpesaService := services.NewMpesaService(database, config)
+	b2cResp, err := mpesaService.InitiateB2C(phoneNumber, req.Amount, req.Description)
+	if err != nil {
+		log.Printf("Failed to initiate B2C for MGR disbursement: %v", err)
+		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+		_ = tx.Commit()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to initiate B2C payment: " + err.Error(),
+		})
+		return
+	}
+
+	// Update transaction with B2C metadata
+	metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
+	_, err = tx.Exec(
+		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+		metadata, now, transactionID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update transaction: " + err.Error(),
+		})
+		return
+	}
+
+	// Update merry-go-round participant status
+	_, _ = tx.Exec(
+		"UPDATE merry_go_round_participants SET has_received = true, received_at = $1 WHERE merry_go_round_id = $2 AND user_id = $3",
+		now, cycleID, req.RecipientId,
+	)
+
+	if err = tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to commit transaction: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "MGR disbursement initiated successfully - funds sent to MPesa",
+		"data": gin.H{
+			"id":             disburseID,
+			"recipientId":    req.RecipientId,
+			"recipientPhone": utils.MaskPhone(phoneNumber),
+			"amount":         req.Amount,
+			"transactionId":  transactionID,
+		},
+	})
+}
+
+// DisburseMerryGoRoundCyclesBulk handles bulk MGR disbursement
+// Sends funds directly to each recipient's MPesa number via B2C
+func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	var req struct {
+		Disbursements []struct {
+			CycleId       string  `json:"cycleId"`
+			RecipientId   string  `json:"recipientId" binding:"required"`
+			RecipientName string  `json:"recipientName" binding:"required"`
+			CycleNumber   int     `json:"cycleNumber"`
+			Amount        float64 `json:"amount" binding:"required"`
+		} `json:"disbursements" binding:"required"`
+		Description   string `json:"description" binding:"required"`
+		DisbursedBy   string `json:"disbursedBy" binding:"required"`
+		DisbursedById string `json:"disbursedById" binding:"required"`
+		Timestamp     string `json:"timestamp"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+	config := cfg.(*config.Config)
+
+	now := time.Now()
+	var successfulDisbursements int
+	var failedDisbursements int
+
+	// Process each disbursement
+	for _, disb := range req.Disbursements {
+		// Get recipient's phone number
+		var recipientPhone string
+		err := database.QueryRow("SELECT phone FROM users WHERE id = $1", disb.RecipientId).Scan(&recipientPhone)
+		if err != nil {
+			log.Printf("Skipping MGR disbursement for member %s - phone not found: %v", disb.RecipientId, err)
+			failedDisbursements++
+			continue
+		}
+
+		// Format phone number
+		phoneNumber := recipientPhone
+		if strings.HasPrefix(phoneNumber, "07") {
+			phoneNumber = "254" + phoneNumber[1:]
+		} else if strings.HasPrefix(phoneNumber, "+254") {
+			phoneNumber = phoneNumber[1:]
+		} else if !strings.HasPrefix(phoneNumber, "254") {
+			log.Printf("Skipping MGR disbursement for member %s - invalid phone format: %s", disb.RecipientId, recipientPhone)
+			failedDisbursements++
+			continue
+		}
+
+		// Create transaction record
+		transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
+		memberWalletID := fmt.Sprintf("wallet-%s-merry_go_round", chamaID)
+
+		_, err = database.Exec(`
+			INSERT INTO transactions (
+				id, from_wallet_id, chama_id, member_id, type, status, amount,
+				currency, description, reference, payment_method, initiated_by, created_at, updated_at
+			) VALUES ($1, $2, $3, $4, 'mgr_disbursement', 'processing', $5, 'KES', $6, $7, 'mobile_money', $8, $9, $10)
+		`, transactionID, memberWalletID, chamaID, disb.RecipientId, disb.Amount, req.Description,
+			fmt.Sprintf("MGR-BULK-%s", disb.RecipientId), req.DisbursedBy, now, now)
+		if err != nil {
+			log.Printf("Failed to create transaction for MGR disbursement: %v", err)
+			failedDisbursements++
+			continue
+		}
+
+		// Create disbursement record
+		disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
+		_, _ = database.Exec(`
+			INSERT INTO disbursements (
+				id, chama_id, type, category, member_id, member_name, amount, purpose,
+				from_account, to_account, initiated_by, initiated_by_id, timestamp, status, transaction_id, created_at, updated_at
+			) VALUES ($1, $2, 'merry_go_round', 'merry_go_round', $3, $4, $5, $6, $7, $8, $9, $10, $11, 'processing', $12, $13, $14)
+		`, disburseID, chamaID, disb.RecipientId, disb.RecipientName, disb.Amount, req.Description,
+			memberWalletID, "mpesa-"+phoneNumber, req.DisbursedBy, req.DisbursedById,
+			now, transactionID, now)
+
+		// Initiate B2C payment
+		mpesaService := services.NewMpesaService(database, config)
+		b2cResp, err := mpesaService.InitiateB2C(phoneNumber, disb.Amount, req.Description)
+		if err != nil {
+			log.Printf("Failed to initiate B2C for MGR disbursement for %s: %v", disb.RecipientId, err)
+			_, _ = database.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+			failedDisbursements++
+			continue
+		}
+
+		// Update transaction with B2C metadata
+		metadata := fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID)
+		_, _ = database.Exec(
+			"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+			metadata, now, transactionID,
+		)
+
+		// Update participant status
+		if disb.CycleId != "" {
+			_, _ = database.Exec(
+				"UPDATE merry_go_round_participants SET has_received = true, received_at = $1 WHERE merry_go_round_id = $2 AND user_id = $3",
+				now, disb.CycleId, disb.RecipientId,
+			)
+		}
+
+		successfulDisbursements++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Bulk MGR disbursement processed",
+		"data": gin.H{
+			"successfulDisbursements": successfulDisbursements,
+			"failedDisbursements":     failedDisbursements,
+			"totalAmount":             req.Disbursements[0].Amount * float64(len(req.Disbursements)),
+		},
 	})
 }

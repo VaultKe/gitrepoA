@@ -10,6 +10,7 @@ import (
 	"vaultke-backend/config"
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -293,7 +294,7 @@ func (h *SubWalletHandlers) WithdrawFromSubWallet(c *gin.Context) {
 		"data": gin.H{
 			"transactionId":  transaction.ID,
 			"amount":         req.Amount,
-			"recipientPhone": req.RecipientPhone,
+			"recipientPhone": utils.MaskPhone(req.RecipientPhone),
 			"status":         transaction.Status,
 		},
 	})

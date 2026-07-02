@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 // User handlers
@@ -113,7 +115,7 @@ func GetUsers(c *gin.Context) {
 
 		userMap := map[string]interface{}{
 			"id":           user.ID,
-			"email":        user.Email,
+			"email":        utils.MaskEmail(user.Email),
 			"firstName":    user.FirstName,
 			"lastName":     user.LastName,
 			"role":         user.Role,
@@ -123,7 +125,7 @@ func GetUsers(c *gin.Context) {
 		}
 
 		if user.Phone.Valid {
-			userMap["phone"] = user.Phone.String
+			userMap["phone"] = utils.MaskPhone(user.Phone.String)
 		}
 		if user.Avatar.Valid {
 			userMap["avatar"] = user.Avatar.String
@@ -244,7 +246,7 @@ func GetProfile(c *gin.Context) {
 
 	userMap := map[string]interface{}{
 		"id":              user.ID,
-		"email":           user.Email,
+		"email":           utils.MaskEmail(user.Email),
 		"firstName":       user.FirstName,
 		"lastName":        user.LastName,
 		"role":            user.Role,
@@ -258,7 +260,7 @@ func GetProfile(c *gin.Context) {
 	}
 
 	if user.Phone.Valid {
-		userMap["phone"] = user.Phone.String
+		userMap["phone"] = utils.MaskPhone(user.Phone.String)
 	}
 	if user.Avatar.Valid {
 		userMap["avatar"] = user.Avatar.String
@@ -405,7 +407,7 @@ func GetUserByID(c *gin.Context) {
 
 	userMap := map[string]interface{}{
 		"id":              user.ID,
-		"email":           user.Email,
+		"email":           utils.MaskEmail(user.Email),
 		"firstName":       user.FirstName,
 		"lastName":        user.LastName,
 		"role":            user.Role,
@@ -419,7 +421,7 @@ func GetUserByID(c *gin.Context) {
 	}
 
 	if user.Phone.Valid {
-		userMap["phone"] = user.Phone.String
+		userMap["phone"] = utils.MaskPhone(user.Phone.String)
 	}
 	if user.Avatar.Valid {
 		userMap["avatar"] = user.Avatar.String
@@ -550,11 +552,11 @@ func SearchUserByCredentials(c *gin.Context) {
 	if phoneExists && idExists && puID.String == iuID.String {
 		phoneUser = map[string]interface{}{
 			"id":         puID.String,
-			"email":      puEmail.String,
-			"phone":      puPhone.String,
+			"email":      utils.MaskEmail(puEmail.String),
+			"phone":      utils.MaskPhone(puPhone.String),
 			"firstName":  puFirstName.String,
 			"lastName":   puLastName.String,
-			"nationalId": puIDNumber.String,
+			"nationalId": utils.MaskID(puIDNumber.String),
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
@@ -567,19 +569,19 @@ func SearchUserByCredentials(c *gin.Context) {
 	if phoneExists && idExists && puID.String != iuID.String {
 		phoneUserMap := map[string]interface{}{
 			"id":         puID.String,
-			"email":      puEmail.String,
-			"phone":      puPhone.String,
+			"email":      utils.MaskEmail(puEmail.String),
+			"phone":      utils.MaskPhone(puPhone.String),
 			"firstName":  puFirstName.String,
 			"lastName":   puLastName.String,
-			"nationalId": puIDNumber.String,
+			"nationalId": utils.MaskID(puIDNumber.String),
 		}
 		idUserMap := map[string]interface{}{
 			"id":         iuID.String,
-			"email":      iuEmail.String,
-			"phone":      iuPhone.String,
+			"email":      utils.MaskEmail(iuEmail.String),
+			"phone":      utils.MaskPhone(iuPhone.String),
 			"firstName":  iuFirstName.String,
 			"lastName":   iuLastName.String,
-			"nationalId": iuIDNumber.String,
+			"nationalId": utils.MaskID(iuIDNumber.String),
 		}
 		c.JSON(http.StatusConflict, gin.H{
 			"success":   false,
@@ -593,11 +595,11 @@ func SearchUserByCredentials(c *gin.Context) {
 	if phoneExists && !idExists {
 		phoneUser = map[string]interface{}{
 			"id":         puID.String,
-			"email":      puEmail.String,
-			"phone":      puPhone.String,
+			"email":      utils.MaskEmail(puEmail.String),
+			"phone":      utils.MaskPhone(puPhone.String),
 			"firstName":  puFirstName.String,
 			"lastName":   puLastName.String,
-			"nationalId": puIDNumber.String,
+			"nationalId": utils.MaskID(puIDNumber.String),
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success":   false,
@@ -610,11 +612,11 @@ func SearchUserByCredentials(c *gin.Context) {
 	if !phoneExists && idExists {
 		idUser := map[string]interface{}{
 			"id":         iuID.String,
-			"email":      iuEmail.String,
-			"phone":      iuPhone.String,
+			"email":      utils.MaskEmail(iuEmail.String),
+			"phone":      utils.MaskPhone(iuPhone.String),
 			"firstName":  iuFirstName.String,
 			"lastName":   iuLastName.String,
-			"nationalId": iuIDNumber.String,
+			"nationalId": utils.MaskID(iuIDNumber.String),
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

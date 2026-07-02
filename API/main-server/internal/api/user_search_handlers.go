@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vaultke-backend/internal/utils"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -144,12 +146,12 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 			"id":        id,
 			"firstName": firstName,
 			"lastName":  lastName,
-			"email":     email,
+			"email":     utils.MaskEmail(email),
 			"createdAt": createdAt,
 		}
 
 		if phoneNumber.Valid {
-			user["phoneNumber"] = phoneNumber.String
+			user["phoneNumber"] = utils.MaskPhone(phoneNumber.String)
 		}
 
 		users = append(users, user)
@@ -214,12 +216,12 @@ func (h *UserSearchHandlers) GetUserProfile(c *gin.Context) {
 		"id":        id,
 		"firstName": firstName,
 		"lastName":  lastName,
-		"email":     email,
+		"email":     utils.MaskEmail(email),
 		"createdAt": createdAt,
 	}
 
 	if phoneNumber.Valid {
-		user["phoneNumber"] = phoneNumber.String
+		user["phoneNumber"] = utils.MaskPhone(phoneNumber.String)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -324,12 +326,12 @@ func (h *UserSearchHandlers) SearchUsersAdvanced(c *gin.Context) {
 			"id":        id,
 			"firstName": firstName,
 			"lastName":  lastName,
-			"email":     email,
+			"email":     utils.MaskEmail(email),
 			"createdAt": createdAt,
 		}
 
 		if phoneNumber.Valid {
-			user["phoneNumber"] = phoneNumber.String
+			user["phoneNumber"] = utils.MaskPhone(phoneNumber.String)
 		}
 
 		users = append(users, user)

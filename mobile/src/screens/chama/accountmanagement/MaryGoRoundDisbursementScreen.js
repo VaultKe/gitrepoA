@@ -582,10 +582,10 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
         timestamp: new Date().toISOString(),
       };
 
-      const response = await ApiService.disburseMaryGoRoundCycle(currentChamaId, disbursementData);
+      const response = await ApiService.disburseMerryGoRoundCycle(currentChamaId, selectedCycle.id, disbursementData);
 
       if (response.success) {
-        Alert.alert('Success', 'Merry go round disbursement processed successfully.');
+        Alert.alert('Success', 'Merry go round disbursement processed successfully - funds sent to recipient MPesa.');
         setShowDisburseModal(false);
         await loadMaryGoRoundCycles();
       } else {
@@ -613,10 +613,10 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
         timestamp: new Date().toISOString(),
       };
 
-      const response = await ApiService.bulkDisburseMaryGoRoundCycles(currentChamaId, bulkData);
+      const response = await ApiService.disburseMerryGoRoundCyclesBulk(currentChamaId, bulkData);
 
       if (response.success) {
-        Alert.alert('Success', `Bulk disbursement completed for ${bulkDisburseData.selectedCycles.length} cycles.`);
+        Alert.alert('Success', `Bulk disbursement completed for ${bulkDisburseData.selectedCycles.length} cycles - funds sent to recipients MPesa.`);
         setShowBulkDisburseModal(false);
         await loadMaryGoRoundCycles();
       } else {
