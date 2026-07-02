@@ -20,7 +20,6 @@ import api from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
 
 const ViewMember = ({ route, navigation }) => {
-  console.log('[ViewMember] component rendered', { memberId: route.params?.memberId, chamaId: route.params?.chamaId, userRole: route.params?.userRole });
   const { memberId, chamaId, userRole } = route.params;
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
