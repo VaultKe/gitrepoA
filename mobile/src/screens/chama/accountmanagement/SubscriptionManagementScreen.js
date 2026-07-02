@@ -495,7 +495,6 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
   const handlePrintAllPaidSubscriptions = async () => {
     const paidSubs = subscriptions.filter(s => s.status === 'paid');
     if (paidSubs.length === 0) {
-      Alert.alert('No Paid Subscriptions', 'There are no paid subscriptions to print.', [{ text: 'OK' }]);
       return;
     }
 
@@ -563,6 +562,7 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
   const paginatedSubscriptions = subscriptions.slice(startIndex, startIndex + PER_PAGE);
 
   const renderSubscriptionTable = () => {
+
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
@@ -590,16 +590,13 @@ const SubscriptionManagementScreen = ({ route, navigation }) => {
             <Text style={[styles.tableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
             <Text style={[styles.tableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
             <Text style={[styles.tableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: 'center' }]}>Action</Text>
-            {subscriptions.some(s => s.status === 'paid') && (
-              <TouchableOpacity
-                style={[styles.printAllButton, { backgroundColor: colors.success }]}
-                onPress={handlePrintAllPaidSubscriptions}
-                disabled={receiptLoading}
-              >
-                <Ionicons name="print" size={14} color={colors.white} />
-                <Text style={[styles.printAllButtonText, { color: colors.white }]}>Print All Paid</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.moreButton, { backgroundColor: colors.primary + '15' }]}
+              onPress={handlePrintAllPaidSubscriptions}
+              disabled={receiptLoading}
+            >
+              <Ionicons name="ellipsis-vertical" size={18} color={colors.primary} />
+            </TouchableOpacity>
           </View>
           {paginatedSubscriptions.map((sub, index) => {
             const isEven = index % 2 === 0;
@@ -841,18 +838,13 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  printAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  moreButton: {
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderRadius: 6,
-    gap: 4,
     marginLeft: 8,
-  },
-  printAllButtonText: {
-    fontSize: 11,
-    fontWeight: '600',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   receiptButton: {
     flexDirection: 'row',
