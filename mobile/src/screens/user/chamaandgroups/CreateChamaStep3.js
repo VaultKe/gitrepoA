@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from '../../../services/api';
+import { getMemberServiceFeePayments, payMemberServiceFee } from '../../../services/api/chamaEndpoints';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -55,6 +56,9 @@ const CreateChamaStep3 = ({
 
   const [onboardLoading, setOnboardLoading] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
+  const [payingFee, setPayingFee] = useState(null);
+  const [payingFeeTimestamp, setPayingFeeTimestamp] = useState(null);
+  const [selectedForPayment, setSelectedForPayment] = useState(new Set());
 
   const memberRoles = [
     { id: 'chairperson', name: 'Chairperson', description: 'Leads the chama and presides over meetings', maxCount: 2 },
@@ -353,6 +357,59 @@ const CreateChamaStep3 = ({
     onUpdateMember(memberId, { [field]: value });
   };
 
+  const togglePaymentSelection = (memberId) => {
+    setSelectedForPayment((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) {
+        next.delete(memberId);
+      } else {
+        next.add(memberId);
+      }
+      return next;
+    });
+  };
+
+  const handlePayServiceFee = async (memberId) => {
+    const now = Date.now();
+    if (payingFeeTimestamp && now - payingFeeTimestamp < 30000) {
+      const remaining = Math.ceil((30000 - (now - payingFeeTimestamp)) / 1000);
+      Toast.show({
+        type: 'info',
+        text1: 'Please wait',
+        text2: `Cooldown active. Try again in ${remaining}s`,
+      });
+      return;
+    }
+
+    setPayingFee(memberId);
+    setPayingFeeTimestamp(now);
+    try {
+      const response = await payMemberServiceFee(chamaData.id, memberId);
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Payment Initiated',
+          text2: "STK push sent to member's phone",
+        });
+        setSelectedForPayment((prev) => {
+          const next = new Set(prev);
+          next.delete(memberId);
+          return next;
+        });
+      } else {
+        throw new Error(response.error || 'Failed to initiate payment');
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Payment Failed',
+        text2: error.message || 'Failed to initiate payment',
+      });
+    } finally {
+      setPayingFee(null);
+    }
+  };
+
   const renderSearchSection = () => (
     <Card style={styles.section}>
       <Text style={[styles.stepTitle, { color: colors.text }]}>
@@ -607,90 +664,215 @@ const CreateChamaStep3 = ({
   const renderOnboardedTable = () => {
     if (onboardedMembers.length === 0) return null;
 
+    const maskPhone = (phone) => {
+      if (!phone || phone === 'N/A') return 'N/A';
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length >= 4) {
+        return phone.slice(0, 2) + '****' + phone.slice(-4);
+      }
+      return phone;
+    };
+
+    const maskNationalId = (id) => {
+      if (!id || id === 'N/A') return 'N/A';
+      const digits = id.replace(/\D/g, '');
+      if (digits.length >= 4) {
+        return id.slice(0, 2) + '****' + id.slice(-4);
+      }
+      return id;
+    };
+
+    const chairperson = {
+      id: user?.id,
+      firstName: user?.firstName || user?.first_name || 'You',
+      lastName: user?.lastName || user?.last_name || '',
+      phone: user?.phone || user?.phoneNumber || 'N/A',
+      idNumber: user?.idNumber || 'N/A',
+      phoneVerified: true,
+      role: 'chairperson',
+      serviceFeeStatus: 'pending',
+      isChairperson: true,
+    };
+
+    const allRows = [chairperson, ...onboardedMembers];
+
     return (
       <Card style={styles.section}>
         <Text style={[styles.stepTitle, { color: colors.text }]}>
-          Onboarded Members ({onboardedMembers.length})
+          Onboarded Members ({allRows.length})
         </Text>
 
         <ScrollView horizontal>
           <View style={styles.tableContainer}>
-            <View style={[styles.tableRow, styles.tableHeader]}>
-              <View style={[styles.tableCell, { flex: 2.0, alignItems: 'flex-start' }]}>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Name</Text>
+            <View style={[
+              styles.tableRow,
+              styles.tableHeader,
+              { backgroundColor: colors.primary + '15', borderBottomColor: colors.primary, borderBottomWidth: 2 }
+            ]}>
+              <View style={[styles.tableCell, { flex: 1.5, alignItems: 'flex-start' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Name</Text>
               </View>
               <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Role</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Phone</Text>
               </View>
               <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Phone Verified</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>ID / National ID</Text>
               </View>
               <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Service Fee</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Role</Text>
               </View>
-              <View style={[styles.tableCell, { flex: 0.5, alignItems: 'center' }]}>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }]}>Actions</Text>
+              <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Phone Verified</Text>
+              </View>
+              <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Service Fee</Text>
+              </View>
+              <View style={[styles.tableCell, { flex: 1.3, alignItems: 'center' }]}>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Actions</Text>
               </View>
             </View>
 
-            {onboardedMembers.map((member) => (
-              <View key={member.id || member.phone} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
-                <View style={[styles.tableCell, { flex: 1.5, alignItems: 'flex-start' }]}>
-                  <Text style={[styles.tableCellText, { color: colors.text, textAlign: 'left' }]}>
-                    {member.firstName} {member.lastName}
-                  </Text>
-                </View>
-                <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                  <TouchableOpacity
-                    style={[styles.roleDropdown, { borderColor: colors.border }]}
-                    onPress={() => setEditingRole({ member: member.id || member.phone, currentRole: member.role })}
-                  >
-                    <Text style={[styles.roleDropdownText, { color: colors.text }]}>
-                      {memberRoles.find(r => r.id === member.role)?.name || 'Select role'}
+            {allRows.map((member, index) => {
+              const memberKey = member.isChairperson ? `chairperson-${member.id}` : (member.id || member.phone);
+              const isSelected = selectedForPayment.has(member.id || member.phone);
+              const isEven = index % 2 === 0;
+
+              return (
+                <View key={memberKey} style={[styles.tableRow, isEven ? styles.tableRowEven : styles.tableRowOdd, { borderBottomColor: colors.border }]}>
+                  <View style={[styles.tableCell, { flex: 1.5, alignItems: 'flex-start' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                      {member.isChairperson && (
+                        <Ionicons name="star" size={14} color={colors.warning || colors.primary} />
+                      )}
+                      <Text style={[styles.tableCellText, { color: colors.text, textAlign: 'left' }]}>
+                        {member.firstName} {member.lastName}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                    <Text style={[styles.tableCellText, { color: colors.text }]}>
+                      {maskPhone(member.phone || member.phoneNumber)}
                     </Text>
-                    <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-                <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                  <TouchableOpacity
-                    style={[styles.statusChip, { backgroundColor: member.phoneVerified ? colors.success + '20' : colors.error + '20' }]}
-                    onPress={() => updateMemberStatus(member.id || member.phone, 'phoneVerified', !member.phoneVerified)}
-                  >
-                    <Ionicons
-                      name={member.phoneVerified ? 'checkmark-circle' : 'close-circle'}
-                      size={16}
-                      color={member.phoneVerified ? colors.success : colors.error}
-                    />
-                    <Text style={[styles.statusText, { color: member.phoneVerified ? colors.success : colors.error }]}>
-                      {member.phoneVerified ? 'Verified' : 'Unverified'}
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                    <Text style={[styles.tableCellText, { color: colors.text }]}>
+                      {maskNationalId(member.idNumber || member.nationalId || member.national_id)}
                     </Text>
-                  </TouchableOpacity>
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                    {member.isChairperson ? (
+                      <View style={[styles.statusChip, { backgroundColor: colors.warning + '20' }]}>
+                        <Ionicons name="star" size={14} color={colors.warning || colors.primary} />
+                        <Text style={[styles.statusText, { color: colors.warning || colors.primary }]}>Chairperson</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.roleDropdown, { borderColor: colors.border }]}
+                        onPress={() => setEditingRole({ member: member.id || member.phone, currentRole: member.role })}
+                      >
+                        <Text style={[styles.roleDropdownText, { color: colors.text }]}>
+                          {memberRoles.find(r => r.id === member.role)?.name || 'Select role'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                    <View style={[styles.statusChip, { backgroundColor: member.phoneVerified ? colors.success + '20' : colors.error + '20' }]}>
+                      <Ionicons
+                        name={member.phoneVerified ? 'checkmark-circle' : 'close-circle'}
+                        size={16}
+                        color={member.phoneVerified ? colors.success : colors.error}
+                      />
+                      <Text style={[styles.statusText, { color: member.phoneVerified ? colors.success : colors.error }]}>
+                        {member.phoneVerified ? 'Verified' : 'Unverified'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                    <View style={[styles.statusChip, { backgroundColor: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success + '20' : colors.error + '20' }]}>
+                      <Ionicons
+                        name={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'checkmark-circle' : 'close-circle'}
+                        size={16}
+                        color={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error}
+                      />
+                      <Text style={[styles.statusText, { color: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error }]}>
+                        {(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'Paid' : 'Unpaid'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1.3, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }]}>
+                    {!member.isChairperson && (
+                      <>
+                        <TouchableOpacity
+                          style={[
+                            styles.tableCheckbox,
+                            isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                          ]}
+                          onPress={() => togglePaymentSelection(member.id || member.phone)}
+                        >
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={14} color={colors.white} />
+                          )}
+                        </TouchableOpacity>
+                        {isSelected && (
+                          <TouchableOpacity
+                            style={[
+                              styles.tablePayButton,
+                              { backgroundColor: colors.primary },
+                              payingFee === (member.id || member.phone) && styles.tablePayButtonDisabled,
+                            ]}
+                            onPress={() => handlePayServiceFee(member.id || member.phone)}
+                            disabled={payingFee === (member.id || member.phone)}
+                          >
+                            <Text style={styles.tablePayButtonText}>
+                              {payingFee === (member.id || member.phone) ? '...' : 'Pay'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    )}
+                    {member.isChairperson ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <TouchableOpacity
+                          style={[
+                            styles.tableCheckbox,
+                            isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                          ]}
+                          onPress={() => togglePaymentSelection(member.id || member.phone)}
+                        >
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={14} color={colors.white} />
+                          )}
+                        </TouchableOpacity>
+                        {isSelected && (
+                          <TouchableOpacity
+                            style={[
+                              styles.tablePayButton,
+                              { backgroundColor: colors.primary },
+                              payingFee === (member.id || member.phone) && styles.tablePayButtonDisabled,
+                            ]}
+                            onPress={() => handlePayServiceFee(member.id || member.phone)}
+                            disabled={payingFee === (member.id || member.phone)}
+                          >
+                            <Text style={styles.tablePayButtonText}>
+                              {payingFee === (member.id || member.phone) ? '...' : 'Pay'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => onUpdateMember(member.id || member.phone, { _remove: true })}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={colors.error} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                  <TouchableOpacity
-                    style={[styles.statusChip, { backgroundColor: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success + '20' : colors.error + '20' }]}
-                    onPress={() => updateMemberStatus(member.id || member.phone, 'serviceFeeStatus', member.serviceFeeStatus === 'paid' ? 'pending' : 'paid')}
-                  >
-                    <Ionicons
-                      name={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'checkmark-circle' : 'close-circle'}
-                      size={16}
-                      color={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error}
-                    />
-                    <Text style={[styles.statusText, { color: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error }]}>
-                      {(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'Paid' : 'Unpaid'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={[styles.tableCell, { flex: 0.5, alignItems: 'center' }]}>
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => onUpdateMember(member.id || member.phone, { _remove: true })}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={colors.error} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </ScrollView>
 
@@ -702,7 +884,7 @@ const CreateChamaStep3 = ({
             style={styles.tableActionButton}
           />
           <Button
-            title={`Complete Chama Creation (${onboardedMembers.length} members)`}
+            title={`Complete Chama Creation (${allRows.length} members)`}
             onPress={() => onAddMember({ _complete: true })}
             style={styles.tableActionButton}
           />
@@ -936,7 +1118,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tableContainer: {
-    minWidth: 500,
+    minWidth: 780,
   },
   tableRow: {
     flexDirection: 'row',
@@ -953,6 +1135,38 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     textTransform: 'uppercase',
     minWidth: 80,
+  },
+  tableRowEven: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  tableRowOdd: {
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  tableCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tableCheckboxChecked: {
+    // color applied inline via colors.primary
+  },
+  tablePayButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    minHeight: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tablePayButtonDisabled: {
+    opacity: 0.6,
+  },
+  tablePayButtonText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '600',
   },
   tableCell: {
     fontSize: typography.fontSize.sm,
@@ -1012,7 +1226,6 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: spacing.xs,
-    marginLeft: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
