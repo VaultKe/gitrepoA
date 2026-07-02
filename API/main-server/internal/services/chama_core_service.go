@@ -185,17 +185,22 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 	}
 
 	// For chamas, create initial subscription payment record
-	if creation.Category == models.ChamaCategoryChama && creation.MonthlySubscriptionFee > 0 {
+	if creation.Category == models.ChamaCategoryChama {
 		now := time.Now()
 		dueDate := time.Date(now.Year(), now.Month()+1, 2, 0, 0, 0, 0, now.Location())
 		monthYear := dueDate.Format("2006-01")
+
+		subscriptionAmount := creation.MonthlySubscriptionFee
+		if subscriptionAmount <= 0 {
+			subscriptionAmount = 1000
+		}
 
 		subscriptionQuery := `
 			INSERT INTO subscription_payments (id, chama_id, amount, status, due_date, month_year, created_at, updated_at)
 			VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7)
 		`
 		_, err = tx.Exec(subscriptionQuery,
-			uuid.New().String(), chama.ID, creation.MonthlySubscriptionFee,
+			uuid.New().String(), chama.ID, subscriptionAmount,
 			dueDate, monthYear, now, now,
 		)
 		if err != nil {

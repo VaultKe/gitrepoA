@@ -346,13 +346,15 @@ func GetChamaSubscriptionPayments(c *gin.Context) {
 
 	payments := []map[string]interface{}{}
 	for rows.Next() {
-		var rowID, rowChamaID, status, monthYear, paymentMethod, transactionID string
+		var rowID, rowChamaID, status, monthYear string
 		var amount float64
-		var dueDate, paidAt, createdAt, updatedAt time.Time
+		var dueDate, createdAt, updatedAt time.Time
+		var paidAt *time.Time
+		var paymentMethod, transactionID *string
 
 		err := rows.Scan(&rowID, &rowChamaID, &amount, &status, &dueDate, &paidAt, &paymentMethod, &transactionID, &monthYear, &createdAt, &updatedAt)
 		if err != nil {
-			log.Printf("[DEBUG BACKEND] Scan error: %v", err)
+			log.Printf("[DEBUG BACKEND] Scan error for subscription payment: %v", err)
 			continue
 		}
 
@@ -370,6 +372,9 @@ func GetChamaSubscriptionPayments(c *gin.Context) {
 			"updatedAt":     updatedAt,
 		}
 		payments = append(payments, payment)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("[DEBUG BACKEND] Rows error for subscription payments: %v", err)
 	}
 	log.Printf("[DEBUG BACKEND] Found %d subscription payments for chama %s", len(payments), chamaID)
 
@@ -539,6 +544,31 @@ func PaySubscriptionPayment(c *gin.Context) {
 		phoneNumber = phoneNumber[1:]
 	}
 
+	// Get or create chama wallet for subscription payment
+	walletService := services.NewWalletService(database)
+	chamaWallet, err := walletService.GetWalletByOwnerAndType(chamaID, models.WalletTypeChama)
+	if err != nil {
+		chamaWallet, err = walletService.CreateWallet(chamaID, models.WalletTypeChama)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to create chama wallet",
+			})
+			return
+		}
+	}
+
+	reference := fmt.Sprintf("SUB-%s-%s", chamaID[:8], time.Now().Format("20060102150405"))
+	transactionID, err := createPendingMpesaTransaction(database, payment.Amount, reference, chamaWallet.ID, chamaID, "subscription", "subscription", userID)
+	if err != nil {
+		log.Printf("[DEBUG PaySubscriptionPayment] Failed to create pending transaction: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create transaction record",
+		})
+		return
+	}
+
 	mpesaReq := models.MpesaTransaction{
 		PhoneNumber:      phoneNumber,
 		Amount:           payment.Amount,
@@ -548,15 +578,18 @@ func PaySubscriptionPayment(c *gin.Context) {
 
 	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
 	if err != nil {
-		log.Printf("STK Push failed for subscription: %v", err)
+		log.Printf("[DEBUG PaySubscriptionPayment] STK Push failed: payment=%s amount=%.2f phone=%s err=%v", paymentID, payment.Amount, phoneNumber, err)
+		_ = updateTransactionStatus(database, transactionID, models.TransactionStatusFailed)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to initiate STK push: " + err.Error(),
 		})
 		return
 	}
+	log.Printf("[DEBUG PaySubscriptionPayment] STK Push success: payment=%s transaction=%s checkout=%s phone=%s amount=%.2f", paymentID, transactionID, stkResponse.CheckoutRequestID, phoneNumber, payment.Amount)
 
-	updateTransactionCheckoutRequestID(database, paymentID, stkResponse.CheckoutRequestID)
+	// Update transaction with checkout request ID
+	_ = updateTransactionCheckoutRequestID(database, transactionID, stkResponse.CheckoutRequestID)
 
 	now := time.Now()
 	_, err = database.Exec(
@@ -564,15 +597,7 @@ func PaySubscriptionPayment(c *gin.Context) {
 		stkResponse.CheckoutRequestID, now, paymentID,
 	)
 	if err != nil {
-		log.Printf("Error updating subscription payment checkout request id: %v", err)
-	}
-
-	_, err = database.Exec(
-		"UPDATE chamas SET subscription_fee_paid = false WHERE id = $1",
-		chamaID,
-	)
-	if err != nil {
-		log.Printf("Error updating chama subscription status: %v", err)
+		log.Printf("[DEBUG PaySubscriptionPayment] Error updating subscription payment checkout request id: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -628,9 +653,11 @@ func GetMemberServiceFeePayments(c *gin.Context) {
 
 	var payments []map[string]interface{}
 	for rows.Next() {
-		var id, chamaID, userID, firstName, lastName, phone, status, paymentMethod, transactionID string
+		var id, chamaID, userID, firstName, lastName, phone, status string
 		var amount float64
-		var dueDate, paidAt, createdAt, updatedAt time.Time
+		var dueDate, createdAt, updatedAt time.Time
+		var paidAt *time.Time
+		var paymentMethod, transactionID *string
 		var warningSent bool
 
 		err := rows.Scan(&id, &chamaID, &userID, &firstName, &lastName, &phone,
@@ -707,9 +734,11 @@ func GetChamaServiceFeePayments(c *gin.Context) {
 
 	var payments []map[string]interface{}
 	for rows.Next() {
-		var id, chamaID, userID, firstName, lastName, phone, status, paymentMethod, transactionID string
+		var id, chamaID, userID, firstName, lastName, phone, status string
 		var amount float64
-		var dueDate, paidAt, createdAt, updatedAt time.Time
+		var dueDate, createdAt, updatedAt time.Time
+		var paidAt *time.Time
+		var paymentMethod, transactionID *string
 		var warningSent bool
 
 		err := rows.Scan(&id, &chamaID, &userID, &firstName, &lastName, &phone,
