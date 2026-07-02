@@ -452,60 +452,22 @@ const ViewMember = ({ route, navigation }) => {
 
   const handlePrintReceipt = async (member, payment) => {
     if (!member) return;
-    console.log('[Receipt][handlePrintReceipt] start', { memberId: member?.id, paymentId: payment?.id, paymentStatus: payment?.status });
+    setReceiptLoading(true);
     try {
       const receiptId = getReceiptId(payment, member);
       const html = buildReceiptHTML(member, payment);
-      const fileName = getReceiptFileName(receiptId);
-      console.log('[Receipt][handlePrintReceipt] built', { receiptId, fileName });
-
-      Alert.alert(
-        'Receipt Actions',
-        'Choose how you want to share this receipt',
-        [
-          {
-            text: 'Share',
-            onPress: async () => {
-              setReceiptLoading(true);
-              try {
-                const result = await downloadReceiptHTML(html, fileName);
-                console.log('[Receipt][handlePrintReceipt] share result', result);
-                if (result.success) {
-                  Alert.alert('Receipt Shared', `Receipt ready to share as ${result.fileName}`, [{ text: 'OK', style: 'default' }], { cancelable: true });
-                } else {
-                  throw new Error(result.error || 'Share failed');
-                }
-              } catch (error) {
-                Alert.alert('Share Failed', error.message || 'Failed to share receipt.', [{ text: 'OK', style: 'default' }]);
-              } finally {
-                setReceiptLoading(false);
-              }
-            }
-          },
-          {
-            text: 'Print',
-            onPress: async () => {
-              setReceiptLoading(true);
-              try {
-                const result = await printReceiptHTML(html, `Transaction Receipt - ${receiptId}`, receiptId);
-                console.log('[Receipt][handlePrintReceipt] print result', result);
-                if (!result.success) {
-                  throw new Error(result.error || 'Failed to print receipt');
-                }
-                Alert.alert('Print Ready', 'Service fee receipt has been opened for printing.', [{ text: 'OK', style: 'default' }], { cancelable: true });
-              } catch (error) {
-                Alert.alert('Print Failed', error.message || 'Failed to print receipt.', [{ text: 'OK', style: 'default' }]);
-              } finally {
-                setReceiptLoading(false);
-              }
-            }
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ],
-        { cancelable: true }
+      const result = await printReceiptHTML(
+        html,
+        `Transaction Receipt - ${receiptId}`,
+        receiptId
       );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to print receipt');
+      }
     } catch (error) {
-      Alert.alert('Receipt Error', error.message || 'Failed to generate receipt.', [{ text: 'OK', style: 'default' }]);
+      Alert.alert('Print Failed', error.message || 'Failed to print receipt.', [{ text: 'OK' }]);
+    } finally {
       setReceiptLoading(false);
     }
   };
@@ -1030,7 +992,7 @@ const ViewMember = ({ route, navigation }) => {
                         const isEven = index % 2 === 0;
                         return (
                           <View
-                            key={payment.id}
+                            key={payment?.id || `payment-${index}`}
                             style={[
                               styles.feeTableRow,
                               { backgroundColor: isEven ? colors.background : colors.surface }
@@ -1310,7 +1272,7 @@ const ViewMember = ({ route, navigation }) => {
                         const isEven = index % 2 === 0;
                         return (
                           <View
-                            key={payment.id}
+                            key={payment?.id || `payment-${index}`}
                             style={[
                               styles.feeTableRow,
                               { backgroundColor: isEven ? colors.background : colors.surface }
