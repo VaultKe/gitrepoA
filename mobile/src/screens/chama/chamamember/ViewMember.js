@@ -10,7 +10,11 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Platform,
 } from 'react-native';
+import * as Print from 'expo-print';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import Card from '../../../components/common/Card';
@@ -18,6 +22,8 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
+import { generatePDFOptimizedReceiptHTML } from '../../../services/receiptService/html/template';
+import { COMPANY_INFO } from '../../../services/receiptService/config';
 
 const ViewMember = ({ route, navigation }) => {
   const { memberId, chamaId, userRole } = route.params;
@@ -37,9 +43,42 @@ const ViewMember = ({ route, navigation }) => {
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [serviceFeePaid, setServiceFeePaid] = useState(false);
   const PAY_COOLDOWN_MS = 30000;
+  const [receiptLoading, setReceiptLoading] = useState(false);
 
   const isSelf = memberId === user?.id;
-  const hasPaidServiceFee = serviceFeePaid || memberData?.service_fee_paid || serviceFeePayments.some(p => p.status === 'paid');
+
+  const getPaymentTransactionId = (payment) => {
+    if (!payment) return null;
+    return (
+      payment.transactionId ||
+      payment.transaction_id ||
+      payment.mpesaCode ||
+      payment.mpesa_code ||
+      payment.mPesaCode ||
+      payment.m_pesa_code ||
+      payment.mpesaReceiptNumber ||
+      payment.mpesa_receipt_number ||
+      payment.code ||
+      payment.reference ||
+      payment.ref
+    );
+  };
+
+  const isPaymentVerifiedPaid = (payment) => {
+    if (!payment) return false;
+    return payment.status === 'paid' && !!getPaymentTransactionId(payment);
+  };
+
+  const hasPaidServiceFee =
+    serviceFeePaid ||
+    (memberData?.service_fee_paid && serviceFeePayments.some(isPaymentVerifiedPaid)) ||
+    serviceFeePayments.some(isPaymentVerifiedPaid);
+
+  useEffect(() => {
+    if (memberData?.service_fee_paid && !serviceFeePayments.some(isPaymentVerifiedPaid)) {
+      setServiceFeePaid(false);
+    }
+  }, [memberData?.service_fee_paid, serviceFeePayments]);
 
   useEffect(() => {
     let timer;
@@ -286,31 +325,177 @@ const ViewMember = ({ route, navigation }) => {
     }
   };
 
-  const handlePrintReceipt = (member, payment) => {
-    const receiptData = {
-      memberName: `${member.user?.first_name || member.first_name} ${member.user?.last_name || member.last_name}`,
-      amount: 'KES 50',
-      status: 'Paid',
-      date: payment ? formatDate(payment.paidAt || payment.createdAt) : formatDate(member.service_fee_paid_at || member.joined_at),
-      chamaId: chamaId,
-      memberId: memberId,
-      paymentId: payment?.id || 'N/A',
-      transactionId: payment?.transactionId || 'N/A',
+  const getReceiptId = (payment, member) => {
+    return `RCP-${String(payment?.id || member?.id || Date.now()).substring(0, 8).toUpperCase()}`;
+  };
+
+  const getReceiptFileName = (receiptId) => {
+    return `VaultKe_Receipt_${receiptId}_${new Date().toISOString().split('T')[0]}.html`;
+  };
+
+  const getReceiptBodyHTML = (html) => {
+    const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    return match ? match[1].trim() : html;
+  };
+
+  const openReceiptPrintWindow = (html, title, receiptId) => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.open) {
+      return { success: false, error: 'Print is not available on this device' };
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      return { success: false, error: 'Popup blocked. Allow popups to print receipts.' };
+    }
+
+    const isFullHTMLDocument = /<!DOCTYPE html>[\s\S]*<\/html>/i.test(html) || /<html[\s\S]*<\/html>/i.test(html);
+    const documentHTML = isFullHTMLDocument
+      ? html
+      : `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              @page { size: A4; margin: 15mm; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: Arial, sans-serif !important; color: #000 !important; background: white !important; }
+            </style>
+          </head>
+          <body>${html}</body>
+        </html>
+      `;
+
+    printWindow.document.open();
+    printWindow.document.write(documentHTML);
+    printWindow.document.close();
+    printWindow.focus();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+
+    return { success: true, fileName: getReceiptFileName(receiptId) };
+  };
+
+  const printReceiptHTML = async (html, title, receiptId) => {
+    if (Platform.OS === 'web') {
+      return openReceiptPrintWindow(getReceiptBodyHTML(html), title, receiptId);
+    }
+
+    if (!Print?.printAsync) {
+      return { success: false, error: 'Print is not available on this device' };
+    }
+
+    await Print.printAsync({ html, base64: false });
+    return { success: true, fileName: getReceiptFileName(receiptId) };
+  };
+
+  const downloadReceiptHTML = async (html, fileName) => {
+    if (Platform.OS === 'web') {
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+      return { success: true, fileName };
+    }
+
+    if (!FileSystem?.documentDirectory || !Sharing?.isAvailableAsync) {
+      throw new Error('Download is not available on this device');
+    }
+
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      throw new Error('Download is not available on this device');
+    }
+
+    const uri = `${FileSystem.documentDirectory}${fileName}`;
+    await FileSystem.writeAsStringAsync(uri, html, { encoding: FileSystem.EncodingType.UTF8 });
+
+    await Sharing.shareAsync(uri, {
+      mimeType: 'text/html',
+      dialogTitle: 'Download service fee receipt',
+      UTI: 'public.html',
+    });
+
+    return { success: true, fileName, uri };
+  };
+
+  const buildReceiptHTML = (member, payment) => {
+    const transaction = {
+      id: payment?.id || member?.id || Date.now(),
+      date: payment?.paidAt || payment?.createdAt || member?.service_fee_paid_at || member?.joined_at,
+      amount: 50,
+      status: 'paid',
+      type: 'payment',
+      description: 'Service Fee Payment',
+      reference: payment?.transactionId || payment?.id || member?.transactionId || 'N/A',
+      fees: 0,
     };
 
-    Alert.alert(
-      'Payment Receipt',
-      `Member: ${receiptData.memberName}\nAmount: ${receiptData.amount}\nStatus: ${receiptData.status}\nDate: ${receiptData.date}\nPayment ID: ${receiptData.paymentId}\nTransaction ID: ${receiptData.transactionId}`,
-      [
-        { text: 'Close', style: 'cancel' },
-        { text: 'Share', onPress: () => {
-          Toast.show({
-            type: 'success',
-            text1: 'Receipt ready to share',
-          });
-        }},
-      ]
-    );
+    return generatePDFOptimizedReceiptHTML(transaction, 'Service Fee Payment', `${member?.user?.first_name || member?.first_name} ${member?.user?.last_name || member?.last_name}`, COMPANY_INFO);
+  };
+
+  const handlePrintReceipt = async (member, payment) => {
+    if (!member) return;
+    try {
+      const receiptId = getReceiptId(payment, member);
+      const html = buildReceiptHTML(member, payment);
+      const fileName = getReceiptFileName(receiptId);
+
+      Alert.alert(
+        'Receipt Actions',
+        'Choose how you want to share this receipt',
+        [
+          {
+            text: 'Share',
+            onPress: async () => {
+              setReceiptLoading(true);
+              try {
+                const result = await downloadReceiptHTML(html, fileName);
+                if (result.success) {
+                  Alert.alert('Receipt Shared', `Receipt ready to share as ${result.fileName}`, [{ text: 'OK', style: 'default' }], { cancelable: true });
+                } else {
+                  throw new Error(result.error || 'Share failed');
+                }
+              } catch (error) {
+                Alert.alert('Share Failed', error.message || 'Failed to share receipt.', [{ text: 'OK', style: 'default' }]);
+              } finally {
+                setReceiptLoading(false);
+              }
+            }
+          },
+          {
+            text: 'Print',
+            onPress: async () => {
+              setReceiptLoading(true);
+              try {
+                const result = await printReceiptHTML(html, `Transaction Receipt - ${receiptId}`, receiptId);
+                if (!result.success) {
+                  throw new Error(result.error || 'Failed to print receipt');
+                }
+                Alert.alert('Print Ready', 'Service fee receipt has been opened for printing.', [{ text: 'OK', style: 'default' }], { cancelable: true });
+              } catch (error) {
+                Alert.alert('Print Failed', error.message || 'Failed to print receipt.', [{ text: 'OK', style: 'default' }]);
+              } finally {
+                setReceiptLoading(false);
+              }
+            }
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+        { cancelable: true }
+      );
+    } catch (error) {
+      Alert.alert('Receipt Error', error.message || 'Failed to generate receipt.', [{ text: 'OK', style: 'default' }]);
+      setReceiptLoading(false);
+    }
   };
 
   const maskPhone = (phone) => {
@@ -858,7 +1043,7 @@ const ViewMember = ({ route, navigation }) => {
                                 {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
                               </Text>
                             </View>
-                            {payment.status !== 'paid' && (
+                             {!isPaymentVerifiedPaid(payment) && (
                               <TouchableOpacity
                                 style={[
                                   styles.feePayButton,
@@ -876,7 +1061,7 @@ const ViewMember = ({ route, navigation }) => {
                                 )}
                               </TouchableOpacity>
                             )}
-                            {payment.status === 'paid' && (
+                             {isPaymentVerifiedPaid(payment) && (
                               <TouchableOpacity
                                 style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
                                 onPress={() => handlePrintReceipt(memberData, payment)}
@@ -1138,7 +1323,7 @@ const ViewMember = ({ route, navigation }) => {
                                 {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
                               </Text>
                             </View>
-                            {payment.status !== 'paid' && (
+                             {!isPaymentVerifiedPaid(payment) && (
                               <TouchableOpacity
                                 style={[
                                   styles.feePayButton,
@@ -1156,7 +1341,7 @@ const ViewMember = ({ route, navigation }) => {
                                 )}
                               </TouchableOpacity>
                             )}
-                            {payment.status === 'paid' && (
+                             {isPaymentVerifiedPaid(payment) && (
                               <TouchableOpacity
                                 style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
                                 onPress={() => handlePrintReceipt(memberData, payment)}
