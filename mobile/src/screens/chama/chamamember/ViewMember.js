@@ -110,7 +110,7 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
     return () => clearInterval(timer);
   }, [lastPayAttempt, cooldownActive]);
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-  const isDesktop = screenWidth >= breakpoints.lg;
+  const isDesktop = screenWidth >= breakpoints.md;
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -679,6 +679,412 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
     }
   };
 
+  // Helper function to render Member Details section
+  const renderMemberDetailsSection = (isCombined = false) => (
+    <View style={[
+      styles[isCombined ? 'combinedSectionContent' : 'detailsCardContent'],
+      isCombined && isDesktop && styles.combinedSectionContentDesktop,
+    ]}>
+      <Text style={styles.combinedSectionTitle}>
+        Member Details
+      </Text>
+
+      <View style={styles.detailsTableContainer}>
+        <View style={styles.detailsTableHeader}>
+          <Text style={styles.detailsTableHeaderText}>Item</Text>
+          <Text style={styles.detailsTableHeaderText}>Details</Text>
+        </View>
+
+        <View style={styles.detailsTable}>
+          <View style={styles.tableRowEven}>
+            <Text style={styles.tableLabel}>Role</Text>
+            <View style={styles.tableValue}>
+              <Ionicons
+                name={getRoleIcon(memberData.role)}
+                size={12}
+                color={getRoleColor(memberData.role)}
+              />
+              <Text style={styles.tableValueText}>
+                {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.tableRowOdd}>
+            <Text style={styles.tableLabel}>Join Date</Text>
+            <Text style={styles.tableValueText}>
+              {formatDate(memberData.joined_at)}
+            </Text>
+          </View>
+
+          <View style={styles.tableRowEven}>
+            <Text style={styles.tableLabel}>Attendance Rate</Text>
+            <Text style={styles.tableValueTextPrimary}>
+              {memberData.attendance_rate?.toFixed(1) || 0}%
+            </Text>
+          </View>
+
+          <View style={styles.tableRowOdd}>
+            <Text style={styles.tableLabel}>Reputation</Text>
+            <View style={styles.tableValue}>
+              <Ionicons name="star" size={12} color={colors.warning} />
+              <Text style={styles.tableValueText}>
+                {memberData.reputation_score?.toFixed(1) || 0}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.tableRowEven}>
+            <Text style={styles.tableLabel}>Total Contributions</Text>
+            <Text style={styles.tableValueTextSuccess}>
+              {formatCurrency(memberData.total_contributions || 0)}
+            </Text>
+          </View>
+
+          {memberData.loan_balance > 0 && (
+            <View style={styles.tableRowOdd}>
+              <Text style={styles.tableLabel}>Loan Balance</Text>
+              <Text style={styles.tableValueTextError}>
+                {formatCurrency(memberData.loan_balance)}
+              </Text>
+            </View>
+          )}
+
+          {memberData.business_type && (
+            <View style={styles.tableRowOdd}>
+              <Text style={styles.tableLabel}>Business Type</Text>
+              <Text style={styles.tableValueText}>
+                {memberData.business_type}
+              </Text>
+            </View>
+          )}
+
+          {memberData.location && (
+            <View style={styles.tableRowEven}>
+              <Text style={styles.tableLabel}>Location</Text>
+              <Text style={styles.tableValueText}>
+                {maskLocation(memberData.location)}
+              </Text>
+            </View>
+          )}
+
+          {(memberData.user?.phone || memberData.phone_number) && (
+            <View style={styles.tableRowOdd}>
+              <Text style={styles.tableLabel}>Phone</Text>
+              <Text style={styles.tableValueText}>
+                {maskPhone(memberData.user?.phone || memberData.phone_number)}
+              </Text>
+            </View>
+          )}
+
+          {(memberData.user?.bio || memberData.user?.occupation) && (
+            <View style={styles.tableRowEven}>
+              <Text style={styles.tableLabel}>
+                {memberData.user?.occupation ? 'Occupation' : 'Bio'}
+              </Text>
+              <Text style={styles.tableValueText}>
+                {maskOccupation(memberData.user?.occupation || memberData.user?.bio)}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  // Helper function to render Service Fee Payments section
+  const renderServiceFeeSection = () => (
+    <Card variant="outlined" padding="none" style={styles.feeCard}>
+      <View style={styles.feeCardContent}>
+        <Text style={styles.feeCardTitle}>
+          Service Fee Payments
+        </Text>
+        {feePaymentsLoading ? (
+          <View style={styles.feeLoadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : serviceFeePayments.length === 0 && !hasPaidServiceFee ? (
+          <View style={styles.feeTableWrapper}>
+            <View style={styles.feeTableHeader}>
+              <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+              <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+              <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+              {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
+              )}
+            </View>
+            <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                {formatDate(memberData.joined_at)}
+              </Text>
+              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                KES 50
+              </Text>
+              <View style={styles.feeStatusCell}>
+                <Ionicons name="time" size={14} color={colors.warning} />
+                <Text style={[styles.feeStatusText, { color: colors.warning }]}>
+                  Pending
+                </Text>
+              </View>
+              {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                <TouchableOpacity
+                  style={[styles.feePayButton, { backgroundColor: colors.primary }]}
+                  onPress={() => handlePayMemberServiceFee()}
+                  disabled={payingFee === 'pending' || cooldownActive}
+                >
+                  {payingFee === 'pending' ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : cooldownActive ? (
+                    <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                      Wait {cooldownRemaining}s
+                    </Text>
+                  ) : (
+                    <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                      Pay
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ) : serviceFeePayments.length === 0 && hasPaidServiceFee ? (
+          <View style={styles.feeTableWrapper}>
+            <View style={styles.feeTableHeader}>
+              <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+              <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+              <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+              <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
+            </View>
+            <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
+              </Text>
+              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                KES 50
+              </Text>
+              <View style={styles.feeStatusCell}>
+                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                <Text style={[styles.feeStatusText, { color: colors.success }]}>
+                  Paid
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                onPress={() => handlePrintReceipt(memberData)}
+              >
+                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                  Print Receipt
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
+            <View style={styles.feeTable}>
+              <View style={styles.feeTableHeader}>
+                <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
+                <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
+                {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                  <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
+                )}
+              </View>
+              {serviceFeePayments.map((payment, index) => {
+                const isEven = index % 2 === 0;
+                return (
+                  <View
+                    key={payment?.id || `payment-${index}`}
+                    style={[
+                      styles.feeTableRow,
+                      { backgroundColor: isEven ? colors.background : colors.surface }
+                    ]}
+                  >
+                    <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                      {formatDate(payment.dueDate || payment.createdAt)}
+                    </Text>
+                    <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                      {formatCurrency(payment.amount)}
+                    </Text>
+                    <View style={styles.feeStatusCell}>
+                      <Ionicons
+                        name={getFeeStatusIcon(payment.status)}
+                        size={14}
+                        color={getFeeStatusColor(payment.status)}
+                      />
+                      <Text style={[
+                        styles.feeStatusText,
+                        { color: getFeeStatusColor(payment.status) }
+                      ]}>
+                        {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
+                      </Text>
+                    </View>
+                    {!isPaymentVerifiedPaid(payment) && (
+                      <TouchableOpacity
+                        style={[
+                          styles.feePayButton,
+                          { backgroundColor: colors.primary }
+                        ]}
+                        onPress={() => handlePayServiceFee(payment)}
+                        disabled={payingFee === payment.id}
+                      >
+                        {payingFee === payment.id ? (
+                          <ActivityIndicator size="small" color={colors.white} />
+                        ) : (
+                          <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                            Pay
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {isPaymentVerifiedPaid(payment) && (
+                      <TouchableOpacity
+                        style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                        onPress={() => handlePrintReceipt(memberData, payment)}
+                      >
+                        <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                          Print Receipt
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        )}
+      </View>
+    </Card>
+  );
+
+  // Helper function to render Disbursement Approvals section
+  const renderDisbursementApprovalsSection = (isCombined = false) => (
+    <View style={[
+      styles[isCombined ? 'combinedSectionContent' : 'approvalCardContent'],
+      isCombined && isDesktop && styles.combinedSectionContentDesktop,
+      isCombined && !isDesktop && styles.combinedSectionContentStacked,
+    ]}>
+      <Text style={styles.combinedSectionTitle}>
+        Disbursement Approvals & Verifications
+      </Text>
+      {approvalHistoryLoading ? (
+        <View style={styles.approvalLoadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : approvalHistory.length === 0 ? (
+        <View style={styles.approvalEmptyContainer}>
+          <Ionicons name="document-text" size={48} color={colors.textSecondary} />
+          <Text style={[styles.approvalEmptyText, { color: colors.textSecondary }]}>
+            No pending approvals or verifications
+          </Text>
+        </View>
+      ) : isDesktop ? (
+        <ScrollView
+          style={styles.approvalTableScroll}
+          nestedScrollEnabled
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.approvalTableHorizontalContent}
+          >
+            <View style={[
+              styles.approvalTable,
+              isCombined && styles.approvalTableCombinedDesktop,
+            ]}>
+              {renderApprovalTableRows()}
+            </View>
+          </ScrollView>
+        </ScrollView>
+      ) : (
+        <View style={styles.tableScrollArea}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator
+            nestedScrollEnabled
+            contentContainerStyle={styles.tableScrollAreaContent}
+          >
+            <View style={styles.approvalTable}>
+              {renderApprovalTableRows()}
+            </View>
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderApprovalTableRows = () => (
+    <>
+      <View style={styles.approvalTableHeader}>
+        <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Type</Text>
+        <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Recipient</Text>
+        <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+        <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Date</Text>
+        <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1 }]}>Status</Text>
+        <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1, minWidth: 80, textAlign: 'center' }]}>Action</Text>
+      </View>
+      {approvalHistory.map((item, index) => {
+        const isEven = index % 2 === 0;
+        const canApprove =
+          userRole === 'chairperson' ||
+          userRole === 'secretary' ||
+          userRole === 'treasurer' ||
+          item.randomVerifierId === user?.id ||
+          item.verifierId === user?.id;
+        const isPending = item.status === 'pending' || item.approvalStatus === 'pending';
+        return (
+          <View
+            key={item?.id || `approval-${index}`}
+            style={[
+              styles.approvalTableRow,
+              { backgroundColor: isEven ? colors.background : colors.surface }
+            ]}
+          >
+            <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.2 }]}>
+              {item.type || 'Welfare'}
+            </Text>
+            <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.5 }]}>
+              {item.recipientName || item.member_name || 'N/A'}
+            </Text>
+            <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1 }]}>
+              {formatCurrency(item.amount)}
+            </Text>
+            <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.2 }]}>
+              {formatDate(item.createdAt || item.date)}
+            </Text>
+            <View style={styles.approvalStatusCell}>
+              <Ionicons
+                name={item.status === 'approved' || item.approvalStatus === 'approved' ? 'checkmark-circle' :
+                  item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? 'cash' : 'time'}
+                size={14}
+                color={item.status === 'approved' || item.approvalStatus === 'approved' ? colors.success :
+                  item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? colors.primary : colors.warning}
+              />
+              <Text style={[
+                styles.approvalStatusText,
+                { color: item.status === 'approved' || item.approvalStatus === 'approved' ? colors.success :
+                  item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? colors.primary : colors.warning }
+              ]}>
+                {item.status || item.approvalStatus || 'Pending'}
+              </Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 80, alignItems: 'center' }}>
+              {isPending && canApprove ? (
+                <Button
+                  title="Approve"
+                  onPress={() => handleInitiateApprove(item)}
+                  size="small"
+                  style={{ paddingHorizontal: 8, paddingVertical: 4, minHeight: 28 }}
+                />
+              ) : (
+                <Text style={[styles.approvalViewText, { color: colors.textSecondary }]}>View</Text>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </>
+  );
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, styles.containerBackground]}>
@@ -742,7 +1148,11 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Member Profile Card */}
         <Card
           variant="outlined"
@@ -853,663 +1263,31 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
           </Card>
         )}
 
-        {/* Member Details & Service Fee */}
-        {isDesktop ? (
-          <Card variant="outlined" padding="none" style={styles.desktopCombinedCard}>
-            <View style={styles.desktopCombinedContent}>
-              {/* Member Details Table */}
-              <View style={styles.detailsCardContent}>
-                <Text style={styles.detailsTitle}>
-                  Member Details
-                </Text>
-
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.detailsTableScrollContent}
-                >
-                  <View style={styles.detailsTableInner}>
-                    <View style={styles.detailsTableHeader}>
-                      <Text style={styles.detailsTableHeaderText}>Item</Text>
-                      <Text style={styles.detailsTableHeaderText}>Details</Text>
-                    </View>
-
-                    <View style={styles.detailsTable}>
-                      <View style={styles.tableRowEven}>
-                        <Text style={styles.tableLabel}>Role</Text>
-                        <View style={styles.tableValue}>
-                          <Ionicons
-                            name={getRoleIcon(memberData.role)}
-                            size={12}
-                            color={getRoleColor(memberData.role)}
-                          />
-                          <Text style={styles.tableValueText}>
-                            {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.tableRowOdd}>
-                        <Text style={styles.tableLabel}>Join Date</Text>
-                        <Text style={styles.tableValueText}>
-                          {formatDate(memberData.joined_at)}
-                        </Text>
-                      </View>
-
-                      <View style={styles.tableRowEven}>
-                        <Text style={styles.tableLabel}>Attendance Rate</Text>
-                        <Text style={styles.tableValueTextPrimary}>
-                          {memberData.attendance_rate?.toFixed(1) || 0}%
-                        </Text>
-                      </View>
-
-                      <View style={styles.tableRowOdd}>
-                        <Text style={styles.tableLabel}>Reputation</Text>
-                        <View style={styles.tableValue}>
-                          <Ionicons name="star" size={12} color={colors.warning} />
-                          <Text style={styles.tableValueText}>
-                            {memberData.reputation_score?.toFixed(1) || 0}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.tableRowEven}>
-                        <Text style={styles.tableLabel}>Total Contributions</Text>
-                        <Text style={styles.tableValueTextSuccess}>
-                          {formatCurrency(memberData.total_contributions || 0)}
-                        </Text>
-                      </View>
-
-                      {memberData.loan_balance > 0 && (
-                        <View style={styles.tableRowOdd}>
-                          <Text style={styles.tableLabel}>Loan Balance</Text>
-                          <Text style={styles.tableValueTextError}>
-                            {formatCurrency(memberData.loan_balance)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {memberData.business_type && (
-                        <View style={styles.tableRowOdd}>
-                          <Text style={styles.tableLabel}>Business Type</Text>
-                          <Text style={styles.tableValueText}>
-                            {memberData.business_type}
-                          </Text>
-                        </View>
-                      )}
-
-                      {memberData.location && (
-                        <View style={styles.tableRowEven}>
-                          <Text style={styles.tableLabel}>Location</Text>
-                          <Text style={styles.tableValueText}>
-                            {maskLocation(memberData.location)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {(memberData.user?.phone || memberData.phone_number) && (
-                        <View style={styles.tableRowOdd}>
-                          <Text style={styles.tableLabel}>Phone</Text>
-                          <Text style={styles.tableValueText}>
-                            {maskPhone(memberData.user?.phone || memberData.phone_number)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {(memberData.user?.bio || memberData.user?.occupation) && (
-                        <View style={styles.tableRowEven}>
-                          <Text style={styles.tableLabel}>
-                            {memberData.user?.occupation ? 'Occupation' : 'Bio'}
-                          </Text>
-                          <Text style={styles.tableValueText}>
-                            {maskOccupation(memberData.user?.occupation || memberData.user?.bio)}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </ScrollView>
-              </View>
-
-              {/* Service Fee Payments Table */}
-              <View style={[styles.feeCardContent, { alignSelf: 'stretch' }]}>
-                <Text style={styles.feeCardTitle}>
-                  Service Fee Payments
-                </Text>
-                {feePaymentsLoading ? (
-                  <View style={styles.feeLoadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  </View>
-                ) : serviceFeePayments.length === 0 && !hasPaidServiceFee ? (
-                  <View style={styles.feeTableWrapper}>
-                    <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
-                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
-                      )}
-                    </View>
-                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
-                        {formatDate(memberData.joined_at)}
-                      </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
-                        KES 50
-                      </Text>
-                      <View style={styles.feeStatusCell}>
-                        <Ionicons name="time" size={14} color={colors.warning} />
-                        <Text style={[styles.feeStatusText, { color: colors.warning }]}>
-                          Pending
-                        </Text>
-                      </View>
-                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
-                        <TouchableOpacity
-                          style={[styles.feePayButton, { backgroundColor: colors.primary }]}
-                          onPress={() => { Alert.alert('DEBUG', 'pending pay button pressed userRole=' + userRole + ' payingFee=' + payingFee + ' cooldown=' + cooldownActive); console.log('[ViewMember] pending pay button pressed', { userRole, payingFee, cooldownActive }); handlePayMemberServiceFee(); }}
-                          disabled={payingFee === 'pending' || cooldownActive}
-                        >
-                          {payingFee === 'pending' ? (
-                            <ActivityIndicator size="small" color={colors.white} />
-                          ) : cooldownActive ? (
-                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                              Wait {cooldownRemaining}s
-                            </Text>
-                          ) : (
-                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                              Pay
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ) : serviceFeePayments.length === 0 && hasPaidServiceFee ? (
-                  <View style={styles.feeTableWrapper}>
-                    <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
-                    </View>
-                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
-                        {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
-                      </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
-                        KES 50
-                      </Text>
-                      <View style={styles.feeStatusCell}>
-                        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                        <Text style={[styles.feeStatusText, { color: colors.success }]}>
-                          Paid
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-                        onPress={() => handlePrintReceipt(memberData)}
-                      >
-                        <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
-                          Print Receipt
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
-                    <View style={styles.feeTable}>
-                      <View style={styles.feeTableHeader}>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
-                        {userRole === 'chairperson' && (
-                          <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
-                        )}
-                      </View>
-                      {serviceFeePayments.map((payment, index) => {
-                        const isEven = index % 2 === 0;
-                        return (
-                          <View
-                            key={payment?.id || `payment-${index}`}
-                            style={[
-                              styles.feeTableRow,
-                              { backgroundColor: isEven ? colors.background : colors.surface }
-                            ]}
-                          >
-                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
-                              {formatDate(payment.dueDate || payment.createdAt)}
-                            </Text>
-                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
-                              {formatCurrency(payment.amount)}
-                            </Text>
-                            <View style={styles.feeStatusCell}>
-                              <Ionicons
-                                name={getFeeStatusIcon(payment.status)}
-                                size={14}
-                                color={getFeeStatusColor(payment.status)}
-                              />
-                              <Text style={[
-                                styles.feeStatusText,
-                                { color: getFeeStatusColor(payment.status) }
-                              ]}>
-                                {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
-                              </Text>
-                            </View>
-                             {!isPaymentVerifiedPaid(payment) && (
-                              <TouchableOpacity
-                                style={[
-                                  styles.feePayButton,
-                                  { backgroundColor: colors.primary }
-                                ]}
-                                onPress={() => { Alert.alert("DEBUG", "existing pay button pressed payment=" + payment.id + " status=" + payment.status); handlePayServiceFee(payment); }}
-                                disabled={payingFee === payment.id}
-                              >
-                                {payingFee === payment.id ? (
-                                  <ActivityIndicator size="small" color={colors.white} />
-                                ) : (
-                                  <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                                    Pay
-                                  </Text>
-                                )}
-                              </TouchableOpacity>
-                            )}
-                             {isPaymentVerifiedPaid(payment) && (
-                              <TouchableOpacity
-                                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-                                onPress={() => handlePrintReceipt(memberData, payment)}
-                              >
-                                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
-                                  Print Receipt
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
-                )}
-              </View>
-            </View>
-          </Card>
-        ) : (
-          <>
-            {/* Member Details Table */}
-            <Card variant="outlined" padding="none" style={styles.detailsCard}>
-              <View style={styles.detailsCardContent}>
-                <Text style={styles.detailsTitle}>
-                  Member Details
-                </Text>
-
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.detailsTableScrollContent}
-                >
-                  <View style={styles.detailsTableInner}>
-                    <View style={styles.detailsTableHeader}>
-                      <Text style={styles.detailsTableHeaderText}>Item</Text>
-                      <Text style={styles.detailsTableHeaderText}>Details</Text>
-                    </View>
-
-                    <View style={styles.detailsTable}>
-                      <View style={styles.tableRowEven}>
-                        <Text style={styles.tableLabel}>Role</Text>
-                        <View style={styles.tableValue}>
-                          <Ionicons
-                            name={getRoleIcon(memberData.role)}
-                            size={12}
-                            color={getRoleColor(memberData.role)}
-                          />
-                          <Text style={styles.tableValueText}>
-                            {memberData.role?.charAt(0).toUpperCase() + memberData.role?.slice(1)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.tableRowOdd}>
-                        <Text style={styles.tableLabel}>Join Date</Text>
-                        <Text style={styles.tableValueText}>
-                          {formatDate(memberData.joined_at)}
-                        </Text>
-                      </View>
-
-                      <View style={styles.tableRowEven}>
-                        <Text style={styles.tableLabel}>Attendance Rate</Text>
-                        <Text style={styles.tableValueTextPrimary}>
-                          {memberData.attendance_rate?.toFixed(1) || 0}%
-                        </Text>
-                      </View>
-
-                      <View style={styles.tableRowOdd}>
-                        <Text style={styles.tableLabel}>Reputation</Text>
-                        <View style={styles.tableValue}>
-                          <Ionicons name="star" size={12} color={colors.warning} />
-                          <Text style={styles.tableValueText}>
-                            {memberData.reputation_score?.toFixed(1) || 0}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.tableRowEven}>
-                        <Text style={styles.tableLabel}>Total Contributions</Text>
-                        <Text style={styles.tableValueTextSuccess}>
-                          {formatCurrency(memberData.total_contributions || 0)}
-                        </Text>
-                      </View>
-
-                      {memberData.loan_balance > 0 && (
-                        <View style={styles.tableRowOdd}>
-                          <Text style={styles.tableLabel}>Loan Balance</Text>
-                          <Text style={styles.tableValueTextError}>
-                            {formatCurrency(memberData.loan_balance)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {memberData.business_type && (
-                        <View style={styles.tableRowOdd}>
-                          <Text style={styles.tableLabel}>Business Type</Text>
-                          <Text style={styles.tableValueText}>
-                            {memberData.business_type}
-                          </Text>
-                        </View>
-                      )}
-
-                      {memberData.location && (
-                        <View style={styles.tableRowEven}>
-                          <Text style={styles.tableLabel}>Location</Text>
-                          <Text style={styles.tableValueText}>
-                            {maskLocation(memberData.location)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {(memberData.user?.phone || memberData.phone_number) && (
-                        <View style={styles.tableRowOdd}>
-                          <Text style={styles.tableLabel}>Phone</Text>
-                          <Text style={styles.tableValueText}>
-                            {maskPhone(memberData.user?.phone || memberData.phone_number)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {(memberData.user?.bio || memberData.user?.occupation) && (
-                        <View style={styles.tableRowEven}>
-                          <Text style={styles.tableLabel}>
-                            {memberData.user?.occupation ? 'Occupation' : 'Bio'}
-                          </Text>
-                          <Text style={styles.tableValueText}>
-                            {maskOccupation(memberData.user?.occupation || memberData.user?.bio)}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </ScrollView>
-              </View>
-            </Card>
-
-            {/* Service Fee Payments Card */}
-            <Card variant="outlined" padding="none" style={styles.feeCard}>
-              <View style={styles.feeCardContent}>
-                <Text style={styles.feeCardTitle}>
-                  Service Fee Payments
-                </Text>
-                {feePaymentsLoading ? (
-                  <View style={styles.feeLoadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  </View>
-                ) : serviceFeePayments.length === 0 && !hasPaidServiceFee ? (
-                  <View style={styles.feeTableWrapper}>
-                    <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
-                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
-                      )}
-                    </View>
-                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
-                        {formatDate(memberData.joined_at)}
-                      </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
-                        KES 50
-                      </Text>
-                      <View style={styles.feeStatusCell}>
-                        <Ionicons name="time" size={14} color={colors.warning} />
-                        <Text style={[styles.feeStatusText, { color: colors.warning }]}>
-                          Pending
-                        </Text>
-                      </View>
-                      {(userRole === 'chairperson' || userRole === 'treasurer') && (
-                        <TouchableOpacity
-                          style={[styles.feePayButton, { backgroundColor: colors.primary }]}
-                          onPress={() => { Alert.alert('DEBUG', 'pending pay button pressed userRole=' + userRole + ' payingFee=' + payingFee + ' cooldown=' + cooldownActive); console.log('[ViewMember] pending pay button pressed', { userRole, payingFee, cooldownActive }); handlePayMemberServiceFee(); }}
-                          disabled={payingFee === 'pending' || cooldownActive}
-                        >
-                          {payingFee === 'pending' ? (
-                            <ActivityIndicator size="small" color={colors.white} />
-                          ) : cooldownActive ? (
-                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                              Wait {cooldownRemaining}s
-                            </Text>
-                          ) : (
-                            <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                              Pay
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ) : serviceFeePayments.length === 0 && hasPaidServiceFee ? (
-                  <View style={styles.feeTableWrapper}>
-                    <View style={styles.feeTableHeader}>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
-                      <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
-                    </View>
-                    <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
-                        {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
-                      </Text>
-                      <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
-                        KES 50
-                      </Text>
-                      <View style={styles.feeStatusCell}>
-                        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                        <Text style={[styles.feeStatusText, { color: colors.success }]}>
-                          Paid
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-                        onPress={() => handlePrintReceipt(memberData)}
-                      >
-                        <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
-                          Print Receipt
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
-                    <View style={styles.feeTable}>
-                      <View style={styles.feeTableHeader}>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
-                        <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
-                        {userRole === 'chairperson' && (
-                          <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
-                        )}
-                      </View>
-                      {serviceFeePayments.map((payment, index) => {
-                        const isEven = index % 2 === 0;
-                        return (
-                          <View
-                            key={payment?.id || `payment-${index}`}
-                            style={[
-                              styles.feeTableRow,
-                              { backgroundColor: isEven ? colors.background : colors.surface }
-                            ]}
-                          >
-                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
-                              {formatDate(payment.dueDate || payment.createdAt)}
-                            </Text>
-                            <Text style={[styles.feeTableCell, { color: colors.text }]}>
-                              {formatCurrency(payment.amount)}
-                            </Text>
-                            <View style={styles.feeStatusCell}>
-                              <Ionicons
-                                name={getFeeStatusIcon(payment.status)}
-                                size={14}
-                                color={getFeeStatusColor(payment.status)}
-                              />
-                              <Text style={[
-                                styles.feeStatusText,
-                                { color: getFeeStatusColor(payment.status) }
-                              ]}>
-                                {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
-                              </Text>
-                            </View>
-                             {!isPaymentVerifiedPaid(payment) && (
-                              <TouchableOpacity
-                                style={[
-                                  styles.feePayButton,
-                                  { backgroundColor: colors.primary }
-                                ]}
-                                onPress={() => { Alert.alert("DEBUG", "existing pay button pressed payment=" + payment.id + " status=" + payment.status); handlePayServiceFee(payment); }}
-                                disabled={payingFee === payment.id}
-                              >
-                                {payingFee === payment.id ? (
-                                  <ActivityIndicator size="small" color={colors.white} />
-                                ) : (
-                                  <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                                    Pay
-                                  </Text>
-                                )}
-                              </TouchableOpacity>
-                            )}
-                             {isPaymentVerifiedPaid(payment) && (
-                              <TouchableOpacity
-                                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-                                onPress={() => handlePrintReceipt(memberData, payment)}
-                              >
-                                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
-                                  Print Receipt
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
-                )}
-              </View>
-            </Card>
-          </>
-        )}
-
-        {/* Disbursement Approvals & Verifications */}
+{/* Combined Member Details & Disbursement Approvals Card */}
         {(userRole === 'chairperson' || userRole === 'secretary' || userRole === 'treasurer' || 
           approvalHistory.some(item => item.randomVerifierId === user?.id || item.verifierId === user?.id)) && (
-          <Card variant="outlined" padding="none" style={styles.approvalCard}>
-            <View style={styles.approvalCardContent}>
-              <Text style={[styles.detailsTitle, styles.detailsTitleText]}>
-                Disbursement Approvals & Verifications
-              </Text>
-              {approvalHistoryLoading ? (
-                <View style={styles.approvalLoadingContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                </View>
-              ) : approvalHistory.length === 0 ? (
-                <View style={styles.approvalEmptyContainer}>
-                  <Ionicons name="document-text" size={48} color={colors.textSecondary} />
-                  <Text style={[styles.approvalEmptyText, { color: colors.textSecondary }]}>
-                    No pending approvals or verifications
-                  </Text>
-                </View>
-              ) : (
-                <ScrollView style={styles.approvalTableScroll} nestedScrollEnabled>
-                  <View style={styles.approvalTable}>
-                    <View style={styles.approvalTableHeader}>
-                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Type</Text>
-                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Recipient</Text>
-                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
-                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Date</Text>
-                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1 }]}>Status</Text>
-                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1, minWidth: 80, textAlign: 'center' }]}>Action</Text>
-                    </View>
-                    {approvalHistory.map((item, index) => {
-                      const isEven = index % 2 === 0;
-                      const canApprove = 
-                        userRole === 'chairperson' || 
-                        userRole === 'secretary' || 
-                        userRole === 'treasurer' ||
-                        item.randomVerifierId === user?.id ||
-                        item.verifierId === user?.id;
-                      const isPending = item.status === 'pending' || item.approvalStatus === 'pending';
-                      return (
-                        <View
-                          key={item?.id || `approval-${index}`}
-                          style={[
-                            styles.approvalTableRow,
-                            { backgroundColor: isEven ? colors.background : colors.surface }
-                          ]}
-                        >
-                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.2 }]}>
-                            {item.type || 'Welfare'}
-                          </Text>
-                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.5 }]}>
-                            {item.recipientName || item.member_name || 'N/A'}
-                          </Text>
-                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1 }]}>
-                            {formatCurrency(item.amount)}
-                          </Text>
-                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.2 }]}>
-                            {formatDate(item.createdAt || item.date)}
-                          </Text>
-                          <View style={styles.approvalStatusCell}>
-                            <Ionicons
-                              name={item.status === 'approved' || item.approvalStatus === 'approved' ? 'checkmark-circle' : 
-                                    item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? 'cash' : 'time'}
-                              size={14}
-                              color={item.status === 'approved' || item.approvalStatus === 'approved' ? colors.success : 
-                                     item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? colors.primary : colors.warning}
-                            />
-                            <Text style={[
-                              styles.approvalStatusText,
-                              { color: item.status === 'approved' || item.approvalStatus === 'approved' ? colors.success : 
-                                     item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? colors.primary : colors.warning }
-                            ]}>
-                              {item.status || item.approvalStatus || 'Pending'}
-                            </Text>
-                          </View>
-                          <View style={{ flex: 1, minWidth: 80, alignItems: 'center' }}>
-                            {isPending && canApprove ? (
-                              <Button
-                                title="Approve"
-                                onPress={() => handleInitiateApprove(item)}
-                                size="small"
-                                style={{ paddingHorizontal: 8, paddingVertical: 4, minHeight: 28 }}
-                              />
-                            ) : (
-                              <Text style={[styles.approvalViewText, { color: colors.textSecondary }]}>View</Text>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
+          <Card variant="outlined" padding="none" style={styles.statsCard}>
+            <View style={isDesktop ? styles.combinedCardRow : styles.combinedCardColumn}>
+              {/* Member Details Section */}
+              <View style={isDesktop ? styles.combinedCardLeft : styles.combinedCardFull}>
+                {renderMemberDetailsSection(true)}
+              </View>
+
+              {/* Divider for desktop */}
+              {isDesktop && (
+                <View style={styles.combinedDivider} />
               )}
+
+              {/* Disbursement Approvals Section */}
+              <View style={isDesktop ? styles.combinedCardRight : styles.combinedCardFull}>
+                {renderDisbursementApprovalsSection(true)}
+              </View>
             </View>
           </Card>
         )}
+
+        {/* Service Fee Payments */}
+        {renderServiceFeeSection()}
 
         {/* Actions */}
         {userRole === 'chairperson' && memberData.user_id !== user.id && (
@@ -1583,6 +1361,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     padding: 16,
   },
   loadingContainer: {
@@ -1910,11 +1690,14 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  detailsTableScrollContent: {
-    flexGrow: 1,
+  detailsTableContainer: {
+    width: '100%',
   },
-  detailsTableInner: {
-    minWidth: 320,
+  tableScrollArea: {
+    width: '100%',
+  },
+  tableScrollAreaContent: {
+    flexGrow: 1,
   },
   detailsTableHeader: {
     flexDirection: 'row',
@@ -1983,14 +1766,48 @@ const createStyles = (colors) => StyleSheet.create({
     flex: 1,
     color: colors.error,
   },
-  desktopCombinedCard: {
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
+  combinedCardRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
   },
-  desktopCombinedContent: {
+  combinedCardColumn: {
     flexDirection: 'column',
-    alignItems: 'center',
+  },
+  combinedCardLeft: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+  },
+  combinedCardRight: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+  },
+  combinedCardFull: {
+    width: '100%',
+  },
+  combinedDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: colors.border,
+  },
+  combinedSectionContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  combinedSectionContentDesktop: {
+    flex: 1,
+    minWidth: 0,
+  },
+  combinedSectionContentStacked: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  combinedSectionTitle: {
+    color: colors.text,
+    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '600',
   },
   feeCard: {
     borderRadius: 12,
@@ -2063,57 +1880,6 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  feeTableHeader: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
-    backgroundColor: colors.primary + '10',
-    alignItems: 'center',
-  },
-  feeTableHeaderText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    textAlign: 'left',
-  },
-  feeTableHeaderDate: {
-    flex: 1.5,
-  },
-  feeTableHeaderAmount: {
-    flex: 1,
-  },
-  feeTableHeaderStatus: {
-    flex: 1.5,
-  },
-  feeTableHeaderAction: {
-    flex: 1,
-    minWidth: 60,
-    textAlign: 'center',
-  },
-  feeTableRow: {
-    flexDirection: 'row',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
-    alignItems: 'center',
-  },
-  feeTableCell: {
-    fontSize: 12,
-  },
-  feeTableCellDate: {
-    flex: 1.5,
-  },
-  feeTableCellAmount: {
-    flex: 1,
-  },
-  feeStatusCell: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
   feeStatusText: {
     fontSize: 12,
     fontWeight: '600',
@@ -2171,8 +1937,15 @@ const createStyles = (colors) => StyleSheet.create({
   approvalTableScroll: {
     maxHeight: 300,
   },
+  approvalTableHorizontalContent: {
+    flexGrow: 1,
+  },
   approvalTable: {
-    minWidth: 500,
+    minWidth: 400,
+  },
+  approvalTableCombinedDesktop: {
+    minWidth: 320,
+    width: '100%',
   },
   approvalTableHeader: {
     flexDirection: 'row',
