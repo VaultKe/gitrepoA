@@ -116,20 +116,22 @@ const CreateChamaStep3 = ({
      saveDraft();
    }, [phoneNumber, nationalId, userForm, onboardingPhase, foundUser]);
 
-   useEffect(() => {
-     const fetchUserProfile = async () => {
-       if (!user?.id) return;
-       try {
-         const response = await getProfile();
-         if (response.success && response.data) {
-           setUserProfile(response.data);
-         }
-       } catch (e) {
-         console.log('Failed to fetch user profile for chairperson row:', e);
-       }
-     };
-     fetchUserProfile();
-   }, [user?.id]);
+useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
+      try {
+        const response = await getProfile();
+        if (response.success && response.data) {
+          // Extract user from the nested response structure: { data: { user: {...} } }
+          const profileData = response.data.user || response.data;
+          setUserProfile(profileData);
+        }
+      } catch (e) {
+        console.log('Failed to fetch user profile for chairperson row:', e);
+      }
+    };
+    fetchUserProfile();
+  }, [user?.id]);
 
   const searchUser = async () => {
     if (!phoneNumber && !nationalId) {
@@ -387,6 +389,16 @@ const CreateChamaStep3 = ({
   };
 
   const handlePayServiceFee = async (memberId) => {
+    // During chama creation, chamaData.id may not be set yet
+    if (!chamaData?.id) {
+      Toast.show({
+        type: 'info',
+        text1: 'Chama not created yet',
+        text2: 'Complete chama creation before paying service fees',
+      });
+      return;
+    }
+
     const now = Date.now();
     if (payingFeeTimestamp && now - payingFeeTimestamp < 30000) {
       const remaining = Math.ceil((30000 - (now - payingFeeTimestamp)) / 1000);
@@ -848,28 +860,29 @@ const CreateChamaStep3 = ({
                             <Ionicons name="checkmark" size={14} color={colors.white} />
                           )}
                         </TouchableOpacity>
-                        {isSelected && (
-                          <TouchableOpacity
-                            style={[
-                              styles.tablePayButton,
-                              { backgroundColor: colors.primary },
-                              payingFee === (member.id || member.phone) && styles.tablePayButtonDisabled,
-                            ]}
-                            onPress={() => handlePayServiceFee(member.id || member.phone)}
-                            disabled={payingFee === (member.id || member.phone)}
-                          >
-                            <Text style={styles.tablePayButtonText}>
-                              {payingFee === (member.id || member.phone) ? '...' : 'Pay'}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.removeButton}
-                        onPress={() => onUpdateMember(member.id || member.phone, { _remove: true })}
-                      >
-                        <Ionicons name="trash-outline" size={18} color={colors.error} />
+{isSelected && (
+                           <TouchableOpacity
+                             style={[
+                               styles.tablePayButton,
+                               { backgroundColor: colors.primary },
+                               payingFee === (member.id || member.phone) && styles.tablePayButtonDisabled,
+                               !chamaData?.id && { opacity: 0.5 },
+                             ]}
+                             onPress={() => handlePayServiceFee(member.id || member.phone)}
+                             disabled={payingFee === (member.id || member.phone) || !chamaData?.id}
+                           >
+                             <Text style={styles.tablePayButtonText}>
+                               {!chamaData?.id ? 'After Creation' : (payingFee === (member.id || member.phone) ? '...' : 'Pay')}
+                             </Text>
+                           </TouchableOpacity>
+                         )}
+                       </View>
+                     ) : (
+                       <TouchableOpacity
+                         style={styles.removeButton}
+                         onPress={() => onUpdateMember(member.id || member.phone, { _remove: true })}
+                       >
+                         <Ionicons name="trash-outline" size={18} color={colors.error} />
                       </TouchableOpacity>
                     )}
                   </View>
