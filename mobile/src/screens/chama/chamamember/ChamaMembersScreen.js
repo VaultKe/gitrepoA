@@ -233,152 +233,63 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-  const maskPhone = (phone) => {
-    if (!phone) return 'N/A';
-    const digits = String(phone).replace(/\D/g, '');
-    if (digits.length >= 4) {
-      return phone.slice(0, 2) + '****' + phone.slice(-4);
-    }
-    return digits.length > 0 ? digits.slice(0, 1) + '***' : 'N/A';
-  };
-
-  const maskNationalId = (id) => {
-    if (!id) return 'N/A';
-    const digits = String(id).replace(/\D/g, '');
-    if (digits.length >= 4) {
-      return '****' + digits.slice(-4);
-    }
-    return digits.length > 0 ? '***' + digits : 'N/A';
-  };
-
-  const getMemberNationalId = (member) => {
-    return (
-      member.user?.id_number ||
-      member.user?.idNumber ||
-      member.user?.nationalId ||
-      member.user?.national_id ||
-      member.id_number ||
-      member.idNumber ||
-      member.nationalId ||
-      member.national_id ||
-      ''
-    );
-  };
-
-  const getMemberPhone = (member) => {
-    return member.user?.phone || member.phone_number || member.phone || '';
-  };
-
   const handleExportMembers = async () => {
     if (exporting) return;
     setExporting(true);
 
     try {
-      const exportData = filteredMembers.map((member, index) => ({
-        no: index + 1,
-        fullName: `${member.user?.first_name || ''} ${member.user?.last_name || ''}`.trim() || 'N/A',
-        role: member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'N/A',
-        phone: maskPhone(getMemberPhone(member)),
-        nationalId: maskNationalId(getMemberNationalId(member)),
-        joinDate: member.joined_at ? new Date(member.joined_at).toLocaleDateString() : 'N/A',
-      }));
-
-      const totalRows = exportData.length;
-      let tableRows = exportData.map((row) => `
-        <tr>
-          <td style="text-align:center;">${row.no}</td>
-          <td>${escapeHtml(row.fullName)}</td>
-          <td style="text-align:center;">${escapeHtml(row.role)}</td>
-          <td style="text-align:center;">${escapeHtml(row.phone)}</td>
-          <td style="text-align:center;">${escapeHtml(row.nationalId)}</td>
-          <td style="text-align:center;">${escapeHtml(row.joinDate)}</td>
-        </tr>
-      `).join('');
-
-      if (totalRows === 0) {
-        tableRows = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No members found</td></tr>`;
-      }
-
-      const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Chama Members Export</title>
-<style>
-  body { font-family: Arial, sans-serif; margin: 20px; }
-  h1 { color: #333; font-size: 18px; margin-bottom: 4px; }
-  p { color: #666; font-size: 12px; margin-bottom: 20px; }
-  table { border-collapse: collapse; width: 100%; font-size: 12px; }
-  th { background-color: #f2f2f2; border: 1px solid #ddd; padding: 8px; text-align: center; font-weight: bold; }
-  td { border: 1px solid #ddd; padding: 6px; }
-  tr:nth-child(even) { background-color: #fafafa; }
-</style>
-</head>
-<body>
-  <h1>Chama Members List</h1>
-  <p>Generated on ${new Date().toLocaleString()} | Total Members: ${totalRows} | Note: Phone numbers and National IDs are masked for privacy.</p>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:40px;">No.</th>
-        <th style="width:100px;">Full Name</th>
-        <th style="width:100px;">Role</th>
-        <th style="width:140px;">Phone Number</th>
-        <th style="width:120px;">National ID</th>
-        <th style="width:120px;">Join Date</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${tableRows}
-    </tbody>
-  </table>
-</body>
-</html>`;
-
-      // Platform-specific export handling
+      // Call backend export endpoint
+      const blob = await ApiService.exportChamaMembers(chamaId);
+      
       if (Platform.OS === 'web') {
-        // Web: trigger download using browser APIs
-        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.html`;
-        const blob = new Blob([html], { type: 'text/html' });
+        // Web: trigger download using blob
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
+        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.xlsx`;
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        Toast.show({
-          type: 'success',
-          text1: 'Export Ready',
-          text2: 'Members list has been downloaded.',
-        });
       } else {
-        // Native: use FileSystem and Sharing
-        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.html`;
+        // Native: convert blob to base64 and save
+        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.xlsx`;
         const fileUri = FileSystem.documentDirectory + fileName;
-
-        await FileSystem.writeAsStringAsync(fileUri, html, { encoding: FileSystem.EncodingType.UTF8 });
-
+        
+        // Convert blob to base64 - React Native compatible
+        const base64data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result;
+            if (typeof result === 'string') {
+              resolve(result.split(',')[1]);
+            } else {
+              reject(new Error('Failed to read blob'));
+            }
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        
+        await FileSystem.writeAsStringAsync(fileUri, base64data, { 
+          encoding: FileSystem.EncodingType.Base64 
+        });
+        
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
-            mimeType: 'text/html',
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             dialogTitle: 'Export Members',
-            UTI: 'public.html',
-          });
-          Toast.show({
-            type: 'success',
-            text1: 'Export Ready',
-            text2: 'Members list has been exported.',
-          });
-        } else {
-          Toast.show({
-            type: 'info',
-            text1: 'Export Saved',
-            text2: 'File saved to device storage.',
+            UTI: 'org.openxmlformats.spreadsheetml.sheet',
           });
         }
       }
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Export Ready',
+        text2: 'Members list has been downloaded.',
+      });
     } catch (error) {
       console.error('Export failed:', error);
       Toast.show({
@@ -389,17 +300,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     } finally {
       setExporting(false);
     }
-  };
-
-  const escapeHtml = (text) => {
-    if (!text) return '';
-    const str = String(text);
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
   };
 
   const filteredMembers = useMemo(

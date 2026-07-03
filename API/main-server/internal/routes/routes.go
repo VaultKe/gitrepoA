@@ -236,6 +236,7 @@ func SetupRoutes(
 				chamas.GET("/:id/members", api.GetChamaMembers)
 				chamas.GET("/:id/members/:memberId/role", api.GetMemberRole)
 				chamas.GET("/:id/members/:memberId/stats", api.GetChamaMemberStatistics)
+				chamas.GET("/:id/members/export", api.ExportChamaMembers)
 				chamas.GET("/:id/transactions", api.GetChamaTransactions)
 				chamas.GET("/:id/statistics", api.GetChamaStatistics)
 				chamas.GET("/:id/merry-go-rounds", api.GetMerryGoRounds)

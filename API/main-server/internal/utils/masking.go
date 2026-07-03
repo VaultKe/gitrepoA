@@ -52,13 +52,27 @@ func MaskEmail(email string) string {
 }
 
 // MaskID masks an identifier, showing only the last 4 characters.
+// For National IDs, extracts digits and shows first 2 + last 4 digits.
+// Returns "N/A" for empty or non-numeric values.
 func MaskID(id string) string {
-    if id == "" {
-        return id
-    }
-    if len(id) <= 4 {
-        return strings.Repeat("*", len(id))
-    }
-    masked := strings.Repeat("*", len(id)-4) + id[len(id)-4:]
-    return masked
+	if id == "" {
+		return "N/A"
+	}
+	// Extract only digits for National ID masking
+	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(id, "")
+	if cleaned == "" {
+		// No numeric value found - National ID should be numeric
+		return "N/A"
+	}
+	n := len(cleaned)
+	if n >= 8 {
+		// Long ID: show first 2 + asterisks + last 4
+		return cleaned[:2] + "****" + cleaned[n-4:]
+	}
+	// Short ID (5-7 digits): show first 2 + asterisks + last 4
+	if n >= 6 {
+		return cleaned[:2] + "***" + cleaned[n-4:]
+	}
+	// Very short ID (5 or less): mask with asterisks
+	return strings.Repeat("*", n-1) + cleaned[n-1:]
 }

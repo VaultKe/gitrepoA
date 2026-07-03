@@ -1,4 +1,5 @@
 import { makeRequest, makeRequestWithRetry } from './client';
+import { API_BASE_URL, getAuthToken } from './auth';
 
 const getChamas = async (limit = 20, offset = 0) => {
   return await makeRequest(`/chamas/?limit=${limit}&offset=${offset}`);
@@ -22,6 +23,24 @@ const getChamaStatistics = async (chamaId) => {
 
 const getChamaMembers = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/members`);
+};
+
+const exportChamaMembers = async (chamaId) => {
+  // This returns a blob for file download
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE_URL}/chamas/${chamaId}/members/export`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Export failed: ${response.status} ${errorText}`);
+  }
+  
+  return response.blob();
 };
 
 const getChamaTransactions = async (chamaId, limit = 20, offset = 0) => {
@@ -191,6 +210,7 @@ export {
   getChamaById,
   getChamaStatistics,
   getChamaMembers,
+  exportChamaMembers,
   getChamaTransactions,
   getMerryGoRounds,
   createMerryGoRound,
