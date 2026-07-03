@@ -6,6 +6,7 @@ import {
   Alert,
   ScrollView,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -320,7 +321,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     <thead>
       <tr>
         <th style="width:40px;">No.</th>
-        <th>Full Name</th>
+        <th style="width:100px;">Full Name</th>
         <th style="width:100px;">Role</th>
         <th style="width:140px;">Phone Number</th>
         <th style="width:120px;">National ID</th>
@@ -334,28 +335,49 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 </body>
 </html>`;
 
-      const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.html`;
-      const fileUri = FileSystem.documentDirectory + fileName;
-
-      await FileSystem.writeAsStringAsync(fileUri, html, { encoding: FileSystem.EncodingType.UTF8 });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/html',
-          dialogTitle: 'Export Members',
-          UTI: 'public.html',
-        });
+      // Platform-specific export handling
+      if (Platform.OS === 'web') {
+        // Web: trigger download using browser APIs
+        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.html`;
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
         Toast.show({
           type: 'success',
           text1: 'Export Ready',
-          text2: 'Members list has been exported.',
+          text2: 'Members list has been downloaded.',
         });
       } else {
-        Toast.show({
-          type: 'info',
-          text1: 'Export Saved',
-          text2: 'File saved to device storage.',
-        });
+        // Native: use FileSystem and Sharing
+        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.html`;
+        const fileUri = FileSystem.documentDirectory + fileName;
+
+        await FileSystem.writeAsStringAsync(fileUri, html, { encoding: FileSystem.EncodingType.UTF8 });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/html',
+            dialogTitle: 'Export Members',
+            UTI: 'public.html',
+          });
+          Toast.show({
+            type: 'success',
+            text1: 'Export Ready',
+            text2: 'Members list has been exported.',
+          });
+        } else {
+          Toast.show({
+            type: 'info',
+            text1: 'Export Saved',
+            text2: 'File saved to device storage.',
+          });
+        }
       }
     } catch (error) {
       console.error('Export failed:', error);

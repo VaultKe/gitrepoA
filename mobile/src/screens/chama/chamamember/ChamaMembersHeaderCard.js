@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../../components/common/Card';
@@ -15,10 +15,10 @@ const ChamaMembersHeaderCard = ({
   canExportMembers,
   setActiveTab,
   theme,
+  onExportMenuPress,
 }) => {
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
-  const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
     <Card variant="outlined" padding="none" style={styles.headerCard}>
@@ -74,41 +74,15 @@ const ChamaMembersHeaderCard = ({
         )}
 
         {canExportMembers && (
-          <View style={styles.exportContainer}>
-            <TouchableOpacity
-              style={styles.exportMenuButton}
-              onPress={() => setShowExportMenu(!showExportMenu)}
-              accessibilityLabel="Export options"
-              accessibilityHint="Tap to see export options for members"
-            >
-              <Text style={styles.exportMenuButtonText}>...</Text>
-            </TouchableOpacity>
-
-            {showExportMenu && (
-              <TouchableOpacity
-                style={styles.exportMenuOverlay}
-                activeOpacity={1}
-                onPress={() => setShowExportMenu(false)}
-              />
-            )}
-
-            {showExportMenu && (
-              <View style={styles.exportMenuDropdown}>
-                <TouchableOpacity
-                  style={styles.exportMenuItem}
-                  onPress={() => {
-                    setShowExportMenu(false);
-                    onExportMenuPress?.();
-                  }}
-                >
-                  <View style={styles.exportMenuIconContainer}>
-                    <Ionicons name="download-outline" size={16} color={colors.primary} />
-                  </View>
-                  <Text style={styles.exportMenuItemText}>Export Members</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={() => onExportMenuPress?.()}
+            accessibilityLabel="Export members"
+            accessibilityHint="Export member list to Excel"
+          >
+            <Ionicons name="download-outline" size={16} color={colors.primary} />
+            <Text style={styles.exportButtonText}>Export</Text>
+          </TouchableOpacity>
         )}
       </View>
     </Card>
@@ -163,71 +137,23 @@ const createStyles = (colors) => StyleSheet.create({
   compactTabTextInactive: {
     color: colors.textSecondary,
   },
-  headerActionsContainer: {
-    marginLeft: 'auto',
-    paddingLeft: spacing.sm,
-    position: 'relative',
-  },
-  exportMenuButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.border + '40',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  exportMenuButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-  exportMenuOverlay: {
-    position: 'absolute',
-    top: -200,
-    left: -200,
-    right: 200,
-    bottom: 200,
-    zIndex: 1,
-  },
-  exportMenuDropdown: {
-    position: 'absolute',
-    top: 36,
-    right: 0,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    paddingVertical: spacing.xs,
-    minWidth: 180,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    zIndex: 2,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  exportMenuItem: {
+  exportButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  exportMenuIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary + '20',
+    marginLeft: 'auto',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.primary + '15',
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+    gap: spacing.xs,
   },
-  exportMenuItemText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text,
+  exportButtonText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary,
   },
 });
 
