@@ -24,6 +24,11 @@ import api from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
 import { generatePDFOptimizedReceiptHTML } from '../../../services/receiptService/html/template';
 import { COMPANY_INFO } from '../../../services/receiptService/config';
+import Button from '../../../components/common/Button';
+import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
+import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
+import { getChamaDisbursementApprovals, approveWelfareDisbursement } from '../../../services/api/welfareEndpoints';
+import { getMemberRole } from '../../../services/api';
 
 const ViewMember = ({ route, navigation }) => {
   const { memberId, chamaId, userRole } = route.params;
@@ -40,10 +45,17 @@ const ViewMember = ({ route, navigation }) => {
   const [payingFee, setPayingFee] = useState(null);
   const [lastPayAttempt, setLastPayAttempt] = useState(null);
   const [cooldownActive, setCooldownActive] = useState(false);
-  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [serviceFeePaid, setServiceFeePaid] = useState(false);
   const PAY_COOLDOWN_MS = 30000;
+
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [approvalHistory, setApprovalHistory] = useState([]);
+  const [approvalHistoryLoading, setApprovalHistoryLoading] = useState(false);
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState(null);
+  const [approvalActionType, setApprovalActionType] = useState(null);
 
   const isSelf = memberId === user?.id;
 
@@ -153,7 +165,6 @@ const ViewMember = ({ route, navigation }) => {
         console.log('Member stats not available:', error);
         // Stats are optional, don't fail if not available
       }
-
     } catch (error) {
       console.error('Error loading member details:', error);
       Toast.show({
@@ -164,6 +175,20 @@ const ViewMember = ({ route, navigation }) => {
       navigation.goBack();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadApprovalHistory = async () => {
+    try {
+      setApprovalHistoryLoading(true);
+      const response = await getChamaDisbursementApprovals(chamaId, user?.id);
+      if (response.success && response.data) {
+        setApprovalHistory(response.data);
+      }
+    } catch (error) {
+      console.log('Approval history not available:', error);
+    } finally {
+      setApprovalHistoryLoading(false);
     }
   };
 
@@ -194,32 +219,6 @@ const ViewMember = ({ route, navigation }) => {
         { text: 'Remove', style: 'destructive', onPress: confirmRemoveMember },
       ]
     );
-  };
-
-  const confirmRemoveMember = async () => {
-    try {
-      const response = await api.makeRequest(`/chamas/${chamaId}/members/${memberId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.success) {
-        Toast.show({
-          type: 'success',
-          text1: 'Member Removed',
-          text2: 'Member has been removed from the chama',
-        });
-        navigation.goBack();
-      } else {
-        throw new Error(response.error || 'Failed to remove member');
-      }
-    } catch (error) {
-      console.error('Error removing member:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to Remove',
-        text2: error.message || 'Failed to remove member',
-      });
-    }
   };
 
   const handlePayServiceFee = async (payment) => {
@@ -526,6 +525,85 @@ const ViewMember = ({ route, navigation }) => {
       case 'paid': return 'checkmark-circle';
       case 'overdue': return 'alert-circle';
       default: return 'time';
+    }
+  };
+
+  const handleInitiateApprove = (item) => {
+    setSelectedApprovalItem(item);
+    setApprovalActionType('approve');
+    setShowOTPModal(true);
+  };
+
+  const handleVerifyOTP = async (code) => {
+    if (!selectedApprovalItem) return;
+    try {
+      setOtpLoading(true);
+      const response = await approveWelfareDisbursement(
+        chamaId,
+        selectedApprovalItem.id,
+        { otp: code, userId: user?.id }
+      );
+      if (response.success) {
+        showInAppToast({
+          title: 'Disbursement Approved',
+          message: `${selectedApprovalItem.type || 'Disbursement'} has been approved successfully.`,
+          type: 'success',
+        });
+        sendApprovalNotification({
+          chamaId,
+          recipientUserId: selectedApprovalItem.recipientId || selectedApprovalItem.member_id,
+          recipientName: selectedApprovalItem.recipientName || selectedApprovalItem.member_name,
+          disbursementType: selectedApprovalItem.type || 'disbursement',
+          disbursementId: selectedApprovalItem.id,
+          entityLabel: selectedApprovalItem.description || 'Disbursement',
+          amount: selectedApprovalItem.amount,
+          action: 'approved',
+          initiatedBy: user?.first_name || 'Member',
+          chamaName: memberData?.chama?.name || 'Chama',
+        });
+      } else {
+        throw new Error(response.error || 'Failed to approve disbursement');
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Approval Failed',
+        text2: error.message || 'Failed to approve disbursement',
+      });
+    } finally {
+      setOtpLoading(false);
+      setShowOTPModal(false);
+      setSelectedApprovalItem(null);
+      setApprovalActionType(null);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (!selectedApprovalItem) return;
+    try {
+      await sendApprovalNotification({
+        chamaId,
+        recipientUserId: user?.id,
+        recipientName: user?.first_name || 'Member',
+        disbursementType: selectedApprovalItem.type || 'disbursement',
+        disbursementId: selectedApprovalItem.id,
+        entityLabel: selectedApprovalItem.description || 'Disbursement',
+        amount: selectedApprovalItem.amount,
+        action: 'ready_for_verification',
+        initiatedBy: memberData?.chama?.name || 'Chama',
+        chamaName: memberData?.chama?.name || 'Chama',
+      });
+      showInAppToast({
+        title: 'OTP Resent',
+        message: 'A new OTP has been sent to your phone.',
+        type: 'info',
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Resend Failed',
+        text2: error.message || 'Failed to resend OTP',
+      });
     }
   };
 
@@ -1173,12 +1251,12 @@ const ViewMember = ({ route, navigation }) => {
             </Card>
 
             {/* Service Fee Payments Card */}
-              <Card variant="outlined" padding="none" style={styles.feeCard}>
-                <View style={styles.feeCardContent}>
-<Text style={styles.feeCardTitle}>
-                    Service Fee Payments
-                  </Text>
-                  {feePaymentsLoading ? (
+            <Card variant="outlined" padding="none" style={styles.feeCard}>
+              <View style={styles.feeCardContent}>
+                <Text style={styles.feeCardTitle}>
+                  Service Fee Payments
+                </Text>
+                {feePaymentsLoading ? (
                   <View style={styles.feeLoadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
                   </View>
@@ -1336,6 +1414,103 @@ const ViewMember = ({ route, navigation }) => {
           </>
         )}
 
+        {/* Disbursement Approvals & Verifications */}
+        {(userRole === 'chairperson' || userRole === 'secretary' || userRole === 'treasurer' || 
+          approvalHistory.some(item => item.randomVerifierId === user?.id || item.verifierId === user?.id)) && (
+          <Card variant="outlined" padding="none" style={styles.approvalCard}>
+            <View style={styles.approvalCardContent}>
+              <Text style={[styles.detailsTitle, styles.detailsTitleText]}>
+                Disbursement Approvals & Verifications
+              </Text>
+              {approvalHistoryLoading ? (
+                <View style={styles.approvalLoadingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : approvalHistory.length === 0 ? (
+                <View style={styles.approvalEmptyContainer}>
+                  <Ionicons name="document-text" size={48} color={colors.textSecondary} />
+                  <Text style={[styles.approvalEmptyText, { color: colors.textSecondary }]}>
+                    No pending approvals or verifications
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.approvalTableScroll} nestedScrollEnabled>
+                  <View style={styles.approvalTable}>
+                    <View style={styles.approvalTableHeader}>
+                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Type</Text>
+                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Recipient</Text>
+                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
+                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Date</Text>
+                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1 }]}>Status</Text>
+                      <Text style={[styles.approvalTableHeaderText, { color: colors.primary, flex: 1, minWidth: 80, textAlign: 'center' }]}>Action</Text>
+                    </View>
+                    {approvalHistory.map((item, index) => {
+                      const isEven = index % 2 === 0;
+                      const canApprove = 
+                        userRole === 'chairperson' || 
+                        userRole === 'secretary' || 
+                        userRole === 'treasurer' ||
+                        item.randomVerifierId === user?.id ||
+                        item.verifierId === user?.id;
+                      const isPending = item.status === 'pending' || item.approvalStatus === 'pending';
+                      return (
+                        <View
+                          key={item?.id || `approval-${index}`}
+                          style={[
+                            styles.approvalTableRow,
+                            { backgroundColor: isEven ? colors.background : colors.surface }
+                          ]}
+                        >
+                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.2 }]}>
+                            {item.type || 'Welfare'}
+                          </Text>
+                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.5 }]}>
+                            {item.recipientName || item.member_name || 'N/A'}
+                          </Text>
+                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1 }]}>
+                            {formatCurrency(item.amount)}
+                          </Text>
+                          <Text style={[styles.approvalTableCell, { color: colors.text, flex: 1.2 }]}>
+                            {formatDate(item.createdAt || item.date)}
+                          </Text>
+                          <View style={styles.approvalStatusCell}>
+                            <Ionicons
+                              name={item.status === 'approved' || item.approvalStatus === 'approved' ? 'checkmark-circle' : 
+                                    item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? 'cash' : 'time'}
+                              size={14}
+                              color={item.status === 'approved' || item.approvalStatus === 'approved' ? colors.success : 
+                                     item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? colors.primary : colors.warning}
+                            />
+                            <Text style={[
+                              styles.approvalStatusText,
+                              { color: item.status === 'approved' || item.approvalStatus === 'approved' ? colors.success : 
+                                     item.status === 'disbursed' || item.approvalStatus === 'disbursed' ? colors.primary : colors.warning }
+                            ]}>
+                              {item.status || item.approvalStatus || 'Pending'}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1, minWidth: 80, alignItems: 'center' }}>
+                            {isPending && canApprove ? (
+                              <Button
+                                title="Approve"
+                                onPress={() => handleInitiateApprove(item)}
+                                size="small"
+                                style={{ paddingHorizontal: 8, paddingVertical: 4, minHeight: 28 }}
+                              />
+                            ) : (
+                              <Text style={[styles.approvalViewText, { color: colors.textSecondary }]}>View</Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              )}
+            </View>
+          </Card>
+        )}
+
         {/* Actions */}
         {userRole === 'chairperson' && memberData.user_id !== user.id && (
           <Card variant="outlined" padding="none" style={styles.actionsCard}>
@@ -1356,6 +1531,21 @@ const ViewMember = ({ route, navigation }) => {
             </View>
           </Card>
         )}
+
+        <OTPVerificationModal
+          visible={showOTPModal}
+          onClose={() => {
+            setShowOTPModal(false);
+            setSelectedApprovalItem(null);
+            setApprovalActionType(null);
+          }}
+          title={approvalActionType === 'approve' ? 'Approve Disbursement' : 'Verify Disbursement'}
+          subtitle={`Enter the OTP sent to your phone to ${approvalActionType || 'verify'} this ${selectedApprovalItem?.type || 'disbursement'}`}
+          onVerify={handleVerifyOTP}
+          onResend={handleResendOTP}
+          loading={otpLoading}
+          itemType={selectedApprovalItem?.type}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -1955,6 +2145,76 @@ const createStyles = (colors) => StyleSheet.create({
   feeReceiptButtonText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  approvalCard: {
+    borderRadius: 12,
+    marginBottom: 16,
+    marginTop: 16,
+  },
+  approvalCardContent: {
+    padding: 16,
+  },
+  approvalLoadingContainer: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  approvalEmptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  approvalEmptyText: {
+    fontSize: 14,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  approvalTableScroll: {
+    maxHeight: 300,
+  },
+  approvalTable: {
+    minWidth: 500,
+  },
+  approvalTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+  },
+  approvalTableHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  approvalTableRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+  },
+  approvalTableCell: {
+    flex: 1,
+    fontSize: 12,
+  },
+  approvalStatusCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  approvalStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  approvalViewText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 

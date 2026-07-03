@@ -17,8 +17,11 @@ import { getThemeColors, spacing, typography, borderRadius } from '../../../util
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import ApiService from '../../../services/api';
 import { getChamaDividendDeclarations } from '../../../services/api/settingsEndpoints';
+import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
+import { approveWelfareDisbursement } from '../../../services/api/welfareEndpoints';
 
 const DividendsManagementScreen = ({ route, navigation }) => {
   const { theme } = useApp();
@@ -32,6 +35,11 @@ const DividendsManagementScreen = ({ route, navigation }) => {
   const [showDeclareModal, setShowDeclareModal] = useState(false);
   const [form, setForm] = useState({ dividendPerShare: '', totalAmount: '', description: '', fromAccount: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState(null);
+  const [approvalActionType, setApprovalActionType] = useState(null);
 
   const fetchData = useCallback(async () => {
     if (!chamaId) return;
@@ -105,6 +113,111 @@ const DividendsManagementScreen = ({ route, navigation }) => {
     }
   };
 
+  const canApproveDividends = () => {
+    const normalizedUserRole = (userRole || '').toLowerCase();
+    return ['chairperson', 'secretary', 'treasurer'].includes(normalizedUserRole);
+  };
+
+  const handleInitiateApprove = (declaration) => {
+    if (!canApproveDividends()) {
+      Alert.alert('Access Denied', 'You do not have permission to approve dividends.');
+      return;
+    }
+    if (declaration.status === 'approved' || declaration.status === 'disbursed') {
+      Alert.alert('Info', 'This dividend declaration has already been processed.');
+      return;
+    }
+    setSelectedApprovalItem(declaration);
+    setApprovalActionType('approve');
+    setShowOTPModal(true);
+  };
+
+  const handleVerifyOTP = async (code) => {
+    if (!selectedApprovalItem) return;
+    setOtpLoading(true);
+    try {
+      const approvalData = {
+        action: approvalActionType,
+        otpCode: code,
+        approvedBy: userRole,
+        approvedById: user.id,
+        approvedByName: user?.fullName || user?.firstName || user?.email || 'Unknown',
+        timestamp: new Date().toISOString(),
+        chamaId,
+        disbursementType: 'dividends',
+        itemLabel: selectedApprovalItem.description || selectedApprovalItem.type || `Declaration #${selectedApprovalItem.id}`,
+        amount: selectedApprovalItem.totalAmount || selectedApprovalItem.amount || 0,
+      };
+
+      const response = await approveWelfareDisbursement(chamaId, selectedApprovalItem.id, approvalData);
+
+      if (response.success) {
+        showInAppToast({
+          title: 'Success',
+          message: `Dividend ${approvalActionType}d successfully.`,
+          type: 'success',
+        });
+
+        await sendApprovalNotification({
+          chamaId,
+          recipientUserId: user.id,
+          recipientName: user?.fullName || user?.firstName || 'You',
+          recipientPhone: user?.phone || user?.phone_number,
+          recipientEmail: user?.email,
+          disbursementType: 'dividends',
+          disbursementId: selectedApprovalItem.id,
+          entityLabel: selectedApprovalItem.description || selectedApprovalItem.type || `Declaration #${selectedApprovalItem.id}`,
+          amount: selectedApprovalItem.totalAmount || selectedApprovalItem.amount || 0,
+          action: approvalActionType,
+          initiatedBy: userRole,
+          chamaName: '',
+        });
+
+        setShowOTPModal(false);
+        setSelectedApprovalItem(null);
+        setApprovalActionType(null);
+        fetchData();
+      } else {
+        Alert.alert('Error', response.error || 'Failed to process approval.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (!selectedApprovalItem) return;
+    try {
+      await sendApprovalNotification({
+        chamaId,
+        recipientUserId: user.id,
+        recipientName: user?.fullName || user?.firstName || 'You',
+        recipientPhone: user?.phone || user?.phone_number,
+        recipientEmail: user?.email,
+        disbursementType: 'dividends',
+        disbursementId: selectedApprovalItem.id,
+        entityLabel: selectedApprovalItem.description || selectedApprovalItem.type || `Declaration #${selectedApprovalItem.id}`,
+        amount: selectedApprovalItem.totalAmount || selectedApprovalItem.amount || 0,
+        action: 'otp_resend',
+        initiatedBy: userRole,
+        chamaName: '',
+      });
+      showInAppToast({
+        title: 'OTP Resent',
+        message: 'A new OTP has been sent to your phone.',
+        type: 'info',
+      });
+    } catch (error) {
+      showInAppToast({
+        title: 'Resend Failed',
+        message: 'Could not resend OTP. Please try again.',
+        type: 'error',
+      });
+    }
+  };
+
   const formatCurrency = (amount) => {
     const val = amount || 0;
     return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(val);
@@ -137,6 +250,15 @@ const DividendsManagementScreen = ({ route, navigation }) => {
           <Text style={[styles.statusText, { color: colors[item.status] || colors.textSecondary }]}>
             {(item.status || 'pending').toUpperCase()}
           </Text>
+          {canApproveDividends() && item.status !== 'disbursed' && (
+            <TouchableOpacity
+              style={[styles.approveButton, { backgroundColor: colors.primary }]}
+              onPress={() => handleInitiateApprove(item)}
+            >
+              <Ionicons name="checkmark-done" size={12} color={colors.white} />
+              <Text style={[styles.approveButtonText, { color: colors.white }]}>Approve</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -214,6 +336,21 @@ const DividendsManagementScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+      <OTPVerificationModal
+        visible={showOTPModal}
+        onClose={() => {
+          setShowOTPModal(false);
+          setSelectedApprovalItem(null);
+          setApprovalActionType(null);
+        }}
+        title={approvalActionType === 'approve' ? 'Approve Dividends' : 'Verify Dividends'}
+        subtitle={`Enter the OTP sent to your phone to ${approvalActionType} this dividend declaration.`}
+        onVerify={handleVerifyOTP}
+        onResend={handleResendOTP}
+        loading={otpLoading}
+        itemType="dividends"
+      />
     </SafeAreaView>
   );
 };
@@ -228,6 +365,16 @@ const styles = StyleSheet.create({
   rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },
   statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2 },
   statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  approveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginTop: 4,
+    gap: 3,
+  },
+  approveButtonText: { fontSize: 10, fontWeight: '600' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl },
   emptyTitle: { fontSize: typography.fontSize.lg, fontWeight: '600', marginTop: spacing.lg, marginBottom: spacing.xs },
   emptySubtitle: { fontSize: typography.fontSize.sm, textAlign: 'center' },

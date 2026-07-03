@@ -19,7 +19,10 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import ApiService from '../../../services/api';
+import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
+import { approveWelfareDisbursement, getChamaDisbursementApprovals } from '../../../services/api/welfareEndpoints';
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableContainer: {
@@ -221,6 +224,11 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     selectedCycles: [],
     description: '',
   });
+
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState(null);
+  const [approvalActionType, setApprovalActionType] = useState(null);
 
   const filters = [
     { id: 'all', name: 'All Cycles', icon: 'list' },
@@ -632,6 +640,110 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
+  const canApproveMaryGoRound = () => {
+    return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
+  };
+
+  const handleInitiateApprove = (cycle) => {
+    if (!canApproveMaryGoRound()) {
+      Alert.alert('Access Denied', 'You do not have permission to approve merry go round disbursements.');
+      return;
+    }
+    if (cycle.status?.toLowerCase() === 'disbursed' || cycle.status?.toLowerCase() === 'completed') {
+      Alert.alert('Info', 'This disbursement has already been processed.');
+      return;
+    }
+    setSelectedApprovalItem(cycle);
+    setApprovalActionType('approve');
+    setShowOTPModal(true);
+  };
+
+  const handleVerifyOTP = async (code) => {
+    if (!selectedApprovalItem) return;
+    setOtpLoading(true);
+    try {
+      const approvalData = {
+        action: approvalActionType,
+        otpCode: code,
+        approvedBy: userRole,
+        approvedById: user.id,
+        approvedByName: user?.fullName || user?.firstName || user?.email || 'Unknown',
+        timestamp: new Date().toISOString(),
+        chamaId: currentChamaId,
+        disbursementType: 'merry-go-round',
+        itemLabel: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || `Cycle #${selectedApprovalItem.id}`,
+        amount: selectedApprovalItem.amount_per_round || selectedApprovalItem.amountPerRound || selectedApprovalItem.amount || selectedApprovalItem.totalAmount || 0,
+      };
+
+      const response = await approveWelfareDisbursement(currentChamaId, selectedApprovalItem.id, approvalData);
+
+      if (response.success) {
+        showInAppToast({
+          title: 'Success',
+          message: `Merry go round ${approvalActionType}d successfully.`,
+          type: 'success',
+        });
+
+        await sendApprovalNotification({
+          chamaId: currentChamaId,
+          recipientUserId: selectedApprovalItem.recipientId || selectedApprovalItem.recipient?.id || selectedApprovalItem.id,
+          recipientName: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || 'Recipient',
+          recipientPhone: selectedApprovalItem.recipientPhone,
+          recipientEmail: selectedApprovalItem.recipientEmail,
+          disbursementType: 'merry-go-round',
+          disbursementId: selectedApprovalItem.id,
+          entityLabel: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || `Cycle #${selectedApprovalItem.id}`,
+          amount: selectedApprovalItem.amount_per_round || selectedApprovalItem.amountPerRound || selectedApprovalItem.amount || selectedApprovalItem.totalAmount || 0,
+          action: approvalActionType,
+          initiatedBy: userRole,
+          chamaName: '',
+        });
+
+        setShowOTPModal(false);
+        setSelectedApprovalItem(null);
+        setApprovalActionType(null);
+        await loadMaryGoRoundCycles();
+      } else {
+        Alert.alert('Error', response.error || 'Failed to process approval.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (!selectedApprovalItem) return;
+    try {
+      await sendApprovalNotification({
+        chamaId: currentChamaId,
+        recipientUserId: user.id,
+        recipientName: user?.fullName || user?.firstName || 'You',
+        recipientPhone: user?.phone || user?.phone_number,
+        recipientEmail: user?.email,
+        disbursementType: 'merry-go-round',
+        disbursementId: selectedApprovalItem.id,
+        entityLabel: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || `Cycle #${selectedApprovalItem.id}`,
+        amount: selectedApprovalItem.amount_per_round || selectedApprovalItem.amountPerRound || selectedApprovalItem.amount || selectedApprovalItem.totalAmount || 0,
+        action: 'otp_resend',
+        initiatedBy: userRole,
+        chamaName: '',
+      });
+      showInAppToast({
+        title: 'OTP Resent',
+        message: 'A new OTP has been sent to your phone.',
+        type: 'info',
+      });
+    } catch (error) {
+      showInAppToast({
+        title: 'Resend Failed',
+        message: 'Could not resend OTP. Please try again.',
+        type: 'error',
+      });
+    }
+  };
+
   const renderTableRow = ({ item, index }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
@@ -677,12 +789,20 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
             >
               <Ionicons name="eye" size={14} color={colors.info} />
             </TouchableOpacity>
-            {canDisburseMaryGoRound() && item.status?.toLowerCase().includes('ready') && (
+            {canApproveMaryGoRound() && (item.status?.toLowerCase() === 'pending' || item.status?.toLowerCase().includes('ready')) && (
               <TouchableOpacity
                 style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
+                onPress={() => handleInitiateApprove(item)}
+              >
+                <Ionicons name="checkmark-done" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+            {canDisburseMaryGoRound() && item.status?.toLowerCase().includes('ready') && (
+              <TouchableOpacity
+                style={[tableStyles.actionButton, { backgroundColor: colors.success + '20' }]}
                 onPress={() => handleDisburse(item)}
               >
-                <Ionicons name="cash" size={14} color={colors.primary} />
+                <Ionicons name="cash" size={14} color={colors.success} />
               </TouchableOpacity>
             )}
           </View>
@@ -1062,6 +1182,21 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+      <OTPVerificationModal
+        visible={showOTPModal}
+        onClose={() => {
+          setShowOTPModal(false);
+          setSelectedApprovalItem(null);
+          setApprovalActionType(null);
+        }}
+        title={approvalActionType === 'approve' ? 'Approve Disbursement' : 'Verify Disbursement'}
+        subtitle={`Enter the OTP sent to your phone to ${approvalActionType} this merry go round disbursement.`}
+        onVerify={handleVerifyOTP}
+        onResend={handleResendOTP}
+        loading={otpLoading}
+        itemType="merry-go-round"
+      />
     </>
   );
 };
