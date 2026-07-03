@@ -186,13 +186,8 @@ const SettingsScreen = ({ navigation }) => {
     loadUserSettings();
     checkGoogleDriveConnection();
   }, []);
-
-  // Check Google Drive connection when screen comes into focus
-  // This helps detect if user just completed authentication
   useFocusEffect(
     React.useCallback(() => {
-      console.log('🎯 SettingsScreen focused - checking Google Drive connection');
-      // Add a small delay to ensure any OAuth redirects have completed
       setTimeout(() => {
         checkGoogleDriveConnection();
       }, 1000);
@@ -201,9 +196,7 @@ const SettingsScreen = ({ navigation }) => {
 
   const checkGoogleDriveConnection = async (forceRefresh = false) => {
     try {
-      console.log('🔍 Checking Google Drive connection...', forceRefresh ? '(forced refresh)' : '');
 
-      // If forcing refresh, clear any cached connection state first
       if (forceRefresh) {
         setGoogleDriveConnected(false);
         setShowAuthLink(false);
@@ -212,9 +205,6 @@ const SettingsScreen = ({ navigation }) => {
       }
 
       const result = await GoogleDriveService.isConnected();
-      console.log('🔗 Google Drive connection status:', result);
-
-      // Extract connected status and raw response
       const connected = result.connected !== undefined ? result.connected : false;
       const rawResponse = result.rawResponse || result;
 
@@ -239,24 +229,14 @@ const SettingsScreen = ({ navigation }) => {
         setAuthUrl(null);
         await checkLastBackup();
 
-        console.log('✅ Google Drive connection confirmed and active');
-
         // Show success message if this was a forced refresh (user manually checked)
         if (forceRefresh) {
           Alert.alert('Success', 'Google Drive connection detected! You are now connected.');
         }
       } else {
-        console.log('❌ Google Drive not connected');
 
-        // If we were previously connected but now disconnected, show a message
-        if (googleDriveConnected && !forceRefresh) {
-          console.log('⚠️ Google Drive connection lost');
-          Alert.alert('Connection Lost', 'Google Drive connection has been lost. Please reconnect.');
-        }
-
-        // If we've tried multiple times and still not connected, offer manual override
+       // If we've tried multiple times and still not connected, offer manual override
         if (connectionCheckAttempts >= 3 && !forceRefresh) {
-          console.log('🔄 Multiple connection check attempts failed, offering manual override');
           Alert.alert(
             'Connection Check Issue',
             'Having trouble detecting your Google Drive connection. Would you like to manually verify the connection?',
@@ -981,14 +961,11 @@ const SettingsScreen = ({ navigation }) => {
           onPress={async () => {
             try {
               setLoading(true);
-              console.log('🎯 Generating test Google Drive tokens...');
-
               const response = await ApiService.makeRequest('/users/google-drive/generate-test-tokens', {
                 method: 'POST',
               });
 
               if (response.success) {
-                console.log('✅ Test tokens generated successfully');
                 Toast.show({
                   type: 'success',
                   text1: 'Test Tokens Generated',

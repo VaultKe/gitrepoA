@@ -27,42 +27,28 @@ const NotificationsScreen = ({ navigation }) => {
   const { theme, notifications: contextNotifications, loadLocalData, getCachedData } = useApp();
   const colors = getThemeColors(theme);
 
-  // Debug navigation context - only run once
-  useEffect(() => {
-    // console.log('🔍 Navigation loaded for NotificationsScreen');
-  }, []);
-
   // Smart navigation helper that can handle cross-navigator navigation
   const smartNavigate = (screenName) => {
-    console.log(`🎯 SMART NAV: Attempting to navigate to ${screenName}`);
-
     try {
       // First, try direct navigation within current navigator
       navigation.navigate(screenName);
-      console.log(`✅ SMART NAV: Direct navigation to ${screenName} successful`);
       return true;
     } catch (error) {
-      console.log(`⚠️ SMART NAV: Direct navigation failed, trying alternatives...`);
-
       try {
         // Try navigating to the parent navigator first, then to the screen
         const parent = navigation.getParent();
         if (parent) {
           parent.navigate(screenName);
-          console.log(`✅ SMART NAV: Parent navigation to ${screenName} successful`);
           return true;
         }
       } catch (parentError) {
-        console.log(`⚠️ SMART NAV: Parent navigation failed`);
       }
 
       try {
         // Try navigating through the root navigator
         navigation.navigate('UserTabs', { screen: screenName });
-        console.log(`✅ SMART NAV: Root navigation to ${screenName} successful`);
         return true;
       } catch (rootError) {
-        console.log(`⚠️ SMART NAV: Root navigation failed`);
       }
 
       console.error(`❌ SMART NAV: All navigation attempts failed for ${screenName}:`, error);
@@ -164,14 +150,11 @@ const NotificationsScreen = ({ navigation }) => {
 
   // Log when notifications change for debugging
   useEffect(() => {
-    // console.log('🔄 Notifications data changed:', notifications?.length || 0, contextNotifications?.length || 0, unreadCount || 0);
   }, [notifications, contextNotifications, unreadCount]);
 
   // Refresh data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // console.log('🎯 NotificationsScreen focused - refreshing data...');
-
       // Refresh both notifications and unread count when screen comes into focus
       const refreshData = async () => {
         try {
@@ -179,7 +162,6 @@ const NotificationsScreen = ({ navigation }) => {
             refreshNotifications(),
             refreshUnreadCount()
           ]);
-          // console.log('🎯 Focus refresh completed');
         } catch (error) {
           console.error('❌ Focus refresh failed:', error);
         }
@@ -220,9 +202,7 @@ const NotificationsScreen = ({ navigation }) => {
 
   
 
-  // Debug filter counts
-  useEffect(() => {
-    // console.log('🔢 Filter counts updated:', filterCounts);
+    useEffect(() => {
   }, [displayNotifications]);
 
   useEffect(() => {
@@ -234,7 +214,6 @@ const NotificationsScreen = ({ navigation }) => {
       try {
         const initialized = await notificationService.initialize();
         if (initialized) {
-          console.log('🔔 Notification service initialized for automatic tone playback');
         } else {
           console.warn('⚠️ Notification service initialization failed');
         }
@@ -262,7 +241,6 @@ const NotificationsScreen = ({ navigation }) => {
         setInvitationsCount(response.count || 0);
       }
     } catch (error) {
-      console.log('Failed to load invitations count:', error);
       setInvitationsCount(0);
     }
   };
@@ -279,12 +257,10 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   const onRefresh = async () => {
-    // console.log('🔄 PULL REFRESH: Starting pull-to-refresh...');
     setRefreshing(true);
 
     try {
       // Reset local state to sync with fresh data
-      // console.log('🔄 PULL REFRESH: Resetting local state for fresh sync');
       setLocalNotifications([]);
       setDeletedNotificationIds(new Set());
       setHasLocalState(false);
@@ -298,7 +274,6 @@ const NotificationsScreen = ({ navigation }) => {
 
       // Natural state updates will re-render; no manual trigger needed
 
-      // console.log('🔄 PULL REFRESH: Pull-to-refresh completed');
     } catch (error) {
       console.error('❌ PULL REFRESH: Pull-to-refresh failed:', error);
     } finally {
@@ -923,12 +898,8 @@ const NotificationsScreen = ({ navigation }) => {
                     style={[styles.actionButton, styles.acceptButton, { backgroundColor: 'rgba(76, 175, 80, 0.15)', borderColor: '#4CAF50', borderWidth: 1 }]}
                     onPress={async () => {
                       try {
-                        console.log('✅ GUARANTOR ACCEPT: Processing accept for notification:', item.id);
-
                         // Parse loan data from notification
                         const loanData = JSON.parse(item.data || '{}');
-                        console.log('🔍 GUARANTOR ACCEPT: Parsed loan data:', loanData);
-
                         const response = await ApiService.respondToGuaranteeRequest(loanData.loan_id, {
                           guarantorId: loanData.guarantor_id,
                           action: 'accept'
@@ -979,12 +950,8 @@ const NotificationsScreen = ({ navigation }) => {
                     style={[styles.actionButton, styles.rejectButton, { backgroundColor: 'rgba(244, 67, 54, 0.15)', borderColor: '#f44336', borderWidth: 1 }]}
                     onPress={async () => {
                       try {
-                        console.log('❌ GUARANTOR REJECT: Processing reject for notification:', item.id);
-
                         // Parse loan data from notification
                         const loanData = JSON.parse(item.data || '{}');
-                        console.log('🔍 GUARANTOR REJECT: Parsed loan data:', loanData);
-
                         const response = await ApiService.respondToGuaranteeRequest(loanData.loan_id, {
                           guarantorId: loanData.guarantor_id,
                           action: 'decline'
@@ -1041,7 +1008,6 @@ const NotificationsScreen = ({ navigation }) => {
               style={[styles.actionButton, { backgroundColor: 'rgba(33, 150, 243, 0.15)' }]}
               onPress={async () => {
                 try {
-                  console.log('📖 MARK READ: Starting mark as read for notification:', item.id);
 
                   // Update local state immediately for instant UI feedback
 setLocalNotifications(prev =>
@@ -1053,8 +1019,6 @@ setLocalNotifications(prev =>
                            );
 
                   const markResult = await markNotificationAsRead(item.id);
-                  console.log('📖 MARK READ: Mark result:', markResult);
-
                   // Show success toast
                   Toast.show({
                     type: 'success',
@@ -1064,7 +1028,6 @@ setLocalNotifications(prev =>
                     visibilityTime: 1500,
                   });
 
-                  console.log('✅ Notification marked as read:', item.id);
 } catch (error) {
                    console.error('❌ Failed to mark notification as read:', error);
 
@@ -1097,24 +1060,18 @@ setLocalNotifications(prev =>
           <TouchableOpacity
             style={[styles.actionButton, styles.deleteButton, { backgroundColor: 'rgba(244, 67, 54, 0.15)', borderColor: '#f44336', borderWidth: 1 }]}
             onPress={async () => {
-              console.log('🗑️ DELETE BUTTON PRESSED - Deleting notification instantly:', item.id);
-
               // Prevent duplicate deletions
               if (deletedNotificationIds.has(item.id)) {
-                console.log('⚠️ DUPLICATE PREVENTION: Notification already being deleted, ignoring:', item.id);
                 return;
               }
 
               try {
                 // IMMEDIATE UI UPDATE - Remove from local state instantly
-                console.log('⚡ INSTANT DELETE: Removing notification from display immediately');
                 setLocalNotifications(prev => prev.filter(notification => notification.id !== item.id));
                 setDeletedNotificationIds(prev => new Set([...prev, item.id]));
 
                 // Delete notification with optimistic update
                 const deleteResult = await deleteNotification(item.id);
-                console.log('🗑️ DELETE RESULT:', deleteResult);
-
                 // Show success toast
                 Toast.show({
                   type: 'success',
@@ -1124,7 +1081,6 @@ setLocalNotifications(prev =>
                   visibilityTime: 2000,
                 });
 
-                console.log('✅ Notification deleted successfully:', item.id);
               } catch (error) {
                 console.error('❌ Failed to delete notification:', error);
 

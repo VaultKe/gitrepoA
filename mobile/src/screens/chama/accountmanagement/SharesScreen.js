@@ -20,6 +20,7 @@ import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
 import { getWalletBalance, transferMoney } from '../../../services/api/walletEndpoints';
+import stkPushService from '../../../services/stkPushService';
 
 const SharesScreen = ({ navigation, route }) => {
   const { theme } = useApp();
@@ -34,7 +35,7 @@ const SharesScreen = ({ navigation, route }) => {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('mpesa');
-  const [buyForm, setBuyForm] = useState({ amount: '', phone: '' });
+  const [buyForm, setBuyForm] = useState({ amount: '' });
   const [submitting, setSubmitting] = useState(false);
 
   const chamaId = currentChamaId || route?.params?.chamaId;
@@ -132,28 +133,35 @@ const SharesScreen = ({ navigation, route }) => {
           Alert.alert('Error', response.error || 'Failed to purchase shares from personal wallet.');
         }
       } else {
+        // Auto-use user's phone number for M-Pesa STK Push
+        const rawPhone = user?.phone || user?.phone_number || user?.phoneNumber || '';
+        
+        // Validate phone using the service
+        const phoneCheck = stkPushService.validatePhone(rawPhone);
+        if (!rawPhone || !phoneCheck.valid) {
+          Alert.alert('Error', 'No phone number registered or invalid format. Please update your profile with a valid phone number.');
+          setSubmitting(false);
+          return;
+        }
+
         const payload = {
-          phoneNumber: buyForm.phone || '',
-          amount,
-          description: 'Share purchase',
+          phone: phoneCheck.phone,
+          amount: parseFloat(amount),
+          chamaId: chamaId,
+          userId: user?.id,
+          description: 'Share purchase'
         };
-        const response = await ApiService.makeRequest(
-          `/chamas/${chamaId}/subwallets/shares/pay`,
-          {
-            method: 'POST',
-            body: payload,
-          }
-        );
+        const response = await stkPushService.startPayment(payload);
 
         if (response.success) {
-          Alert.alert('Success', 'Share purchase initiated successfully.');
+          Alert.alert('Success', response.message || 'Check your phone for the STK prompt.');
         } else {
-          Alert.alert('Error', response.error || 'Failed to purchase shares.');
+          Alert.alert('Error', response.message || 'Failed to purchase shares.');
         }
       }
 
       setShowBuyModal(false);
-      setBuyForm({ amount: '', phone: '' });
+      setBuyForm({ amount: '' });
       fetchShares(true);
       fetchPersonalBalance();
     } catch (error) {
@@ -229,11 +237,11 @@ const SharesScreen = ({ navigation, route }) => {
         <Button
           title="Buy"
           size="small"
-          onPress={() => {
-            setBuyForm({ amount: String(item.pricePerShare ?? ''), phone: '' });
-            setPaymentMethod('mpesa');
-            setShowBuyModal(true);
-          }}
+onPress={() => {
+             setBuyForm({ amount: String(item.pricePerShare ?? '') });
+             setPaymentMethod('mpesa');
+             setShowBuyModal(true);
+           }}
           style={{ marginTop: spacing.xs }}
         />
       </View>
@@ -389,19 +397,11 @@ const SharesScreen = ({ navigation, route }) => {
             </View>
 
             {paymentMethod === 'mpesa' && (
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.text }]}>Phone (M-Pesa)</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    { backgroundColor: colors.background, borderColor: colors.border, color: colors.text },
-                  ]}
-                  keyboardType="phone-pad"
-                  value={buyForm.phone}
-                  onChangeText={(text) => setBuyForm((prev) => ({ ...prev, phone: text }))}
-                  placeholder="254XXXXXXXXX"
-                  placeholderTextColor={colors.textSecondary}
-                />
+              <View style={[styles.hintBox, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+                <Ionicons name="information-circle" size={16} color={colors.primary} />
+                <Text style={[styles.hintText, { color: colors.textSecondary }]}>
+                  M-Pesa will use your registered phone number automatically
+                </Text>
               </View>
             )}
 

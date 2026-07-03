@@ -281,11 +281,6 @@ const ProfileScreen = ({ navigation }) => {
         profile_image: profileImage,
       };
 
-      console.log('Updating profile with data:', {
-        ...updateData,
-        profile_image: profileImage ? 'Image selected' : 'No image'
-      });
-
       try {
         const response = await apiService.updateProfile(updateData);
         if (response.success) {

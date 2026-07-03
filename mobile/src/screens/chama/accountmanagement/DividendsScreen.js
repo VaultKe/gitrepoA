@@ -20,6 +20,7 @@ import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
 import { getWalletBalance, transferMoney } from '../../../services/api/walletEndpoints';
+import stkPushService from '../../../services/stkPushService';
 import { getChamaDividendDeclarations } from '../../../services/api/settingsEndpoints';
 
 const DividendsScreen = ({ navigation, route }) => {
@@ -35,7 +36,7 @@ const DividendsScreen = ({ navigation, route }) => {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('mpesa');
-  const [buyForm, setBuyForm] = useState({ amount: '', phone: '' });
+  const [buyForm, setBuyForm] = useState({ amount: '' });
   const [submitting, setSubmitting] = useState(false);
 
   const chamaId = currentChamaId || route?.params?.chamaId;
@@ -142,9 +143,31 @@ const DividendsScreen = ({ navigation, route }) => {
           Alert.alert('Error', response.error || 'Failed to purchase dividends from personal wallet.');
         }
       } else {
+        // Auto-use user's phone number for M-Pesa STK Push
+        const rawPhone = user?.phone || user?.phone_number || user?.phoneNumber || '';
+        
+        // Format phone number to international format
+        let userPhone = '';
+        if (rawPhone) {
+          userPhone = rawPhone.replace(/\D/g, ''); // Remove all non-digits
+          if (userPhone.startsWith('0') && userPhone.length === 10) {
+            // Convert 07XXXXXXXX to 2547XXXXXXXX
+            userPhone = '254' + userPhone.substring(1);
+          } else if (userPhone.length === 9) {
+            // Add 254 prefix if missing
+            userPhone = '254' + userPhone;
+          }
+        }
+        
+        if (!userPhone) {
+          Alert.alert('Error', 'No phone number registered. Please update your profile with a phone number.');
+          setSubmitting(false);
+          return;
+        }
+
         const payload = {
-          phoneNumber: buyForm.phone || '',
-          amount,
+          PhoneNumber: userPhone,
+          Amount: parseFloat(amount),
           description: 'Dividend purchase',
         };
         const response = await ApiService.makeRequest(
@@ -163,7 +186,7 @@ const DividendsScreen = ({ navigation, route }) => {
       }
 
       setShowBuyModal(false);
-      setBuyForm({ amount: '', phone: '' });
+      setBuyForm({ amount: '' });
       fetchDividends(true);
       fetchPersonalBalance();
     } catch (error) {
@@ -232,11 +255,11 @@ const DividendsScreen = ({ navigation, route }) => {
         <Button
           title="Buy"
           size="small"
-          onPress={() => {
-            setBuyForm({ amount: '', phone: '' });
-            setPaymentMethod('mpesa');
-            setShowBuyModal(true);
-          }}
+onPress={() => {
+             setBuyForm({ amount: String(item?.totalAmount || item?.amount || '') });
+             setPaymentMethod('mpesa');
+             setShowBuyModal(true);
+           }}
           style={{ marginTop: spacing.xs }}
         />
       </View>
@@ -343,6 +366,108 @@ const DividendsScreen = ({ navigation, route }) => {
       </View>
 
       {loading && !refreshing && <LoadingSpinner />}
+
+      <Modal
+        visible={showBuyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowBuyModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg }}>
+          <View style={{ borderRadius: borderRadius.lg, padding: spacing.lg, width: '90%', maxWidth: 400, backgroundColor: colors.surface }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg }}>
+              <Text style={{ fontSize: typography.fontSize.lg, fontWeight: '600', color: colors.text }}>
+                Buy Dividends
+              </Text>
+              <TouchableOpacity onPress={() => setShowBuyModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
+              <TouchableOpacity
+                style={[
+                  { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1 },
+                  paymentMethod === 'mpesa' && { backgroundColor: colors.primary + '20', borderColor: colors.primary },
+                  { borderColor: colors.border },
+                ]}
+                onPress={() => setPaymentMethod('mpesa')}
+              >
+                <Ionicons name="phone-portrait" size={18} color={paymentMethod === 'mpesa' ? colors.primary : colors.textSecondary} />
+                <Text style={[ { fontSize: typography.fontSize.sm, fontWeight: '500' }, { color: paymentMethod === 'mpesa' ? colors.primary : colors.textSecondary }]}>
+                  M-Pesa STK Push
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1 },
+                  paymentMethod === 'personal' && { backgroundColor: colors.success + '20', borderColor: colors.success },
+                  { borderColor: colors.border },
+                ]}
+                onPress={() => setPaymentMethod('personal')}
+              >
+                <Ionicons name="wallet" size={18} color={paymentMethod === 'personal' ? colors.success : colors.textSecondary} />
+                <Text style={[ { fontSize: typography.fontSize.sm, fontWeight: '500' }, { color: paymentMethod === 'personal' ? colors.success : colors.textSecondary }]}>
+                  Personal Wallet
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {paymentMethod === 'mpesa' && (
+              <View style={{ padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md, backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }}>
+                <Ionicons name="information-circle" size={16} color={colors.primary} />
+                <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary }}>
+                  M-Pesa will use your registered phone number automatically
+                </Text>
+              </View>
+            )}
+
+            {paymentMethod === 'personal' && (
+              <View style={{ padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md, backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }}>
+                <Ionicons name="information-circle" size={16} color={colors.primary} />
+                <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary }}>
+                  Personal wallet balance: {formatCurrency(personalBalance)}
+                </Text>
+              </View>
+            )}
+
+            <View style={{ marginBottom: spacing.md }}>
+              <Text style={{ fontSize: typography.fontSize.sm, fontWeight: '500', marginBottom: spacing.xs, color: colors.text }}>
+                Amount (KES)
+              </Text>
+              <TextInput
+                style={{ borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: typography.fontSize.sm, backgroundColor: colors.background, borderColor: colors.border, color: colors.text }}
+                keyboardType="numeric"
+                value={buyForm.amount}
+                onChangeText={(text) => setBuyForm((prev) => ({ ...prev, amount: text }))}
+                placeholder="Enter amount"
+                placeholderTextColor={colors.textSecondary}
+              />
+              {paymentMethod === 'personal' && buyForm.amount && parseFloat(buyForm.amount) > personalBalance && (
+                <Text style={{ color: colors.error, fontSize: 12, marginTop: 4 }}>
+                  Insufficient balance in personal wallet
+                </Text>
+              )}
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.lg }}>
+              <Button
+                title="Cancel"
+                onPress={() => setShowBuyModal(false)}
+                style={{ backgroundColor: colors.textSecondary }}
+              />
+              <Button
+                title="Purchase"
+                onPress={handleBuyDividends}
+                loading={submitting}
+                disabled={submitting}
+                style={{ backgroundColor: colors.primary }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
