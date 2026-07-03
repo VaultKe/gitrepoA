@@ -41,7 +41,7 @@ func GetChamaMembers(c *gin.Context) {
 					cm.total_contributions, cm.last_contribution, cm.rating, cm.total_ratings,
 					u.first_name, u.last_name, u.email, u.phone, u.avatar, u.status,
 					u.is_email_verified, u.is_phone_verified, u.business_type, u.county, u.town,
-					u.bio, u.occupation, u.created_at as user_created_at,
+					u.bio, u.occupation, u.id_number, u.created_at as user_created_at,
 					COALESCE(w.balance, 0) as savings_balance,
 					COALESCE(loan_balance.balance, 0) as loan_balance,
 					COALESCE(contrib_stats.monthly_average, 0) as monthly_average,
@@ -107,7 +107,7 @@ func GetChamaMembers(c *gin.Context) {
 			isActive, isEmailVerified, isPhoneVerified                                                      bool
 			totalContributions, rating, savingsBalance, loanBalance, monthlyAverage, consistencyRate        float64
 			totalRatings, meetingsAttended, totalMeetings, contributionsMade, loansTaken, guarantorRequests int
-			avatar, lastContribution, businessType, county, town, bio, occupation                           *string
+			avatar, lastContribution, businessType, county, town, bio, occupation, idNumber                          *string
 		)
 
 		err := rows.Scan(
@@ -115,7 +115,7 @@ func GetChamaMembers(c *gin.Context) {
 			&totalContributions, &lastContribution, &rating, &totalRatings,
 			&firstName, &lastName, &email, &phone, &avatar, &userStatus,
 			&isEmailVerified, &isPhoneVerified, &businessType, &county, &town,
-			&bio, &occupation, &userCreatedAt,
+			&bio, &occupation, &idNumber, &userCreatedAt,
 			&savingsBalance, &loanBalance, &monthlyAverage, &consistencyRate,
 			&meetingsAttended, &totalMeetings, &contributionsMade, &loansTaken, &guarantorRequests,
 		)
@@ -157,19 +157,20 @@ func GetChamaMembers(c *gin.Context) {
 			"location":                 fmt.Sprintf("%s, %s", getStringValue(town), getStringValue(county)),
 			"phone_verified":           isPhoneVerified,
 			"email_verified":           isEmailVerified,
-			"user": map[string]interface{}{
-				"id":         userID,
-				"first_name": firstName,
-				"last_name":  lastName,
-				"email":      utils.MaskEmail(email),
-				"phone":      utils.MaskPhone(phone),
-				"avatar_url": avatar,
-				"bio":        bio,
-				"occupation": occupation,
-				"created_at": userCreatedAt,
-				"last_seen":  joinedAt, // Mock - would need real tracking
-				"is_online":  isOnline,
-			},
+		"user": map[string]interface{}{
+			"id":         userID,
+			"first_name": firstName,
+			"last_name":  lastName,
+			"email":      utils.MaskEmail(email),
+			"phone":      utils.MaskPhone(phone),
+			"id_number":  utils.MaskID(utils.DerefString(idNumber)),
+			"avatar_url": avatar,
+			"bio":        bio,
+			"occupation": occupation,
+			"created_at": userCreatedAt,
+			"last_seen":  joinedAt, // Mock - would need real tracking
+			"is_online":  isOnline,
+		},
 			"contributions_summary": map[string]interface{}{
 				"total_amount":     totalContributions,
 				"monthly_average":  monthlyAverage,

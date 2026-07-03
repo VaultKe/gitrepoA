@@ -5,6 +5,7 @@ import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee } from '../../../services/api/chamaEndpoints';
+import { getProfile } from '../../../services/api/userEndpoints';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -59,6 +60,7 @@ const CreateChamaStep3 = ({
   const [payingFee, setPayingFee] = useState(null);
   const [payingFeeTimestamp, setPayingFeeTimestamp] = useState(null);
   const [selectedForPayment, setSelectedForPayment] = useState(new Set());
+  const [userProfile, setUserProfile] = useState(null);
 
   const memberRoles = [
     { id: 'chairperson', name: 'Chairperson', description: 'Leads the chama and presides over meetings', maxCount: 2 },
@@ -97,22 +99,37 @@ const CreateChamaStep3 = ({
     loadDraft();
   }, []);
 
-  useEffect(() => {
-    const saveDraft = async () => {
-      try {
-        await AsyncStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({
-          phoneNumber,
-          nationalId,
-          userForm,
-          onboardingPhase,
-          foundUser,
-        }));
-      } catch (e) {
-        console.error('Failed to save onboarding draft:', e);
-      }
-    };
-    saveDraft();
-  }, [phoneNumber, nationalId, userForm, onboardingPhase, foundUser]);
+   useEffect(() => {
+     const saveDraft = async () => {
+       try {
+         await AsyncStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({
+           phoneNumber,
+           nationalId,
+           userForm,
+           onboardingPhase,
+           foundUser,
+         }));
+       } catch (e) {
+         console.error('Failed to save onboarding draft:', e);
+       }
+     };
+     saveDraft();
+   }, [phoneNumber, nationalId, userForm, onboardingPhase, foundUser]);
+
+   useEffect(() => {
+     const fetchUserProfile = async () => {
+       if (!user?.id) return;
+       try {
+         const response = await getProfile();
+         if (response.success && response.data) {
+           setUserProfile(response.data);
+         }
+       } catch (e) {
+         console.log('Failed to fetch user profile for chairperson row:', e);
+       }
+     };
+     fetchUserProfile();
+   }, [user?.id]);
 
   const searchUser = async () => {
     if (!phoneNumber && !nationalId) {
@@ -661,40 +678,26 @@ const CreateChamaStep3 = ({
     </Card>
   );
 
-  const renderOnboardedTable = () => {
-    if (onboardedMembers.length === 0) return null;
+   const renderOnboardedTable = () => {
+     if (onboardedMembers.length === 0) return null;
 
-    const maskPhone = (phone) => {
-      if (!phone || phone === 'N/A') return 'N/A';
-      const digits = phone.replace(/\D/g, '');
-      if (digits.length >= 4) {
-        return phone.slice(0, 2) + '****' + phone.slice(-4);
-      }
-      return phone;
-    };
+     const profile = userProfile || user;
+     const chairperson = onboardedMembers.find(m => m.isChairperson) || {
+       id: profile?.id || user?.id,
+       user_id: profile?.id || user?.id,
+       firstName: profile?.firstName || profile?.first_name || user?.firstName || user?.first_name || 'You',
+       lastName: profile?.lastName || profile?.last_name || user?.lastName || user?.last_name || '',
+       phone: profile?.phone || profile?.phoneNumber || user?.phone || user?.phoneNumber || 'N/A',
+       phoneNumber: profile?.phone || profile?.phoneNumber || user?.phone || user?.phoneNumber || 'N/A',
+       idNumber: profile?.idNumber || profile?.nationalId || profile?.id_number || user?.idNumber || user?.nationalId || 'N/A',
+       nationalId: profile?.idNumber || profile?.nationalId || profile?.id_number || user?.idNumber || user?.nationalId || 'N/A',
+       phoneVerified: profile?.isPhoneVerified ?? profile?.phoneVerified ?? user?.isPhoneVerified ?? user?.phoneVerified ?? true,
+       role: 'chairperson',
+       serviceFeeStatus: 'pending',
+       isChairperson: true,
+     };
 
-    const maskNationalId = (id) => {
-      if (!id || id === 'N/A') return 'N/A';
-      const digits = id.replace(/\D/g, '');
-      if (digits.length >= 4) {
-        return id.slice(0, 2) + '****' + id.slice(-4);
-      }
-      return id;
-    };
-
-    const chairperson = {
-      id: user?.id,
-      firstName: user?.firstName || user?.first_name || 'You',
-      lastName: user?.lastName || user?.last_name || '',
-      phone: user?.phone || user?.phoneNumber || 'N/A',
-      idNumber: user?.idNumber || 'N/A',
-      phoneVerified: true,
-      role: 'chairperson',
-      serviceFeeStatus: 'pending',
-      isChairperson: true,
-    };
-
-    const allRows = [chairperson, ...onboardedMembers];
+     const allRows = [chairperson, ...onboardedMembers.filter(m => !m.isChairperson)];
 
     return (
       <Card style={styles.section}>
@@ -716,7 +719,7 @@ const CreateChamaStep3 = ({
                 <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Phone</Text>
               </View>
               <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>ID / National ID</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.primary }]}>National ID</Text>
               </View>
               <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
                 <Text style={[styles.tableHeaderText, { color: colors.primary }]}>Role</Text>
@@ -749,16 +752,16 @@ const CreateChamaStep3 = ({
                       </Text>
                     </View>
                   </View>
-                  <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                    <Text style={[styles.tableCellText, { color: colors.text }]}>
-                      {maskPhone(member.phone || member.phoneNumber)}
-                    </Text>
-                  </View>
-                  <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                    <Text style={[styles.tableCellText, { color: colors.text }]}>
-                      {maskNationalId(member.idNumber || member.nationalId || member.national_id)}
-                    </Text>
-                  </View>
+                   <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                     <Text style={[styles.tableCellText, { color: colors.text }]}>
+                       {member.phone || member.phoneNumber || 'N/A'}
+                     </Text>
+                   </View>
+                   <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
+                     <Text style={[styles.tableCellText, { color: colors.text }]}>
+                       {member.idNumber || member.nationalId || member.national_id || 'N/A'}
+                     </Text>
+                   </View>
                   <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
                     {member.isChairperson ? (
                       <View style={[styles.statusChip, { backgroundColor: colors.warning + '20' }]}>

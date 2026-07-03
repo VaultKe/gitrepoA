@@ -124,9 +124,9 @@ func GetUsers(c *gin.Context) {
 			"createdAt":    user.CreatedAt,
 		}
 
-		if user.Phone.Valid {
-			userMap["phone"] = utils.MaskPhone(user.Phone.String)
-		}
+	if user.Phone.Valid {
+		userMap["phone"] = utils.MaskPhone(user.Phone.String)
+	}
 		if user.Avatar.Valid {
 			userMap["avatar"] = user.Avatar.String
 		}
@@ -172,8 +172,8 @@ func GetProfile(c *gin.Context) {
 		SELECT id, email, phone, first_name, last_name, avatar, role, status,
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, rating, total_ratings,
-			   bio, occupation, date_of_birth, gender,
-			   created_at, updated_at
+			   bio, occupation, date_of_birth, gender, id_number,
+			   registration_fee_paid, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -203,6 +203,8 @@ func GetProfile(c *gin.Context) {
 		Occupation          sql.NullString  `json:"occupation"`
 		DateOfBirth         sql.NullString  `json:"dateOfBirth"`
 		Gender              sql.NullString  `json:"gender"`
+		IDNumber            sql.NullString  `json:"idNumber"`
+		RegistrationFeePaid bool            `json:"registrationFeePaid"`
 		CreatedAt           string          `json:"createdAt"`
 		UpdatedAt           string          `json:"updatedAt"`
 	}
@@ -212,7 +214,7 @@ func GetProfile(c *gin.Context) {
 		&user.Avatar, &user.Role, &user.Status, &user.IsEmailVerified, &user.IsPhoneVerified,
 		&user.Language, &user.Theme, &user.County, &user.Town, &user.Latitude, &user.Longitude,
 		&user.BusinessType, &user.BusinessDescription, &user.Rating, &user.TotalRatings,
-		&user.Bio, &user.Occupation, &user.DateOfBirth, &user.Gender,
+		&user.Bio, &user.Occupation, &user.DateOfBirth, &user.Gender, &user.IDNumber, &user.RegistrationFeePaid,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -301,6 +303,10 @@ func GetProfile(c *gin.Context) {
 	if user.Gender.Valid {
 		userMap["gender"] = user.Gender.String
 	}
+	if user.IDNumber.Valid {
+		userMap["idNumber"] = utils.MaskID(user.IDNumber.String)
+	}
+	userMap["registrationFeePaid"] = user.RegistrationFeePaid
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

@@ -23,7 +23,7 @@ const CreateChamaStep4 = ({
   const [paymentError, setPaymentError] = useState('');
 
   const feeLabel = chamaData.group_type === 'chama' ? 'Monthly Subscription Fee' : 'Registration Fee';
-  const feeAmount = 50;
+  const feeAmount = 500;
 
   const handleFeeCheckbox = async (value) => {
     setPayRegistrationFee(value);

@@ -94,7 +94,12 @@ const CreateChamaScreen = ({ navigation }) => {
         if (saved) {
           const draft = JSON.parse(saved);
           if (draft.chamaData) setChamaData(draft.chamaData);
-          if (draft.onboardedMembers) setOnboardedMembers(draft.onboardedMembers);
+          if (draft.onboardedMembers) {
+            const members = Array.isArray(draft.onboardedMembers)
+              ? draft.onboardedMembers.filter(m => !m.isChairperson)
+              : draft.onboardedMembers;
+            setOnboardedMembers(members);
+          }
           if (draft.currentStep) setCurrentStep(draft.currentStep);
         }
       } catch (e) {
@@ -789,6 +794,38 @@ const CreateChamaScreen = ({ navigation }) => {
       const response = await ApiService.createChama(formData);
 
       if (response.success) {
+        try {
+          const membersResponse = await ApiService.makeRequest(`/chamas/${response.data.id}/members`);
+          if (membersResponse.success && Array.isArray(membersResponse.data)) {
+            const backendChair = membersResponse.data.find(m =>
+              (m.role === 'chairperson') || (m.user_id === user.id) || (m.user?.id === user.id)
+            );
+            if (backendChair) {
+              const normalizedChair = {
+                id: backendChair.user_id || backendChair.id,
+                user_id: backendChair.user_id || backendChair.user?.id,
+                firstName: backendChair.user?.first_name || backendChair.first_name || user.firstName || user.first_name || 'You',
+                lastName: backendChair.user?.last_name || backendChair.last_name || user.lastName || user.last_name || '',
+                phone: backendChair.user?.phone || backendChair.phone || 'N/A',
+                phoneNumber: backendChair.user?.phone || backendChair.phone || 'N/A',
+                idNumber: backendChair.user?.id_number || backendChair.user?.idNumber || backendChair.id_number || 'N/A',
+                nationalId: backendChair.user?.id_number || backendChair.user?.idNumber || backendChair.id_number || 'N/A',
+                phoneVerified: backendChair.phone_verified ?? true,
+                role: backendChair.role || 'chairperson',
+                serviceFeeStatus: backendChair.service_fee_status || 'pending',
+                hasPaidRegistration: backendChair.user?.registration_fee_paid || backendChair.registration_fee_paid || false,
+                isChairperson: true,
+              };
+              setOnboardedMembers(prev => {
+                const filtered = prev.filter(m => !m.isChairperson);
+                return [normalizedChair, ...filtered];
+              });
+            }
+          }
+        } catch (memberFetchError) {
+          console.log('Could not sync chairperson from backend:', memberFetchError);
+        }
+
         if (typeof loadUserChamas === 'function') {
           await loadUserChamas();
         }
