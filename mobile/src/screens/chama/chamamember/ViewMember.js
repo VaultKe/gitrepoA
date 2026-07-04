@@ -46,8 +46,9 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [serviceFeePaid, setServiceFeePaid] = useState(false);
   const PAY_COOLDOWN_MS = 30000;
 
-  const [receiptLoading, setReceiptLoading] = useState(false);
-  const [approvalHistory, setApprovalHistory] = useState([]);
+const [receiptLoading, setReceiptLoading] = useState(false);
+   const [invoiceLoading, setInvoiceLoading] = useState(false);
+   const [approvalHistory, setApprovalHistory] = useState([]);
   const [approvalHistoryLoading, setApprovalHistoryLoading] = useState(false);
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -331,7 +332,8 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
       }
       const token = await api.getAuthToken();
 
-      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${encodeURIComponent(transactionId)}/download?format=pdf`, {
+      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${encodeURIComponent(transactionId)}/download`, {
+        method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -343,7 +345,7 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
       }
 
       const blob = await response.blob();
-      const fileName = `VaultKe_Receipt_${String(transactionId).substring(0, 8).toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `VaultKe_ETR_Receipt_${String(transactionId).substring(0, 8).toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`;
 
       if (Platform.OS === 'web') {
         const url = URL.createObjectURL(blob);
@@ -357,8 +359,8 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
         setTimeout(() => URL.revokeObjectURL(url), 100);
         Toast.show({
           type: 'success',
-          text1: 'Receipt Downloaded',
-          text2: 'PDF receipt has been downloaded.',
+          text1: 'ETR Receipt Downloaded',
+          text2: 'PDF receipt has been downloaded successfully.',
         });
         return;
       }
@@ -393,18 +395,18 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
       await Sharing.shareAsync(fileUri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Download service fee receipt',
+        dialogTitle: 'Download ETR Receipt',
         UTI: 'com.adobe.pdf',
       });
 
       Toast.show({
         type: 'success',
-        text1: 'Receipt Ready',
+        text1: 'ETR Receipt Ready',
         text2: 'PDF receipt has been generated.',
       });
     } catch (error) {
       console.error('Receipt download failed:', error);
-      Alert.alert('Receipt Failed', error.message || 'Failed to download receipt.', [{ text: 'OK' }]);
+      Alert.alert('ETR Receipt Failed', error.message || 'Failed to download receipt.', [{ text: 'OK' }]);
     } finally {
       setReceiptLoading(false);
     }
