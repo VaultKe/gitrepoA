@@ -51,7 +51,7 @@ const ChamaMembersTable = ({
                   onOpenRoleModal={onOpenRoleModal}
                 />
               )}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item, index) => item?.id || `member-${index}`}
               contentContainerStyle={{ padding: spacing.md }}
               scrollEnabled={false}
               ListEmptyComponent={!loading && filteredMembers.length === 0 && (

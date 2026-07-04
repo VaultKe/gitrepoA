@@ -89,7 +89,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
       const response = await ApiService.getChamaMembers(chamaId);
       if (response.success) {
         const membersData = response.data || [];
-        setMembers(membersData);
+        const uniqueMembers = Array.from(
+          new Map(membersData.map((m) => [m.id, m])).values()
+        );
+        setMembers(uniqueMembers);
 
         // Member stats remain available for future stats cards.
 
