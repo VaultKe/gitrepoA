@@ -330,7 +330,10 @@ func (m *MigrationManager) migrateExistingNotificationsTable() error {
 			return fmt.Errorf("failed to copy data: %w", err)
 		}
 
-		if _, err = m.db.Exec("DROP TABLE notifications"); err != nil {
+		// Use CASCADE to automatically drop dependent objects (e.g., notification_delivery_log
+		// foreign key constraints) when dropping the old notifications table.
+		// notification_delivery_log will be recreated by the CREATE TABLE IF NOT EXISTS below.
+		if _, err = m.db.Exec("DROP TABLE IF EXISTS notifications CASCADE"); err != nil {
 			return fmt.Errorf("failed to drop old table: %w", err)
 		}
 

@@ -248,9 +248,7 @@ func addMissingUserProfileFields(db *sql.DB) error {
 func addRegistrationFeeColumns(db *sql.DB) error {
 	queries := []string{
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`,
-		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`,
 		`CREATE INDEX IF NOT EXISTS idx_users_registration_fee_paid ON users(registration_fee_paid)`,
-		`CREATE INDEX IF NOT EXISTS idx_chamas_registration_fee_paid ON chamas(registration_fee_paid)`,
 	}
 	for _, q := range queries {
 		if _, err := db.Exec(q); err != nil {

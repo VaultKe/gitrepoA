@@ -38,7 +38,7 @@ func MigrateChamas(db *sql.DB) error {
 	if err := addSubscriptionFeeColumns(db); err != nil {
 		return err
 	}
-	if err := addServiceFeeColumns(db); err != nil {
+	if err := addChamaRegistrationFeeColumns(db); err != nil {
 		return err
 	}
 
@@ -361,6 +361,17 @@ func addChatRoomIdToChamasTable(db *sql.DB) error {
 }
 
 func backfillChatRoomIds(db *sql.DB) error {
+	var chatRoomsTableExists bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'chat_rooms')`).Scan(&chatRoomsTableExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if chat_rooms table exists: %w", err)
+	}
+
+	if !chatRoomsTableExists {
+		log.Println("chat_rooms table does not exist yet, skipping chat_room_id backfill")
+		return nil
+	}
+
 	updateQuery := `
 		UPDATE chamas c
 		SET chat_room_id = cr.id, updated_at = CURRENT_TIMESTAMP
@@ -454,5 +465,19 @@ func addServiceFeeColumns(db *sql.DB) error {
 		}
 	}
 	log.Println("service fee columns ready")
+	return nil
+}
+
+func addChamaRegistrationFeeColumns(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS registration_fee_paid BOOLEAN DEFAULT FALSE`,
+		`CREATE INDEX IF NOT EXISTS idx_chamas_registration_fee_paid ON chamas(registration_fee_paid)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add registration fee columns: %w", err)
+		}
+	}
+	log.Println("registration fee columns ready")
 	return nil
 }

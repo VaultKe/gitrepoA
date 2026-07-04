@@ -102,7 +102,7 @@ func Load() *Config {
 	return &Config{
 		Environment:   getEnv("ENVIRONMENT", "development"),
 		Port:          getEnv("PORT", "8085"),
-		DatabaseURL:   getEnv("DATABASE_URL", "postgres://postgres:password@localhost/vaultke?sslmode=disable"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"),
 		JWTSecret:     getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
 		JWTExpiration: getEnvAsInt("JWT_EXPIRATION", 24*60*60), // 24 hours in seconds
 
@@ -281,7 +281,7 @@ func (c *Config) SetDefaults() {
 		c.JWTSecret = "your-super-secret-jwt-key-change-in-production"
 	}
 	if c.DatabaseURL == "" {
-		c.DatabaseURL = "postgres://postgres:password@localhost/vaultke?sslmode=disable"
+		c.DatabaseURL = "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 	}
 	if c.Environment == "" {
 		c.Environment = "development"
