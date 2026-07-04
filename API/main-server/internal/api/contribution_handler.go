@@ -4,8 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"time"
+
+	"vaultke-backend/config"
+	"vaultke-backend/internal/models"
+	"vaultke-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -73,6 +79,7 @@ func MakeContribution(c *gin.Context) {
 		"penalty":        true,
 		"special":        true,
 		"merry-go-round": true,
+		"savings":        true, // Savings contributions to chama savings subwallet
 		"":               true, // Allow empty (defaults to regular)
 	}
 	if !validTypes[req.Type] {
@@ -284,41 +291,26 @@ func MakeContribution(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	var transactionID string
+
 	// Handle different payment methods
 	if req.PaymentMethod == "wallet" {
-		// Check if user has sufficient balance in personal wallet
-		var personalBalance float64
-		err = tx.QueryRow(`
-			SELECT COALESCE(balance, 0)
-			FROM wallets
-			WHERE owner_id = $1 AND type = 'personal'
-		`, userID).Scan(&personalBalance)
+		walletService := services.NewWalletService(db.(*sql.DB))
+
+		// Get or create user's personal wallet
+		senderWallet, err := walletService.GetWalletByOwnerAndType(userID.(string), models.WalletTypePersonal)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				// User doesn't have a personal wallet, create one with 0 balance
-				_, err = tx.Exec(`
-					INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
-					VALUES ($1, $2, 'personal', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-				`, "wallet-"+userID.(string), userID)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"success": false,
-						"error":   "Failed to create user wallet",
-					})
-					return
-				}
-				personalBalance = 0
-			} else {
+			senderWallet, err = walletService.CreateWallet(userID.(string), models.WalletTypePersonal)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"success": false,
-					"error":   "Failed to check wallet balance",
+					"error":   "Failed to ensure user wallet exists",
 				})
 				return
 			}
 		}
 
-
-		if personalBalance < req.Amount {
+		if senderWallet.Balance < req.Amount {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
 				"error":   "Insufficient balance in personal wallet",
@@ -326,75 +318,258 @@ func MakeContribution(c *gin.Context) {
 			return
 		}
 
-		// Deduct from personal wallet
-		result, err := tx.Exec(`
-			UPDATE wallets
-			SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP
-			WHERE owner_id = $2 AND type = 'personal'
-		`, req.Amount, userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
+		var recipientWalletID string
+		var recipientWallet *models.Wallet
+
+		// For savings contributions, send to the savings subwallet
+		if req.Type == "savings" {
+			recipientWalletID = fmt.Sprintf("wallet-%s-savings", req.ChamaID)
+			recipientWallet, err = walletService.GetWalletByID(recipientWalletID)
+			if err != nil {
+				// Create the savings subwallet if it doesn't exist
+				_, createErr := db.(*sql.DB).Exec(
+					"INSERT INTO wallets (id, type, owner_id, subwallet_type, chama_id, balance, currency, is_active, is_locked, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()) ON CONFLICT (id) DO NOTHING",
+					recipientWalletID, "chama", req.ChamaID, "savings", req.ChamaID, 0, "KES", true, false,
+				)
+				if createErr != nil {
+					log.Printf("Failed to ensure savings wallet exists: %v", createErr)
+				}
+				// Fetch the wallet again
+				recipientWallet, err = walletService.GetWalletByID(recipientWalletID)
+			}
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"error":   "Failed to ensure savings subwallet exists",
+				})
+				return
+			}
+		} else {
+			recipientWalletID = fmt.Sprintf("wallet-%s", req.ChamaID)
+			recipientWallet, err = walletService.GetWalletByID(recipientWalletID)
+			if err != nil {
+				recipientWallet, err = walletService.CreateWallet(req.ChamaID, models.WalletTypeChama)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"error":   "Failed to ensure chama wallet exists",
+					})
+					return
+				}
+			}
+		}
+
+		if !senderWallet.IsAvailable() {
+			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Failed to deduct from personal wallet",
+				"error":   "Sender wallet is not available",
 			})
 			return
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		fmt.Printf("✅ Wallet deduction: %d rows affected for user %s\n", rowsAffected, userID)
+		if !recipientWallet.IsAvailable() {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Recipient wallet is not available",
+			})
+			return
+		}
+
+		description := req.Description
+		if description == "" {
+			description = fmt.Sprintf("%s contribution to %s", req.Type, req.ChamaID)
+		}
+
+		transferTx := &models.TransactionCreation{
+			FromWalletID:  &senderWallet.ID,
+			ToWalletID:    &recipientWallet.ID,
+			Type:          models.TransactionTypeTransfer,
+			Amount:        req.Amount,
+			Description:   &description,
+			PaymentMethod: models.PaymentMethodWalletTransfer,
+			Metadata: map[string]interface{}{
+				"contributionType": req.Type,
+				"chamaId":          req.ChamaID,
+				"savingsContribution": req.Type == "savings",
+			},
+		}
+
+		processedTx, err := walletService.CreateTransaction(transferTx, userID.(string))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to process wallet transfer: " + err.Error(),
+			})
+			return
+		}
+
+		// Process the transaction to update wallet balances
+		if err := walletService.ProcessTransaction(processedTx.ID); err != nil {
+			log.Printf("Failed to process transaction (update balances): %v", err)
+			// Continue anyway - the transaction is recorded for audit purposes
+		}
+
+		transactionID = processedTx.ID
+
+		// Skip the duplicate transaction insert below for wallet payments
+		// Update member contributions and chama stats within the outer transaction
+		contributorUserID := userID
+		if req.PaymentMethod == "cash" {
+			contributorUserID = req.ContributorID
+		} else {
+			contributorUserID = userID
+		}
+
+		fmt.Printf("✅ Updating member contributions for user %s in chama %s\n", contributorUserID, req.ChamaID)
+
+		_, err = tx.Exec(`
+			UPDATE chama_members
+			SET total_contributions = total_contributions + $1,
+			    last_contribution = CURRENT_TIMESTAMP
+			WHERE chama_id = $2 AND user_id = $3
+		`, req.Amount, req.ChamaID, contributorUserID)
+		if err != nil {
+			fmt.Printf("❌ Error updating member contributions: %v\n", err)
+		}
+
+		fmt.Printf("✅ Successfully updated contributions for user %s\n", contributorUserID)
+
+		// Commit the outer transaction
+		if err = tx.Commit(); err != nil {
+			fmt.Printf("❌ Failed to commit transaction: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to commit transaction: " + err.Error(),
+			})
+			return
+		}
+
+		fmt.Printf("✅ Transaction committed successfully\n")
+
+		// Return success response
+		c.JSON(http.StatusCreated, gin.H{
+			"success": true,
+			"message": "Savings contribution processed successfully",
+			"data": map[string]interface{}{
+				"transactionId": transactionID,
+				"amount":        req.Amount,
+				"type":          req.Type,
+				"status":        "completed",
+			},
+		})
+		return
 	} else if req.PaymentMethod == "mpesa" {
-		fmt.Printf("Creating M-Pesa contribution record with reference: %s\n", req.MpesaReference)
+		targetWalletID := fmt.Sprintf("wallet-%s", req.ChamaID)
+		_, err := db.(*sql.DB).Exec(`
+			INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
+			VALUES ($1, $2, 'chama', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			ON CONFLICT (id) DO NOTHING
+		`, targetWalletID, req.ChamaID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to ensure chama wallet exists",
+			})
+			return
+		}
+
+		userPhone := userID.(string)
+		var phone string
+		err = db.(*sql.DB).QueryRow("SELECT phone FROM users WHERE id = $1", userID).Scan(&phone)
+		if err == nil {
+			userPhone = phone
+		}
+
+		mpesaPhone := userPhone
+		if strings.HasPrefix(mpesaPhone, "0") {
+			mpesaPhone = "254" + mpesaPhone[1:]
+		} else if strings.HasPrefix(mpesaPhone, "+254") {
+			mpesaPhone = mpesaPhone[1:]
+		}
+
+		reference := req.MpesaReference
+		if reference == "" {
+			reference = fmt.Sprintf("CONTRIB-%s-%d", req.ChamaID[:8], time.Now().UnixNano())
+		}
+
+		transactionID, err := createPendingMpesaTransaction(db.(*sql.DB), req.Amount, reference, targetWalletID, req.ChamaID, "contribution", "chama", userID.(string))
+		if err != nil {
+			log.Printf("Failed to create pending contribution transaction: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to create transaction record",
+			})
+			return
+		}
+
+		cfg, exists := c.Get("config")
+		if !exists {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Configuration not available",
+			})
+			return
+		}
+
+		mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
+		mpesaReq := &models.MpesaTransaction{
+			PhoneNumber:      mpesaPhone,
+			Amount:           req.Amount,
+			AccountReference: reference,
+			TransactionDesc:  req.Description,
+		}
+
+		stkResponse, err := mpesaService.InitiateSTKPush(mpesaReq)
+		if err != nil {
+			log.Printf("STK Push failed for contribution: %v", err)
+			updateTransactionStatus(db.(*sql.DB), transactionID, models.TransactionStatusFailed)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to initiate M-Pesa payment: " + err.Error(),
+				"data": map[string]interface{}{
+					"transactionId": transactionID,
+					"status":        "failed",
+				},
+			})
+			return
+		}
+
+		updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "M-Pesa contribution initiated successfully",
+			"data": map[string]interface{}{
+				"transactionId":     transactionID,
+				"checkoutRequestId": stkResponse.CheckoutRequestID,
+				"customerMessage":   stkResponse.CustomerMessage,
+				"status":            "pending",
+			},
+		})
+		return
 	} else if req.PaymentMethod == "cash" {
 	}
 
-	// Add to chama wallet
-	result, err := tx.Exec(`
-		UPDATE wallets
-		SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP
-		WHERE owner_id = $2 AND type = 'chama'
-	`, req.Amount, req.ChamaID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to update chama wallet: " + err.Error(),
-		})
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		// If chama wallet doesn't exist, create it
-		_, err = tx.Exec(`
-			INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
-			VALUES ($1, $2, 'chama', $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`, "wallet-"+req.ChamaID, req.ChamaID, req.Amount)
+	// Update chama's total_funds field when wallet payment succeeds
+	if req.PaymentMethod == "wallet" {
+		_, err = db.(*sql.DB).Exec(`
+			UPDATE chamas
+			SET total_funds = (
+				SELECT COALESCE(balance, 0)
+				FROM wallets
+				WHERE owner_id = $1 AND type = 'chama'
+			), updated_at = CURRENT_TIMESTAMP
+			WHERE id = $2
+		`, req.ChamaID, req.ChamaID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to create chama wallet: " + err.Error(),
-			})
-			return
+			fmt.Printf("Warning: Failed to update chama total_funds: %v\n", err)
 		}
-	} else {
 	}
 
-	// Update chama's total_funds field to match wallet balance
-	_, err = tx.Exec(`
-		UPDATE chamas
-		SET total_funds = (
-			SELECT COALESCE(balance, 0)
-			FROM wallets
-			WHERE owner_id = $1 AND type = 'chama'
-		), updated_at = CURRENT_TIMESTAMP
-		WHERE id = $2
-	`, req.ChamaID, req.ChamaID)
-	if err != nil {
-		fmt.Printf("Warning: Failed to update chama total_funds: %v\n", err)
-		// Don't fail the transaction for this, just log the warning
+	// Prepare transaction record
+	if req.PaymentMethod != "wallet" {
+		transactionID = fmt.Sprintf("txn-%d", time.Now().UnixNano())
 	}
-
-	// Record the transaction
-	transactionID := fmt.Sprintf("txn-%d", time.Now().UnixNano())
 	contributionType := req.Type
 	if contributionType == "" {
 		contributionType = "regular"

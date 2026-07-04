@@ -3,9 +3,9 @@ services:
   chat-service:
     build: .
     ports:
-      - "8083:8083"
+      - "8084:8084"
     environment:
-      - SERVER_PORT=8083
+      - SERVER_PORT=8084
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}

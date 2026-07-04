@@ -95,10 +95,20 @@ func InitiateMpesaSTK(c *gin.Context) {
 	prefix := getPaymentPrefix(req.PaymentType)
 	reference := models.GeneratePaybillReference(prefix, req.ChamaID, userID)
 
-	// For chama payments, determine target wallet
+	// For chama payments, determine target wallet and validate chama membership
 	var targetWalletID string
 	if req.ChamaID != "" {
 		targetWalletID, _ = getTargetChamaWallet(db.(*sql.DB), req.ChamaID, req.WalletType)
+
+		var memberCount int
+		memberQuery := "SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = true"
+		if err := db.(*sql.DB).QueryRow(memberQuery, req.ChamaID, userID).Scan(&memberCount); err != nil || memberCount == 0 {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error":   "Access denied - you are not an active member of this chama",
+			})
+			return
+		}
 	} else {
 		targetWalletID = fmt.Sprintf("wallet-%s", userID)
 	}
@@ -255,6 +265,104 @@ func GetMpesaTransactionStatus(c *gin.Context) {
 			"checkoutRequestId": checkoutRequestID,
 			"status":            status,
 		},
+	})
+}
+
+func HandleMpesaB2CCallback(c *gin.Context) {
+	log.Println("M-Pesa B2C callback received")
+
+	var callbackData map[string]interface{}
+	if err := c.ShouldBindJSON(&callbackData); err != nil {
+		log.Printf("Failed to parse B2C callback: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid B2C callback format",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+
+	mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
+
+	err := mpesaService.HandleB2CCallback(callbackData)
+	if err != nil {
+		log.Printf("Failed to process B2C callback: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"ResultCode": 1,
+			"ResultDesc": "Failed",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ResultCode": 0,
+		"ResultDesc": "Success",
+	})
+}
+
+func HandleMpesaB2CTimeout(c *gin.Context) {
+	log.Println("M-Pesa B2C timeout received")
+
+	var callbackData map[string]interface{}
+	if err := c.ShouldBindJSON(&callbackData); err != nil {
+		log.Printf("Failed to parse B2C timeout: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid B2C timeout format",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	cfg, exists := c.Get("config")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Configuration not available",
+		})
+		return
+	}
+
+	mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
+
+	err := mpesaService.HandleB2CTimeout(callbackData)
+	if err != nil {
+		log.Printf("Failed to process B2C timeout: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"ResultCode": 1,
+			"ResultDesc": "Failed",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ResultCode": 0,
+		"ResultDesc": "Success",
 	})
 }
 

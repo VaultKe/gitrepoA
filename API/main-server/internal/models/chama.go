@@ -77,12 +77,7 @@ type Chama struct {
 	ContributionFrequency ContributionFrequency  `json:"contributionFrequency" db:"contribution_frequency"`
 	TargetAmount          *float64               `json:"targetAmount,omitempty" db:"target_amount"`
 	TargetDeadline        *time.Time             `json:"targetDeadline,omitempty" db:"target_deadline"`
-	PaymentMethod         *string                `json:"paymentMethod,omitempty" db:"payment_method"`
-	TillNumber            *string                `json:"tillNumber,omitempty" db:"till_number"`
-	PaybillBusinessNumber *string                `json:"paybillBusinessNumber,omitempty" db:"paybill_business_number"`
-	PaybillAccountNumber  *string                `json:"paybillAccountNumber,omitempty" db:"paybill_account_number"`
-	PaymentRecipientName  *string                `json:"paymentRecipientName,omitempty" db:"payment_recipient_name"`
-	MaxMembers            *int                   `json:"maxMembers,omitempty" db:"max_members"`
+	MaxMembers            *int                  `json:"maxMembers,omitempty" db:"max_members"`
 	CurrentMembers        int                    `json:"currentMembers" db:"current_members"`
 	TotalFunds            float64                `json:"totalFunds" db:"total_funds"`
 	IsPublic              bool                   `json:"isPublic" db:"is_public"`
@@ -143,11 +138,6 @@ type ChamaCreation struct {
 	ContributionFrequency ContributionFrequency `json:"contributionFrequency"`
 	TargetAmount          *float64              `json:"targetAmount,omitempty"`
 	TargetDeadline        *time.Time            `json:"targetDeadline,omitempty"`
-	PaymentMethod         *string               `json:"paymentMethod,omitempty"`
-	TillNumber            *string               `json:"tillNumber,omitempty"`
-	PaybillBusinessNumber *string               `json:"paybillBusinessNumber,omitempty"`
-	PaybillAccountNumber  *string               `json:"paybillAccountNumber,omitempty"`
-	PaymentRecipientName  *string               `json:"paymentRecipientName,omitempty"`
 	MaxMembers            *int                  `json:"maxMembers,omitempty"`
 	IsPublic              bool                  `json:"isPublic"`
 	RequiresApproval      bool                  `json:"requiresApproval"`

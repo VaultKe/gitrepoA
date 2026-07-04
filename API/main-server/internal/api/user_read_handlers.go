@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 // User handlers
@@ -113,7 +115,7 @@ func GetUsers(c *gin.Context) {
 
 		userMap := map[string]interface{}{
 			"id":           user.ID,
-			"email":        user.Email,
+			"email":        utils.MaskEmail(user.Email),
 			"firstName":    user.FirstName,
 			"lastName":     user.LastName,
 			"role":         user.Role,
@@ -122,9 +124,9 @@ func GetUsers(c *gin.Context) {
 			"createdAt":    user.CreatedAt,
 		}
 
-		if user.Phone.Valid {
-			userMap["phone"] = user.Phone.String
-		}
+	if user.Phone.Valid {
+		userMap["phone"] = utils.MaskPhone(user.Phone.String)
+	}
 		if user.Avatar.Valid {
 			userMap["avatar"] = user.Avatar.String
 		}
@@ -170,8 +172,8 @@ func GetProfile(c *gin.Context) {
 		SELECT id, email, phone, first_name, last_name, avatar, role, status,
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, rating, total_ratings,
-			   bio, occupation, date_of_birth, gender,
-			   created_at, updated_at
+			   bio, occupation, date_of_birth, gender, id_number,
+			   registration_fee_paid, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -201,6 +203,8 @@ func GetProfile(c *gin.Context) {
 		Occupation          sql.NullString  `json:"occupation"`
 		DateOfBirth         sql.NullString  `json:"dateOfBirth"`
 		Gender              sql.NullString  `json:"gender"`
+		IDNumber            sql.NullString  `json:"idNumber"`
+		RegistrationFeePaid bool            `json:"registrationFeePaid"`
 		CreatedAt           string          `json:"createdAt"`
 		UpdatedAt           string          `json:"updatedAt"`
 	}
@@ -210,7 +214,7 @@ func GetProfile(c *gin.Context) {
 		&user.Avatar, &user.Role, &user.Status, &user.IsEmailVerified, &user.IsPhoneVerified,
 		&user.Language, &user.Theme, &user.County, &user.Town, &user.Latitude, &user.Longitude,
 		&user.BusinessType, &user.BusinessDescription, &user.Rating, &user.TotalRatings,
-		&user.Bio, &user.Occupation, &user.DateOfBirth, &user.Gender,
+		&user.Bio, &user.Occupation, &user.DateOfBirth, &user.Gender, &user.IDNumber, &user.RegistrationFeePaid,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -244,7 +248,7 @@ func GetProfile(c *gin.Context) {
 
 	userMap := map[string]interface{}{
 		"id":              user.ID,
-		"email":           user.Email,
+		"email":           utils.MaskEmail(user.Email),
 		"firstName":       user.FirstName,
 		"lastName":        user.LastName,
 		"role":            user.Role,
@@ -258,7 +262,7 @@ func GetProfile(c *gin.Context) {
 	}
 
 	if user.Phone.Valid {
-		userMap["phone"] = user.Phone.String
+		userMap["phone"] = utils.MaskPhone(user.Phone.String)
 	}
 	if user.Avatar.Valid {
 		userMap["avatar"] = user.Avatar.String
@@ -299,6 +303,10 @@ func GetProfile(c *gin.Context) {
 	if user.Gender.Valid {
 		userMap["gender"] = user.Gender.String
 	}
+	if user.IDNumber.Valid {
+		userMap["idNumber"] = utils.MaskID(user.IDNumber.String)
+	}
+	userMap["registrationFeePaid"] = user.RegistrationFeePaid
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -405,7 +413,7 @@ func GetUserByID(c *gin.Context) {
 
 	userMap := map[string]interface{}{
 		"id":              user.ID,
-		"email":           user.Email,
+		"email":           utils.MaskEmail(user.Email),
 		"firstName":       user.FirstName,
 		"lastName":        user.LastName,
 		"role":            user.Role,
@@ -419,7 +427,7 @@ func GetUserByID(c *gin.Context) {
 	}
 
 	if user.Phone.Valid {
-		userMap["phone"] = user.Phone.String
+		userMap["phone"] = utils.MaskPhone(user.Phone.String)
 	}
 	if user.Avatar.Valid {
 		userMap["avatar"] = user.Avatar.String
@@ -550,11 +558,11 @@ func SearchUserByCredentials(c *gin.Context) {
 	if phoneExists && idExists && puID.String == iuID.String {
 		phoneUser = map[string]interface{}{
 			"id":         puID.String,
-			"email":      puEmail.String,
-			"phone":      puPhone.String,
+			"email":      utils.MaskEmail(puEmail.String),
+			"phone":      utils.MaskPhone(puPhone.String),
 			"firstName":  puFirstName.String,
 			"lastName":   puLastName.String,
-			"nationalId": puIDNumber.String,
+			"nationalId": utils.MaskID(puIDNumber.String),
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
@@ -567,19 +575,19 @@ func SearchUserByCredentials(c *gin.Context) {
 	if phoneExists && idExists && puID.String != iuID.String {
 		phoneUserMap := map[string]interface{}{
 			"id":         puID.String,
-			"email":      puEmail.String,
-			"phone":      puPhone.String,
+			"email":      utils.MaskEmail(puEmail.String),
+			"phone":      utils.MaskPhone(puPhone.String),
 			"firstName":  puFirstName.String,
 			"lastName":   puLastName.String,
-			"nationalId": puIDNumber.String,
+			"nationalId": utils.MaskID(puIDNumber.String),
 		}
 		idUserMap := map[string]interface{}{
 			"id":         iuID.String,
-			"email":      iuEmail.String,
-			"phone":      iuPhone.String,
+			"email":      utils.MaskEmail(iuEmail.String),
+			"phone":      utils.MaskPhone(iuPhone.String),
 			"firstName":  iuFirstName.String,
 			"lastName":   iuLastName.String,
-			"nationalId": iuIDNumber.String,
+			"nationalId": utils.MaskID(iuIDNumber.String),
 		}
 		c.JSON(http.StatusConflict, gin.H{
 			"success":   false,
@@ -593,11 +601,11 @@ func SearchUserByCredentials(c *gin.Context) {
 	if phoneExists && !idExists {
 		phoneUser = map[string]interface{}{
 			"id":         puID.String,
-			"email":      puEmail.String,
-			"phone":      puPhone.String,
+			"email":      utils.MaskEmail(puEmail.String),
+			"phone":      utils.MaskPhone(puPhone.String),
 			"firstName":  puFirstName.String,
 			"lastName":   puLastName.String,
-			"nationalId": puIDNumber.String,
+			"nationalId": utils.MaskID(puIDNumber.String),
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success":   false,
@@ -610,11 +618,11 @@ func SearchUserByCredentials(c *gin.Context) {
 	if !phoneExists && idExists {
 		idUser := map[string]interface{}{
 			"id":         iuID.String,
-			"email":      iuEmail.String,
-			"phone":      iuPhone.String,
+			"email":      utils.MaskEmail(iuEmail.String),
+			"phone":      utils.MaskPhone(iuPhone.String),
 			"firstName":  iuFirstName.String,
 			"lastName":   iuLastName.String,
-			"nationalId": iuIDNumber.String,
+			"nationalId": utils.MaskID(iuIDNumber.String),
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

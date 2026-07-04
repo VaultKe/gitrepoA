@@ -21,13 +21,17 @@ type Meeting struct {
 }
 
 type MeetingAttendance struct {
-	ID        string     `json:"id" db:"id"`
-	MeetingID string     `json:"meetingId" db:"meeting_id"`
-	UserID    string     `json:"userId" db:"user_id"`
-	ChamaID   string     `json:"chamaId" db:"chama_id"`
-	Status    string     `json:"status" db:"status"`
-	Notes     *string    `json:"notes,omitempty" db:"notes"`
-	CreatedAt time.Time  `json:"createdAt" db:"created_at"`
+	ID              string     `json:"id" db:"id"`
+	MeetingID       string     `json:"meetingId" db:"meeting_id"`
+	UserID          string     `json:"userId" db:"user_id"`
+	AttendanceType  string     `json:"attendanceType" db:"attendance_type"`
+	IsPresent       bool       `json:"isPresent" db:"is_present"`
+	Notes           *string    `json:"notes,omitempty" db:"notes"`
+	JoinedAt        *time.Time `json:"joinedAt,omitempty" db:"joined_at"`
+	LeftAt          *time.Time `json:"leftAt,omitempty" db:"left_at"`
+	DurationMinutes int        `json:"durationMinutes" db:"duration_minutes"`
+	CreatedAt       time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt       time.Time  `json:"updatedAt" db:"updated_at"`
 }
 
 type MeetingDocument struct {

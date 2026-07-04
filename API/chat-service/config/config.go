@@ -8,24 +8,24 @@ import (
 )
 
 type Config struct {
-	ServerPort        string
-	DatabaseURL       string
-	RedisAddr         string
-	RedisPassword     string
-	RedisDB           int
-	JWTSecret         string
-	MaxRoomCapacity   int
-	MessageRetention  int
-	EnableE2EE        bool
-	TLSCertFile       string
-	TLSKeyFile        string
+	ServerPort       string
+	DatabaseURL      string
+	RedisAddr        string
+	RedisPassword    string
+	RedisDB          int
+	JWTSecret        string
+	MaxRoomCapacity  int
+	MessageRetention int
+	EnableE2EE       bool
+	TLSCertFile      string
+	TLSKeyFile       string
 }
 
 func Load() *Config {
 	godotenv.Load(".env")
 	godotenv.Load("../../.env")
 
-	port := getEnv("SERVER_PORT", "8083")
+	port := getEnv("SERVER_PORT", "8084")
 	dbURL := getEnv("DATABASE_URL", "")
 	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
 	redisPassword := getEnv("REDIS_PASSWORD", "")
@@ -38,17 +38,17 @@ func Load() *Config {
 	tlsKey := getEnv("TLS_KEY_FILE", "")
 
 	return &Config{
-		ServerPort:     port,
-		DatabaseURL:    dbURL,
-		RedisAddr:      redisAddr,
-		RedisPassword:  redisPassword,
-		RedisDB:        redisDB,
-		JWTSecret:      jwtSecret,
-		MaxRoomCapacity: maxRoom,
+		ServerPort:       port,
+		DatabaseURL:      dbURL,
+		RedisAddr:        redisAddr,
+		RedisPassword:    redisPassword,
+		RedisDB:          redisDB,
+		JWTSecret:        jwtSecret,
+		MaxRoomCapacity:  maxRoom,
 		MessageRetention: retention,
-		EnableE2EE:     enableE2EE,
-		TLSCertFile:    tlsCert,
-		TLSKeyFile:     tlsKey,
+		EnableE2EE:       enableE2EE,
+		TLSCertFile:      tlsCert,
+		TLSKeyFile:       tlsKey,
 	}
 }
 

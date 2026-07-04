@@ -10,5 +10,5 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=builder /chat-service .
 COPY --from=builder /app/uploads /app/uploads
-EXPOSE 8083
+EXPOSE 8084
 CMD ["./chat-service"]

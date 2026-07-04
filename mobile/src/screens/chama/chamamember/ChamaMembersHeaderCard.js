@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../../components/common/Card';
 import Input from '../../../components/common/Input';
-import { getThemeColors, spacing, typography } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 
 const ChamaMembersHeaderCard = ({
   activeTab,
@@ -12,8 +12,10 @@ const ChamaMembersHeaderCard = ({
   filteredMembersCount,
   sentInvitationsCount,
   canManageMembers,
+  canExportMembers,
   setActiveTab,
   theme,
+  onExportMenuPress,
 }) => {
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
@@ -70,6 +72,18 @@ const ChamaMembersHeaderCard = ({
             </Text>
           </TouchableOpacity>
         )}
+
+        {canExportMembers && (
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={() => onExportMenuPress?.()}
+            accessibilityLabel="Export members"
+            accessibilityHint="Export member list to Excel"
+          >
+            <Ionicons name="download-outline" size={16} color={colors.primary} />
+            <Text style={styles.exportButtonText}>Export</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Card>
   );
@@ -90,6 +104,7 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: 'transparent',
     paddingHorizontal: 0,
+    alignItems: 'center',
   },
   compactTab: {
     flex: 1,
@@ -121,6 +136,24 @@ const createStyles = (colors) => StyleSheet.create({
   },
   compactTabTextInactive: {
     color: colors.textSecondary,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.primary + '15',
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+    gap: spacing.xs,
+  },
+  exportButtonText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary,
   },
 });
 

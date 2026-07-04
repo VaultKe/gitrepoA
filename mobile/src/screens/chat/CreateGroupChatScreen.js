@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  TextInput,
-  Alert,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
+import { useFocusEffect } from '@react-navigation/native';
 import { getThemeColors } from '../../utils/theme';
+import { formatTime } from '../../utils/dateUtils';
+import chatService from '../../services/chat/ChatService';
 import ApiService from '../../services/api';
 
 export default function CreateGroupChatScreen({ navigation }) {
@@ -20,91 +20,89 @@ export default function CreateGroupChatScreen({ navigation }) {
   const colors = getThemeColors(theme);
   const [chamas, setChamas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    loadChamas();
+  const fetchLatestMessageForRoom = useCallback(async (room) => {
+    try {
+      const response = await ApiService.makeRequest(`/chat/rooms/${room.id}/messages?limit=20&offset=0`);
+      if (response.success && response.data && response.data.length > 0) {
+        const messages = response.data;
+        const lastMsg = messages[messages.length - 1];
+        return {
+          ...room,
+          lastMessage: lastMsg,
+          lastMessageAt: lastMsg.createdAt || room.lastMessageAt || room.updatedAt,
+        };
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch messages for room ${room.id}:`, e.message);
+    }
+    return room;
   }, []);
 
-  const loadChamas = async () => {
+  const loadChatRooms = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await ApiService.getChamas();
+      const rooms = await chatService.getRooms();
       
-      if (response.success) {
-        setChamas(response.data || []);
+      if (rooms && rooms.length > 0) {
+        const enrichedRooms = await Promise.all(
+          rooms.map(room => fetchLatestMessageForRoom(room))
+        );
+        setChamas(enrichedRooms);
       } else {
-        // Use mock data if API fails
-        const mockChamas = [
-          {
-            id: '1',
-            name: 'Savings Group',
-            description: 'Monthly savings and investment group',
-            memberCount: 12,
-            type: 'savings',
-          },
-          {
-            id: '2',
-            name: 'Business Network',
-            description: 'Entrepreneurs and business owners',
-            memberCount: 8,
-            type: 'business',
-          },
-          {
-            id: '3',
-            name: 'Investment Club',
-            description: 'Stock market and investment discussions',
-            memberCount: 15,
-            type: 'investment',
-          },
-        ];
-        setChamas(mockChamas);
+        setChamas([]);
       }
     } catch (error) {
-      console.error('Failed to load chamas:', error);
-      // Use mock data as fallback
-      const mockChamas = [
-        {
-          id: '1',
-          name: 'Savings Group',
-          description: 'Monthly savings and investment group',
-          memberCount: 12,
-          type: 'savings',
-        },
-      ];
-      setChamas(mockChamas);
+      console.error('Failed to load chat rooms:', error);
+      setChamas([]);
     } finally {
       setLoading(false);
     }
+  }, [fetchLatestMessageForRoom]);
+
+  useEffect(() => {
+    loadChatRooms();
+  }, [loadChatRooms]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadChatRooms();
+    }, [loadChatRooms])
+  );
+
+  const getLastMessageText = (room) => {
+    if (!room.lastMessage) return '';
+    
+    if (typeof room.lastMessage === 'string') return room.lastMessage;
+    
+    if (room.lastMessage.type === 'image') return 'Photo';
+    if (room.lastMessage.content) return room.lastMessage.content;
+    return '';
   };
 
-  const createChamaChat = async (chama) => {
-    try {
-      setCreating(true);
+  const sortedChamas = useMemo(() => {
+    return [...chamas].sort((a, b) => {
+      const aLastMsg = a.lastMessage;
+      const bLastMsg = b.lastMessage;
       
-      const response = await ApiService.createChatRoom({
-        type: 'chama',
-        chamaId: chama.id,
-        name: `${chama.name} Chat`,
-      });
+      const aReceived = aLastMsg && typeof aLastMsg === 'object' && aLastMsg.senderId !== user?.id;
+      const bReceived = bLastMsg && typeof bLastMsg === 'object' && bLastMsg.senderId !== user?.id;
+      
+      if (aReceived && !bReceived) return -1;
+      if (!aReceived && bReceived) return 1;
+      
+      const aTime = a.lastMessageAt || 0;
+      const bTime = b.lastMessageAt || 0;
+      return bTime - aTime;
+    });
+  }, [chamas, user?.id]);
 
-      if (response.success) {
-        // Navigate to the chat room
-        navigation.replace('ChatRoom', {
-          roomId: response.data.id,
-          roomName: `${chama.name} Chat`,
-          roomType: 'chama',
-          chamaId: chama.id,
-        });
-      } else {
-        Alert.alert('Error', 'Failed to create group chat');
-      }
-    } catch (error) {
-      console.error('Failed to create chama chat:', error);
-      Alert.alert('Error', 'Failed to create group chat');
-    } finally {
-      setCreating(false);
-    }
+  const openChatRoom = (room) => {
+    navigation.replace('ChatRoom', {
+      roomId: room.id,
+      roomName: room.name,
+      roomType: room.type || 'group',
+    });
   };
 
   const getChamaIcon = (type) => {
@@ -120,46 +118,54 @@ export default function CreateGroupChatScreen({ navigation }) {
     }
   };
 
-  const renderChamaItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.chamaItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onPress={() => createChamaChat(item)}
-      disabled={creating}
-    >
-      <View style={[styles.chamaIcon, { backgroundColor: colors.primary }]}>
+  const renderChamaItem = ({ item }) => {
+    const lastMessageText = getLastMessageText(item);
+    const truncatedText = lastMessageText.length > 10 ? lastMessageText.substring(0, 10) + '...' : lastMessageText;
+    const isReceived = item.lastMessage && typeof item.lastMessage === 'object' && item.lastMessage.senderId !== user?.id;
+    const lastTime = item.lastMessageAt ? formatTime(new Date(item.lastMessageAt)) : '';
+
+    return (
+      <TouchableOpacity
+        style={[styles.chamaItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={() => openChatRoom(item)}
+      >
+        <View style={[styles.chamaIcon, { backgroundColor: colors.primary }]}>
+          <Ionicons 
+            name={getChamaIcon(item.type)} 
+            size={24} 
+            color={colors.surface} 
+          />
+        </View>
+        
+        <View style={styles.chamaInfo}>
+          <Text style={[styles.chamaName, { color: colors.text }]}>
+            {item.name}
+          </Text>
+          <Text style={[styles.lastMessage, { color: isReceived ? colors.success || colors.primary : colors.textSecondary }]}>
+            {truncatedText || 'No messages yet'}
+          </Text>
+          {lastTime && (
+            <Text style={[styles.lastMessageTime, { color: colors.textTertiary }]}>
+              {lastTime}
+            </Text>
+          )}
+        </View>
+        
         <Ionicons 
-          name={getChamaIcon(item.type)} 
+          name="chatbubbles-outline" 
           size={24} 
-          color={colors.surface} 
+          color={colors.primary} 
         />
-      </View>
-      
-      <View style={styles.chamaInfo}>
-        <Text style={[styles.chamaName, { color: colors.text }]}>
-          {item.name}
-        </Text>
-        <Text style={[styles.chamaDescription, { color: colors.textSecondary }]}>
-          {item.description}
-        </Text>
-        <Text style={[styles.memberCount, { color: colors.textTertiary }]}>
-          {item.memberCount} members
-        </Text>
-      </View>
-      
-      <Ionicons 
-        name="chatbubbles-outline" 
-        size={24} 
-        color={colors.primary} 
-      />
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          Loading your chamas...
+          Loading your chat rooms...
         </Text>
       </View>
     );
@@ -170,41 +176,32 @@ export default function CreateGroupChatScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Create Group Chat
+          Group Chats
         </Text>
         <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-          Select a chama to create a group chat
+          Your recent group conversations
         </Text>
       </View>
 
-      {/* Chamas List */}
+      {/* Chat Rooms List */}
       <FlatList
-        data={chamas}
+        data={sortedChamas}
         renderItem={renderChamaItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={64} color={colors.textTertiary} />
+            <Ionicons name="chatbubbles-outline" size={64} color={colors.textTertiary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              No chamas available
+              No chat rooms available
             </Text>
             <Text style={[styles.emptySubtext, { color: colors.textTertiary }]}>
-              Join a chama first to create group chats
+              Create or join a chama to get started
             </Text>
           </View>
         }
       />
-
-      {creating && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
-            Creating group chat...
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -257,12 +254,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
-  chamaDescription: {
-    fontSize: 14,
-    marginBottom: 4,
+  lastMessage: {
+    fontSize: 13,
+    marginBottom: 2,
   },
-  memberCount: {
-    fontSize: 12,
+  lastMessageTime: {
+    fontSize: 11,
+    marginTop: 2,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -284,15 +282,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 16,
     textAlign: 'center',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

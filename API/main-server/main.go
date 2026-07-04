@@ -96,12 +96,6 @@ func main() {
 		log.Fatalf("Failed to initialize email verification table: %v", err)
 	}
 
-	// Initialize notification service
-	notificationService := services.NewNotificationService(db, cfg)
-
-	// Initialize meeting service
-	api.InitializeMeetingService(db, notificationService)
-
 	// Initialize notification scheduler for reminders
 	notificationScheduler := services.NewNotificationScheduler(db)
 	notificationScheduler.Start()
@@ -127,6 +121,9 @@ func main() {
 			testDataGenerator.Start(5 * time.Minute)
 		}
 	}
+
+	// Initialize meeting service for attendance endpoints
+	api.InitializeMeetingService(db, nil)
 
 	// Register routes and middleware
 	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService)

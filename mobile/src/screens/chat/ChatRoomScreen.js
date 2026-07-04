@@ -12,38 +12,51 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import EmojiSelector from 'react-native-emoji-selector';
 import { useNavigation } from '@react-navigation/native';
-import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Swipeable } from 'react-native-gesture-handler';
+import { getThemeColors, spacing, typography, borderRadius, shadows, getShadowStyle } from '../../utils/theme';
 import { formatTime } from '../../utils/dateUtils';
 import { useApp } from '../../context/AppContext';
 import chatService from '../../services/chat/ChatService';
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
+// WhatsApp-style: bubble never wider than ~78% of screen, image never wider than the bubble cap
+const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.78;
+const MAX_IMAGE_WIDTH = MAX_BUBBLE_WIDTH - spacing.md * 2;
+const MAX_IMAGE_HEIGHT = 280;
+
 const ChatRoomScreen = ({ route, navigation }) => {
   const { roomId, roomName } = route.params || {};
-  const { theme } = useApp();
+  const { theme, user } = useApp();
   const colors = getThemeColors(theme);
-  const navigationRef = useNavigation();
+  const insets = useSafeAreaInsets();
 
-// State
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [inputHeight, setInputHeight] = useState(40);
-
-  // Refs
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
+  const [openActionId, setOpenActionId] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [reactingToMessage, setReactingToMessage] = useState(null);
   const flatListRef = useRef(null);
   const messageUnsubscribeRef = useRef(null);
   const typingUnsubscribeRef = useRef(null);
-  const roomUnsubscribeRef = useRef(null);
   const typingDebounceRef = useRef(null);
+  const swipeableRefs = useRef(new Map());
 
-  // Safety check
   useEffect(() => {
     if (!roomId) {
       console.error('ChatRoomScreen: roomId is required');
@@ -51,23 +64,15 @@ const ChatRoomScreen = ({ route, navigation }) => {
     }
   }, [roomId, navigation]);
 
-  // Load initial room and messages
   const loadData = useCallback(async () => {
     if (!roomId) return;
 
     try {
       setLoading(true);
-
-      // Get room details
       await chatService.joinRoom(roomId);
-
-      // Get messages
       const roomMessages = await chatService.getMessages(roomId, 100, 0);
       setMessages(roomMessages);
-
-      // Mark room as read
       chatService.markRoomAsRead(roomId);
-
       setError(null);
     } catch (err) {
       console.error('Load room error:', err);
@@ -81,40 +86,33 @@ const ChatRoomScreen = ({ route, navigation }) => {
     loadData();
 
     return () => {
-      // Cleanup subscriptions
       if (messageUnsubscribeRef.current) {
         messageUnsubscribeRef.current();
       }
       if (typingUnsubscribeRef.current) {
         typingUnsubscribeRef.current();
       }
-      if (roomUnsubscribeRef.current) {
-        roomUnsubscribeRef.current();
-      }
       chatService.leaveRoom(roomId);
     };
   }, [roomId, loadData]);
 
-  // Subscribe to new messages
   useEffect(() => {
     if (!roomId) return;
 
     messageUnsubscribeRef.current = chatService.subscribeToMessages(roomId, (message) => {
       setMessages(prev => {
-        // Avoid duplicates
-        if (prev.some(m => m.id === message.id || m.tempId === message.id)) {
-          return prev;
+        if (message.type === 'remove') {
+          return prev.filter(m => m.id !== message.id);
         }
-
+        if (prev.some(m => m.id === message.id || m.tempId === message.id)) {
+          return prev.map(m => m.id === message.id || m.tempId === message.id ? { ...m, ...message } : m);
+        }
         const filtered = prev.filter(m => m.tempId !== message.tempId && m.id !== message.id);
-        return [...filtered, message];
+        return [...filtered, message].sort((a, b) => a.createdAt - b.createdAt);
       });
     });
 
-    // Subscribe to typing indicators
-    typingUnsubscribeRef.current = chatService.subscribeToRoom(roomId, (room) => {
-      // Could update room info if needed
-    });
+    typingUnsubscribeRef.current = chatService.subscribeToRoom(roomId, (room) => {});
 
     return () => {
       if (messageUnsubscribeRef.current) {
@@ -126,29 +124,55 @@ const ChatRoomScreen = ({ route, navigation }) => {
     };
   }, [roomId]);
 
-  // Handle send message
   const handleSend = useCallback(async () => {
-    if (!messageText.trim() || !roomId || sending) return;
+    if (!messageText.trim() && selectedImages.length === 0) return;
 
     const content = messageText.trim();
+    const replyToId = replyTo?.id || null;
+    const replyToData = replyTo ? { id: replyTo.id, senderName: replyTo.senderName, content: replyTo.content, type: replyTo.type } : null;
     setMessageText('');
-    setSending(true);
+    setReplyTo(null);
+    const imagesToSend = [...selectedImages];
+    setSelectedImages([]);
 
     try {
-      await chatService.sendMessage(roomId, content, 'text');
+      if (imagesToSend.length > 0) {
+        for (const image of imagesToSend) {
+          await chatService.sendMessage(roomId, content, 'image', { imageUri: image.uri, replyToId, replyToData });
+        }
+      } else {
+        await chatService.sendMessage(roomId, content, 'text', { replyToId, replyToData });
+      }
     } catch (err) {
       console.error('Send error:', err);
       Alert.alert('Error', 'Failed to send message. Please try again.');
-      setMessageText(content); // Restore message on failure
-    } finally {
-      setSending(false);
+      setMessageText(content);
+      setReplyTo(replyToData ? { ...replyTo, ...replyToData } : null);
+      setSelectedImages(imagesToSend);
     }
-  }, [messageText, roomId, sending]);
+  }, [messageText, roomId, replyTo, selectedImages]);
 
-  // No image picker yet - future feature
-  // Future: handleImagePicker will use dedicated upload endpoint
+  const handleImagePicker = useCallback(async () => {
+    try {
+      const ImagePicker = await import('expo-image-picker');
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission required', 'Please allow access to your photo library');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets) {
+        setSelectedImages(result.assets.map(asset => ({ uri: asset.uri })));
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+    }
+  }, []);
 
-  // Handle typing indicator
   const handleTyping = useCallback((text) => {
     setMessageText(text);
 
@@ -164,64 +188,293 @@ const ChatRoomScreen = ({ route, navigation }) => {
     }, 1000);
   }, [isTyping, roomId]);
 
-  // Render message item
-  const renderMessage = ({ item: message }) => {
-    const isOwn = message.senderId === chatService._getCurrentUserId();
-    const status = message.status || 'sent';
+  const handleEmojiSelect = useCallback((emoji) => {
+    setMessageText(prev => prev + emoji);
+    setShowEmojiPicker(false);
+  }, []);
 
-    return (
-      <View style={[styles.messageRow, isOwn ? styles.ownRow : styles.otherRow]}>
-        <View style={[
-          styles.messageBubble,
-          {
-            backgroundColor: isOwn ? colors.primary : colors.card,
-            borderBottomLeftRadius: isOwn ? borderRadius.lg : 4,
-            borderBottomRightRadius: isOwn ? 4 : borderRadius.lg,
+  const handleReactionSelect = useCallback((emoji) => {
+    if (reactingToMessage) {
+      // TODO: Send reaction to backend
+      console.log('Reacting to message:', reactingToMessage.id, 'with emoji:', emoji);
+    }
+    setShowReactionPicker(false);
+    setReactingToMessage(null);
+  }, [reactingToMessage]);
+
+  const handleReply = useCallback((message) => {
+    setReplyTo(message);
+  }, []);
+
+  const handleDelete = useCallback(async (message) => {
+    Alert.alert(
+      'Delete Message',
+      'Are you sure you want to delete this message?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await chatService.deleteMessage(roomId, message.id);
+            } catch (err) {
+              console.error('Delete error:', err);
+              Alert.alert('Error', 'Failed to delete message');
+            }
           },
-        ]}>
-          <Text style={[styles.messageText, { color: isOwn ? 'white' : colors.text }]}>
-            {message.content}
+        },
+      ]
+    );
+  }, [roomId]);
+
+  const handleCopy = useCallback((message) => {
+    if (message.content) {
+      navigator.clipboard?.writeText(message.content);
+    }
+  }, []);
+
+  const closeSwipeable = useCallback((messageId) => {
+    const ref = swipeableRefs.current.get(messageId);
+    if (ref) {
+      ref.close();
+    }
+    if (openActionId === messageId || openActionId === message.tempId) {
+      setOpenActionId(null);
+    }
+  }, [openActionId]);
+
+  const handleOpenActions = useCallback((message) => {
+    setOpenActionId(message.id || message.tempId);
+    Object.values(swipeableRefs.current).forEach(ref => ref.close?.());
+  }, []);
+
+  const handleCloseActions = useCallback(() => {
+    setOpenActionId(null);
+  }, []);
+
+  const handleActionPress = useCallback((message, action) => {
+    if (action === 'reply') handleReply(message);
+    else if (action === 'delete') handleDelete(message);
+    else if (action === 'copy') handleCopy(message);
+    else if (action === 'react') {
+      setReactingToMessage(message);
+      setShowReactionPicker(true);
+    }
+    else if (action === 'report') {/* TODO: Report */}
+    closeSwipeable(message.id || message.tempId);
+    handleCloseActions();
+  }, [handleReply, handleDelete, handleCopy, closeSwipeable, handleCloseActions]);
+
+  const renderReplyPreview = () => {
+    if (!replyTo) return null;
+    
+    return (
+      <View style={[styles.replyPreview, { backgroundColor: colors.background, borderLeftColor: colors.primary }]}>
+        <View style={styles.replyPreviewContent}>
+          <Text style={[styles.replyPreviewLabel, { color: colors.primary }]}>
+            Replying to
           </Text>
+          <Text style={[styles.replyPreviewText, { color: colors.text }]} numberOfLines={1}>
+            {replyTo.content || (replyTo.type === 'image' ? 'Photo' : 'Message')}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => setReplyTo(null)}>
+          <Ionicons name="close" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
-          {message.type === 'image' && message.metadata?.imageUri && (
-            <Image
-              source={{ uri: message.metadata.imageUri }}
-              style={styles.messageImage}
-              resizeMode="cover"
-            />
-          )}
-
-          <View style={styles.messageMeta}>
-            <Text style={[styles.timestamp, {
-              color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textSecondary,
-              fontSize: typography.fontSize.xs,
-            }]}>
-              {formatTime(message.createdAt)}
-            </Text>
-            {isOwn && (
-              <Ionicons
-                name={
-                  status === 'delivered' ? 'checkmark-done' :
-                  status === 'read' ? 'checkmark-done' :
-                  status === 'sending' ? 'time' : 'checkmark'
-                }
-                size={14}
-                color={isOwn ? 'rgba(255,255,255,0.8)' : colors.textSecondary}
-                style={styles.statusIcon}
-              />
-            )}
-          </View>
+  const renderReplyInBubble = ({ item: message }) => {
+    const repliedMessage = message.replyTo?.id 
+      ? messages.find(m => m.id === message.replyTo?.id || m.tempId === message.replyTo?.id)
+      : null;
+    
+    const replyData = repliedMessage || message.replyTo;
+    
+    if (!replyData?.id) return null;
+    
+    const replyIsOwn = repliedMessage && repliedMessage.senderId === user?.id;
+    const replyBubbleBg = replyIsOwn ? colors.primary : '#e5e7eb';
+    const replyTextClr = replyIsOwn ? 'white' : colors.text;
+    
+    return (
+      <View style={styles.replyInBubbleContainer}>
+        <View style={[styles.replyInBubbleLine, { backgroundColor: colors.primary }]} />
+        <View style={[styles.replyInBubbleContent, { backgroundColor: replyBubbleBg, borderRadius: borderRadius.sm }]}>
+          <Text style={[styles.replyInBubbleSender, { color: replyIsOwn ? '#fff' : colors.primary }]}>
+            {replyData.senderName || 'Sender'}
+          </Text>
+          <Text style={[styles.replyInBubbleText, { color: replyTextClr }]} numberOfLines={1}>
+            {replyData.content || (replyData.type === 'image' ? 'Photo' : 'Message')}
+          </Text>
         </View>
       </View>
     );
   };
 
-  // Scroll to bottom on new messages
+  const renderMessage = ({ item: message }) => {
+    const isOwn = message.senderId === user?.id;
+    const status = message.status || 'sent';
+    const hasImage = message.type === 'image' && (message.imageUrl || message.metadata?.imageUri || message.metadata?.imageUrl);
+    const isReply = !!message.replyTo?.id;
+
+    const imgWidth = message.metadata?.imageWidth || message.metadata?.width;
+    const imgHeight = message.metadata?.imageHeight || message.metadata?.height;
+    const aspectRatio = imgWidth && imgHeight ? imgWidth / imgHeight : 1;
+
+    let imageWidth = MAX_IMAGE_WIDTH;
+    let imageHeight = imageWidth / aspectRatio;
+    if (imageHeight > MAX_IMAGE_HEIGHT) {
+      imageHeight = MAX_IMAGE_HEIGHT;
+      imageWidth = imageHeight * aspectRatio;
+    }
+
+    return (
+      <View style={[styles.messageRow, isOwn ? styles.ownRow : styles.otherRow]}>
+        {!isOwn && (
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+              <Text style={styles.avatarText}>
+                {message.senderName?.charAt(0)?.toUpperCase() || 'U'}
+              </Text>
+            </View>
+          </View>
+        )}
+        <Swipeable
+          ref={ref => {
+            if (ref) swipeableRefs.current.set(message.id || message.tempId, ref);
+          }}
+          renderRightActions={() => <View style={{ width: 220 }} />}
+          onSwipeableOpen={() => handleOpenActions(message)}
+          onSwipeableClose={handleCloseActions}
+          rightThreshold={40}
+        >
+          <View style={[
+            styles.messageBubble,
+            {
+              backgroundColor: isOwn
+                ? (isReply ? colors.primaryDark : colors.primary)
+                : (isReply ? colors.backgroundSecondary : colors.card),
+              borderBottomLeftRadius: isOwn ? borderRadius.lg : 4,
+              borderBottomRightRadius: isOwn ? 4 : borderRadius.lg,
+            },
+          ]}>
+            {renderReplyInBubble({ item: message })}
+            
+            {hasImage && (
+              <Image
+                source={{ uri: message.imageUrl || message.metadata?.imageUri || message.metadata?.imageUrl }}
+                style={[
+                  styles.messageImage,
+                  { width: imageWidth, height: imageHeight },
+                ]}
+                resizeMode="cover"
+              />
+            )}
+
+            {!!message.content && (
+              <Text
+                style={[
+                  styles.messageText,
+                  { color: isOwn ? 'white' : colors.text, marginTop: hasImage || message.replyTo?.id ? spacing.xs : 0 },
+                ]}
+              >
+                {message.content}
+              </Text>
+            )}
+
+            <View style={styles.messageMeta}>
+              <Text
+                style={[
+                  styles.timestamp,
+                  { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textSecondary },
+                ]}
+              >
+                {formatTime(message.createdAt)}
+              </Text>
+              {isOwn && (
+                <Ionicons
+                  name={
+                    status === 'delivered' ? 'checkmark-done' :
+                    status === 'read' ? 'checkmark-done' :
+                    status === 'sending' ? 'time' : 'checkmark'
+                  }
+                  size={14}
+                  color={isOwn ? 'rgba(255,255,255,0.8)' : colors.textSecondary}
+                  style={{ marginLeft: 2 }}
+                />
+              )}
+            </View>
+          </View>
+        </Swipeable>
+        {openActionId === message.id || openActionId === message.tempId ? (
+          <View style={[styles.actionOverlayContainer, { backgroundColor: colors.backgroundSecondary }, getShadowStyle('md')]}>
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'reply')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.primary }]}>
+                <Ionicons name="reply" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Reply</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'delete')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.error }]}>
+                <Ionicons name="trash" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Delete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'copy')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.border }]}>
+                <Ionicons name="copy" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Copy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'react')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.info || '#17a2b8' }]}>
+                <Ionicons name="heart" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>React</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'report')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.warning || '#ffc107' }]}>
+                <Ionicons name="alert-circle" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={() => handleActionPress(message, 'close')}>
+              <View style={[styles.actionIconWrapper, { backgroundColor: colors.textSecondary }]}>
+                <Ionicons name="close" size={18} color="white" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
   useEffect(() => {
     if (messages.length > 0 && flatListRef.current) {
       flatListRef.current.scrollToEnd({ animated: true });
     }
   }, [messages.length]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !roomId || messages.length < 50) return;
+
+    try {
+      setLoadingMore(true);
+      const offset = messages.length;
+      const olderMessages = await chatService.getMessages(roomId, 50, offset);
+      if (olderMessages.length > 0) {
+        setMessages(prev => [...prev, ...olderMessages]);
+      }
+    } catch (err) {
+      console.error('Load more messages error:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [roomId, loadingMore, messages.length]);
 
   if (loading && messages.length === 0) {
     return (
@@ -231,7 +484,6 @@ const ChatRoomScreen = ({ route, navigation }) => {
     );
   }
 
-  // Show error screen
   if (error) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
@@ -247,9 +499,6 @@ const ChatRoomScreen = ({ route, navigation }) => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.divider, backgroundColor: colors.card }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
             {roomName || 'Chat'}
@@ -270,7 +519,12 @@ const ChatRoomScreen = ({ route, navigation }) => {
         renderItem={renderMessage}
         keyExtractor={(item) => item.id || item.tempId}
         contentContainerStyle={styles.messageList}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        removeClippedSubviews={false}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 10 }} /> : null}
+        showsVerticalScrollIndicator={false}
       />
 
       {/* Input Area */}
@@ -278,8 +532,33 @@ const ChatRoomScreen = ({ route, navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-         <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.divider }]}>
-           <View style={styles.inputRow}>
+        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.divider }]}>
+          {renderReplyPreview()}
+          {/* Image Preview */}
+          {selectedImages.length > 0 && (
+            <View style={styles.imagePreview}>
+              {selectedImages.map((image, index) => (
+                <View key={index} style={styles.imageThumb}>
+                  <Image source={{ uri: image.uri }} style={styles.thumbnail} />
+                  <TouchableOpacity
+                    onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== index))}
+                    style={styles.removeImage}
+                  >
+                    <Ionicons name="close-circle" size={20} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.inputRow}>
+            <TouchableOpacity onPress={() => setShowEmojiPicker(true)} style={styles.emojiButton}>
+              <Ionicons name="happy" size={24} color={colors.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleImagePicker} style={styles.attachButton}>
+              <Ionicons name="attach" size={24} color={colors.primary} />
+            </TouchableOpacity>
 
             <TextInput
               style={[
@@ -289,7 +568,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
                   backgroundColor: colors.background,
                   borderRadius: 20,
                   borderColor: colors.border,
-                  height: Math.max(40, inputHeight),
+                  height: Math.max(40, Math.min(inputHeight, 100)),
                 },
               ]}
               placeholder="Type a message..."
@@ -299,26 +578,63 @@ const ChatRoomScreen = ({ route, navigation }) => {
               multiline
               onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
               maxLength={5000}
-              editable={!sending}
             />
 
-            {messageText.trim().length > 0 ? (
-              <TouchableOpacity
-                onPress={handleSend}
-                disabled={sending}
-                style={[styles.sendButton, { opacity: sending ? 0.5 : 1 }]}
-              >
-                <Ionicons name="send" size={20} color="white" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.sendButton, { backgroundColor: colors.divider }]}
-                disabled
-              >
-                <Ionicons name="send" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={handleSend}
+              style={[styles.sendButton, { backgroundColor: colors.primary }]}
+            >
+              <Ionicons name="send" size={20} color="white" />
+            </TouchableOpacity>
           </View>
+
+          <Modal
+            visible={showEmojiPicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowEmojiPicker(false)}
+          >
+            <View style={styles.emojiModalContainer}>
+              <View style={[styles.emojiModalContent, { backgroundColor: colors.card, paddingBottom: Math.max(70, insets.bottom + 20) }]}>
+                <View style={[styles.emojiHeader, { borderBottomColor: colors.divider }]}>
+                  <Text style={[styles.emojiHeaderTitle, { color: colors.text }]}>
+                    Select Emoji
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                    <Ionicons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <EmojiSelector
+                  onEmojiSelected={handleEmojiSelect}
+                  columns={8}
+                />
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={showReactionPicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowReactionPicker(false)}
+          >
+            <View style={styles.emojiModalContainer}>
+              <View style={[styles.emojiModalContent, { backgroundColor: colors.card, paddingBottom: Math.max(70, insets.bottom + 20) }]}>
+                <View style={[styles.emojiHeader, { borderBottomColor: colors.divider }]}>
+                  <Text style={[styles.emojiHeaderTitle, { color: colors.text }]}>
+                    React with Emoji
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowReactionPicker(false)}>
+                    <Ionicons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <EmojiSelector
+                  onEmojiSelected={handleReactionSelect}
+                  columns={8}
+                />
+              </View>
+            </View>
+          </Modal>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -328,9 +644,13 @@ const ChatRoomScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   center: {
     flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -346,6 +666,8 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     marginHorizontal: spacing.md,
   },
   headerTitle: {
@@ -356,45 +678,73 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   messageList: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: 70,
   },
+  // Row must span full width so percentage/flex rules inside have something
+  // real to measure against, and so flexShrink can actually take effect.
   messageRow: {
-    flexDirection: 'row',
-    marginVertical: spacing.xs,
+    width: '100%',
+    marginBottom: spacing.xs,
+    position: 'relative',
+    overflow: 'visible',
   },
   ownRow: {
-    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
   },
   otherRow: {
-    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
   },
+  avatarContainer: {
+    marginRight: spacing.xs,
+    marginBottom: 2,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // This is the key fix: flexShrink + maxWidth together let the bubble
+  // grow to fit short text, wrap long text, and grow downward for images,
+  // without ever overflowing past ~78% of the screen (WhatsApp behavior).
   messageBubble: {
-    maxWidth: '80%',
-    padding: spacing.md,
+    maxWidth: MAX_BUBBLE_WIDTH,
+    flexShrink: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.lg,
-    ...shadows.sm,
   },
-messageText: {
+  messageText: {
     fontSize: typography.fontSize.md,
-    lineHeight: typography.lineHeight.normal,
+    // Line height locked to a safe multiple of font size so wrapped lines
+    // stack below each other instead of overlapping.
+    lineHeight: typography.fontSize.md * 1.3,
+    flexWrap: 'wrap',
   },
   messageImage: {
-    width: 200,
-    height: 200,
     borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
+    backgroundColor: '#00000010',
   },
   messageMeta: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
+    alignSelf: 'flex-end',
     marginTop: spacing.xs,
   },
   timestamp: {
-    marginRight: spacing.xs,
-  },
-  statusIcon: {
-    marginLeft: 2,
+    fontSize: typography.fontSize.xs,
+    lineHeight: typography.fontSize.xs * 1.3,
+    marginRight: 2,
   },
   inputContainer: {
     borderTopWidth: 1,
@@ -406,7 +756,7 @@ messageText: {
     marginBottom: spacing.sm,
     flexWrap: 'wrap',
   },
-imageThumb: {
+  imageThumb: {
     width: 60,
     height: 60,
     marginRight: spacing.sm,
@@ -427,14 +777,20 @@ imageThumb: {
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
+  attachButton: {
+    padding: spacing.xs,
+  },
+  emojiButton: {
+    padding: spacing.xs,
+    paddingLeft: 0,
+  },
   input: {
     flex: 1,
-    marginHorizontal: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    marginHorizontal: spacing.sm,
     borderWidth: 1,
     fontSize: typography.fontSize.md,
-    maxHeight: 100,
   },
   sendButton: {
     width: 40,
@@ -451,6 +807,106 @@ imageThumb: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
+  },
+  actionOverlayContainer: {
+    position: 'absolute',
+    right: 8,
+    bottom: '100%',
+    marginBottom: 8,
+    flexDirection: 'column',
+    alignItems: 'center',
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    minWidth: 72,
+    maxWidth: 220,
+    zIndex: 999,
+  },
+  actionItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.xxs,
+  },
+  actionIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  actionLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'center',
+  },
+  replyPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.sm,
+    borderLeftWidth: 3,
+    marginBottom: spacing.xs,
+  },
+  replyPreviewContent: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  replyPreviewLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '600',
+  },
+  replyPreviewText: {
+    fontSize: typography.fontSize.sm,
+    marginTop: 2,
+  },
+  replyInBubbleContainer: {
+    flexDirection: 'row',
+    marginBottom: spacing.xs,
+    alignItems: 'flex-start',
+  },
+  replyInBubbleLine: {
+    width: 2,
+    height: 24,
+    borderRadius: 1,
+    marginRight: spacing.xs,
+  },
+  replyInBubbleContent: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  replyInBubbleSender: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '600',
+  },
+  replyInBubbleText: {
+    fontSize: typography.fontSize.sm,
+  },
+  emojiModalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  emojiModalContent: {
+    height: '50%',
+    borderTopLeftRadius: borderRadius.lg,
+    borderTopRightRadius: borderRadius.lg,
+  },
+  emojiHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  emojiHeaderTitle: {
+    fontSize: typography.fontSize.md,
+    fontWeight: '600',
   },
 });
 

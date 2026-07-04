@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 func GetAllUsersForAdmin(c *gin.Context) {
@@ -110,8 +112,8 @@ func GetAllUsersForAdmin(c *gin.Context) {
 
 		userMap := map[string]interface{}{
 			"id":           user.ID,
-			"email":        user.Email,
-			"phone":        user.Phone,
+			"email":        utils.MaskEmail(user.Email),
+			"phone":        utils.MaskPhone(user.Phone),
 			"firstName":    user.FirstName,
 			"lastName":     user.LastName,
 			"role":         user.Role,

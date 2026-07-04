@@ -19,7 +19,10 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import ApiService from '../../../services/api';
+import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
+import { approveWelfareDisbursement, getChamaDisbursementApprovals } from '../../../services/api/welfareEndpoints';
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableContainer: {
@@ -222,6 +225,11 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
     reason: '',
   });
 
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState(null);
+  const [approvalActionType, setApprovalActionType] = useState(null);
+
   const filters = [
     { id: 'all', name: 'All Accounts', icon: 'list' },
     { id: 'eligible', name: 'Eligible', icon: 'checkmark-circle' },
@@ -296,134 +304,15 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
   const loadSavingsAccounts = async (page = 1, search = '') => {
     try {
       setLoading(true);
-      const offset = (page - 1) * pageSize;
-      const response = await ApiService.getEligibleSavingsMembers(currentChamaId, pageSize, offset);
+      const response = await ApiService.getEligibleSavingsMembers(currentChamaId);
 
       if (response.success) {
         let accountsData = response.data || [];
 
-        // Enrich savings accounts with member user information
-        const enrichedAccounts = await Promise.all(
-          accountsData.map(async (account) => {
-            try {
-              // Get member user ID from various possible field names
-              const userId = account.user_id || account.memberId || account.userId || account.id;
-              if (userId) {
-                console.log(`🔍 Enriching savings account ${account.id} with member user ID: ${userId}`);
-                const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                console.log(`🔍 User response for member ${userId}:`, userResponse);
-
-                if (userResponse.success && userResponse.data) {
-                  const userData = userResponse.data;
-                  const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-                  console.log(`✅ Enriched savings account ${account.id} with member: ${fullName}`);
-
-                  return {
-                    ...account,
-                    user_id: userId,
-                    member_name: fullName,
-                    memberName: fullName,
-                    memberId: userId,
-                    user: {
-                      id: userId,
-                      first_name: userData.firstName || userData.first_name,
-                      last_name: userData.lastName || userData.last_name,
-                      name: fullName,
-                      username: userData.username || userData.email
-                    }
-                  };
-                }
-              }
-
-              // Return account with placeholder member data
-              return {
-                ...account,
-                user_id: userId,
-                member_name: account.member_name || account.memberName || 'Unknown Member',
-                memberName: account.member_name || account.memberName || 'Unknown Member',
-                memberId: userId,
-                user: {
-                  id: userId,
-                  name: account.member_name || account.memberName || 'Unknown Member',
-                  first_name: 'Unknown',
-                  last_name: 'Member',
-                  username: 'unknown'
-                }
-              };
-            } catch (error) {
-              console.warn(`❌ Failed to enrich savings account ${account.id}:`, error);
-              return {
-                ...account,
-                member_name: account.member_name || account.memberName || 'Unknown Member',
-                memberName: account.member_name || account.memberName || 'Unknown Member',
-              };
-            }
-          })
-        );
-
-        setSavingsAccounts(enrichedAccounts);
-
-        // For search functionality, if searching, load all data
-        if (search.trim()) {
-          const allResponse = await ApiService.getEligibleSavingsMembers(currentChamaId, 1000, 0); // Load more for search
-          if (allResponse.success) {
-            let allAccountsData = allResponse.data || [];
-
-            // Enrich all savings accounts data as well
-            const enrichedAllAccounts = await Promise.all(
-              allAccountsData.map(async (account) => {
-                try {
-                  const userId = account.user_id || account.memberId || account.userId || account.id;
-                  if (userId) {
-                    const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                    if (userResponse.success && userResponse.data) {
-                      const userData = userResponse.data;
-                      const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-
-                      return {
-                        ...account,
-                        user_id: userId,
-                        member_name: fullName,
-                        memberName: fullName,
-                        memberId: userId,
-                        user: {
-                          id: userId,
-                          first_name: userData.firstName || userData.first_name,
-                          last_name: userData.lastName || userData.last_name,
-                          name: fullName,
-                          username: userData.username || userData.email
-                        }
-                      };
-                    }
-                  }
-
-                  return {
-                    ...account,
-                    member_name: account.member_name || account.memberName || 'Unknown Member',
-                    memberName: account.member_name || account.memberName || 'Unknown Member',
-                  };
-                } catch (error) {
-                  return {
-                    ...account,
-                    member_name: account.member_name || account.memberName || 'Unknown Member',
-                    memberName: account.member_name || account.memberName || 'Unknown Member',
-                  };
-                }
-              })
-            );
-
-            setAllSavingsAccounts(enrichedAllAccounts);
-            // Calculate pagination info from all data
-            const filteredData = filterSavingsAccountsData(enrichedAllAccounts, search, selectedFilter);
-            setTotalItems(filteredData.length);
-            setTotalPages(Math.ceil(filteredData.length / pageSize));
-          }
-        } else {
-          setAllSavingsAccounts(enrichedAccounts);
-          // Use pagination info from API if available, otherwise estimate
-          setTotalItems(response.totalCount || response.data?.length || enrichedAccounts.length);
-          setTotalPages(Math.ceil((response.totalCount || enrichedAccounts.length) / pageSize));
-        }
+        setSavingsAccounts(accountsData);
+        setAllSavingsAccounts(accountsData);
+        setTotalItems(accountsData.length);
+        setTotalPages(Math.ceil(accountsData.length / pageSize));
       } else {
         console.error('Failed to load savings accounts:', response.error);
         setSavingsAccounts([]);
@@ -613,6 +502,110 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
+  const canApproveSavings = () => {
+    return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
+  };
+
+  const handleInitiateApprove = (account) => {
+    if (!canApproveSavings()) {
+      Alert.alert('Access Denied', 'You do not have permission to approve savings withdrawals.');
+      return;
+    }
+    if (account.status === 'locked') {
+      Alert.alert('Info', 'This account is locked and cannot be processed.');
+      return;
+    }
+    setSelectedApprovalItem(account);
+    setApprovalActionType('approve');
+    setShowOTPModal(true);
+  };
+
+  const handleVerifyOTP = async (code) => {
+    if (!selectedApprovalItem) return;
+    setOtpLoading(true);
+    try {
+      const approvalData = {
+        action: approvalActionType,
+        otpCode: code,
+        approvedBy: userRole,
+        approvedById: user.id,
+        approvedByName: user?.fullName || user?.firstName || user?.email || 'Unknown',
+        timestamp: new Date().toISOString(),
+        chamaId: currentChamaId,
+        disbursementType: 'savings-withdrawal',
+        itemLabel: selectedApprovalItem.memberName || selectedApprovalItem.member_name || `Account #${selectedApprovalItem.id}`,
+        amount: selectedApprovalItem.balance,
+      };
+
+      const response = await approveWelfareDisbursement(currentChamaId, selectedApprovalItem.id, approvalData);
+
+      if (response.success) {
+        showInAppToast({
+          title: 'Success',
+          message: `Savings withdrawal ${approvalActionType}d successfully.`,
+          type: 'success',
+        });
+
+        await sendApprovalNotification({
+          chamaId: currentChamaId,
+          recipientUserId: selectedApprovalItem.memberId || selectedApprovalItem.id,
+          recipientName: selectedApprovalItem.memberName || selectedApprovalItem.member_name || 'Member',
+          recipientPhone: selectedApprovalItem.memberPhone || selectedApprovalItem.phone_number,
+          recipientEmail: selectedApprovalItem.memberEmail || selectedApprovalItem.email,
+          disbursementType: 'savings-withdrawal',
+          disbursementId: selectedApprovalItem.id,
+          entityLabel: selectedApprovalItem.memberName || selectedApprovalItem.member_name || `Account #${selectedApprovalItem.id}`,
+          amount: selectedApprovalItem.balance,
+          action: approvalActionType,
+          initiatedBy: userRole,
+          chamaName: '',
+        });
+
+        setShowOTPModal(false);
+        setSelectedApprovalItem(null);
+        setApprovalActionType(null);
+        await loadSavingsAccounts();
+      } else {
+        Alert.alert('Error', response.error || 'Failed to process approval.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (!selectedApprovalItem) return;
+    try {
+      await sendApprovalNotification({
+        chamaId: currentChamaId,
+        recipientUserId: user.id,
+        recipientName: user?.fullName || user?.firstName || 'You',
+        recipientPhone: user?.phone || user?.phone_number,
+        recipientEmail: user?.email,
+        disbursementType: 'savings-withdrawal',
+        disbursementId: selectedApprovalItem.id,
+        entityLabel: selectedApprovalItem.memberName || selectedApprovalItem.member_name || `Account #${selectedApprovalItem.id}`,
+        amount: selectedApprovalItem.balance,
+        action: 'otp_resend',
+        initiatedBy: userRole,
+        chamaName: '',
+      });
+      showInAppToast({
+        title: 'OTP Resent',
+        message: 'A new OTP has been sent to your phone.',
+        type: 'info',
+      });
+    } catch (error) {
+      showInAppToast({
+        title: 'Resend Failed',
+        message: 'Could not resend OTP. Please try again.',
+        type: 'error',
+      });
+    }
+  };
+
   const renderTableRow = ({ item, index }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
@@ -660,6 +653,14 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
             >
               <Ionicons name="eye" size={14} color={colors.info} />
             </TouchableOpacity>
+            {canApproveSavings() && (item.status === 'eligible' || item.status === 'pending') && (
+              <TouchableOpacity
+                style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
+                onPress={() => handleInitiateApprove(item)}
+              >
+                <Ionicons name="checkmark-done" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            )}
             {canWithdrawSavings() && item.status === 'eligible' && (
               <TouchableOpacity
                 style={[tableStyles.actionButton, { backgroundColor: colors.warning + '20' }]}
@@ -1048,6 +1049,21 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+      <OTPVerificationModal
+        visible={showOTPModal}
+        onClose={() => {
+          setShowOTPModal(false);
+          setSelectedApprovalItem(null);
+          setApprovalActionType(null);
+        }}
+        title={approvalActionType === 'approve' ? 'Approve Withdrawal' : 'Verify Withdrawal'}
+        subtitle={`Enter the OTP sent to your phone to ${approvalActionType} this savings withdrawal.`}
+        onVerify={handleVerifyOTP}
+        onResend={handleResendOTP}
+        loading={otpLoading}
+        itemType="savings-withdrawal"
+      />
     </>
   );
 };

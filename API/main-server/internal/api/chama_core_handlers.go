@@ -200,11 +200,6 @@ func CreateChama(c *gin.Context) {
 		ContributionFrequency  string  `json:"contribution_frequency,omitempty"`
 		TargetAmount           float64 `json:"target_amount,omitempty"`
 		TargetDeadline         string  `json:"target_deadline,omitempty"`
-		PaymentMethod          string  `json:"payment_method,omitempty" validate:"omitempty,oneof=till paybill"`
-		TillNumber             string  `json:"till_number,omitempty"`
-		PaybillBusinessNumber  string  `json:"paybill_business_number,omitempty"`
-		PaybillAccountNumber   string  `json:"paybill_account_number,omitempty"`
-		PaymentRecipientName   string  `json:"payment_recipient_name,omitempty"`
 		MaxMembers             int     `json:"max_members" binding:"required" validate:"required,min=2,max=1000"`
 		IsPublic               bool    `json:"is_public"`
 		RequiresApproval       bool    `json:"requires_approval"`
@@ -328,57 +323,8 @@ func CreateChama(c *gin.Context) {
 		}
 	}
 
-	// Validate payment method if provided
-	if req.PaymentMethod != "" {
-		if req.PaymentMethod != "till" && req.PaymentMethod != "paybill" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Payment method must be either 'till' or 'paybill'",
-			})
-			return
-		}
-
-		if req.PaymentMethod == "till" {
-			if req.TillNumber == "" {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   "Till number is required when payment method is 'till'",
-				})
-				return
-			}
-			if req.PaymentRecipientName == "" {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   "Payment recipient name is required for till payments",
-				})
-				return
-			}
-		}
-
-		if req.PaymentMethod == "paybill" {
-			if req.PaybillBusinessNumber == "" {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   "Paybill business number is required when payment method is 'paybill'",
-				})
-				return
-			}
-			if req.PaybillAccountNumber == "" {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   "Paybill account number is required when payment method is 'paybill'",
-				})
-				return
-			}
-			if req.PaymentRecipientName == "" {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   "Payment recipient name is required for paybill payments",
-				})
-				return
-			}
-		}
-	}
+	// Payment method fields are no longer required - all payments go to centralized system paybill
+	// Removed: till_number, paybill_business_number, paybill_account_number, payment_recipient_name validation
 
 	if req.MaxMembers < 2 || req.MaxMembers > 1000 {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -454,31 +400,9 @@ func CreateChama(c *gin.Context) {
 				targetDeadline = &deadline
 			}
 		}
-	}
+}
 
-	// Handle payment method fields
-	var paymentMethod, tillNumber, paybillBusinessNumber, paybillAccountNumber, paymentRecipientName *string
 
-	if req.PaymentMethod != "" {
-		paymentMethod = &req.PaymentMethod
-
-		if req.PaymentMethod == "till" && req.TillNumber != "" {
-			tillNumber = &req.TillNumber
-		}
-
-		if req.PaymentMethod == "paybill" {
-			if req.PaybillBusinessNumber != "" {
-				paybillBusinessNumber = &req.PaybillBusinessNumber
-			}
-			if req.PaybillAccountNumber != "" {
-				paybillAccountNumber = &req.PaybillAccountNumber
-			}
-		}
-
-		if req.PaymentRecipientName != "" {
-			paymentRecipientName = &req.PaymentRecipientName
-		}
-	}
 
 	// Create chama creation model
 	creation := &models.ChamaCreation{
@@ -492,11 +416,6 @@ func CreateChama(c *gin.Context) {
 		ContributionFrequency:  models.ContributionFrequency(req.ContributionFrequency),
 		TargetAmount:           targetAmount,
 		TargetDeadline:         targetDeadline,
-		PaymentMethod:          paymentMethod,
-		TillNumber:             tillNumber,
-		PaybillBusinessNumber:  paybillBusinessNumber,
-		PaybillAccountNumber:   paybillAccountNumber,
-		PaymentRecipientName:   paymentRecipientName,
 		MaxMembers:             maxMembers,
 		IsPublic:               req.IsPublic,
 		RequiresApproval:       req.RequiresApproval,
@@ -563,11 +482,6 @@ func CreateChama(c *gin.Context) {
 			"contribution_frequency":   chama.ContributionFrequency,
 			"target_amount":            chama.TargetAmount,
 			"target_deadline":          chama.TargetDeadline,
-			"payment_method":           chama.PaymentMethod,
-			"till_number":              chama.TillNumber,
-			"paybill_business_number":  chama.PaybillBusinessNumber,
-			"paybill_account_number":   chama.PaybillAccountNumber,
-			"payment_recipient_name":   chama.PaymentRecipientName,
 			"max_members":              chama.MaxMembers,
 			"current_members":          chama.CurrentMembers,
 			"is_public":                chama.IsPublic,

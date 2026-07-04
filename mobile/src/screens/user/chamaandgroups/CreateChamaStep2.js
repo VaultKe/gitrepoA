@@ -32,18 +32,39 @@ const CreateChamaStep2 = ({
     { id: 'quarterly', name: 'Quarterly' },
   ];
 
+  const isChama = chamaData.group_type === 'chama';
+
   return (
     <Card style={styles.section}>
       <Text style={[styles.stepTitle, { color: colors.text }]}>
-        {chamaData.group_type === 'contribution' ? 'Target & Location Details' : 'Financial & Location Details'}
+        {isChama ? 'Financial & Location Details' : 'Target & Location Details'}
+      </Text>
+      <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
+        {isChama
+          ? 'Set your contribution amount, frequency, and where your chama is based.'
+          : 'Define your target amount and where the contribution group operates.'}
       </Text>
 
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Location</Text>
       <View style={styles.row}>
         <TouchableOpacity
-          style={[styles.halfInput, styles.countySelector, { borderColor: showErrors && formErrors.county ? colors.error : colors.border }]}
-          onPress={() => setShowCountyPicker(true)}
+          style={[
+            styles.halfInput,
+            styles.countySelector,
+            { borderColor: showErrors && formErrors.county ? colors.error : colors.border }
+          ]}
+          onPress={() => {
+            setCountySearch('');
+            setShowCountyPicker(true);
+          }}
         >
-          <Text style={[styles.countyText, { color: chamaData.county ? colors.text : colors.textSecondary }]}>
+          <Text
+            style={[
+              styles.countyText,
+              { color: chamaData.county ? colors.text : colors.textSecondary }
+            ]}
+            numberOfLines={1}
+          >
             {chamaData.county || 'Select county'}
           </Text>
           <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
@@ -53,11 +74,90 @@ const CreateChamaStep2 = ({
           label="Town *"
           value={chamaData.town}
           onChangeText={(text) => handleInputChange('town', text)}
-          placeholder="Select town"
+          placeholder="Enter town"
           style={styles.halfInput}
           error={showErrors && formErrors.town}
         />
       </View>
+
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+        {isChama ? 'Contributions' : 'Target'}
+      </Text>
+
+      {isChama ? (
+        <View style={styles.row}>
+          <Input
+            label="Contribution Amount (KES) *"
+            value={chamaData.contribution_amount}
+            onChangeText={(text) => handleInputChange('contribution_amount', text)}
+            placeholder="0"
+            keyboardType="numeric"
+            style={styles.halfInput}
+            error={showErrors && formErrors.contribution_amount}
+          />
+          <View style={styles.halfInput}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+              Frequency *
+            </Text>
+            <View style={styles.frequencyRow}>
+              {frequencies.map((freq) => (
+                <TouchableOpacity
+                  key={freq.id}
+                  style={[
+                    styles.frequencyChip,
+                    {
+                      backgroundColor: chamaData.contribution_frequency === freq.id ? colors.primary : colors.backgroundSecondary,
+                      borderColor: chamaData.contribution_frequency === freq.id ? colors.primary : colors.border,
+                    }
+                  ]}
+                  onPress={() => handleInputChange('contribution_frequency', freq.id)}
+                >
+                  <Text
+                    style={[
+                      styles.frequencyText,
+                      { color: chamaData.contribution_frequency === freq.id ? colors.white : colors.text }
+                    ]}
+                  >
+                    {freq.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      ) : (
+        <>
+          <Input
+            label="Target Amount (KES) *"
+            value={chamaData.target_amount}
+            onChangeText={(text) => handleInputChange('target_amount', text)}
+            placeholder="e.g., 50000"
+            keyboardType="numeric"
+            error={showErrors && formErrors.target_amount}
+          />
+          <Input
+            label="Contribution Rules"
+            value={chamaData.contribution_rules}
+            onChangeText={(text) => handleInputChange('contribution_rules', text)}
+            placeholder="e.g., Minimum KES 100 per person, Deadline: End of month"
+            multiline
+            numberOfLines={3}
+            error={showErrors && formErrors.contribution_rules}
+          />
+        </>
+      )}
+
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+        Group Settings
+      </Text>
+      <Input
+        label="Maximum Members *"
+        value={chamaData.max_members}
+        onChangeText={(text) => handleInputChange('max_members', text)}
+        placeholder="e.g., 20"
+        keyboardType="numeric"
+        error={showErrors && formErrors.max_members}
+      />
 
       <Modal
         visible={showCountyPicker}
@@ -65,35 +165,78 @@ const CreateChamaStep2 = ({
         animationType="fade"
         onRequestClose={() => setShowCountyPicker(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowCountyPicker(false)}
-        >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowCountyPicker(false)}
+          />
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Select County</Text>
-            <TextInput
-              style={[styles.countySearch, { color: colors.text, borderColor: colors.border }]}
-              placeholder="Search counties..."
-              placeholderTextColor={colors.textSecondary}
-              value={countySearch}
-              onChangeText={setCountySearch}
-            />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Select County</Text>
+              <TouchableOpacity onPress={() => setShowCountyPicker(false)}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.countySearch, { borderColor: colors.border }]}>
+              <Ionicons name="search" size={18} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.countySearchInput, { color: colors.text }]}
+                placeholder="Search counties..."
+                placeholderTextColor={colors.textSecondary}
+                value={countySearch}
+                onChangeText={setCountySearch}
+                autoFocus
+              />
+              {countySearch.length > 0 && (
+                <TouchableOpacity onPress={() => setCountySearch('')}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
             <ScrollView style={styles.countyList} nestedScrollEnabled>
+              <TouchableOpacity
+                style={[
+                  styles.countyOption,
+                  { borderBottomColor: colors.border },
+                  chamaData.county === 'National' && { backgroundColor: colors.primary + '15' }
+                ]}
+                onPress={() => selectCounty('National')}
+              >
+                <View style={styles.countyOptionLeft}>
+                  <Ionicons name="earth" size={18} color={colors.primary} />
+                  <Text
+                    style={[
+                      styles.countyOptionText,
+                      { color: chamaData.county === 'National' ? colors.primary : colors.text }
+                    ]}
+                  >
+                    Not specific/Multi-County
+                  </Text>
+                </View>
+                {chamaData.county === 'National' && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+
               {filteredCounties.map((county) => (
                 <TouchableOpacity
                   key={county}
                   style={[
                     styles.countyOption,
                     { borderBottomColor: colors.border },
-                    chamaData.county === county && { backgroundColor: colors.primary + '20' }
+                    chamaData.county === county && { backgroundColor: colors.primary + '15' }
                   ]}
                   onPress={() => selectCounty(county)}
                 >
-                  <Text style={[
-                    styles.countyOptionText,
-                    { color: chamaData.county === county ? colors.primary : colors.text }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.countyOptionText,
+                      { color: chamaData.county === county ? colors.primary : colors.text }
+                    ]}
+                  >
                     {county}
                   </Text>
                   {chamaData.county === county && (
@@ -108,207 +251,8 @@ const CreateChamaStep2 = ({
               )}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
-
-      {chamaData.group_type === 'chama' && (
-        <View style={styles.row}>
-          <Input
-            label="Contribution Amount (KES) *"
-            value={chamaData.contribution_amount}
-            onChangeText={(text) => handleInputChange('contribution_amount', text)}
-            placeholder="0"
-            keyboardType="numeric"
-            style={styles.halfInput}
-            error={showErrors && formErrors.contribution_amount}
-          />
-
-          <View style={styles.halfInput}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Frequency *
-            </Text>
-            <View style={styles.frequencyContainer}>
-              {frequencies.map((freq) => (
-                <TouchableOpacity
-                  key={freq.id}
-                  style={[
-                    styles.frequencyChip,
-                    {
-                      backgroundColor: chamaData.contribution_frequency === freq.id ? colors.primary : colors.backgroundSecondary,
-                      borderColor: colors.border,
-                    }
-                  ]}
-                  onPress={() => handleInputChange('contribution_frequency', freq.id)}
-                >
-                  <Text style={[
-                    styles.frequencyText,
-                    { color: chamaData.contribution_frequency === freq.id ? colors.white : colors.text }
-                  ]}>
-                    {freq.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
-
-      {chamaData.group_type === 'contribution' && (
-        <>
-          <Input
-            label="Target Amount (KES) *"
-            value={chamaData.target_amount}
-            onChangeText={(text) => handleInputChange('target_amount', text)}
-            placeholder="e.g., 50000"
-            keyboardType="numeric"
-            error={showErrors && formErrors.target_amount}
-          />
-
-          <Input
-            label="Contribution Rules"
-            value={chamaData.contribution_rules}
-            onChangeText={(text) => handleInputChange('contribution_rules', text)}
-            placeholder="e.g., Minimum KES 100 per person, Deadline: End of month, No refunds after target reached"
-            multiline
-            numberOfLines={3}
-            error={showErrors && formErrors.contribution_rules}
-          />
-        </>
-      )}
-
-      <View style={styles.paymentMethodSection}>
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-          Payment Method (Optional)
-        </Text>
-        <View style={styles.descriptionContainer}>
-          <Text
-            style={[styles.sectionDescription, { color: colors.textSecondary }]}
-            adjustsFontSizeToFit={false}
-            allowFontScaling={true}
-          >
-            Configure how members will send payments to this {chamaData.group_type === 'contribution' ? 'contribution group' : 'chama'}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.paymentMethodRow}>
-        <TouchableOpacity
-          style={[
-            styles.paymentMethodCard,
-            styles.paymentMethodCardLeft,
-            {
-              backgroundColor: chamaData.payment_method === 'till' ? colors.primary + '20' : colors.backgroundSecondary,
-              borderColor: chamaData.payment_method === 'till' ? colors.primary : colors.border,
-            }
-          ]}
-          onPress={() => handleInputChange('payment_method', chamaData.payment_method === 'till' ? '' : 'till')}
-        >
-          {chamaData.payment_method === 'till' && (
-            <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
-              <Ionicons name="checkmark" size={10} color={colors.white} />
-            </View>
-          )}
-          <Ionicons
-            name="card"
-            size={24}
-            color={chamaData.payment_method === 'till' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[
-            styles.paymentMethodText,
-            { color: chamaData.payment_method === 'till' ? colors.primary : colors.text }
-          ]}>
-            TILL
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.paymentMethodCard,
-            styles.paymentMethodCardRight,
-            {
-              backgroundColor: chamaData.payment_method === 'paybill' ? colors.primary + '20' : colors.backgroundSecondary,
-              borderColor: chamaData.payment_method === 'paybill' ? colors.primary : colors.border,
-            }
-          ]}
-          onPress={() => handleInputChange('payment_method', chamaData.payment_method === 'paybill' ? '' : 'paybill')}
-        >
-          {chamaData.payment_method === 'paybill' && (
-            <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
-              <Ionicons name="checkmark" size={10} color={colors.white} />
-            </View>
-          )}
-          <Ionicons
-            name="business"
-            size={24}
-            color={chamaData.payment_method === 'paybill' ? colors.primary : colors.textSecondary}
-          />
-          <Text style={[
-            styles.paymentMethodText,
-            { color: chamaData.payment_method === 'paybill' ? colors.primary : colors.text }
-          ]}>
-            PAYBILL
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {chamaData.payment_method === 'till' && (
-        <View>
-          <Input
-            label="TILL Number *"
-            value={chamaData.till_number}
-            onChangeText={(text) => handleInputChange('till_number', text)}
-            placeholder="e.g., 123456"
-            keyboardType="numeric"
-            maxLength={10}
-            error={showErrors && formErrors.till_number}
-          />
-          <Input
-            label="Recipient Name *"
-            value={chamaData.payment_recipient_name}
-            onChangeText={(text) => handleInputChange('payment_recipient_name', text)}
-            placeholder="Name members will see when paying"
-            error={showErrors && formErrors.payment_recipient_name}
-          />
-        </View>
-      )}
-
-      {chamaData.payment_method === 'paybill' && (
-        <View>
-          <Input
-            label="Business Number *"
-            value={chamaData.paybill_business_number}
-            onChangeText={(text) => handleInputChange('paybill_business_number', text)}
-            placeholder="e.g., 123456"
-            keyboardType="numeric"
-            maxLength={10}
-            error={showErrors && formErrors.paybill_business_number}
-          />
-          <Input
-            label="Account Number *"
-            value={chamaData.paybill_account_number}
-            onChangeText={(text) => handleInputChange('paybill_account_number', text)}
-            placeholder="Account number for payments"
-            error={showErrors && formErrors.paybill_account_number}
-          />
-          <Input
-            label="Recipient Name *"
-            value={chamaData.payment_recipient_name}
-            onChangeText={(text) => handleInputChange('payment_recipient_name', text)}
-            placeholder="Name members will see when paying"
-            error={showErrors && formErrors.payment_recipient_name}
-          />
-        </View>
-      )}
-
-      <Input
-        label="Maximum Members *"
-        value={chamaData.max_members}
-        onChangeText={(text) => handleInputChange('max_members', text)}
-        placeholder="e.g., 20"
-        keyboardType="numeric"
-        error={showErrors && formErrors.max_members}
-        style={{ marginTop: spacing.lg }}
-      />
     </Card>
   );
 };
@@ -323,18 +267,27 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
     textAlign: 'center',
+  },
+  stepDescription: {
+    fontSize: typography.fontSize.base,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.sm,
+  },
+  sectionLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: spacing.md,
   },
   inputLabel: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     marginBottom: spacing.sm,
-  },
-  errorText: {
-    fontSize: typography.fontSize.sm,
-    marginTop: spacing.xs,
-    marginLeft: spacing.sm,
   },
   row: {
     flexDirection: 'row',
@@ -343,151 +296,116 @@ const styles = StyleSheet.create({
   halfInput: {
     flex: 1,
   },
-  frequencyContainer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  frequencyChip: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  frequencyText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-  paymentMethodSection: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-    width: '100%',
-    flexDirection: 'column',
-  },
-  sectionLabel: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  sectionDescription: {
-    fontSize: typography.fontSize.base,
-    textAlign: 'left',
-    lineHeight: 22,
-    letterSpacing: 0.2,
-    width: '100%',
-    minHeight: 44,
-    flexShrink: 1,
-    flexGrow: 1,
-  },
-  paymentMethodRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginHorizontal: spacing.sm,
-  },
-  paymentMethodCard: {
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 90,
-    marginBottom: spacing.sm,
-    position: 'relative',
-  },
-  paymentMethodText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-    lineHeight: typography.lineHeight.normal,
-  },
-  checkBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentMethodCardLeft: {
-    flex: 1,
-    marginRight: spacing.xs,
-  },
-  paymentMethodCardRight: {
-    flex: 1,
-    marginLeft: spacing.xs,
-  },
   countySelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: 4,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    minHeight: 36,
+    minHeight: 48,
+    marginBottom: 0,
   },
   countyText: {
     fontSize: typography.fontSize.base,
     flex: 1,
+    marginRight: spacing.sm,
+  },
+  frequencyRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  frequencyChip: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  frequencyText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   modalContent: {
-    width: '80%',
+    width: '85%',
     maxWidth: 320,
-    maxHeight: '70%',
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
     ...shadows.lg,
   },
-  modalTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    marginBottom: spacing.xs,
-  },
-  countySearch: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    fontSize: typography.fontSize.base,
-  },
-  countyList: {
-    maxHeight: 300,
-  },
-  countyOption: {
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  countySearch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  countySearchInput: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    paddingVertical: 0,
+    marginLeft: spacing.sm,
+  },
+  countyList: {
+    maxHeight: 320,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  countyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  countyOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.sm,
   },
   countyOptionText: {
     fontSize: typography.fontSize.base,
     flex: 1,
   },
   noResults: {
-    fontSize: typography.fontSize.base,
-    textAlign: 'center',
+    fontSize: typography.fontSize.sm,
     paddingVertical: spacing.lg,
+    textAlign: 'center',
   },
 });
 

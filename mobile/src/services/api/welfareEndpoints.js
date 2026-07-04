@@ -85,6 +85,21 @@ const bulkDisburseWelfareFunds = async (chamaId, bulkData) => {
   });
 };
 
+const approveWelfareDisbursement = async (chamaId, fundId, approvalData) => {
+  return await makeRequest(`/chamas/${chamaId}/disbursements/${fundId}/approval`, {
+    method: 'POST',
+    body: approvalData,
+  });
+};
+
+const getDisbursementApprovalHistory = async (chamaId, disbursementId) => {
+  return await makeRequest(`/chamas/${chamaId}/disbursements/${disbursementId}/approval-history`);
+};
+
+const getChamaDisbursementApprovals = async (chamaId, userId) => {
+  return await makeRequest(`/chamas/${chamaId}/disbursements/approval-history?userId=${userId}`);
+};
+
 export {
   getWelfareRequests,
   getWelfareContributions,
@@ -93,4 +108,7 @@ export {
   contributeToWelfare,
   disburseWelfareFund,
   bulkDisburseWelfareFunds,
+  approveWelfareDisbursement,
+  getDisbursementApprovalHistory,
+  getChamaDisbursementApprovals,
 };

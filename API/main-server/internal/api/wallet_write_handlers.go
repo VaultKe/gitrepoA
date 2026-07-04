@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 	"vaultke-backend/config"
@@ -198,7 +197,7 @@ func TransferMoney(c *gin.Context) {
 			"transactionId":  processedTransaction.ID,
 			"amount":         req.Amount,
 			"recipientName":  recipientName,
-			"recipientPhone": recipientPhone,
+			"recipientPhone": utils.MaskPhone(recipientPhone),
 			"description":    description,
 			"status":         processedTransaction.Status,
 			"transactionRef": processedTransaction.Reference,
@@ -244,6 +243,7 @@ func DepositMoney(c *gin.Context) {
 	}
 
 	// For M-Pesa deposits, use real M-Pesa STK push
+	var transactionID string
 	if req.PaymentMethod == "mpesa" {
 		// Get user's phone number
 		db, exists := c.Get("db")
@@ -304,9 +304,22 @@ func DepositMoney(c *gin.Context) {
 		// Create M-Pesa service
 		mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
 
-		// Create pending transaction record with proper reference
-		targetWalletID := "wallet-personal-" + userID.(string)
-		transactionID, err := createPendingMpesaTransaction(db.(*sql.DB), req.Amount, reference, targetWalletID, "", "deposit", "personal", userID.(string))
+		walletService := services.NewWalletService(db.(*sql.DB))
+		personalUserID := userID.(string)
+		targetWallet, err := walletService.GetWalletByOwnerAndType(personalUserID, models.WalletTypePersonal)
+		if err != nil {
+			targetWallet, err = walletService.CreateWallet(personalUserID, models.WalletTypePersonal)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"error":   "Failed to create personal wallet",
+				})
+				return
+			}
+		}
+		targetWalletID := targetWallet.ID
+
+		transactionID, err = createPendingMpesaTransaction(db.(*sql.DB), req.Amount, reference, targetWalletID, "", "deposit", "personal", personalUserID)
 		if err != nil {
 			log.Printf("Failed to create pending transaction: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -321,75 +334,25 @@ func DepositMoney(c *gin.Context) {
 		if err != nil {
 			log.Printf("STK Push failed: %v", err)
 
-			// Check if development mode is enabled for mock success
-			developmentMode := os.Getenv("DEVELOPMENT_MODE") == "true"
-			mockSuccess := c.Query("mock_success") == "true" // Allow override via query param
-
-			if developmentMode || mockSuccess {
-				log.Printf("Development mode enabled - creating mock successful transaction...")
-
-				// Simulate successful transaction for development
-				mockTransactionID := fmt.Sprintf("DEV_MOCK_%d", time.Now().UnixNano())
-
-				// Update the pending transaction to completed
-				_, err = db.(*sql.DB).Exec(`
-					UPDATE transactions
-					SET status = 'completed', reference = $1, updated_at = CURRENT_TIMESTAMP
-					WHERE id = $2
-				`, mockTransactionID, transactionID)
-				if err != nil {
-					log.Printf("Failed to update mock transaction: %v", err)
-				}
-
-				// Update wallet balance
-				_, err = db.(*sql.DB).Exec(`
-					UPDATE wallets
-					SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP
-					WHERE id = $2
-				`, req.Amount, "wallet-personal-"+userID.(string))
-				if err != nil {
-					log.Printf("Failed to update wallet balance: %v", err)
-				}
-
-				c.JSON(http.StatusOK, gin.H{
-					"success": true,
-					"message": "Deposit completed successfully (Development Mock)",
-					"data": map[string]interface{}{
-						"id":            transactionID,
-						"amount":        req.Amount,
-						"paymentMethod": req.PaymentMethod,
-						"reference":     mockTransactionID,
-						"status":        "completed",
-						"mock":          true,
-						"development":   true,
-					},
-				})
-				return
-			}
-
-			// Production mode: Mark transaction as failed with proper error details
 			failureReason := fmt.Sprintf("M-Pesa STK Push failed: %v", err)
 
-			// Update transaction status to failed
 			updateErr := updateTransactionStatus(db.(*sql.DB), transactionID, models.TransactionStatusFailed)
 			if updateErr != nil {
 				log.Printf("Failed to update transaction status to failed: %v", updateErr)
 			}
 
-			// Update additional failure details
 			_, updateErr = db.(*sql.DB).Exec(`
-				UPDATE transactions
-				SET reference = $1,
-				    description = CONCAT(description, ' - ', $2),
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE id = $3
-			`, fmt.Sprintf("FAILED_%d", time.Now().UnixNano()), failureReason, transactionID)
+			UPDATE transactions
+			SET reference = $1,
+			    description = COALESCE(description, '') || ' - ' || $2,
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE id = $3
+		`, fmt.Sprintf("FAILED_%d", time.Now().UnixNano()), failureReason, transactionID)
 
 			if updateErr != nil {
 				log.Printf("Failed to update transaction failure details: %v", updateErr)
 			}
 
-			// Return proper error response
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   "Failed to initiate M-Pesa payment: STK push failed",
@@ -403,7 +366,6 @@ func DepositMoney(c *gin.Context) {
 			return
 		}
 
-		// Update transaction with checkout request ID
 		updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
 
 		c.JSON(http.StatusOK, gin.H{
@@ -495,11 +457,8 @@ func DepositMoney(c *gin.Context) {
 	}
 
 	// Record the transaction
-	transactionID := fmt.Sprintf("txn-%d", time.Now().UnixNano())
+	transactionID = fmt.Sprintf("txn-%d", time.Now().UnixNano())
 	paymentMethod := req.PaymentMethod
-	if paymentMethod == "" {
-		paymentMethod = "simulation"
-	}
 
 	description := req.Description
 	if description == "" {
@@ -923,30 +882,18 @@ func InitiateRegistrationPayment(c *gin.Context) {
 	stkResponse, err := mpesaService.InitiateSTKPush(&mpesaReq)
 	if err != nil {
 		log.Printf("STK Push failed for registration payment: %v", err)
-
-		developmentMode := os.Getenv("DEVELOPMENT_MODE") == "true"
-		mockSuccess := c.Query("mock_success") == "true"
-
-		if developmentMode || mockSuccess {
-			log.Printf("Development mode - marking registration payment as completed")
-			_, _ = database.Exec(
-				"UPDATE transactions SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
-				transaction.ID,
-			)
-		} else {
-			_, _ = database.Exec(
-				"UPDATE transactions SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
-				transaction.ID,
-			)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to initiate STK push: " + err.Error(),
-			})
-			return
-		}
-	} else {
-		updateTransactionCheckoutRequestID(database, transaction.ID, stkResponse.CheckoutRequestID)
+		_, _ = database.Exec(
+			"UPDATE transactions SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+			transaction.ID,
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to initiate STK push: " + err.Error(),
+		})
+		return
 	}
+
+	updateTransactionCheckoutRequestID(database, transaction.ID, stkResponse.CheckoutRequestID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

@@ -6,9 +6,12 @@ import {
   Alert,
   ScrollView,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors } from '../../../utils/theme';
 import ApiService from '../../../services/api';
@@ -37,6 +40,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const [activeTab, setActiveTab] = useState('members');
   const [sentInvitations, setSentInvitations] = useState([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const refreshIntervalRef = useRef(null);
 
@@ -46,6 +50,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   const canManageRoles = () => {
     return userRole === 'chairperson';
+  };
+
+  const canExportMembers = () => {
+    return ['chairperson', 'secretary', 'treasurer'].includes(userRole);
   };
 
   useEffect(() => {
@@ -81,7 +89,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
       const response = await ApiService.getChamaMembers(chamaId);
       if (response.success) {
         const membersData = response.data || [];
-        setMembers(membersData);
+        const uniqueMembers = Array.from(
+          new Map(membersData.map((m) => [m.id, m])).values()
+        );
+        setMembers(uniqueMembers);
 
         // Member stats remain available for future stats cards.
 
@@ -225,6 +236,75 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     }
   };
 
+  const handleExportMembers = async () => {
+    if (exporting) return;
+    setExporting(true);
+
+    try {
+      // Call backend export endpoint
+      const blob = await ApiService.exportChamaMembers(chamaId);
+      
+      if (Platform.OS === 'web') {
+        // Web: trigger download using blob
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        // Native: convert blob to base64 and save
+        const fileName = `ChamaMembers_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const fileUri = FileSystem.documentDirectory + fileName;
+        
+        // Convert blob to base64 - React Native compatible
+        const base64data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result;
+            if (typeof result === 'string') {
+              resolve(result.split(',')[1]);
+            } else {
+              reject(new Error('Failed to read blob'));
+            }
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        
+        await FileSystem.writeAsStringAsync(fileUri, base64data, { 
+          encoding: FileSystem.EncodingType.Base64 
+        });
+        
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            dialogTitle: 'Export Members',
+            UTI: 'org.openxmlformats.spreadsheetml.sheet',
+          });
+        }
+      }
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Export Ready',
+        text2: 'Members list has been downloaded.',
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Export Failed',
+        text2: error.message || 'Could not export members list.',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const filteredMembers = useMemo(
     () => getFilteredMembers(members, searchQuery),
     [members, searchQuery]
@@ -276,8 +356,10 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
           filteredMembersCount={filteredMembers.length}
           sentInvitationsCount={sentInvitations.length}
           canManageMembers={canManageMembers}
+          canExportMembers={canExportMembers()}
           setActiveTab={setActiveTab}
           theme={theme}
+          onExportMenuPress={handleExportMembers}
         />
 
         {activeTab === 'members' ? (

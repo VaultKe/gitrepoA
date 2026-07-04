@@ -583,6 +583,55 @@ const ContributeScreen = ({ route, navigation }) => {
   };
 
   const handleWalletContribution = async (cleanChamaId) => {
+    // For savings contributions, use the subwallet endpoint
+    if (contributionType === 'savings') {
+      const response = await ApiService.contributeToSavings(cleanChamaId, parseFloat(amount), description || getContributionDescription());
+
+      if (response.success) {
+        const backendBalance = response.data?.senderBalanceAfter;
+        if (typeof backendBalance === 'number' && !isNaN(backendBalance)) {
+          setWalletBalance(Math.max(0, backendBalance));
+        } else {
+          setWalletBalance(prev => Math.max(0, prev - parseFloat(amount || '0')));
+        }
+
+        const refreshBalance = async () => {
+          try {
+            const balanceRes = await ApiService.getWalletBalance();
+            if (balanceRes.success && balanceRes.data?.balance !== undefined) {
+              setWalletBalance(balanceRes.data.balance);
+            }
+          } catch {}
+        };
+
+        try {
+          await refreshSpecificData('wallet');
+        } catch {}
+
+        // Retry refresh shortly after in case writes haven't surfaced yet
+        setTimeout(refreshBalance, 1500);
+
+        Toast.show({
+          type: 'success',
+          text1: 'Savings Contribution Successful!',
+          text2: `You have successfully contributed ${formatCurrency(parseFloat(amount))} from your personal wallet to ${chama?.name || 'group'} savings subwallet.`,
+          position: 'top',
+          visibilityTime: 4000,
+          topOffset: 60,
+        });
+
+        setTimeout(() => {
+          setAmount('');
+          setDescription('');
+          setShowPaymentModal(false);
+          navigation.goBack();
+        }, 2000);
+      } else {
+        throw new Error(response.error || 'Savings contribution failed');
+      }
+      return;
+    }
+
     const validContributionType = (() => {
       const validTypes = ['regular', 'penalty', 'special', 'merry-go-round', 'welfare'];
       return validTypes.includes(contributionType) ? contributionType : 'regular';
@@ -609,6 +658,15 @@ const ContributeScreen = ({ route, navigation }) => {
       try {
         await refreshSpecificData('wallet');
       } catch {}
+
+      setTimeout(async () => {
+        try {
+          const balanceRes = await ApiService.getWalletBalance();
+          if (balanceRes.success && balanceRes.data?.balance !== undefined) {
+            setWalletBalance(balanceRes.data.balance);
+          }
+        } catch {}
+      }, 1500);
 
       const successTitle = contributionType === 'regular'
         ? 'Contribution Successful!'
@@ -643,8 +701,10 @@ const ContributeScreen = ({ route, navigation }) => {
         return proposalTitle
           ? `Welfare support for: ${proposalTitle}`
           : `Welfare contribution to ${chama?.name}`;
+      case 'savings':
+        return `Savings contribution to ${chama?.name}`;
       default:
-        return `Contribution to ${chama?.name}`;
+        return `${contributionType.charAt(0).toUpperCase() + contributionType.slice(1)} contribution to ${chama?.name}`;
     }
   };
 
@@ -657,7 +717,10 @@ const ContributeScreen = ({ route, navigation }) => {
         baseMessage = `You have successfully contributed KES ${amountText} to ${roundName || 'the merry-go-round'} from your VaultKe wallet.`;
         break;
       case 'welfare':
-        baseMessage = `You have successfully contributed KES ${amountText} from your VaultKe wallet to the welfare fund.`;
+        baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to the welfare fund.`;
+        break;
+      case 'savings':
+        baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to ${chamaName} savings.`;
         break;
       default:
         baseMessage = `You have successfully contributed KES ${amountText} from your VaultKe wallet to ${chamaName}.`;
@@ -937,8 +1000,18 @@ const handleMpesaContribution = async (cleanChamaId) => {
         );
         return false;
       }
-
     }
+
+    // Savings contributions only allow wallet payment
+    if (contributionType === 'savings' && method !== 'wallet') {
+      Alert.alert(
+        'Invalid Payment Method',
+        'Only wallet payments are allowed for savings contributions. Please use your VaultKe wallet.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+
     return true;
   };
 
@@ -1084,6 +1157,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
         return 'Merry-Go-Round Contribution';
       case 'welfare':
         return 'Welfare Contribution';
+      case 'savings':
+        return 'Savings Contribution';
       case 'loan':
         return 'Loan Contribution';
       case 'emergency':
@@ -1101,6 +1176,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
         return proposalTitle
           ? `Support: ${proposalTitle}`
           : `Welfare fund for ${chama?.name || 'group'}`;
+      case 'savings':
+        return `Save to your chama savings subwallet`;
       case 'loan':
         return `Loan fund for ${chama?.name || 'group'}`;
       case 'emergency':
@@ -1116,6 +1193,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
         return 'refresh-circle';
       case 'welfare':
         return 'heart';
+      case 'savings':
+        return 'wallet';
       case 'loan':
         return 'card';
       case 'emergency':
@@ -1131,6 +1210,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
         return colors.warning;
       case 'welfare':
         return '#EC4899'; // Pink
+      case 'savings':
+        return colors.success;
       case 'loan':
         return '#6366F1'; // Indigo
       case 'emergency':

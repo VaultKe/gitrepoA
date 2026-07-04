@@ -201,9 +201,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
 
       if (membersResponse.success) {
-        setMembers(membersResponse.data || []);
+        const uniqueMembers = Array.from(
+          new Map((membersResponse.data || []).map((m) => [m.id, m])).values()
+        );
+        setMembers(uniqueMembers);
         const currentUserId = String(user?.id);
-        const membership = membersResponse.data?.find(member =>
+        const membership = uniqueMembers.find(member =>
           String(member.user_id) === currentUserId ||
           String(member.user?.id) === currentUserId
         );
@@ -710,7 +713,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             const isActive = memberStatus === 'active';
 
             return (
-              <View key={member.user_id || member.id || index} style={[styles.memberItem, { borderBottomColor: colors.border }]}>
+              <View key={[member.user_id, member.id, index].filter(Boolean).join('-')} style={[styles.memberItem, { borderBottomColor: colors.border }]}>
                 {renderMemberAvatar(member)}
                 <View style={styles.memberInfo}>
                   <Text style={[styles.memberName, { color: colors.text }]}>
@@ -783,7 +786,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             const isPast = new Date(meeting.scheduledAt || meeting.scheduled_date || meeting.date) < new Date();
 
             return (
-              <View key={meeting.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+              <View key={`meeting-${meeting.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
                 <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{meeting.title || 'Chama Meeting'}</Text>
                 <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{meetingDate} {meetingTime}</Text>
                 <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isCompleted ? colors.success : isPast ? colors.textSecondary : colors.info, textAlign: 'center' }}>
@@ -856,7 +859,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             const transactionDescription = transaction.description || (isContribution ? 'Chama Contribution' : 'Transaction') || transactionType;
 
             return (
-              <View key={transaction.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+              <View key={`transaction-${transaction.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
                 <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{transactionDescription}</Text>
                 <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{contributionDate}</Text>
                 <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.medium, color: isContribution ? colors.success : colors.primary, textAlign: 'right' }}>
@@ -931,7 +934,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
               const isActive = pollStatus === 'active' && !hasEnded;
 
               return (
-                <View key={poll.id || index} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+                 <View key={`poll-${poll.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
                   <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
                   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <Ionicons

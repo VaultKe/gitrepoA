@@ -6,15 +6,16 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors } from '../../../utils/theme';
-import { spacing, typography, borderRadius } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 
 const AccountManagementScreen = ({ route, navigation }) => {
   const { chamaId } = route.params;
+  const { width } = useWindowDimensions();
   const { theme } = useApp();
   const colors = getThemeColors(theme);
 
@@ -23,42 +24,52 @@ const AccountManagementScreen = ({ route, navigation }) => {
       title: 'Loans',
       icon: 'card',
       color: colors.primary,
-      route: 'LoanManagement',
-      bg: colors.primary + '20',
+      onPress: () => navigation.navigate('LoanManagement', { chamaId }),
     },
     {
       title: 'Welfare',
       icon: 'heart',
       color: colors.warning,
-      route: 'WelfareDisbursement',
-      bg: colors.warning + '20',
+      onPress: () => navigation.navigate('WelfareDisbursement', { chamaId }),
     },
     {
       title: 'Subscriptions',
       icon: 'repeat',
       color: colors.info || colors.primary,
-      route: 'SubscriptionManagement',
-      bg: (colors.info || colors.primary) + '20',
+      onPress: () => navigation.navigate('SubscriptionManagement', { chamaId }),
     },
     {
       title: 'Savings',
       icon: 'wallet',
       color: colors.secondary,
-      route: 'SavingsWithdrawal',
-      bg: colors.secondary + '20',
+      onPress: () => navigation.navigate('SavingsWithdrawal', { chamaId }),
     },
     {
       title: 'Merry-go-round',
       icon: 'refresh-circle',
       color: colors.primary,
-      route: 'MaryGoRoundDisbursement',
-      bg: colors.primary + '20',
+      onPress: () => navigation.navigate('MaryGoRoundDisbursement', { chamaId }),
+    },
+    {
+      title: 'Shares',
+      icon: 'cube',
+      color: '#8B5CF6',
+      onPress: () => navigation.navigate('SharesManagement', { chamaId }),
+    },
+    {
+      title: 'Dividends',
+      icon: 'cash',
+      color: colors.success,
+      onPress: () => navigation.navigate('DividendsManagement', { chamaId }),
     },
   ];
 
-  const topRow = [modules[0], modules[1]];
-  const middleRow = [modules[2], modules[3]];
-  const bottomRow = [modules[4]];
+  const isDesktop = width >= 1024;
+  const isTablet = width >= 768;
+  const itemsPerRow = isDesktop ? 4 : isTablet ? 4 : 3;
+
+  const mainModules = modules.slice(0, -1);
+  const lastModule = modules[modules.length - 1];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -67,7 +78,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Stat Cards 2x2 Grid */}
-        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
+        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginHorizontal: spacing.md }}>
           <View style={styles.statsContainer}>
             <View style={styles.statRow}>
               <Card variant="outlined" style={styles.statCard}>
@@ -119,52 +130,34 @@ const AccountManagementScreen = ({ route, navigation }) => {
         <Card variant="outlined" style={styles.navigationContainer}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Management Modules</Text>
 
-          <View style={styles.navigationGrid}>
-            <View style={styles.navRow}>
-              {topRow.map((mod) => (
-                <TouchableOpacity
-                  key={mod.title}
-                  style={styles.navCard}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate(mod.route, { chamaId })}
-                >
-                  <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
-                    <Ionicons name={mod.icon} size={32} color={mod.color} />
-                  </View>
-                  <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={styles.navRow}>
-              {middleRow.map((mod) => (
-                <TouchableOpacity
-                  key={mod.title}
-                  style={styles.navCard}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate(mod.route, { chamaId })}
-                >
-                  <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
-                    <Ionicons name={mod.icon} size={32} color={mod.color} />
-                  </View>
-                  <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={styles.navRow}>
-              {bottomRow.map((mod) => (
-                <TouchableOpacity
-                  key={mod.title}
-                  style={[styles.navCard, bottomRow.length === 1 && { alignSelf: 'center' }]}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate(mod.route, { chamaId })}
-                >
-                  <View style={[styles.navIcon, { backgroundColor: mod.bg }]}>
-                    <Ionicons name={mod.icon} size={32} color={mod.color} />
-                  </View>
-                  <Text style={[styles.navTitle, { color: colors.text }]}>{mod.title}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            {mainModules.map((mod) => (
+              <TouchableOpacity
+                key={mod.title}
+                style={{ width: `${100 / itemsPerRow - 2}%`, alignItems: 'center', marginBottom: spacing.md }}
+                onPress={mod.onPress}
+              >
+                <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }}>
+                  <Ionicons name={mod.icon} size={24} color={mod.color} />
+                </View>
+                <Text style={{ fontSize: typography.fontSize.sm, color: colors.text, textAlign: 'center' }}>
+                  {mod.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
+            <TouchableOpacity
+              onPress={lastModule.onPress}
+              style={{ alignItems: 'center' }}
+            >
+              <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }}>
+                <Ionicons name={lastModule.icon} size={24} color={lastModule.color} />
+              </View>
+              <Text style={{ fontSize: typography.fontSize.sm, color: colors.text, textAlign: 'center' }}>
+                {lastModule.title}
+              </Text>
+            </TouchableOpacity>
           </View>
         </Card>
       </ScrollView>
@@ -172,7 +165,6 @@ const AccountManagementScreen = ({ route, navigation }) => {
   );
 };
 
-// 🎨 SECURE ACCOUNT MANAGEMENT STYLES
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -183,13 +175,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   statsContainer: {
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: borderRadius.lg,
   },
   statRow: {
     flexDirection: 'row',
@@ -200,9 +187,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.xs,
   },
   statIcon: {
     marginBottom: spacing.sm,
@@ -224,40 +208,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  navigationGrid: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    width: '100%',
-  },
-  navCard: {
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderRadius: borderRadius.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    flex: 1,
-  },
-  navIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  navTitle: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
-    textAlign: 'center',
   },
 });
 

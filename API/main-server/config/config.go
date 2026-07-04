@@ -78,10 +78,6 @@ type Config struct {
 	LogLevel string
 	LogFile  string
 
-	// CORS Configuration
-	AllowedOrigins []string
-	AllowAllOrigins bool
-
 	// Metrics and Monitoring Configuration
 	EnableMetrics bool
 	MetricsPort   string
@@ -91,6 +87,14 @@ type Config struct {
 	BackupEnabled  bool
 	BackupInterval int
 	BackupPath     string
+
+	// CORS Configuration
+	AllowedOrigins  []string
+	AllowAllOrigins bool
+
+	// Microservice URLs
+	MeetingServiceURL string
+	ChatServiceURL    string
 }
 
 // Load loads configuration from environment variables
@@ -98,7 +102,7 @@ func Load() *Config {
 	return &Config{
 		Environment:   getEnv("ENVIRONMENT", "development"),
 		Port:          getEnv("PORT", "8085"),
-		DatabaseURL:   getEnv("DATABASE_URL", "postgres://postgres:password@localhost/vaultke?sslmode=disable"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"),
 		JWTSecret:     getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
 		JWTExpiration: getEnvAsInt("JWT_EXPIRATION", 24*60*60), // 24 hours in seconds
 
@@ -178,6 +182,10 @@ func Load() *Config {
 		// CORS Configuration
 		AllowedOrigins:  getEnvAsStringSlice("ALLOWED_ORIGINS", []string{}),
 		AllowAllOrigins: getEnvAsBool("ALLOW_ALL_ORIGINS", true), // Default to true for development
+
+// Microservice URLs
+	MeetingServiceURL: getEnv("MEETING_SERVICE_URL", "http://localhost:8086"),
+	ChatServiceURL:    getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
 	}
 }
 
@@ -273,7 +281,7 @@ func (c *Config) SetDefaults() {
 		c.JWTSecret = "your-super-secret-jwt-key-change-in-production"
 	}
 	if c.DatabaseURL == "" {
-		c.DatabaseURL = "postgres://postgres:password@localhost/vaultke?sslmode=disable"
+		c.DatabaseURL = "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 	}
 	if c.Environment == "" {
 		c.Environment = "development"

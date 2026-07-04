@@ -45,23 +45,38 @@ func (w *corsResponseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+func (w *corsResponseWriter) Write(data []byte) (int, error) {
+	// Ensure headers are set even if Write is called without WriteHeader
+	if w.Header().Get("Access-Control-Allow-Origin") == "" {
+		setCORSHeaders(w.Header(), w.origin)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
 // CORSMiddleware applies strict CORS handling
 func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
-	// cfg retained for compatibility even though strict CORS
-	// no longer depends on environment.
-	_ = cfg
+	allowedOrigins := make(map[string]struct{})
+	for _, origin := range cfg.AllowedOrigins {
+		allowedOrigins[origin] = struct{}{}
+	}
 
-	allowedOrigins := map[string]struct{}{
-		"https://gitrepoa-1.onrender.com":  {},
-		"http://localhost:8081":            {},
-		"https://localhost":                {},
-		"https://127.0.0.1:8081":           {},
-		"http://localhost:8085":            {},
-		"http://localhost:3000":            {},
-		"http://127.0.0.1:3000":            {},
-		"https://vault-better1.vercel.app": {},
-		"http://localhost:19006":           {},
-		"http://127.0.0.1:19006":           {},
+	// Default fallback origins for development when none configured
+	defaultOrigins := []string{
+		"https://gitrepoa-1.onrender.com",
+		"http://localhost:8081",
+		"https://localhost",
+		"https://127.0.0.1:8081",
+		"http://localhost:8085",
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+		"https://vault-better1.vercel.app",
+		"http://localhost:19006",
+		"http://127.0.0.1:19006",
+	}
+	if len(allowedOrigins) == 0 {
+		for _, origin := range defaultOrigins {
+			allowedOrigins[origin] = struct{}{}
+		}
 	}
 
 	return func(c *gin.Context) {
@@ -77,8 +92,10 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 			log.Printf("ℹ️ CORS: Request without Origin header (likely mobile client)")
 			// Allow the request to proceed - don't abort
 			allowedOrigin = "*"
+		} else if cfg.AllowAllOrigins {
+			// When ALLOW_ALL_ORIGINS is true, echo back the requesting origin
+			allowedOrigin = origin
 		} else if _, allowed := allowedOrigins[origin]; !allowed {
-
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Origin not allowed",
 			})

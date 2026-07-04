@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -35,28 +36,40 @@ type connWrapper struct {
 }
 
 type Hub struct {
-	clients      map[*Client]bool
-	rooms        map[string]map[*Client]bool
-	broadcast    chan *Message
-	register     chan *Client
-	unregister   chan *Client
-	roomMessages chan *RoomMessage
-	mu           sync.RWMutex
+	clients       map[*Client]bool
+	rooms         map[string]map[*Client]bool
+	broadcast     chan *Message
+	register      chan *Client
+	unregister    chan *Client
+	roomMessages  chan *RoomMessage
+	roomSubscribe chan *RoomSubscription
+	mu            sync.RWMutex
+}
+
+type RoomSubscription struct {
+	Client *Client
+	RoomID string
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:      make(map[*Client]bool),
-		rooms:        make(map[string]map[*Client]bool),
-		broadcast:    make(chan *Message, 256),
-		register:     make(chan *Client, 256),
-		unregister:   make(chan *Client, 256),
-		roomMessages: make(chan *RoomMessage, 256),
+		clients:       make(map[*Client]bool),
+		rooms:         make(map[string]map[*Client]bool),
+		broadcast:     make(chan *Message, 256),
+		register:      make(chan *Client, 256),
+		unregister:    make(chan *Client, 256),
+		roomMessages:  make(chan *RoomMessage, 256),
+		roomSubscribe: make(chan *RoomSubscription, 256),
 	}
 }
 
 func (h *Hub) Run() {
 	for {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("WS HUB PANIC RECOVERED: %v\n", r)
+			}
+		}()
 		select {
 		case client := <-h.register:
 			h.mu.Lock()
@@ -79,6 +92,14 @@ func (h *Hub) Run() {
 				}
 				close(client.send)
 			}
+			h.mu.Unlock()
+
+		case sub := <-h.roomSubscribe:
+			h.mu.Lock()
+			if h.rooms[sub.RoomID] == nil {
+				h.rooms[sub.RoomID] = make(map[*Client]bool)
+			}
+			h.rooms[sub.RoomID][sub.Client] = true
 			h.mu.Unlock()
 
 		case msg := <-h.broadcast:
@@ -118,6 +139,13 @@ func (h *Hub) Register(conn *websocket.Conn, userID, roomID string) *Client {
 	}
 	h.register <- client
 	return client
+}
+
+func (h *Hub) RegisterToRoom(userID, roomID string, client *Client) {
+	h.roomSubscribe <- &RoomSubscription{
+		Client: client,
+		RoomID: roomID,
+	}
 }
 
 func (h *Hub) Unregister(client *Client) {

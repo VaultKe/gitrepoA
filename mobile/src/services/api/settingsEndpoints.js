@@ -1,4 +1,5 @@
-import { makeRequest, makeRequestWithRetry } from './client';
+import { makeRequest, makeRequestWithRetry, API_BASE_URL } from './client';
+import { getAuthToken } from './auth';
 
 const getNotificationPreferences = async () => {
   return await makeRequest('/notifications/preferences', { method: 'GET' });
@@ -89,6 +90,10 @@ const getEligibleDividendMembers = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/eligible-dividend-members`);
 };
 
+const getChamaDividendDeclarations = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/dividends/`);
+};
+
 const getEligibleSharesMembers = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/eligible-shares-members`);
 };
@@ -99,6 +104,25 @@ const getEligibleSavingsMembers = async (chamaId) => {
 
 const getEligibleOtherMembers = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/eligible-other-members`);
+};
+
+const exportSavingsTransactions = async (chamaId) => {
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE_URL}/chamas/${chamaId}/savings/export`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Export failed: ${response.status} ${errorText}`);
+  }
+
+  // Return the blob directly for the export function
+  return await response.blob();
 };
 
 const getTransparencyFeedChama = async (chamaId, filters = {}) => {
@@ -129,6 +153,10 @@ const createChamaShares = async (chamaId, shareData) => {
     method: 'POST',
     body: shareData
   });
+};
+
+const getChamaShareOfferings = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/shares/offerings`);
 };
 
 const declareChamaDividends = async (chamaId, dividendData) => {
@@ -165,14 +193,17 @@ export {
   getEligibleLoanMembers,
   getEligibleWelfareMembers,
   getEligibleDividendMembers,
+  getChamaDividendDeclarations,
   getEligibleSharesMembers,
   getEligibleSavingsMembers,
   getEligibleOtherMembers,
+  exportSavingsTransactions,
   getTransparencyFeedChama,
   getAccountNotifications,
   sendSystemNotification,
   getMemberRole,
   createChamaShares,
+  getChamaShareOfferings,
   declareChamaDividends,
   validateSystemSecurity,
   logSecurityEvent,

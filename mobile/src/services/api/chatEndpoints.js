@@ -6,6 +6,7 @@
  */
 
 import chatService from '../chat/ChatService';
+import { makeRequest } from './client';
 
 // ==================== Room Operations ====================
 
@@ -80,27 +81,48 @@ export const getChatMessages = async (roomId, limit = 50, offset = 0) => {
  * Send a text message
  */
 export const sendMessage = async (roomId, messageData) => {
-  try {
-    const message = await chatService.sendMessage(
-      roomId,
-      messageData.content,
-      messageData.type || 'text',
-      messageData.metadata || {}
-    );
-    return { success: true, data: message };
-  } catch (error) {
-    console.error('sendMessage error:', error);
-    return { success: false, error: error.message };
-  }
-};
+   try {
+     console.log('[WS DEBUG] sendMessage API called with roomId:', roomId, 'data:', messageData);
+     const message = await chatService.sendMessage(
+       roomId,
+       messageData.content,
+       messageData.type || 'text',
+       messageData.metadata || {}
+     );
+     console.log('[WS DEBUG] sendMessage API resolved with:', JSON.stringify(message));
+     return { success: true, data: message };
+   } catch (error) {
+     console.error('[WS DEBUG] sendMessage API error:', error);
+     return { success: false, error: error.message };
+   }
+ };
 
 /**
- * Send an image message (placeholder - image upload not yet implemented)
+ * Upload image for chat messages
  */
-export const sendMessageWithImage = async (roomId, messageData) => {
-  // TODO: Implement image upload via backend
-  console.warn('Image messaging not yet implemented');
-  return { success: false, error: 'Image messaging not implemented' };
+export const uploadChatImage = async (imageUri) => {
+  try {
+    const formData = new FormData();
+    if (imageUri) {
+      const filename = imageUri.split('/').pop() || 'image.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      formData.append('image', {
+        uri: imageUri,
+        name: filename,
+        type: type,
+      });
+    }
+    
+    const result = await makeRequest('/chat/upload/image', {
+      method: 'POST',
+      body: formData,
+    });
+    return result;
+  } catch (error) {
+    console.error('uploadChatImage error:', error);
+    throw error;
+  }
 };
 
 /**
@@ -121,8 +143,6 @@ export const markMessageAsRead = async (roomId, messageId) => {
 /**
  * Get room members (still using REST as it's a one-time fetch)
  */
-import { makeRequest } from './client';
-
 export const getChatRoomMembers = async (roomId) => {
   try {
     return await makeRequest(`/chat/rooms/${roomId}/members`);

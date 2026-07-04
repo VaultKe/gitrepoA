@@ -116,8 +116,6 @@ func SecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-
-			fmt.Printf("✅ Valid Content-Type: '%s'\n", contentType)
 		}
 
 		// 4. Security headers
@@ -145,15 +143,17 @@ func SecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 			return
 		}
 
-		// 6. Validate User-Agent (block empty or suspicious agents)
-		userAgent := c.GetHeader("User-Agent")
-		if userAgent == "" || len(userAgent) < 10 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Invalid User-Agent",
-			})
-			c.Abort()
-			return
+		// 6. Validate User-Agent (skip for WebSocket upgrades)
+		if !strings.EqualFold(c.Request.Header.Get("Upgrade"), "websocket") {
+			userAgent := c.GetHeader("User-Agent")
+			if userAgent == "" || len(userAgent) < 10 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"error":   "Invalid User-Agent",
+				})
+				c.Abort()
+				return
+			}
 		}
 
 		// 7. Block suspicious patterns in URL
