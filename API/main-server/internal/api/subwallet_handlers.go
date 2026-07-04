@@ -246,13 +246,45 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 			return
 		}
 
+		// Verify both wallets were actually updated after processing
+		updatedSenderWallet, senderErr := walletService.GetWalletByID(senderWallet.ID)
+		updatedTargetWallet, targetErr := walletService.GetWalletByID(targetWallet.ID)
+		actualSenderBalance := senderWallet.Balance
+		actualTargetBalance := targetWallet.Balance
+		if senderErr == nil {
+			actualSenderBalance = updatedSenderWallet.Balance
+		}
+		if targetErr == nil {
+			actualTargetBalance = updatedTargetWallet.Balance
+		}
+		log.Printf("Savings contribution verification: sender wallet=%s before=%.2f after=%.2f target_wallet=%s before=%.2f after=%.2f",
+			senderWallet.ID, senderWallet.Balance, actualSenderBalance,
+			targetWallet.ID, targetWallet.Balance, actualTargetBalance)
+
+		// Update member contribution records in chama_members
+		_, contribErr := database.Exec(`
+			UPDATE chama_members
+			SET total_contributions = total_contributions + $1,
+			    last_contribution = CURRENT_TIMESTAMP
+			WHERE chama_id = $2 AND user_id = $3
+		`, req.Amount, chamaID, userID.(string))
+		if contribErr != nil {
+			log.Printf("⚠️ Failed to update member contribution records for savings: %v", contribErr)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "Savings contribution processed successfully",
 			"data": gin.H{
-				"transactionId": processedTx.ID,
-				"amount":        req.Amount,
-				"status":        "completed",
+				"transactionId":         processedTx.ID,
+				"amount":                req.Amount,
+				"status":                "completed",
+				"senderWalletId":        senderWallet.ID,
+				"senderBalanceBefore":   senderWallet.Balance,
+				"senderBalanceAfter":    actualSenderBalance,
+				"targetWalletId":        targetWallet.ID,
+				"targetBalanceBefore":   targetWallet.Balance,
+				"targetBalanceAfter":    actualTargetBalance,
 			},
 		})
 		return

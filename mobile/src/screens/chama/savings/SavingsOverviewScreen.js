@@ -20,6 +20,7 @@ import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { useFocusEffect } from '@react-navigation/native';
 
 const SavingsOverviewScreen = ({ navigation, route }) => {
   const { theme, user } = useApp();
@@ -120,6 +121,14 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
       fetchSavingsTransactions();
     }
   }, [activeTab, fetchSavingsTransactions]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isActiveRef.current && currentChamaId) {
+        fetchSavingsData();
+      }
+    }, [fetchSavingsData, currentChamaId])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

@@ -160,7 +160,7 @@ func (s *WalletService) GetWalletByOwnerAndType(ownerID string, walletType model
 	query := `
 		SELECT id, type, owner_id, balance, currency, is_active, is_locked,
 			   daily_limit, monthly_limit, created_at, updated_at
-		FROM wallets WHERE owner_id = $1 AND type = $2
+		FROM wallets WHERE owner_id = $1 AND type = $2 ORDER BY created_at ASC
 	`
 
 	wallet := &models.Wallet{}

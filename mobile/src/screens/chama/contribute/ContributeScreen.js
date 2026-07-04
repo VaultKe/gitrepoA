@@ -588,15 +588,33 @@ const ContributeScreen = ({ route, navigation }) => {
       const response = await ApiService.contributeToSavings(cleanChamaId, parseFloat(amount), description || getContributionDescription());
 
       if (response.success) {
-        await loadWalletBalance();
+        const backendBalance = response.data?.senderBalanceAfter;
+        if (typeof backendBalance === 'number' && !isNaN(backendBalance)) {
+          setWalletBalance(Math.max(0, backendBalance));
+        } else {
+          setWalletBalance(prev => Math.max(0, prev - parseFloat(amount || '0')));
+        }
+
+        const refreshBalance = async () => {
+          try {
+            const balanceRes = await ApiService.getWalletBalance();
+            if (balanceRes.success && balanceRes.data?.balance !== undefined) {
+              setWalletBalance(balanceRes.data.balance);
+            }
+          } catch {}
+        };
+
         try {
           await refreshSpecificData('wallet');
         } catch {}
 
+        // Retry refresh shortly after in case writes haven't surfaced yet
+        setTimeout(refreshBalance, 1500);
+
         Toast.show({
           type: 'success',
           text1: 'Savings Contribution Successful!',
-          text2: `You have successfully contributed ${formatCurrency(parseFloat(amount))} to your chama savings.`,
+          text2: `You have successfully contributed ${formatCurrency(parseFloat(amount))} from your personal wallet to ${chama?.name || 'group'} savings subwallet.`,
           position: 'top',
           visibilityTime: 4000,
           topOffset: 60,
@@ -640,6 +658,15 @@ const ContributeScreen = ({ route, navigation }) => {
       try {
         await refreshSpecificData('wallet');
       } catch {}
+
+      setTimeout(async () => {
+        try {
+          const balanceRes = await ApiService.getWalletBalance();
+          if (balanceRes.success && balanceRes.data?.balance !== undefined) {
+            setWalletBalance(balanceRes.data.balance);
+          }
+        } catch {}
+      }, 1500);
 
       const successTitle = contributionType === 'regular'
         ? 'Contribution Successful!'
