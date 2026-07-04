@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"vaultke-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // SendChamaInvitation sends an invitation to join a chama
@@ -596,8 +598,96 @@ func CreateChamaChatRoom(c *gin.Context) {
 		return
 	}
 
+	// Get chama details
+	chama, err := chamaService.GetChamaByID(chamaID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Chama not found",
+		})
+		return
+	}
+
+	// Check if chat room already exists
+	if chama.ChatRoomID != nil && strings.TrimSpace(*chama.ChatRoomID) != "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"id":      *chama.ChatRoomID,
+				"name":    chama.Name,
+				"type":    "chama",
+				"chamaId": chamaID,
+			},
+		})
+		return
+	}
+
+	roomID := uuid.New().String()
+	roomName := chama.Name
+	if strings.TrimSpace(roomName) == "" {
+		roomName = "Chama Group Chat"
+	}
+
+	// Use a transaction for atomicity
+	tx, err := db.(*sql.DB).Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create chat room",
+		})
+		return
+	}
+	defer tx.Rollback()
+
+	// Create chat room
+	_, err = tx.Exec(`INSERT INTO chat_rooms (id, chama_id, name, type, created_by, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())`,
+		roomID, chamaID, roomName, "chama", userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create chat room",
+		})
+		return
+	}
+
+	// Add creator as room member
+	memberID := uuid.New().String()
+	_, err = tx.Exec(`INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active) VALUES ($1, $2, $3, $4, NOW(), TRUE)`,
+		memberID, roomID, userID.(string), "admin")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to add chat room member",
+		})
+		return
+	}
+
+	// Update chamas table with chat_room_id
+	_, err = tx.Exec(`UPDATE chamas SET chat_room_id = $1, updated_at = NOW() WHERE id = $2`,
+		roomID, chamaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update chama with chat room",
+		})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to commit chat room creation",
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Chat rooms are managed by the chat microservice",
+		"data": gin.H{
+			"id":      roomID,
+			"name":    roomName,
+			"type":    "chama",
+			"chamaId": chamaID,
+		},
 	})
 }
