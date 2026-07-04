@@ -333,8 +333,6 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
               metadata: { ...metadata, replyToId },
               clientMessageId: tempId,
             };
-            console.log('[WS DEBUG] Sending message to backend:', JSON.stringify(message));
-
             if (!websocketService.send(message)) {
               clearTimeout(timeout);
               websocketService.unregisterMessageHandler('message_sent');

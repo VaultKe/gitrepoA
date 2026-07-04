@@ -1,0 +1,777 @@
+2026/07/04 22:10:57 Database connection established successfully
+2026/07/04 22:10:57 Migrations tracking table ready
+2026/07/04 22:11:01 Column bio already exists in users table
+2026/07/04 22:11:01 Column occupation already exists in users table
+2026/07/04 22:11:02 Column date_of_birth already exists in users table
+2026/07/04 22:11:03 Column gender already exists in users table
+2026/07/04 22:11:03 Column id_number already exists in users table
+2026/07/04 22:11:04 registration fee columns ready
+2026/07/04 22:11:05 refresh_tokens schema ready
+2026/07/04 22:11:05 Core migrations completed successfully
+2026/07/04 22:11:07 Column permissions already exists in chamas table
+2026/07/04 22:11:07 Column category already exists in chamas table
+2026/07/04 22:11:10 Column chat_room_id already exists in chamas table
+2026/07/04 22:11:14 subscription fee columns ready
+2026/07/04 22:11:15 registration fee columns ready
+2026/07/04 22:11:15 Chamas migrations completed successfully
+2026/07/04 22:11:16 Column recipient_id already exists in transactions table
+2026/07/04 22:11:16 Column chama_id already exists in transactions table
+2026/07/04 22:11:16 Column recipient_id already exists in transactions table
+2026/07/04 22:11:17 Column checkout_request_id already exists in transactions table
+2026/07/04 22:11:18 subwallet_type column added to wallets table
+2026/07/04 22:11:19 member_id column added to transactions table
+2026/07/04 22:11:19 subwallet_type column added to transactions table
+2026/07/04 22:11:19 Wallets migrations completed successfully
+2026/07/04 22:11:21 Column loan_type_id already exists in loans table
+2026/07/04 22:11:22 loan_types schema ready
+2026/07/04 22:11:22 Loans migrations completed successfully
+2026/07/04 22:11:23 Column beneficiary_id already exists in welfare_requests table
+2026/07/04 22:11:24 Column welfare_request_id already exists in welfare_contributions table
+2026/07/04 22:11:24 Column contributor_id already exists in welfare_contributions table
+2026/07/04 22:11:25 Column message already exists in welfare_contributions table
+2026/07/04 22:11:25 Column status already exists in welfare_contributions table
+2026/07/04 22:11:26 Column created_at already exists in welfare_contributions table
+2026/07/04 22:11:27 Column updated_at already exists in welfare_contributions table
+2026/07/04 22:11:27 Welfare migrations completed successfully
+2026/07/04 22:11:27 Merry go round migrations completed successfully
+2026/07/04 22:11:29 Column dividend_type already exists in dividend_declarations table
+2026/07/04 22:11:34 Shares and dividends migrations completed successfully
+2026/07/04 22:11:35 Column content already exists in chat_messages table
+2026/07/04 22:11:36 Column type already exists in chat_messages table
+2026/07/04 22:11:36 Column metadata already exists in chat_messages table
+2026/07/04 22:11:37 Column is_deleted already exists in chat_messages table
+2026/07/04 22:11:37 Column reply_to_id already exists in chat_messages table
+2026/07/04 22:11:38 Updated content field from message field for existing records
+2026/07/04 22:11:38 Updated message field from content field for compatibility
+2026/07/04 22:11:39 Column is_active already exists in chat_rooms table
+2026/07/04 22:11:39 Column last_message already exists in chat_rooms table
+2026/07/04 22:11:40 Column last_message_at already exists in chat_rooms table
+2026/07/04 22:11:40 Column updated_at already exists in chat_rooms table
+2026/07/04 22:11:41 Refactored chat messages to reduce redundancy
+2026/07/04 22:11:41 Starting chat message content refactor...
+2026/07/04 22:11:41 Refactored chat message content to store only ciphertext
+2026/07/04 22:11:41 Chat migrations completed successfully
+2026/07/04 22:11:43 file_url column already exists in meeting_documents table
+2026/07/04 22:11:43 Meetings migrations completed successfully
+2026/07/04 22:11:45 Polls and votes migrations completed successfully
+2026/07/04 22:11:48 Migrated existing notifications table data
+2026/07/04 22:12:02 Default notification sounds successfully upserted!
+2026/07/04 22:12:02 Notification templates already exist, skipping default template insertion.
+2026/07/04 22:12:03 'Vibrate' notification sound already exists, skipping insertion.
+2026/07/04 22:12:03 Notifications migrations completed successfully
+2026/07/04 22:12:05 Column video_url already exists in learning_courses table
+2026/07/04 22:12:06 Column quiz_questions already exists in learning_courses table
+2026/07/04 22:12:07 Column article_content already exists in learning_courses table
+2026/07/04 22:12:07 Column course_structure already exists in learning_courses table
+2026/07/04 22:12:07 Learning migrations completed successfully
+2026/07/04 22:12:08 Disbursements migrations completed successfully
+2026/07/04 22:12:08 Reminders migrations completed successfully
+2026/07/04 22:12:08 Starting database migrations...
+2026/07/04 22:12:09 Migration 'create_notification_system_tables' already executed, skipping...
+2026/07/04 22:12:10 Migration 'insert_default_notification_data' already executed, skipping...
+2026/07/04 22:12:10 Migration 'insert_vibrate_sound' already executed, skipping...
+2026/07/04 22:12:10 All migrations completed successfully!
+2026/07/04 22:12:11 loan_types schema ready
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+2026/07/04 22:12:13 Starting notification scheduler...
+[GIN-debug] Loaded HTML Templates (5): 
+	- 
+	- oauth_error.html
+	- oauth_success_secure.html
+	- privacy-policy.html
+	- terms-of-service.html
+
+[GIN-debug] GET    /health                   --> vaultke-backend/internal/routes.SetupRoutes.func2 (7 handlers)
+[GIN-debug] GET    /privacy-policy           --> vaultke-backend/internal/routes.SetupRoutes.func3 (7 handlers)
+[GIN-debug] GET    /terms-of-service         --> vaultke-backend/internal/routes.SetupRoutes.func4 (7 handlers)
+[GIN-debug] GET    /uploads/*filepath        --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (7 handlers)
+[GIN-debug] HEAD   /uploads/*filepath        --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (7 handlers)
+[GIN-debug] GET    /notification_sound/*filepath --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (7 handlers)
+[GIN-debug] HEAD   /notification_sound/*filepath --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (7 handlers)
+[GIN-debug] GET    /api/v1/health            --> vaultke-backend/internal/routes.SetupRoutes.func11 (7 handlers)
+[GIN-debug] POST   /api/v1/auth/register     --> vaultke-backend/internal/api.(*AuthHandlers).Register-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/login        --> vaultke-backend/internal/api.(*AuthHandlers).Login-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/logout       --> vaultke-backend/internal/api.(*AuthHandlers).Logout-fm (12 handlers)
+[GIN-debug] POST   /api/v1/auth/refresh      --> vaultke-backend/internal/api.(*AuthHandlers).RefreshToken-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/verify-email --> vaultke-backend/internal/api.(*AuthHandlers).VerifyEmail-fm (12 handlers)
+[GIN-debug] POST   /api/v1/auth/verify-phone --> vaultke-backend/internal/api.(*AuthHandlers).VerifyPhone-fm (12 handlers)
+[GIN-debug] POST   /api/v1/auth/forgot-password --> vaultke-backend/internal/api.(*AuthHandlers).ForgotPassword-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/reset-password --> vaultke-backend/internal/api.(*AuthHandlers).ResetPassword-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/check-token-status --> vaultke-backend/internal/api.(*AuthHandlers).CheckTokenStatus-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/send-email-verification --> vaultke-backend/internal/api.(*AuthHandlers).SendEmailVerification-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/verify-email-code --> vaultke-backend/internal/api.(*AuthHandlers).VerifyEmailCode-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/check-email-verification-status --> vaultke-backend/internal/api.(*AuthHandlers).CheckEmailVerificationStatus-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/send-onboarding-totp --> vaultke-backend/internal/api.(*AuthHandlers).SendOnboardingTOTP-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/verify-onboarding-totp --> vaultke-backend/internal/api.(*AuthHandlers).VerifyOnboardingTOTP-fm (11 handlers)
+[GIN-debug] POST   /api/v1/auth/test-email   --> vaultke-backend/internal/api.(*AuthHandlers).TestEmail-fm (11 handlers)
+[GIN-debug] POST   /api/v1/payments/mpesa/callback --> vaultke-backend/internal/api.HandleMpesaCallback (9 handlers)
+[GIN-debug] POST   /api/v1/payments/mpesa/b2c/callback --> vaultke-backend/internal/api.HandleMpesaB2CCallback (9 handlers)
+[GIN-debug] POST   /api/v1/payments/mpesa/b2c/timeout --> vaultke-backend/internal/api.HandleMpesaB2CTimeout (9 handlers)
+[GIN-debug] GET    /api/v1/auth/google/drive --> vaultke-backend/internal/api.InitiateGoogleDriveAuth (7 handlers)
+[GIN-debug] GET    /api/v1/auth/google/callback --> vaultke-backend/internal/api.HandleGoogleDriveCallback (7 handlers)
+[GIN-debug] GET    /api/v1/users/            --> vaultke-backend/internal/api.GetUsers (13 handlers)
+[GIN-debug] GET    /api/v1/users/:id         --> vaultke-backend/internal/api.(*AuthHandlers).GetUserByID-fm (13 handlers)
+[GIN-debug] GET    /api/v1/users/admin/all   --> vaultke-backend/internal/api.GetAllUsersForAdmin (13 handlers)
+[GIN-debug] GET    /api/v1/users/admin/statistics --> vaultke-backend/internal/api.GetAdminStatistics (13 handlers)
+[GIN-debug] GET    /api/v1/users/admin/analytics --> vaultke-backend/internal/api.GetSystemAnalytics (13 handlers)
+[GIN-debug] GET    /api/v1/users/profile     --> vaultke-backend/internal/api.(*AuthHandlers).GetProfile-fm (13 handlers)
+[GIN-debug] PUT    /api/v1/users/profile     --> vaultke-backend/internal/api.(*AuthHandlers).UpdateProfile-fm (13 handlers)
+[GIN-debug] GET    /api/v1/users/statistics  --> vaultke-backend/internal/api.GetUserStatistics (13 handlers)
+[GIN-debug] GET    /api/v1/users/google-drive/auth-url --> vaultke-backend/internal/api.GetGoogleDriveAuthURL (13 handlers)
+[GIN-debug] POST   /api/v1/users/google-drive/store-tokens --> vaultke-backend/internal/api.StoreGoogleDriveTokens (13 handlers)
+[GIN-debug] POST   /api/v1/users/google-drive/disconnect --> vaultke-backend/internal/api.DisconnectGoogleDrive (13 handlers)
+[GIN-debug] POST   /api/v1/users/google-drive/backup --> vaultke-backend/internal/api.CreateGoogleDriveBackup (13 handlers)
+[GIN-debug] POST   /api/v1/users/google-drive/restore --> vaultke-backend/internal/api.RestoreGoogleDriveBackup (13 handlers)
+[GIN-debug] GET    /api/v1/users/google-drive/backup-info --> vaultke-backend/internal/api.GetGoogleDriveBackupInfo (13 handlers)
+[GIN-debug] GET    /api/v1/users/google-drive/status --> vaultke-backend/internal/api.GetGoogleDriveStatus (13 handlers)
+[GIN-debug] GET    /api/v1/users/google-drive/debug-tokens --> vaultke-backend/internal/api.DebugGoogleDriveTokens (13 handlers)
+[GIN-debug] POST   /api/v1/users/google-drive/generate-test-tokens --> vaultke-backend/internal/api.GenerateTestTokens (13 handlers)
+[GIN-debug] GET    /api/v1/users/backup/history --> vaultke-backend/internal/api.GetBackupHistory (13 handlers)
+[GIN-debug] GET    /api/v1/users/backup/system-status --> vaultke-backend/internal/api.GetSystemStatus (13 handlers)
+[GIN-debug] GET    /api/v1/users/backup/settings --> vaultke-backend/internal/api.GetBackupSettings (13 handlers)
+[GIN-debug] PUT    /api/v1/users/backup/settings --> vaultke-backend/internal/api.UpdateBackupSettings (13 handlers)
+[GIN-debug] POST   /api/v1/users/backup/start --> vaultke-backend/internal/api.StartBackup (13 handlers)
+[GIN-debug] POST   /api/v1/users/backup/maintenance --> vaultke-backend/internal/api.PerformSystemMaintenance (13 handlers)
+[GIN-debug] GET    /api/v1/users/privacy-settings --> vaultke-backend/internal/api.GetPrivacySettings (13 handlers)
+[GIN-debug] PUT    /api/v1/users/privacy-settings --> vaultke-backend/internal/api.UpdatePrivacySettings (13 handlers)
+[GIN-debug] GET    /api/v1/users/security-settings --> vaultke-backend/internal/api.GetSecuritySettings (13 handlers)
+[GIN-debug] PUT    /api/v1/users/security-settings --> vaultke-backend/internal/api.UpdateSecuritySettings (13 handlers)
+[GIN-debug] GET    /api/v1/users/preferences --> vaultke-backend/internal/api.GetUserPreferences (13 handlers)
+[GIN-debug] PUT    /api/v1/users/preferences --> vaultke-backend/internal/api.UpdateUserPreferences (13 handlers)
+[GIN-debug] POST   /api/v1/users/avatar      --> vaultke-backend/internal/api.UploadAvatar (13 handlers)
+[GIN-debug] GET    /api/v1/users/search-by-credentials --> vaultke-backend/internal/api.SearchUserByCredentials (13 handlers)
+[GIN-debug] PUT    /api/v1/users/:id/role    --> vaultke-backend/internal/api.AdminUpdateUserRole (13 handlers)
+[GIN-debug] PUT    /api/v1/users/:id/status  --> vaultke-backend/internal/api.UpdateUserStatus (13 handlers)
+[GIN-debug] DELETE /api/v1/users/:id         --> vaultke-backend/internal/api.DeleteUser (13 handlers)
+[GIN-debug] POST   /api/v1/users/onboard     --> vaultke-backend/internal/api.OnboardUser (13 handlers)
+[GIN-debug] PUT    /api/v1/users/:id/phone-verified --> vaultke-backend/internal/api.UpdateUserPhoneVerified (13 handlers)
+[GIN-debug] PUT    /api/v1/users/:id/registration-payment --> vaultke-backend/internal/api.UpdateUserPaymentStatus (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/           --> vaultke-backend/internal/api.GetChamas (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/admin/all  --> vaultke-backend/internal/api.GetAllChamasForAdmin (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/           --> vaultke-backend/internal/api.CreateChama (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/my         --> vaultke-backend/internal/api.GetUserChamas (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id        --> vaultke-backend/internal/api.GetChama (13 handlers)
+[GIN-debug] PUT    /api/v1/chamas/:id        --> vaultke-backend/internal/api.UpdateChama (13 handlers)
+[GIN-debug] DELETE /api/v1/chamas/:id        --> vaultke-backend/internal/api.DeleteChama (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/members --> vaultke-backend/internal/api.GetChamaMembers (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/members/:memberId/role --> vaultke-backend/internal/api.GetMemberRole (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/members/:memberId/stats --> vaultke-backend/internal/api.GetChamaMemberStatistics (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/members/export --> vaultke-backend/internal/api.ExportChamaMembers (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/transactions --> vaultke-backend/internal/api.GetChamaTransactions (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/statistics --> vaultke-backend/internal/api.GetChamaStatistics (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/merry-go-rounds --> vaultke-backend/internal/api.GetMerryGoRounds (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/savings/export --> vaultke-backend/internal/api.ExportSavingsTransactions (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/invite --> vaultke-backend/internal/api.SendChamaInvitation (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/invitations/sent --> vaultke-backend/internal/api.GetChamaSentInvitations (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/invitations --> vaultke-backend/internal/api.GetUserInvitations (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/invitations/:invitationId/respond --> vaultke-backend/internal/api.RespondToInvitation (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/invitations/:invitationId/cancel --> vaultke-backend/internal/api.CancelInvitation (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/invitations/:invitationId/resend --> vaultke-backend/internal/api.ResendInvitation (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/eligible-loan-members --> vaultke-backend/internal/api.GetEligibleLoanMembers (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/eligible-welfare-members --> vaultke-backend/internal/api.GetEligibleWelfareMembers (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/eligible-savings-members --> vaultke-backend/internal/api.GetEligibleSavingsMembers (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/eligible-dividend-members --> vaultke-backend/internal/api.GetEligibleDividendMembers (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/eligible-shares-members --> vaultke-backend/internal/api.GetChamaSharesOfferings (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/eligible-other-members --> vaultke-backend/internal/api.GetEligibleOtherMembers (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/shares/offering/ --> vaultke-backend/internal/api.CreateChamaShares (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/shares/offerings --> vaultke-backend/internal/api.GetChamaShareOfferingsList (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/dividends/ --> vaultke-backend/internal/api.GetChamaDividendDeclarations (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/dividends/ --> vaultke-backend/internal/api.DeclareChamaDividends (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/disbursements/individual --> vaultke-backend/internal/api.CreateIndividualDisbursement (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/disbursements/bulk --> vaultke-backend/internal/api.CreateBulkDisbursement (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/mgr-disbursements/:cycleId --> vaultke-backend/internal/api.DisburseMerryGoRoundCycle (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/mgr-disbursements/bulk --> vaultke-backend/internal/api.DisburseMerryGoRoundCyclesBulk (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/subscription-payments --> vaultke-backend/internal/api.GetChamaSubscriptionPayments (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/subscription-payments/:paymentId/pay --> vaultke-backend/internal/api.PaySubscriptionPayment (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/service-fee-payments --> vaultke-backend/internal/api.GetChamaServiceFeePayments (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/members/:memberId/service-fee-payments --> vaultke-backend/internal/api.GetMemberServiceFeePayments (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/service-fee-payments/:paymentId/pay --> vaultke-backend/internal/api.PayServiceFeePayment (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/members/:memberId/pay-service-fee --> vaultke-backend/internal/api.PayMemberServiceFee (13 handlers)
+[GIN-debug] GET    /api/v1/wallets/          --> vaultke-backend/internal/api.GetWallets (13 handlers)
+[GIN-debug] GET    /api/v1/wallets/balance   --> vaultke-backend/internal/api.GetWalletBalance (13 handlers)
+[GIN-debug] GET    /api/v1/wallets/transactions --> vaultke-backend/internal/api.GetUserTransactions (13 handlers)
+[GIN-debug] GET    /api/v1/wallets/:id       --> vaultke-backend/internal/api.GetWallet (13 handlers)
+[GIN-debug] GET    /api/v1/wallets/:id/transactions --> vaultke-backend/internal/api.GetWalletTransactions (13 handlers)
+[GIN-debug] POST   /api/v1/wallets/transfer  --> vaultke-backend/internal/api.TransferMoney (13 handlers)
+[GIN-debug] POST   /api/v1/wallets/deposit   --> vaultke-backend/internal/api.DepositMoney (13 handlers)
+[GIN-debug] POST   /api/v1/wallets/withdraw  --> vaultke-backend/internal/api.WithdrawMoney (13 handlers)
+[GIN-debug] POST   /api/v1/wallets/registration-payment --> vaultke-backend/internal/api.InitiateRegistrationPayment (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/subwallets/ --> vaultke-backend/internal/api.(*SubWalletHandlers).GetChamaSubWallets-fm (14 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/subwallets/:type/transactions --> vaultke-backend/internal/api.(*SubWalletHandlers).GetSubWalletTransactions-fm (14 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/subwallets/:type/pay --> vaultke-backend/internal/api.(*SubWalletHandlers).PayToSubWallet-fm (14 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/subwallets/:type/withdraw --> vaultke-backend/internal/api.(*SubWalletHandlers).WithdrawFromSubWallet-fm (14 handlers)
+[GIN-debug] GET    /api/v1/receipts/transactions/:transactionId --> vaultke-backend/internal/api.(*ReceiptHandlers).GetTransactionReceipt-fm (13 handlers)
+[GIN-debug] GET    /api/v1/receipts/transactions/:transactionId/download --> vaultke-backend/internal/api.(*ReceiptHandlers).DownloadTransactionReceipt-fm (13 handlers)
+[GIN-debug] POST   /api/v1/payments/mpesa/stk --> vaultke-backend/internal/api.InitiateMpesaSTK (13 handlers)
+[GIN-debug] GET    /api/v1/payments/mpesa/status/:checkoutRequestId --> vaultke-backend/internal/api.GetMpesaTransactionStatus (13 handlers)
+[GIN-debug] POST   /api/v1/payments/bank-transfer --> vaultke-backend/internal/api.InitiateBankTransfer (13 handlers)
+[GIN-debug] GET    /api/v1/notifications/    --> vaultke-backend/internal/api.GetNotifications (13 handlers)
+[GIN-debug] GET    /api/v1/notifications/unread-count --> vaultke-backend/internal/api.GetUnreadNotificationCount (13 handlers)
+[GIN-debug] PUT    /api/v1/notifications/:id/read --> vaultke-backend/internal/api.MarkNotificationAsRead (13 handlers)
+[GIN-debug] POST   /api/v1/notifications/read-all --> vaultke-backend/internal/api.MarkAllNotificationsAsRead (13 handlers)
+[GIN-debug] DELETE /api/v1/notifications/:id --> vaultke-backend/internal/api.DeleteNotification (13 handlers)
+[GIN-debug] POST   /api/v1/notifications/system --> vaultke-backend/internal/api.SendSystemNotification (13 handlers)
+[GIN-debug] GET    /api/v1/notifications/preferences --> vaultke-backend/internal/api.GetNotificationPreferences (13 handlers)
+[GIN-debug] PUT    /api/v1/notifications/preferences --> vaultke-backend/internal/api.UpdateNotificationPreferences (13 handlers)
+[GIN-debug] GET    /api/v1/notifications/sounds --> vaultke-backend/internal/api.GetAvailableNotificationSounds (13 handlers)
+[GIN-debug] POST   /api/v1/notifications/test-sound --> vaultke-backend/internal/api.TestNotificationSound (13 handlers)
+[GIN-debug] GET    /api/v1/notifications/settings --> vaultke-backend/internal/api.GetNotificationSettings (13 handlers)
+[GIN-debug] PUT    /api/v1/notifications/settings --> vaultke-backend/internal/api.UpdateNotificationSettings (13 handlers)
+[GIN-debug] POST   /api/v1/notifications/invitations/:id/accept --> vaultke-backend/internal/api.AcceptChamaInvitation (13 handlers)
+[GIN-debug] POST   /api/v1/notifications/invitations/:id/reject --> vaultke-backend/internal/api.RejectChamaInvitation (13 handlers)
+[GIN-debug] POST   /api/v1/support/requests  --> vaultke-backend/internal/api.CreateSupportRequest (13 handlers)
+[GIN-debug] GET    /api/v1/support/requests  --> vaultke-backend/internal/api.GetSupportRequests (13 handlers)
+[GIN-debug] PUT    /api/v1/support/requests/:id --> vaultke-backend/internal/api.UpdateSupportRequest (13 handlers)
+[GIN-debug] POST   /api/v1/support/test-request --> vaultke-backend/internal/api.CreateTestSupportRequest (13 handlers)
+[GIN-debug] POST   /api/v1/auth/change-password --> vaultke-backend/internal/api.ChangePassword (13 handlers)
+[GIN-debug] GET    /api/v1/auth/login-history --> vaultke-backend/internal/api.GetLoginHistory (13 handlers)
+[GIN-debug] POST   /api/v1/auth/logout-all-devices --> vaultke-backend/internal/api.LogoutAllDevices (13 handlers)
+[GIN-debug] POST   /api/v1/auth/logout-device/:sessionId --> vaultke-backend/internal/api.LogoutSpecificDevice (13 handlers)
+[GIN-debug] POST   /api/v1/security/scan-file --> vaultke-backend/internal/api.ScanFile (13 handlers)
+[GIN-debug] GET    /api/v1/learning/categories --> vaultke-backend/internal/api.GetLearningCategories (13 handlers)
+[GIN-debug] GET    /api/v1/learning/categories/:id --> vaultke-backend/internal/api.GetLearningCategory (13 handlers)
+[GIN-debug] GET    /api/v1/learning/courses  --> vaultke-backend/internal/api.GetLearningCourses (13 handlers)
+[GIN-debug] GET    /api/v1/learning/courses/:id --> vaultke-backend/internal/api.GetLearningCourse (13 handlers)
+[GIN-debug] POST   /api/v1/learning/courses/:id/start --> vaultke-backend/internal/api.StartCourse (13 handlers)
+[GIN-debug] POST   /api/v1/learning/courses/:id/submit-quiz --> vaultke-backend/internal/api.SubmitQuizResults (13 handlers)
+[GIN-debug] POST   /api/v1/learning/upload/image --> vaultke-backend/internal/api.UploadLearningImage (13 handlers)
+[GIN-debug] POST   /api/v1/learning/upload/video --> vaultke-backend/internal/api.UploadLearningVideo (13 handlers)
+[GIN-debug] POST   /api/v1/learning/upload/document --> vaultke-backend/internal/api.UploadLearningDocument (13 handlers)
+[GIN-debug] POST   /api/v1/learning/validate-video-url --> vaultke-backend/internal/api.ValidateVideoURL (13 handlers)
+[GIN-debug] POST   /api/v1/learning/admin/categories --> vaultke-backend/internal/api.CreateLearningCategory (14 handlers)
+[GIN-debug] PUT    /api/v1/learning/admin/categories/:id --> vaultke-backend/internal/api.UpdateLearningCategory (14 handlers)
+[GIN-debug] DELETE /api/v1/learning/admin/categories/:id --> vaultke-backend/internal/api.DeleteLearningCategory (14 handlers)
+[GIN-debug] POST   /api/v1/learning/admin/courses --> vaultke-backend/internal/api.CreateLearningCourse (14 handlers)
+[GIN-debug] PUT    /api/v1/learning/admin/courses/:id --> vaultke-backend/internal/api.UpdateLearningCourse (14 handlers)
+[GIN-debug] DELETE /api/v1/learning/admin/courses/:id --> vaultke-backend/internal/api.DeleteLearningCourse (14 handlers)
+[GIN-debug] POST   /api/v1/reminders/        --> vaultke-backend/internal/api.(*ReminderHandlers).CreateReminder-fm (13 handlers)
+[GIN-debug] GET    /api/v1/reminders/        --> vaultke-backend/internal/api.(*ReminderHandlers).GetUserReminders-fm (13 handlers)
+[GIN-debug] GET    /api/v1/reminders/:id     --> vaultke-backend/internal/api.(*ReminderHandlers).GetReminder-fm (13 handlers)
+[GIN-debug] PUT    /api/v1/reminders/:id     --> vaultke-backend/internal/api.(*ReminderHandlers).UpdateReminder-fm (13 handlers)
+[GIN-debug] DELETE /api/v1/reminders/:id     --> vaultke-backend/internal/api.(*ReminderHandlers).DeleteReminder-fm (13 handlers)
+[GIN-debug] POST   /api/v1/reminders/:id/toggle --> vaultke-backend/internal/api.(*ReminderHandlers).ToggleReminder-fm (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/polls/ --> vaultke-backend/internal/api.(*PollsHandlers).CreatePoll-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/polls/ --> vaultke-backend/internal/api.(*PollsHandlers).GetChamaPolls-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/polls/active --> vaultke-backend/internal/api.(*PollsHandlers).GetActivePolls-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/polls/results --> vaultke-backend/internal/api.(*PollsHandlers).GetPollResults-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/polls/:pollId --> vaultke-backend/internal/api.(*PollsHandlers).GetPollDetails-fm (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/polls/:pollId/vote --> vaultke-backend/internal/api.(*PollsHandlers).CastVote-fm (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/polls/role-escalation --> vaultke-backend/internal/api.(*PollsHandlers).CreateRoleEscalationPoll-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/polls/members --> vaultke-backend/internal/api.(*PollsHandlers).GetChamaMembers-fm (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/votes  --> vaultke-backend/internal/api.CreateVote (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/votes  --> vaultke-backend/internal/api.GetChamaVotes (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/votes/active --> vaultke-backend/internal/api.GetActiveVotes (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/votes/results --> vaultke-backend/internal/api.GetVoteResults (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/votes/:voteId --> vaultke-backend/internal/api.GetVoteDetails (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/votes/:voteId/vote --> vaultke-backend/internal/api.CastVoteOnItem (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/votes/role-escalation --> vaultke-backend/internal/api.CreateRoleEscalationVote (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/disbursements --> vaultke-backend/internal/api.(*DisbursementHandlers).GetDisbursementBatches-fm (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/disbursements/:batchId/process --> vaultke-backend/internal/api.(*DisbursementHandlers).ProcessDisbursementBatch-fm (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/disbursements/:batchId/approve --> vaultke-backend/internal/api.(*DisbursementHandlers).ApproveDisbursementBatch-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/transparency --> vaultke-backend/internal/api.(*DisbursementHandlers).GetTransparencyLog-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/reports --> vaultke-backend/internal/api.(*FinancialReportsHandlers).GetFinancialReports-fm (13 handlers)
+[GIN-debug] POST   /api/v1/chamas/:id/reports --> vaultke-backend/internal/api.(*FinancialReportsHandlers).GenerateFinancialReport-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/reports/:reportId/download --> vaultke-backend/internal/api.(*FinancialReportsHandlers).DownloadFinancialReport-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/welfare/eligible-members --> vaultke-backend/internal/api.(*AccountHandlers).GetEligibleWelfareMembers-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/transparency-feed --> vaultke-backend/internal/api.(*AccountHandlers).GetTransparencyFeed-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/account-notifications --> vaultke-backend/internal/api.(*AccountHandlers).GetAccountNotifications-fm (13 handlers)
+[GIN-debug] GET    /api/v1/chamas/:id/validate-security --> vaultke-backend/internal/api.(*AccountHandlers).ValidateSystemSecurity-fm (13 handlers)
+[GIN-debug] POST   /api/v1/account/security-events --> vaultke-backend/internal/api.(*AccountHandlers).LogSecurityEvent-fm (13 handlers)
+[GIN-debug] GET    /api/v1/user-search/search --> vaultke-backend/internal/api.(*UserSearchHandlers).SearchUsers-fm (13 handlers)
+[GIN-debug] GET    /api/v1/user-search/search/advanced --> vaultke-backend/internal/api.(*UserSearchHandlers).SearchUsersAdvanced-fm (13 handlers)
+[GIN-debug] GET    /api/v1/user-search/:userId/profile --> vaultke-backend/internal/api.(*UserSearchHandlers).GetUserProfile-fm (13 handlers)
+[GIN-debug] GET    /api/v1/contributions     --> vaultke-backend/internal/api.GetContributions (13 handlers)
+[GIN-debug] POST   /api/v1/contributions     --> vaultke-backend/internal/api.MakeContribution (13 handlers)
+[GIN-debug] GET    /api/v1/contributions/:id --> vaultke-backend/internal/api.GetContribution (13 handlers)
+[GIN-debug] GET    /api/v1/contributions/chamas/:chamaId/members --> vaultke-backend/internal/api.GetChamaMembersForContributions (13 handlers)
+[GIN-debug] GET    /api/v1/contributions/chamas/:chamaId/merry-go-round-amount --> vaultke-backend/internal/api.GetMerryGoRoundContributionAmount (13 handlers)
+[GIN-debug] GET    /api/v1/meetings/         --> vaultke-backend/internal/api.GetMeetings (13 handlers)
+[GIN-debug] GET    /api/v1/meetings/user     --> vaultke-backend/internal/api.GetUserMeetings (13 handlers)
+[GIN-debug] POST   /api/v1/meetings/         --> vaultke-backend/internal/api.CreateMeeting (13 handlers)
+[GIN-debug] GET    /api/v1/meetings/:id      --> vaultke-backend/internal/api.GetMeeting (13 handlers)
+[GIN-debug] PUT    /api/v1/meetings/:id      --> vaultke-backend/internal/api.UpdateMeeting (13 handlers)
+[GIN-debug] PATCH  /api/v1/meetings/:id      --> vaultke-backend/internal/api.UpdateMeeting (13 handlers)
+[GIN-debug] DELETE /api/v1/meetings/:id      --> vaultke-backend/internal/api.DeleteMeeting (13 handlers)
+[GIN-debug] POST   /api/v1/meetings/:id/join --> vaultke-backend/internal/api.JoinMeeting (13 handlers)
+[GIN-debug] POST   /api/v1/meetings/:id/attendance --> vaultke-backend/internal/api.MarkAttendance (13 handlers)
+[GIN-debug] GET    /api/v1/meetings/:id/attendance --> vaultke-backend/internal/api.GetMeetingAttendance (13 handlers)
+[GIN-debug] POST   /api/v1/meetings/:id/documents --> vaultke-backend/internal/api.UploadMeetingDocument (13 handlers)
+[GIN-debug] GET    /api/v1/meetings/:id/documents --> vaultke-backend/internal/api.GetMeetingDocuments (13 handlers)
+[GIN-debug] DELETE /api/v1/meetings/:id/documents/:docId --> vaultke-backend/internal/api.DeleteMeetingDocument (13 handlers)
+[GIN-debug] POST   /api/v1/meetings/:id/minutes --> vaultke-backend/internal/api.SaveMeetingMinutes (13 handlers)
+[GIN-debug] PUT    /api/v1/meetings/:id/minutes --> vaultke-backend/internal/api.UpdateMeetingMinutes (13 handlers)
+[GIN-debug] GET    /api/v1/meetings/:id/minutes --> vaultke-backend/internal/api.GetMeetingMinutes (13 handlers)
+[GIN-debug] GET    /api/v1/meetings/:id/calendar/add-url --> vaultke-backend/internal/api.GetGoogleCalendarAddEventURL (13 handlers)
+[GIN-debug] POST   /api/v1/meetings/:id/calendar/create --> vaultke-backend/internal/api.CreateGoogleCalendarEvent (13 handlers)
+[GIN-debug] GET    /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] POST   /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] PUT    /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] PATCH  /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] HEAD   /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] OPTIONS /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] DELETE /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] CONNECT /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] TRACE  /api/v1/online-meetings/*path --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func23 (14 handlers)
+[GIN-debug] GET    /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] POST   /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] PUT    /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] PATCH  /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] HEAD   /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] OPTIONS /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] DELETE /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] CONNECT /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] TRACE  /api/v1/chat/*path        --> vaultke-backend/internal/routes.SetupRoutes.proxyTo.func25 (9 handlers)
+[GIN-debug] POST   /api/v1/chat-ws/ws-token  --> vaultke-backend/internal/routes.SetupRoutes.chatWSTokenHandler.func27 (8 handlers)
+[GIN-debug] GET    /api/v1/chat-ws/ws        --> vaultke-backend/internal/routes.SetupRoutes.chatWSHandler.func28 (7 handlers)
+[GIN-debug] GET    /api/v1/merry-go-rounds/  --> vaultke-backend/internal/api.GetMerryGoRounds (13 handlers)
+[GIN-debug] GET    /api/v1/welfare/          --> vaultke-backend/internal/api.GetWelfareRequests (13 handlers)
+[GIN-debug] POST   /api/v1/welfare/          --> vaultke-backend/internal/api.CreateWelfareRequest (13 handlers)
+[GIN-debug] GET    /api/v1/welfare/:id       --> vaultke-backend/internal/api.GetWelfareRequest (13 handlers)
+[GIN-debug] PUT    /api/v1/welfare/:id       --> vaultke-backend/internal/api.UpdateWelfareRequest (13 handlers)
+[GIN-debug] DELETE /api/v1/welfare/:id       --> vaultke-backend/internal/api.DeleteWelfareRequest (13 handlers)
+[GIN-debug] POST   /api/v1/welfare/:id/vote  --> vaultke-backend/internal/api.VoteOnWelfareRequest (13 handlers)
+[GIN-debug] POST   /api/v1/welfare/contribute --> vaultke-backend/internal/api.ContributeToWelfare (13 handlers)
+[GIN-debug] GET    /api/v1/welfare/:id/contributions --> vaultke-backend/internal/api.GetWelfareContributions (13 handlers)
+[GIN-debug] GET    /api/v1/loans/            --> vaultke-backend/internal/api.GetLoanApplications (14 handlers)
+[GIN-debug] POST   /api/v1/loans/apply       --> vaultke-backend/internal/api.CreateLoanApplication (14 handlers)
+[GIN-debug] GET    /api/v1/loans/:id         --> vaultke-backend/internal/api.GetLoanApplication (14 handlers)
+[GIN-debug] PUT    /api/v1/loans/:id         --> vaultke-backend/internal/api.UpdateLoanApplication (14 handlers)
+[GIN-debug] DELETE /api/v1/loans/:id         --> vaultke-backend/internal/api.DeleteLoanApplication (14 handlers)
+[GIN-debug] POST   /api/v1/loans/:id/approve --> vaultke-backend/internal/api.ApproveLoan (14 handlers)
+[GIN-debug] POST   /api/v1/loans/:id/reject  --> vaultke-backend/internal/api.RejectLoan (14 handlers)
+[GIN-debug] POST   /api/v1/loans/:id/disburse --> vaultke-backend/internal/api.DisburseLoan (14 handlers)
+[GIN-debug] POST   /api/v1/loans/:id/guarantor-response --> vaultke-backend/internal/api.RespondToGuarantorRequest (14 handlers)
+[GIN-debug] GET    /api/v1/loans/guarantor-requests --> vaultke-backend/internal/api.GetGuarantorRequests (14 handlers)
+[GIN-debug] POST   /api/v1/loans/guarantors/:guarantorId/respond --> vaultke-backend/internal/api.RespondToGuarantorRequest (14 handlers)
+[GIN-debug] POST   /api/v1/loans/:id/loan-types --> vaultke-backend/internal/api.CreateLoanType (14 handlers)
+[GIN-debug] GET    /api/v1/loans/:id/loan-types --> vaultke-backend/internal/api.GetChamaLoanTypes (14 handlers)
+[GIN-debug] GET    /api/v1/loans/loan-types/:loanTypeId --> vaultke-backend/internal/api.GetLoanType (13 handlers)
+[GIN-debug] PUT    /api/v1/loans/loan-types/:loanTypeId --> vaultke-backend/internal/api.UpdateLoanType (13 handlers)
+[GIN-debug] DELETE /api/v1/loans/loan-types/:loanTypeId --> vaultke-backend/internal/api.DeleteLoanType (13 handlers)
+[GIN-debug] GET    /api/v1/test-data/stats   --> vaultke-backend/internal/api.GetTestDataStats (14 handlers)
+[GIN-debug] POST   /api/v1/test-data/generate --> vaultke-backend/internal/api.GenerateTestData (14 handlers)
+[GIN-debug] POST   /api/v1/test-data/start   --> vaultke-backend/internal/api.StartTestDataGenerator (14 handlers)
+[GIN-debug] POST   /api/v1/test-data/stop    --> vaultke-backend/internal/api.StopTestDataGenerator (14 handlers)
+[GIN-debug] POST   /api/v1/test-data/reset   --> vaultke-backend/internal/api.ResetTestDataStats (14 handlers)
+2026/07/04 22:12:13 VaultKe API server starting on port 8085
+2026/07/04 22:12:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.235153199s
+2026/07/04 22:13:18 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 7.291429873s
+2026/07/04 22:13:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.493177843s
+2026/07/04 22:14:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.422475106s
+2026/07/04 22:14:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.40392941s
+2026/07/04 22:15:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 7.885187928s
+2026/07/04 22:15:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.513596149s
+2026/07/04 22:16:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.006991995s
+2026/07/04 22:16:35 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.341339993s
+2026/07/04 22:16:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.356506226s
+2026/07/04 22:17:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.203163643s
+2026/07/04 22:17:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.312963299s
+2026/07/04 22:17:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.668280226s
+2026/07/04 22:17:48 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 7.608043371s
+2026/07/04 22:18:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.227641194s
+2026/07/04 22:18:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.623914542s
+2026/07/04 22:18:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.195232266s
+2026/07/04 22:19:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.586804509s
+2026/07/04 22:19:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.226535329s
+2026/07/04 22:19:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.989226198s
+2026/07/04 22:19:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.310476447s
+2026/07/04 22:20:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.532516479s
+2026/07/04 22:20:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.752522673s
+2026/07/04 22:20:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.741106086s
+2026/07/04 22:20:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.859795555s
+2026/07/04 22:21:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.437611592s
+2026/07/04 22:21:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.029879033s
+2026/07/04 22:21:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.95318985s
+2026/07/04 22:21:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.252480496s
+2026/07/04 22:22:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.297188916s
+2026/07/04 22:22:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.540534282s
+2026/07/04 22:22:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.05426716s
+2026/07/04 22:23:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.04211966s
+2026/07/04 22:23:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.364791461s
+2026/07/04 22:23:35 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.327542677s
+2026/07/04 22:23:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 7.895972572s
+2026/07/04 22:24:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.355806045s
+2026/07/04 22:24:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.063905826s
+2026/07/04 22:24:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.974224141s
+2026/07/04 22:24:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.783482317s
+2026/07/04 22:25:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.669945454s
+2026/07/04 22:25:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.184926364s
+2026/07/04 22:25:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.223391442s
+2026/07/04 22:26:11 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 10.489889949s
+2026/07/04 22:26:30 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 19.01917068s
+2026/07/04 22:26:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.910780278s
+2026/07/04 22:27:07 🚨 SLOW REQUEST: GET /api/v1/wallets/balance took 6.713652755s
+2026/07/04 22:27:12 🚨 SLOW REQUEST: GET /api/v1/notifications/unread-count took 12.26205939s
+2026/07/04 22:27:14 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 13.936828956s
+2026/07/04 22:27:16 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 35.320225137s
+2026/07/04 22:27:27 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 16.420471773s
+2026/07/04 22:27:42 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 11.729071248s
+2026/07/04 22:27:52 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.993244335s
+2026/07/04 22:28:17 🚨 SLOW REQUEST: GET /api/v1/notifications/unread-count took 5.911007515s
+2026/07/04 22:28:23 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/members took 9.070409163s
+2026/07/04 22:28:24 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec took 13.615832278s
+2026/07/04 22:28:32 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 32.164314714s
+2026/07/04 22:28:34 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 23.345941753s
+2026/07/04 22:28:52 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 18.362128959s
+2026/07/04 22:29:02 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 21.097361516s
+2026/07/04 22:29:28 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 17.520609982s
+2026/07/04 22:29:41 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 10.706952848s
+2026/07/04 22:29:43 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 14.750462884s
+2026/07/04 22:29:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.541779504s
+2026/07/04 22:30:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.36538516s
+2026/07/04 22:30:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.436644101s
+2026/07/04 22:30:42 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 11.544406495s
+2026/07/04 22:30:57 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 15.891566686s
+2026/07/04 22:31:12 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 15.871399009s
+2026/07/04 22:31:13 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 12.897108419s
+2026/07/04 22:31:24 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.620068178s
+2026/07/04 22:31:39 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 9.298062576s
+2026/07/04 22:31:56 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 15.197751192s
+2026/07/04 22:32:09 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.669381179s
+2026/07/04 22:32:11 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 10.817236096s
+2026/07/04 22:32:28 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 16.822234797s
+2026/07/04 22:32:39 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 9.302717075s
+2026/07/04 22:32:41 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.105879633s
+2026/07/04 22:32:53 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.218387024s
+2026/07/04 22:33:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.313211902s
+2026/07/04 22:33:24 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.997403622s
+2026/07/04 22:33:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.262390697s
+2026/07/04 22:33:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.416001419s
+2026/07/04 22:34:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.934191611s
+2026/07/04 22:34:23 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.920077753s
+2026/07/04 22:34:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.733131949s
+2026/07/04 22:34:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.593083134s
+2026/07/04 22:35:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.838522132s
+2026/07/04 22:35:25 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 14.394435941s
+2026/07/04 22:35:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.841344343s
+2026/07/04 22:35:53 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.825637663s
+2026/07/04 22:36:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.475093833s
+2026/07/04 22:36:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.759747715s
+2026/07/04 22:36:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.227626021s
+2026/07/04 22:36:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.450510337s
+2026/07/04 22:37:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.615412186s
+2026/07/04 22:37:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.533309945s
+2026/07/04 22:37:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.648935793s
+2026/07/04 22:37:55 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 14.640970422s
+2026/07/04 22:38:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.69701877s
+2026/07/04 22:38:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.891832249s
+2026/07/04 22:38:39 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.828944526s
+2026/07/04 22:38:53 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.172782594s
+2026/07/04 22:39:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.066844206s
+2026/07/04 22:39:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.061413513s
+2026/07/04 22:39:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.970352834s
+2026/07/04 22:39:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.269429411s
+2026/07/04 22:40:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.785053862s
+2026/07/04 22:40:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.19391761s
+2026/07/04 22:40:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.464268217s
+2026/07/04 22:40:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.46549387s
+2026/07/04 22:41:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.095321213s
+2026/07/04 22:41:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.096590231s
+2026/07/04 22:41:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.692334567s
+2026/07/04 22:41:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.792483571s
+2026/07/04 22:42:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.10738958s
+2026/07/04 22:42:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.512057436s
+2026/07/04 22:42:36 🚨 SLOW REQUEST: GET /api/v1/notifications/unread-count took 5.459085383s
+2026/07/04 22:42:50 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 19.898513741s
+2026/07/04 22:42:54 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/members took 9.668023458s
+2026/07/04 22:43:02 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec took 21.426011261s
+2026/07/04 22:43:09 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 18.955931261s
+2026/07/04 22:43:12 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 30.812160662s
+2026/07/04 22:43:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.579531403s
+2026/07/04 22:43:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.408114765s
+2026/07/04 22:44:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.577697165s
+2026/07/04 22:44:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.447126101s
+2026/07/04 22:44:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.406942629s
+2026/07/04 22:44:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.70418442s
+2026/07/04 22:45:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.691935855s
+2026/07/04 22:45:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.220818594s
+2026/07/04 22:45:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.207712609s
+2026/07/04 22:45:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.117863889s
+2026/07/04 22:46:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.517730907s
+2026/07/04 22:46:24 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.015625873s
+2026/07/04 22:46:39 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.977459304s
+2026/07/04 22:46:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.603662685s
+2026/07/04 22:47:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.397217913s
+2026/07/04 22:47:22 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.177299504s
+2026/07/04 22:47:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.422731677s
+2026/07/04 22:47:53 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.947617776s
+2026/07/04 22:48:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.854004503s
+2026/07/04 22:48:23 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.963534366s
+2026/07/04 22:48:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.428784546s
+2026/07/04 22:48:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.138973561s
+2026/07/04 22:49:09 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.991534743s
+2026/07/04 22:49:24 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.133244694s
+2026/07/04 22:49:39 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.995994436s
+2026/07/04 22:49:54 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.23365429s
+2026/07/04 22:50:10 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 9.52459271s
+2026/07/04 22:50:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.057758517s
+2026/07/04 22:50:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.440075675s
+2026/07/04 22:50:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.945990523s
+2026/07/04 22:51:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.438704842s
+2026/07/04 22:51:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.767527641s
+2026/07/04 22:51:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.24116631s
+2026/07/04 22:51:53 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.021458874s
+2026/07/04 22:52:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.564823801s
+2026/07/04 22:52:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.585348801s
+2026/07/04 22:52:38 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.193164106s
+2026/07/04 22:52:52 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.51133895s
+2026/07/04 22:53:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.588751893s
+2026/07/04 22:53:24 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.906972632s
+2026/07/04 22:53:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.761383008s
+2026/07/04 22:53:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.904620361s
+2026/07/04 22:54:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.409213842s
+2026/07/04 22:54:22 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.940637587s
+2026/07/04 22:54:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.28318883s
+2026/07/04 22:54:53 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.551572017s
+2026/07/04 22:55:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.59318051s
+2026/07/04 22:55:24 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.378811256s
+2026/07/04 22:55:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.751680087s
+2026/07/04 22:55:54 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.172158505s
+2026/07/04 22:56:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.164825819s
+2026/07/04 22:56:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.564809221s
+2026/07/04 22:56:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.271764366s
+2026/07/04 22:56:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.901876614s
+2026/07/04 22:57:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.974024059s
+2026/07/04 22:57:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.525790108s
+2026/07/04 22:57:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.070770948s
+2026/07/04 22:57:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.679244414s
+2026/07/04 22:58:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.359247146s
+2026/07/04 22:58:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.583745138s
+2026/07/04 22:58:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.770997296s
+2026/07/04 22:58:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.754940728s
+2026/07/04 22:59:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.773898372s
+2026/07/04 22:59:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.835759483s
+2026/07/04 22:59:39 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.541191991s
+2026/07/04 22:59:52 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.357575517s
+2026/07/04 23:00:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.11068778s
+2026/07/04 23:00:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.485647325s
+2026/07/04 23:00:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.518990205s
+2026/07/04 23:00:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.208483035s
+2026/07/04 23:01:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.796027929s
+2026/07/04 23:01:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.964724681s
+2026/07/04 23:01:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.686444249s
+2026/07/04 23:01:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.260896841s
+2026/07/04 23:02:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.696066968s
+2026/07/04 23:02:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.601904049s
+2026/07/04 23:02:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.078768825s
+2026/07/04 23:02:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.233407761s
+2026/07/04 23:03:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.143828842s
+2026/07/04 23:03:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/members took 5.841370731s
+2026/07/04 23:03:28 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 17.722231319s
+2026/07/04 23:03:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.962283825s
+2026/07/04 23:03:38 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.830081721s
+2026/07/04 23:03:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.124153843s
+2026/07/04 23:04:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.577455638s
+2026/07/04 23:04:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.024797527s
+2026/07/04 23:04:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.216873774s
+2026/07/04 23:04:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.154789728s
+2026/07/04 23:05:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.527019931s
+2026/07/04 23:05:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.463792073s
+2026/07/04 23:05:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.915666667s
+2026/07/04 23:05:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.67352784s
+2026/07/04 23:06:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.328177844s
+2026/07/04 23:06:22 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.494860673s
+2026/07/04 23:06:38 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.867129171s
+2026/07/04 23:06:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.002721739s
+2026/07/04 23:07:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.821523322s
+2026/07/04 23:07:26 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 15.248274541s
+2026/07/04 23:07:35 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.262135012s
+2026/07/04 23:07:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.030023729s
+2026/07/04 23:07:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.251100295s
+2026/07/04 23:08:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.159751817s
+2026/07/04 23:08:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.567864508s
+2026/07/04 23:08:40 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 10.216229138s
+2026/07/04 23:08:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.648049828s
+2026/07/04 23:09:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.462511907s
+2026/07/04 23:09:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.260090911s
+2026/07/04 23:09:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.451825827s
+2026/07/04 23:09:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.57177457s
+2026/07/04 23:10:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.206795462s
+2026/07/04 23:10:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.777321504s
+2026/07/04 23:10:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.355689371s
+2026/07/04 23:10:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.029166404s
+2026/07/04 23:11:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.226429564s
+2026/07/04 23:11:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.970967282s
+2026/07/04 23:11:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.747384784s
+2026/07/04 23:11:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.282562778s
+2026/07/04 23:12:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.751746781s
+2026/07/04 23:12:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.584908005s
+2026/07/04 23:12:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.855541373s
+2026/07/04 23:12:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.586033884s
+2026/07/04 23:13:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.345767752s
+2026/07/04 23:13:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.566861192s
+2026/07/04 23:13:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.374185889s
+2026/07/04 23:13:53 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 12.476682264s
+2026/07/04 23:14:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.558364774s
+2026/07/04 23:14:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.995618114s
+2026/07/04 23:14:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.542900538s
+2026/07/04 23:14:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.227223708s
+2026/07/04 23:15:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.447078042s
+2026/07/04 23:15:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.297162284s
+2026/07/04 23:15:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.490559669s
+2026/07/04 23:15:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.81424711s
+2026/07/04 23:16:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.741119061s
+2026/07/04 23:16:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.30610142s
+2026/07/04 23:16:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.956353565s
+2026/07/04 23:16:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.824475771s
+2026/07/04 23:17:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.685241342s
+2026/07/04 23:17:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.520194005s
+2026/07/04 23:17:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.689063292s
+2026/07/04 23:17:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.625277001s
+2026/07/04 23:18:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.55007402s
+2026/07/04 23:18:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.526924286s
+2026/07/04 23:18:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.480974407s
+2026/07/04 23:18:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.431766991s
+2026/07/04 23:19:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.968331771s
+2026/07/04 23:19:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.136745679s
+2026/07/04 23:19:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.833257983s
+2026/07/04 23:19:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.439207034s
+2026/07/04 23:20:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.80417814s
+2026/07/04 23:20:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.034462234s
+2026/07/04 23:20:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.430758984s
+2026/07/04 23:20:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.244532382s
+2026/07/04 23:21:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.026718029s
+2026/07/04 23:21:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.039593739s
+2026/07/04 23:21:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.951134815s
+2026/07/04 23:21:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.636401577s
+2026/07/04 23:22:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.03457221s
+2026/07/04 23:22:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.208876668s
+2026/07/04 23:22:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.142456615s
+2026/07/04 23:22:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.363242968s
+2026/07/04 23:23:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.735452977s
+2026/07/04 23:23:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.955752955s
+2026/07/04 23:23:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.738318861s
+2026/07/04 23:23:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.754972322s
+2026/07/04 23:24:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.586042201s
+2026/07/04 23:24:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.965196647s
+2026/07/04 23:24:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.770241057s
+2026/07/04 23:24:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.479358356s
+2026/07/04 23:25:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.059710718s
+2026/07/04 23:25:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.753817428s
+2026/07/04 23:25:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.277017828s
+2026/07/04 23:25:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.691672534s
+2026/07/04 23:26:10 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 10.317892608s
+2026/07/04 23:26:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.419995878s
+2026/07/04 23:26:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.556936443s
+2026/07/04 23:26:52 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.493306412s
+2026/07/04 23:27:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.837751332s
+2026/07/04 23:27:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.703077176s
+2026/07/04 23:27:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.485241127s
+2026/07/04 23:27:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.824631493s
+2026/07/04 23:28:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.077989134s
+2026/07/04 23:28:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.669067842s
+2026/07/04 23:28:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.49363619s
+2026/07/04 23:28:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.263336481s
+2026/07/04 23:29:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.316469589s
+2026/07/04 23:29:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.74155306s
+2026/07/04 23:29:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.807427251s
+2026/07/04 23:29:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.414446049s
+2026/07/04 23:30:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.788475326s
+2026/07/04 23:30:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.032829925s
+2026/07/04 23:30:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.122154385s
+2026/07/04 23:30:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.012060663s
+2026/07/04 23:31:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.600495474s
+2026/07/04 23:31:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.32294503s
+2026/07/04 23:31:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.002568083s
+2026/07/04 23:31:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.561339178s
+2026/07/04 23:32:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.610670821s
+2026/07/04 23:32:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.330119944s
+2026/07/04 23:32:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.873525827s
+2026/07/04 23:32:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.021004102s
+2026/07/04 23:33:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.399558548s
+2026/07/04 23:33:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.486732879s
+2026/07/04 23:33:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.916668091s
+2026/07/04 23:33:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.928999381s
+2026/07/04 23:34:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.446117135s
+2026/07/04 23:34:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.266109992s
+2026/07/04 23:34:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.331850315s
+2026/07/04 23:34:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.460321197s
+2026/07/04 23:35:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.539656673s
+2026/07/04 23:35:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.839334057s
+2026/07/04 23:35:37 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.055468175s
+2026/07/04 23:35:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.469527705s
+2026/07/04 23:36:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.727192662s
+2026/07/04 23:36:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.585736197s
+2026/07/04 23:36:38 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.47192839s
+2026/07/04 23:36:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.895748396s
+2026/07/04 23:37:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.348920168s
+2026/07/04 23:37:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.815322309s
+2026/07/04 23:37:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.430865889s
+2026/07/04 23:37:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.754141942s
+2026/07/04 23:38:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.557408542s
+2026/07/04 23:38:22 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.723562465s
+2026/07/04 23:38:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.538861989s
+2026/07/04 23:38:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.262616371s
+2026/07/04 23:39:08 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.442337366s
+2026/07/04 23:39:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.751385106s
+2026/07/04 23:39:35 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.238785851s
+2026/07/04 23:39:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.279667737s
+2026/07/04 23:40:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.448713356s
+2026/07/04 23:40:21 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.038331764s
+2026/07/04 23:40:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.859012809s
+2026/07/04 23:40:49 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.331927025s
+2026/07/04 23:41:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.966278503s
+2026/07/04 23:41:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.096661341s
+2026/07/04 23:41:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.560789619s
+2026/07/04 23:41:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.086427101s
+2026/07/04 23:42:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.666701477s
+2026/07/04 23:42:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.297497948s
+2026/07/04 23:42:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.048207069s
+2026/07/04 23:42:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.505723551s
+2026/07/04 23:43:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.595056232s
+2026/07/04 23:43:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.894264965s
+2026/07/04 23:43:38 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.51946034s
+2026/07/04 23:43:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.816807439s
+2026/07/04 23:44:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.480630747s
+2026/07/04 23:44:22 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 11.051896821s
+2026/07/04 23:44:39 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 8.45863072s
+2026/07/04 23:44:50 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.109406833s
+2026/07/04 23:45:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.507456526s
+2026/07/04 23:45:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.624959876s
+2026/07/04 23:45:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.202329692s
+2026/07/04 23:45:51 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.726984591s
+2026/07/04 23:46:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.922100883s
+2026/07/04 23:46:20 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.481056972s
+2026/07/04 23:46:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.311646868s
+2026/07/04 23:46:56 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 15.075433121s
+2026/07/04 23:47:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.894230884s
+2026/07/04 23:47:09 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 13.151866312s
+2026/07/04 23:47:19 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.744415768s
+2026/07/04 23:47:34 🚨 SLOW REQUEST: GET /api/v1/users/statistics took 5.199572683s
+2026/07/04 23:47:58 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.588567577s
+2026/07/04 23:48:04 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.407681036s
+2026/07/04 23:48:06 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 8.494336098s
+2026/07/04 23:48:22 🚨 SLOW REQUEST: GET /api/v1/chat-ws/ws took 52.85141196s
+2026/07/04 23:49:00 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.617458512s
+2026/07/04 23:49:30 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.650799884s
+2026/07/04 23:50:01 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.659314509s
+2026/07/04 23:50:27 🚨 SLOW REQUEST: GET /api/v1/chat-ws/ws took 2m2.76700411s
+2026/07/04 23:50:31 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.56282769s
+2026/07/04 23:50:35 🚨 SLOW REQUEST: GET /api/v1/users/statistics took 5.003794591s
+2026/07/04 23:50:57 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 10.724430827s
+2026/07/04 23:51:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.912314374s
+2026/07/04 23:51:06 🚨 SLOW REQUEST: GET /api/v1/chamas/1220c692-2db7-49f1-bd2a-2cf38c7e57ec/statistics took 9.311479361s
+2026/07/04 23:51:35 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.026932054s
+2026/07/04 23:52:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.12648352s
+2026/07/04 23:52:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.933590792s
+2026/07/04 23:53:06 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.624564066s
+2026/07/04 23:53:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.982444143s
+2026/07/04 23:54:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.669018982s
+2026/07/04 23:54:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.290527232s
+2026/07/04 23:55:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.62635495s
+2026/07/04 23:55:35 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.526744743s
+2026/07/04 23:56:07 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 7.908541276s
+2026/07/04 23:56:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.307197766s
+2026/07/04 23:57:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.048735641s
+2026/07/04 23:57:35 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.075657172s
+2026/07/04 23:58:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.747647661s
+2026/07/04 23:58:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.257282592s
+2026/07/04 23:59:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.856518027s
+2026/07/04 23:59:36 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 6.474092859s
+2026/07/05 00:00:05 🚨 SLOW REQUEST: GET /api/v1/notifications/ took 5.510356685s
+2026/07/05 00:00:14 Shutting down server...
+2026/07/05 00:00:14 Stopping notification scheduler...
+2026/07/05 00:00:14 Server shutdown complete

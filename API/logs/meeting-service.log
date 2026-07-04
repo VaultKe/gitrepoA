@@ -1,0 +1,16 @@
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] POST   /api/v1/rooms             --> vaultke-meeting-service/internal/handler.(*MeetingHandler).CreateRoom-fm (5 handlers)
+[GIN-debug] GET    /api/v1/rooms/:roomID     --> vaultke-meeting-service/internal/handler.(*MeetingHandler).GetRoom-fm (5 handlers)
+[GIN-debug] POST   /api/v1/rooms/:roomID/end --> vaultke-meeting-service/internal/handler.(*MeetingHandler).EndRoom-fm (6 handlers)
+[GIN-debug] POST   /api/v1/rooms/:roomID/join --> vaultke-meeting-service/internal/handler.(*MeetingHandler).JoinRoom-fm (5 handlers)
+[GIN-debug] POST   /api/v1/rooms/:roomID/leave --> vaultke-meeting-service/internal/handler.(*MeetingHandler).LeaveRoom-fm (5 handlers)
+[GIN-debug] GET    /api/v1/rooms/:roomID/participants --> vaultke-meeting-service/internal/handler.(*MeetingHandler).GetParticipants-fm (5 handlers)
+[GIN-debug] PUT    /api/v1/rooms/:roomID/participants --> vaultke-meeting-service/internal/handler.(*MeetingHandler).UpdateParticipant-fm (5 handlers)
+[GIN-debug] GET    /api/v1/rooms/:roomID/signal --> vaultke-meeting-service/internal/handler.(*MeetingHandler).WebRTCSignal-fm (5 handlers)
+[GIN-debug] GET    /api/v1/stats             --> vaultke-meeting-service/internal/handler.(*MeetingHandler).GetStats-fm (5 handlers)
+[GIN-debug] GET    /health                   --> vaultke-meeting-service/internal/handler.(*MeetingHandler).Health-fm (4 handlers)

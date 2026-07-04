@@ -1,0 +1,46 @@
+2026/07/04 22:11:19 redis connected
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /health                   --> main.main.func1 (4 handlers)
+[GIN-debug] POST   /rooms                    --> vaultke-chat-service/internal/handler.(*ChatHandler).CreateRoom-fm (5 handlers)
+[GIN-debug] GET    /rooms                    --> vaultke-chat-service/internal/handler.(*ChatHandler).GetRooms-fm (5 handlers)
+[GIN-debug] GET    /rooms/:roomId            --> vaultke-chat-service/internal/handler.(*ChatHandler).GetRoom-fm (5 handlers)
+[GIN-debug] POST   /rooms/:roomId/join       --> vaultke-chat-service/internal/handler.(*ChatHandler).JoinRoom-fm (5 handlers)
+[GIN-debug] POST   /rooms/:roomId/leave      --> vaultke-chat-service/internal/handler.(*ChatHandler).LeaveRoom-fm (5 handlers)
+[GIN-debug] GET    /rooms/:roomId/messages   --> vaultke-chat-service/internal/handler.(*ChatHandler).GetMessages-fm (5 handlers)
+[GIN-debug] POST   /rooms/:roomId/messages   --> vaultke-chat-service/internal/handler.(*ChatHandler).SendMessage-fm (5 handlers)
+[GIN-debug] GET    /rooms/:roomId/ws         --> vaultke-chat-service/internal/handler.(*ChatHandler).WebSocketEndpoint-fm (5 handlers)
+[GIN-debug] POST   /rooms/:roomId/read       --> vaultke-chat-service/internal/handler.(*ChatHandler).MarkAsRead-fm (5 handlers)
+[GIN-debug] DELETE /rooms/messages/:messageId --> vaultke-chat-service/internal/handler.(*ChatHandler).DeleteMessage-fm (5 handlers)
+[GIN-debug] GET    /rooms/:roomId/search     --> vaultke-chat-service/internal/handler.(*ChatHandler).SearchMessages-fm (5 handlers)
+[GIN-debug] POST   /rooms/:roomId/files      --> vaultke-chat-service/internal/handler.(*ChatHandler).UploadFile-fm (5 handlers)
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+[GIN] 2026/07/04 - 23:48:22 | 200 | 52.846983291s |             ::1 | GET      "/rooms/main/ws?session=8837ba16-7fe7-40b8-9b71-76fdde2c6d83"
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+[GIN] 2026/07/04 - 23:50:27 | 200 |          2m2s |             ::1 | GET      "/rooms/main/ws?session=a6d9afdf-c469-417a-9f6c-13bcb52e7c05"
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
+WS DEBUG: Received type=ping roomId= userId=86e147f4-ed69-4988-913a-d649f4bdf105
