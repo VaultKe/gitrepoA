@@ -72,6 +72,8 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 		"https://vault-better1.vercel.app",
 		"http://localhost:19006",
 		"http://127.0.0.1:19006",
+		"https://chat-service-gvv8.onrender.com",
+		"https://live-meeting-tgat.onrender.com",
 	}
 	if len(allowedOrigins) == 0 {
 		for _, origin := range defaultOrigins {
