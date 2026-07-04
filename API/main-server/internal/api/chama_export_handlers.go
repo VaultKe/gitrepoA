@@ -289,3 +289,178 @@ func maskPhoneForDisplay(phone string) string {
 func maskIDForDisplay(id string) string {
 	return utils.MaskID(id)
 }
+
+// ExportSavingsTransactions exports savings transactions as an Excel file
+func ExportSavingsTransactions(c *gin.Context) {
+	chamaID := c.Param("id")
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
+	}
+
+	// Get database connection
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	chamaService := services.NewChamaService(db.(*sql.DB))
+
+	// Check if user is a member of this chama and has permission to export
+	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "You are not a member of this chama",
+		})
+		return
+	}
+
+	// Only chairperson, secretary, and treasurer can export
+	if userRole != "chairperson" && userRole != "secretary" && userRole != "treasurer" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "You do not have permission to export savings transactions",
+		})
+		return
+	}
+
+	savingsWalletID := fmt.Sprintf("wallet-%s-savings", chamaID)
+
+	// Query savings transactions
+	query := `
+		SELECT
+			t.id, t.amount, t.description, t.status, t.payment_method,
+			t.created_at, u.first_name, u.last_name, u.phone
+		FROM transactions t
+		JOIN users u ON t.initiated_by = u.id
+		WHERE t.to_wallet_id = $1 AND t.status = 'completed'
+		ORDER BY t.created_at DESC
+	`
+
+	rows, err := db.(*sql.DB).Query(query, savingsWalletID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch savings transactions: " + err.Error(),
+		})
+		return
+	}
+	defer rows.Close()
+
+	var transactions []SavingsTransactionExport
+	for rows.Next() {
+		var t SavingsTransactionExport
+		var phone sql.NullString
+		if err := rows.Scan(
+			&t.ID, &t.Amount, &t.Description, &t.Status, &t.PaymentMethod,
+			&t.CreatedAt, &t.FirstName, &t.LastName, &phone,
+		); err != nil {
+			continue
+		}
+		t.MemberName = fmt.Sprintf("%s %s", t.FirstName, t.LastName)
+		if phone.Valid {
+			t.Phone = utils.MaskPhone(phone.String)
+		}
+		transactions = append(transactions, t)
+	}
+
+	// Create Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	sheetName := "Savings Transactions"
+	index, err := f.NewSheet(sheetName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create Excel sheet",
+		})
+		return
+	}
+
+	headers := []string{"No.", "Transaction ID", "Member", "Phone", "Amount (KES)", "Description", "Payment Method", "Date", "Status"}
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s%d", string(rune('A'+i)), 1)
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	lastHeaderCol := string(rune('A' + len(headers) - 1))
+
+	widths := []float64{6.0, 20.0, 20.0, 15.0, 15.0, 25.0, 15.0, 20.0, 10.0}
+	for i, width := range widths {
+		col, _ := excelize.ColumnNumberToName(i + 1)
+		f.SetColWidth(sheetName, col, col, width)
+	}
+
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Color: "FFFFFF"},
+		Fill:      excelize.Fill{Type: "pattern", Color: []string{"28A745"}, Pattern: 1},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	f.SetCellStyle(sheetName, "A1", lastHeaderCol+fmt.Sprintf("%d", 1), headerStyle)
+
+	for i, txn := range transactions {
+		row := i + 2
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), i+1)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), txn.ID)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), txn.MemberName)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), txn.Phone)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), txn.Amount)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), txn.Description)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), txn.PaymentMethod)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), txn.CreatedAt[:10])
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), txn.Status)
+	}
+
+	f.SetActiveSheet(index)
+
+	fileName := fmt.Sprintf("SavingsTransactions_%s_%s.xlsx", chamaID[:8], time.Now().Format("2006-01-02"))
+
+	buffer, err := f.WriteToBuffer()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to generate Excel file",
+		})
+		return
+	}
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Expose-Headers", "Content-Disposition, Content-Length")
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+	c.Header("Content-Length", fmt.Sprintf("%d", buffer.Len()))
+
+	c.Writer.Write(buffer.Bytes())
+}
+
+// SavingsTransactionExport represents a savings transaction row for Excel export
+type SavingsTransactionExport struct {
+	ID            string
+	Amount        float64
+	Description   string
+	Status        string
+	PaymentMethod string
+	CreatedAt     string
+	FirstName     string
+	LastName      string
+	MemberName    string
+	Phone         string
+}

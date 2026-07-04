@@ -1,4 +1,5 @@
-import { makeRequest, makeRequestWithRetry } from './client';
+import { makeRequest, makeRequestWithRetry, API_BASE_URL } from './client';
+import { getAuthToken } from './auth';
 
 const getNotificationPreferences = async () => {
   return await makeRequest('/notifications/preferences', { method: 'GET' });
@@ -105,6 +106,25 @@ const getEligibleOtherMembers = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/eligible-other-members`);
 };
 
+const exportSavingsTransactions = async (chamaId) => {
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE_URL}/chamas/${chamaId}/savings/export`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Export failed: ${response.status} ${errorText}`);
+  }
+
+  // Return the blob directly for the export function
+  return await response.blob();
+};
+
 const getTransparencyFeedChama = async (chamaId, filters = {}) => {
   const queryParams = new URLSearchParams();
   if (filters.startDate) queryParams.append('startDate', filters.startDate);
@@ -177,6 +197,7 @@ export {
   getEligibleSharesMembers,
   getEligibleSavingsMembers,
   getEligibleOtherMembers,
+  exportSavingsTransactions,
   getTransparencyFeedChama,
   getAccountNotifications,
   sendSystemNotification,

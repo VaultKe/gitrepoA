@@ -8,6 +8,10 @@ const getTransactions = async (limit = 20, offset = 0) => {
   return await makeRequest(`/wallets/transactions?limit=${limit}&offset=${offset}`);
 };
 
+const getSubWalletTransactions = async (chamaId, walletType) => {
+  return await makeRequest(`/chamas/${chamaId}/subwallets/${walletType}/transactions`);
+};
+
 const initiateDeposit = async (amount, paymentMethod = 'mpesa', description = '', reference = '') => {
   return await makeRequest('/wallets/deposit', {
     method: 'POST',
@@ -67,6 +71,7 @@ const initiateRegistrationPayment = async (amount = 50, phoneNumber = '', paymen
 export {
   getWalletBalance,
   getTransactions,
+  getSubWalletTransactions,
   initiateDeposit,
   initiateWithdrawal,
   getChamaWalletBalance,

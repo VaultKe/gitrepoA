@@ -267,7 +267,7 @@ func GetEligibleSavingsMembers(c *gin.Context) {
 	query := `
 		SELECT cm.user_id, u.first_name, u.last_name,
 			   COALESCE(SUM(t.amount), 0) as savings_balance,
-			   COALESCE(MAX(t.created_at), '') as last_activity
+			   COALESCE(MAX(t.created_at)::text, '') as last_activity
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
 		LEFT JOIN transactions t ON t.initiated_by = cm.user_id
