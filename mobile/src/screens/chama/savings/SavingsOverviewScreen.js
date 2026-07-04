@@ -226,13 +226,10 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
         <Text style={[styles.headerText, { color: colors.text }]}>Member</Text>
       </View>
       <View style={[styles.cell, styles.balanceCell]}>
-        <Text style={[styles.headerText, { color: colors.text }]}>Balance</Text>
+        <Text style={[styles.headerText, { color: colors.text }]}>My Savings</Text>
       </View>
       <View style={[styles.cell, styles.statusCell]}>
         <Text style={[styles.headerText, { color: colors.text }]}>Status</Text>
-      </View>
-      <View style={[styles.cell, styles.dateCell]}>
-        <Text style={[styles.headerText, { color: colors.text }]}>Last Activity</Text>
       </View>
     </View>
   );
@@ -259,11 +256,6 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
               {(item.status || 'active').toUpperCase()}
             </Text>
           </View>
-        </View>
-        <View style={[styles.cell, styles.dateCell]}>
-          <Text style={[styles.cellText, { color: colors.textSecondary }]}>
-            {formatDate(item.lastActivity)}
-          </Text>
         </View>
       </View>
     );
@@ -329,11 +321,6 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
             {item.payment_method || 'wallet'}
           </Text>
         </View>
-        <View style={[styles.cell, { flex: 1.5, alignItems: 'center' }]}>
-          <Text style={[styles.cellText, { color: colors.textSecondary }]} numberOfLines={1}>
-            {item.id ? item.id.slice(0, 8) : '-'}
-          </Text>
-        </View>
       </View>
     );
   };
@@ -351,9 +338,6 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
       </View>
       <View style={[styles.cell, { flex: 1.5 }]}>
         <Text style={[styles.headerText, { color: colors.text }]}>Method</Text>
-      </View>
-      <View style={[styles.cell, { flex: 1.5 }]}>
-        <Text style={[styles.headerText, { color: colors.text }]}>ID</Text>
       </View>
     </View>
   );
@@ -588,10 +572,6 @@ const styles = StyleSheet.create({
   },
   statusCell: {
     flex: 1.5,
-    alignItems: 'center',
-  },
-  dateCell: {
-    flex: 2,
     alignItems: 'center',
   },
   headerText: {

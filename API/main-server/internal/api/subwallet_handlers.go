@@ -197,8 +197,8 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 		targetWalletID := fmt.Sprintf("wallet-%s-%s", chamaID, subwalletType)
 		targetWallet, err := walletService.GetWalletByID(targetWalletID)
 		if err != nil {
-			// Create the savings subwallet if it doesn't exist
-			targetWallet, err = walletService.CreateWallet(chamaID, models.WalletTypeChama)
+			// Create the savings subwallet if it doesn't exist with the correct ID
+			targetWallet, err = walletService.CreateWalletWithID(targetWalletID, chamaID, models.WalletTypeChama, subwalletType, chamaID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"success": false,
@@ -232,6 +232,16 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   "Failed to process savings contribution: " + err.Error(),
+			})
+			return
+		}
+
+		// Process the transaction to update wallet balances
+		if err := walletService.ProcessTransaction(processedTx.ID); err != nil {
+			log.Printf("Failed to process transaction for savings: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to update wallet balances: " + err.Error(),
 			})
 			return
 		}

@@ -28,6 +28,39 @@ func (s *WalletService) CreateWallet(ownerID string, walletType models.WalletTyp
 	return s.CreateWalletWithTx(nil, ownerID, walletType)
 }
 
+// CreateWalletWithID creates a new wallet with a specific ID (useful for chama subwallets)
+func (s *WalletService) CreateWalletWithID(walletID string, ownerID string, walletType models.WalletType, subWalletType, chamaID string) (*models.Wallet, error) {
+	wallet := &models.Wallet{
+		ID:            walletID,
+		Type:          walletType,
+		OwnerID:       ownerID,
+		SubWalletType: models.ChamaWalletType(subWalletType),
+		ChamaID:       chamaID,
+		Balance:       0,
+		Currency:      "KES",
+		IsActive:      true,
+		IsLocked:      false,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	query := `
+		INSERT INTO wallets (id, type, owner_id, subwallet_type, chama_id, balance, currency, is_active, is_locked, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`
+
+	_, err := s.db.Exec(query,
+		wallet.ID, wallet.Type, wallet.OwnerID, wallet.SubWalletType, wallet.ChamaID, wallet.Balance, wallet.Currency,
+		wallet.IsActive, wallet.IsLocked, wallet.CreatedAt, wallet.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create wallet: %w", err)
+	}
+
+	return wallet, nil
+}
+
 // CreateWalletWithTx creates a new wallet within an existing transaction
 func (s *WalletService) CreateWalletWithTx(tx *sql.Tx, ownerID string, walletType models.WalletType) (*models.Wallet, error) {
 	wallet := &models.Wallet{
