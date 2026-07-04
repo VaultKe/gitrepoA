@@ -330,8 +330,8 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
         throw new Error('Payment transaction ID not found. Please contact support or try again after payment is confirmed.');
       }
       const token = await api.getAuthToken();
-      
-      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${transactionId}/download?format=pdf`, {
+
+      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${encodeURIComponent(transactionId)}/download?format=pdf`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

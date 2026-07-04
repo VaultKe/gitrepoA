@@ -284,22 +284,52 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 // resolveTransactionID attempts to map an external payment reference (e.g. an M-Pesa receipt number)
 // to an internal transaction ID by searching transaction metadata.
 func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, error) {
+	if transactionID == "" {
+		return "", sql.ErrNoRows
+	}
+
+	trxLookup := strings.ReplaceAll(transactionID, " ", "")
+	lowered := strings.ToLower(trxLookup)
+
+	lookupQueries := []string{
+		fmt.Sprintf(`%%"mpesa_receipt_number":"%s"%%`, lowered),
+		fmt.Sprintf(`%%%s%%`, lowered),
+		fmt.Sprintf(`%%%s%%`, transactionID),
+	}
+
 	var actualID string
-	lookupQuery := `
+	query := `
 		SELECT id
 		FROM transactions
 		WHERE payment_method = $1
-		  AND lower(metadata) LIKE $2
+		  AND (
+			lower(metadata) LIKE $2
+			OR lower(metadata) LIKE $3
+			OR reference LIKE $4
+		  )
 		LIMIT 1
 	`
-	err := h.db.QueryRow(lookupQuery, models.PaymentMethodMpesa,
-		fmt.Sprintf(`%%"mpesa_receipt_number":"%s"%%`, strings.ToLower(transactionID)),
-	).Scan(&actualID)
+	err := h.db.QueryRow(query, models.PaymentMethodMpesa, lookupQueries[0], lookupQueries[1], lookupQueries[2]).Scan(&actualID)
 	if err == nil {
 		return actualID, nil
 	}
 	if err == sql.ErrNoRows {
-		return "", sql.ErrNoRows
+		// Fallback: search across all payment methods in case the transaction was not marked as mpesa
+		fallbackQuery := `
+			SELECT id
+			FROM transactions
+			WHERE lower(metadata) LIKE $1
+			   OR reference LIKE $2
+			LIMIT 1
+		`
+		err = h.db.QueryRow(fallbackQuery, lookupQueries[1], lookupQueries[2]).Scan(&actualID)
+		if err == nil {
+			return actualID, nil
+		}
+		if err == sql.ErrNoRows {
+			return "", sql.ErrNoRows
+		}
+		return "", err
 	}
 	return "", err
 }
