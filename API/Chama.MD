@@ -5,14 +5,18 @@
 2. [Service 1: Main Server (API Gateway)](#service-1-main-server-api-gateway)
 3. [Service 2: Chat Service](#service-2-chat-service)
 4. [Service 3: Meeting Service](#service-3-meeting-service)
-5. [Database Schema Reference](#database-schema-reference)
-6. [Security Features](#security-features)
-7. [Inter-Service Communication](#inter-service-communication)
-8. [Deployment Configuration](#deployment-configuration)
-9. [Monitoring & Observability](#monitoring--observability)
-10. [API Versioning](#api-versioning)
-11. [Error Handling](#error-handling)
-12. [Related Documentation](#related-documentation)
+5. [Service 4: React Native Mobile Client](#service-4-react-native-mobile-client)
+6. [Overall System Architecture (Including Mobile)](#overall-system-architecture-including-mobile)
+7. [Database Schema Reference](#database-schema-reference)
+8. [Database Simulation & Data Flow Diagrams](#database-simulation--data-flow-diagrams)
+9. [Security Features](#security-features)
+10. [Inter-Service Communication](#inter-service-communication)
+11. [Mobile User Flow Diagrams](#mobile-user-flow-diagrams)
+12. [Deployment Configuration](#deployment-configuration)
+13. [Monitoring & Observability](#monitoring--observability)
+14. [API Versioning](#api-versioning)
+15. [Error Handling](#error-handling)
+16. [Related Documentation](#related-documentation)
 
 ## Overview
 
@@ -908,3 +912,1895 @@ HTTP Status Codes:
 - `API/main-server/docs/REMINDERS_API.md` - Reminder system
 - `API/main-server/SUPABASE_SETUP.md` - Supabase integration
 - `README.md` in each service directory
+
+---
+
+## Service 4: React Native Mobile Client
+
+**Framework:** React Native (Expo / bare workflow) | **Language:** TypeScript | **State Management:** Zustand / Redux Toolkit | **Navigation:** React Navigation v6 / v7 | **Networking:** Axios / React Query (TanStack Query) | **Storage:** MMKV / SQLite | **Realtime:** Socket.io-client / WebSocket | **Push:** Expo Notifications / Firebase Cloud Messaging | **Maps:** React Native Maps
+
+The VaultKe mobile client is a cross-platform React Native application targeting Android and iOS. It consumes the Main Server API (8085), establishes direct WebSocket connections to Chat Service (8084), and creates signaling tunnels to Meeting Service (8086) for WebRTC media. Offline-first capabilities ensure users can perform critical read/write operations while disconnected and sync when connectivity returns.
+
+---
+
+## Overall System Architecture (Including Mobile)
+
+```
+                                                                                          
+        ┌────────────────────────────────────────────────────────────────────────────┐  
+        │                         API Gateway (main-server:8085)                       │  
+        │  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐        │  
+        │  │   Auth Layer     │    │   Route Layer    │    │  Proxy Layer     │        │  
+        │  │  JWT Validation  │    │  All Endpoints   │    │  -> Meeting SVC  │        │  
+        │  └──────────────────┘    └─────────┬──────────┘    └──────────────────┘        │  
+        │                                   │                                           │  
+        │                                   ▼                                           │  
+        │                         ┌──────────────────┐                                   │  
+        │                         │  Proxy Layer     │                                   │  
+        │                         │  -> Chat Service │                                   │  
+        │                         └──────────────────┘                                   │  
+        └────────────────────────────────────────────────────────────────────────────┘  
+                                          │                                           
+                                          │ HTTPS / REST                               
+                                          ▼                                           
+                            ┌─────────────────────────┐                             
+                            │    React Native Mobile  │                             
+                            │    Client (iOS / Android)│                            
+                            │  ┌────────────────────┐ │                             
+                            │  │ Navigation Layer   │ │                             
+                            │  │ (React Navigation) │ │                             
+                            │  └───────┬────────────┘ │                             
+                            │          │              │                             
+                            │  ┌───────▼────────────┐ │                             
+                            │  │   Feature Modules  │ │                             
+                            │  │ Auth / Chamas /    │ │                             
+                            │  │ Wallets / Chat /   │ │                             
+                            │  │ Meetings / Loans   │ │                             
+                            │  │ Welfare / Learning │ │                             
+                            │  └───────┬────────────┘ │                             
+                            │          │              │                             
+                            │  ┌───────▼────────────┐ │                             
+                            │  │   State + API      │ │                             
+                            │  │   (React Query &   │ │                             
+                            │  │   Zustand Stores)  │ │                             
+                            │  └───────┬────────────┘ │                             
+                            │          │              │                             
+                            │  ┌───────▼────────────┐ │                             
+                            │  │   Offline/Sync     │ │                             
+                            │  │   (MMKV/SQLite)    │ │                             
+                            │  └────────────────────┘ │                             
+                            └─────────────────────────┘                             
+                                          │                                           
+                                          │ WebSocket /                               
+                                          │ Signaling                                  
+                ┌─────────────────────────┼─────────────────────────┐                
+                │                         │                         │                
+                ▼                         ▼                         ▼                
+    ┌───────────────────────┐ ┌──────────────────────────┐ ┌───────────────────────┐  
+    │   Chat Service (8084) │ │   Meeting Service (8086)  │ │   Push Notification   │  
+    │  WebSocket | Messages │ │   WebRTC | Signaling      │ │   (FCM / APNs + Expo) │  
+    └───────────────────────┘ └──────────────────────────┘ └───────────────────────┘  
+                                          
+                                          ▲                    
+                                          │                    
+        ┌─────────────────────────────────┼─────────────────────────────────┐      
+        │                                 │                                 │      
+        ▼                                 ▼                                 ▼      
+    ┌─────────────────────────┐ ┌──────────────────────────┐ ┌───────────────────────┐  
+    │                         │ │                          │ │                       │  
+    │  Shared PostgreSQL      │ │   Redis (Sessions/       │ │                       │  
+    │  Database               │ │   Presence/Queue)        │ │   External Integrations│  
+    │                         │ │                          │ │   (M-Pesa / Drive /    │  
+    │                         │ │                          │ │   Email / SMS)         │  
+    │                         │ │                          │ │                       │  
+    └─────────────────────────┘ └──────────────────────────┘ └───────────────────────┘  
+```
+
+---
+
+## Mobile Architecture Layers
+
+### Layer 1: Presentation Layer (UI Shell)
+```
+[PLACEHOLDER: Attach screenshots/Screen_Architecture_Map.png]
+
+src/
+├── navigation/
+│   ├── AppNavigator.tsx           // Root stack + conditional authflow
+│   ├── AuthNavigator.tsx          // Login / Register / Onboarding / TOTP
+│   ├── MainNavigator.tsx          // Tab navigator (Home | Chamas | Messages | Meetings | Profile)
+│   ├── ChamaStack.tsx             // Detail screens stack for a specific chama
+│   ├── ModalNavigator.tsx         // Bottom sheets (Payments, Apply Loan, etc.)
+│   └── linking.ts                 // Deep linking configuration (Universal Links / App Links)
+├── screens/
+│   ├── auth/
+│   │   ├── SplashScreen.tsx
+│   │   ├── PhoneLoginScreen.tsx
+│   │   ├── VerifyOTPScreen.tsx
+│   │   ├── RegisterScreen.tsx
+│   │   ├── TOTPVerifyScreen.tsx
+│   │   └── OnboardingWizard.tsx   // Multi-step profile completion
+│   ├── home/
+│   │   ├── HomeScreen.tsx
+│   │   ├── DashboardWidgets.tsx   // Financial summary cards
+│   │   └── RecentActivityFeed.tsx
+│   ├── chamas/
+│   │   ├── ChamaListScreen.tsx
+│   │   ├── CreateChamaScreen.tsx
+│   │   ├── ChamaDetailScreen.tsx
+│   │   ├── MembersScreen.tsx
+│   │   ├── LoansScreen.tsx
+│   │   ├── WelfareScreen.tsx
+│   │   ├── SubWalletsScreen.tsx
+│   │   ├── TransactionsScreen.tsx
+│   │   └── SettingsScreen.tsx
+│   ├── wallets/
+│   │   ├── WalletOverview.tsx
+│   │   ├── WalletTransferScreen.tsx
+│   │   ├── MpesaSTKPush.tsx        // STK push confirmation UI
+│   │   └── TransactionHistory.tsx
+│   ├── chat/
+│   │   ├── ChatListScreen.tsx
+│   │   ├── ChatRoomScreen.tsx
+│   │   └── MessageBubble.tsx
+│   ├── meetings/
+│   │   ├── MeetingListScreen.tsx
+│   │   ├── PreJoinScreen.tsx
+│   │   ├── ActiveMeetingScreen.tsx  // WebRTC local/remote views
+│   │   └── MeetingChatSidebar.tsx
+│   ├── loans/
+│   │   ├── ApplyLoanScreen.tsx
+│   │   ├── LoanDetailScreen.tsx
+│   │   └── GuarantorRequestScreen.tsx
+│   ├── welfare/
+│   │   ├── WelfareRequestsScreen.tsx
+│   │   ├── CreateWelfareRequest.tsx
+│   │   └── ContributeScreen.tsx
+│   ├── learning/
+│   │   ├── CoursesScreen.tsx
+│   │   ├── CourseDetailScreen.tsx
+│   │   └── QuizScreen.tsx
+│   ├── notifications/
+│   │   ├── NotificationListScreen.tsx
+│   │   └── NotificationPreferences.tsx
+│   └── profile/
+│       ├── ProfileScreen.tsx
+│       ├── SettingsScreen.tsx
+│       └── SecurityScreen.tsx
+├── components/
+│   ├── common/
+│   │   ├── Button.tsx
+│   │   ├── Input.tsx
+│   │   ├── Card.tsx
+│   │   ├── Avatar.tsx
+│   │   ├── Badge.tsx
+│   │   ├── Skeleton.tsx
+│   │   ├── EmptyState.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   └── Touchable.tsx
+│   ├── chama/
+│   │   ├── ChamaCard.tsx
+│   │   ├── MemberRow.tsx
+│   │   ├── TransactionRow.tsx
+│   │   └── ContributionChart.tsx
+│   ├── chat/
+│   │   ├── MessageBubble.tsx
+│   │   ├── ChatInput.tsx
+│   │   └── AttachmentPreview.tsx
+│   ├── meetings/
+│   │   ├── ParticipantTile.tsx
+│   │   ├── ControlBar.tsx
+│   │   └── FullScreenVideo.tsx
+│   └── forms/
+│       ├── PhoneInput.tsx
+│       ├── AmountInput.tsx
+│       └── DatePicker.tsx
+└── theme/
+    ├── colors.ts
+    ├── typography.ts
+    ├── spacing.ts
+    └── index.ts
+```
+
+**Key Principle:** Each screen is a thin UI layer. Most UI state is derived from React Query cache + Zustand stores. Screens compose reusable components and trigger actions defined in feature hooks.
+
+---
+
+### Layer 2: State Management & Data Layer
+```
+[PLACEHOLDER: Attach screenshots/StateManagement_Architecture.png]
+
+src/
+├── api/
+│   ├── client.ts                 // Axios instance with interceptors
+│   ├── auth.ts                   // Auth endpoints
+│   ├── users.ts                  // User endpoints
+│   ├── chamas.ts                 // Chama CRUD + members
+│   ├── wallets.ts                // Wallets, transactions, transfers
+│   ├── loans.ts                  // Loan operations
+│   ├── welfare.ts                // Welfare endpoints
+│   ├── meetings.ts               // Meeting endpoints
+│   ├── chat.ts                   // Chat REST endpoints
+│   ├── payments.ts               // M-Pesa callbacks (read)
+│   ├── notifications.ts          // Notifications
+│   ├── learning.ts               // Learning endpoints
+│   └── upload.ts                 // File uploads (avatars, docs)
+├── stores/
+│   ├── authStore.ts              // User session, tokens, onboarding status
+│   ├── chamaStore.ts             // Active chama context, current chama id
+│   ├── walletStore.ts            // Default wallet, currency, limits
+│   ├── chatStore.ts              // Active room, unread counts
+│   ├── meetingStore.ts           // Active meeting, media states
+│   ├── uiStore.ts                // Theme (light/dark), language, modals
+│   └── offlineQueue.ts           // Pending mutations when offline
+├── hooks/
+│   ├── useAuth.ts
+│   ├── useChamas.ts
+│   ├── useWallets.ts
+│   ├── useLoans.ts
+│   ├── useChat.ts
+│   ├── useMeetings.ts
+│   ├── useWebRTC.ts
+│   ├── useNotifications.ts
+│   ├── useOfflineSync.ts
+│   └── usePerms.ts               // Generate optimized permission selectors
+├── sockets/
+│   ├── chatSocket.ts             // Chat service WS wrapper
+│   ├── meetingSocket.ts          // Signaling WS wrapper
+│   └── socketRegistry.ts         // Connection pool, keep-alive, reconnection
+├── services/
+│   ├── storage.ts                // MMKV wrapper
+│   ├── biometrics.ts             // Biometric auth (secure storage)
+│   ├── location.ts               // GPS for map views
+│   ├── camera.ts                 // Avatar capture
+│   ├── pushNotifications.ts      // FCM/APNs token registration
+│   ├── deepLinking.ts            // Incoming invite links / deeplinks
+│   └── analytics.ts              // Event tracking (Firebase / Mixpanel)
+└── utils/
+    ├── constants.ts
+    ├── validators.ts             // Client-side validation mirrors backend
+    ├── formatters.ts             // Currency, dates (EAT), phone numbers
+    ├── permissions.ts            // Platform permission wrappers
+    ├── errorHandlers.ts          // Map backend error codes to UX messages
+    └── offlineHelpers.ts         // Retry queues, delta sync
+```
+
+---
+
+### Layer 3: Offline-First & Synchronization Strategy
+```
+[PLACEHOLDER: Attach screenshots/OfflineSync_Architecture.png]
+
+┌──────────────────────────┐     Online      ┌──────────────────────────┐
+│       Mobile Device       │ <-------------> │      API Gateway         │
+│  ┌────────────────────┐   │   HTTPS/WS      │      (8085)              │
+│  │                    │   │                 │                          │
+│  │  Local First DB    │   │                 │                          │
+│  │  (MMKV / SQLite)   │   │                 │                          │
+│  │                    │   │                 │                          │
+│  │  ┌──────────────┐  │   │                 │                          │
+│  │  │ Read Cache    │  │   │                 │                          │
+│  │  │ (Hot)         │  │   │                 │                          │
+│  │  └──────┬───────┘  │   │                 │                          │
+│  │         │          │   │                 │                          │
+│  │  ┌──────▼───────┐  │   │                 │                          │
+│  │  │ Query Store  │  │   │                 │                          │
+│  │  │ (TanStack    │  │   │                 │                          │
+│  │  │  Query)      │  │   │                 │                          │
+│  │  └──────┬───────┘  │   │                 │                          │
+│  │         │          │   │                 │                          │
+│  │  ┌──────▼───────┐  │   │                 │                          │
+│  │  │ Mutation     │  │   │                 │                          │
+│  │  │ Queue +       │  │   │                 │                          │
+│  │  │ Optimistic   │  │   │                 │                          │
+│  │  │ Update       │  │   │                 │                          │
+│  │  └──────────────┘  │   │                 │                          │
+│  └────────────────────┘   │                 │                          │
+│         ▲                 │                 │                          │
+│         │ Background Sync │                 │                          │
+│         │ (NetInfo +      │                 │                          │
+│         │  task handlers) │                 │                          │
+└─────────┼─────────────────┘                 └──────────────────────────┘
+          │
+          │ Sync direction on reconnect
+          │ - POST conflict_resolution strategy
+          │ - last_updated_at timestamps
+          │ - server is source of truth for financials
+```
+
+**Sync Rules:**
+1. Read-While-Offline: Load from local cache immediately, then revalidate via `stale-while-revalidate` when online.
+2. Write-While-Offline: Store mutation in queue. When connectivity resumes, flush queue sequentially. Update UI optimistically but rollback on failure.
+3. Conflict Resolution: Last-write-wins for non-financial data (profile, preferences). Financial data requires explicit confirmation or revert with audit entry.
+4. Delta Sync: Transfer only changed fields using `updated_since` filter to minimize payload.
+
+---
+
+## Mobile Data Flow Diagrams
+
+### 4.1 Authentication & Onboarding Flow
+```
+[PLACEHOLDER: Attach screenshots/Auth_Flow_Diagram.png]
+
+User opens App
+    ↓
+Check Token (MMKV)
+    ├── Valid & not expired  → MainTabs
+    └── Invalid/missing      → AuthFlow
+                                ├── Phone Input
+                                │     ↓
+                                │   POST /api/v1/auth/send-email-verification
+                                │   (dedicated for OTP/TOTP)
+                                │     ↓
+                                │   VerifyOTP / TOTPVerify
+                                │     ↓
+                                │   POST /api/v1/auth/login
+                                │     ↓
+                                │   Store tokens (secure enclave / Keychain)
+                                │     ↓
+                                ├── Onboarding Wizard (if incomplete)
+                                │     ├── Profile Step
+                                │     ├── KYC Step (ID upload)
+                                │     ├── Preferences (Language, Theme)
+                                │     └── Permissions (Notifications, Location)
+                                │         ↓
+                                │       Mark onboarding complete
+                                ↓
+                          MainTabs → Dashboard
+```
+
+### 4.2 Wallet Transaction Flow (M-Pesa STK Push)
+```
+[PLACEHOLDER: Attach screenshots/Wallet_Transaction_Flow.png]
+
+User taps "Deposit / Pay Contribution"
+    ↓
+Select Wallet (personal / chama / subwallet)
+    ↓
+Enter Amount + Reference
+    ↓
+POST /api/v1/wallets/deposit  { amount, wallet_id, description }
+    ↓
+Backend creates Transaction (status: pending) + STK push request
+    ↓
+M-Pesa sends push prompt to user phone
+    ↓
+User enters PIN on device
+    ↓
+M-Pesa callback → Backend updates transaction status
+    ↓
+Mobile Client polls /api/v1/payments/mpesa/status/:id
+    OR
+WebSocket / SSE notification from backend
+    ↓
+Transaction cache invalidation
+    ↓
+UI updates balance + transaction history
+```
+
+### 4.3 Chat Flow (WebSocket)
+```
+[PLACEHOLDER: Attach screenshots/Chat_WebSocket_Flow.png]
+
+User opens ChatRoomScreen
+    ↓
+API: POST /rooms/:id/join (REST via API Gateway)
+    ↓
+WS: Connect to wss://<gateway>/rooms/:id/ws  (proxied to Chat Service:8084)
+    ↓
+Hub registers client, sends room_state event
+    ↓
+Incoming Message Event:
+    ├── Persist to SQLite (local history)
+    ├── Update React Query cache
+    ├── Update unread counters in Zustand
+    └── Trigger local notification if app backgrounded
+    ↓
+Sending Message:
+    └── Mark pending → Optimistic UI insert → WS emit → Acknowledge → Remove pending flag
+```
+
+### 4.4 Meeting / WebRTC Flow
+```
+[PLACEHOLDER: Attach screenshots/Meeting_WebRTC_Flow.png]
+
+User opens MeetingDetailScreen
+    ↓
+API: GET /api/v1/rooms/:id  (via Main Server)
+    ↓
+User taps "Join Meeting"
+    ↓
+Request device permissions (camera, mic, screen capture)
+    ↓
+Connect signaling WebSocket to wss://<gateway>/online-meetings/:id/signal
+    (proxied to Meeting Service:8086)
+    ↓
+SFU answers create Offer → Set local description → ICE candidates exchange
+    ↓
+PeerConnection established:
+    ├── Local stream attached to <Video /> (muted local preview)
+    ├── Remote streams attached to <RTCView /> (active speaker layout)
+    └── DataChannel for meeting chat (backup)
+    ↓
+During call:
+    ├── Mute / Video Toggle → via signaling WS control message
+    ├── Screen Share → replace video track with display media
+    └── Leave → close peer connections, remove from DB
+```
+
+### 4.5 Loan Application Flow
+```
+[PLACEHOLDER: Attach screenshots/Loan_Application_Flow.png]
+
+User taps "Apply for Loan"
+    ↓
+LoanAmountInput + TermSelector + PurposeInput + GuarantorSelector
+    ↓
+POST /api/v1/loans/apply
+    ↓
+Backend validates eligibility (chama membership, credit score, guarantors)
+    ↓
+Status: pending / approved / rejected
+    ↓
+Push Notification + In-app alert
+    ↓
+If approved:
+    ├── POST /api/v1/loans/:id/approve (admin)
+    ├── POST /api/v1/loans/:id/disburse
+    │     Transfers funds to user wallet
+    └── UI reflects new balance + loan schedule
+```
+
+---
+
+## Mobile User Flow Diagrams
+
+### A. First Launch User Flow
+```
+[PLACEHOLDER: Attach screenshots/UserFlow_FirstLaunch.png]
+
+┌─────────┐    ┌──────────┐    ┌──────────┐    ┌───────────┐    ┌───────────┐
+│ Splash  │ -> │ Select   │ -> │ Enter   │ -> │ Verify    │ -> │ Complete  │
+│ Screen  │    │ Language │    │ Phone # │    │ OTP/TOTP  │    │ Onboarding│
+└─────────┘    └──────────┘    └──────────┘    └───────────┘    └───────────┘
+                                                                 │
+                                                      ┌────────────┼────────────┐
+                                                      ▼            ▼            ▼
+                                                ┌─────────┐ ┌─────────┐ ┌─────────┐
+                                                │ Profile │ │ KYC /   │ │ Permissions
+                                                │ Details │ │ ID Upload│ │ (Push,  │
+                                                └─────────┘ └─────────┘ │ Location│
+                                                              └─────────┘ └─────────┘
+                                                                       │
+                                                                       ▼
+                                                                 ┌─────────┐
+                                                                 │ Home    │
+                                                                 │ Dashboard│
+                                                                 └─────────┘
+```
+
+### B. Chama Creation & Onboarding Flow
+```
+[PLACEHOLDER: Attach screenshots/UserFlow_ChamaCreation.png]
+
+┌──────────┐     ┌───────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+│ Dashboard│  -> │ "Create   │  -> │ Basic Info │  -> │ Add Members│  -> │ Setup     │
+│ Tab      │     │ Chama"    │     │ (Name,Type)│     │ (Invite /  │     │ Contributions│
+│          │     │           │     └────────────┘     │  Contacts)│     │ & Wallet  │
+└──────────┘     └───────────┘                       └────────────┘     └────────────┘
+                                                                                  │
+                                                                          ┌────────────┐
+                                                                          │ Set Rules, │
+                                                                          │ Schedule  │
+                                                                          └────────────┘
+                                                                                  │
+                                                                                  ▼
+                                                                            ┌────────────┐
+                                                                            │ Chama Live │
+                                                                            │ Dashboard  │
+                                                                            └────────────┘
+```
+
+### C. Financial Activity Flow
+```
+[PLACEHOLDER: Attach screenshots/UserFlow_FinancialActivity.png]
+
+┌──────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐
+│ Wallet   │    │ Deposit /  │    │ Contribute │    │ Withdraw  /│    │ Transaction │
+│ Dashboard│ -> │ Pay Bills  │ -> │ to Welfare │ -> │ Loan Repay │ -> │ History    │
+│          │    │ (M-Pesa)   │    │ / Savings  │    │            │    │ & Receipts │
+└──────────┘    └────────────┘    └────────────┘    └────────────┘    └────────────┘
+        ▲               │                │                   │                  │
+        │               ▼                ▼                   ▼                  │
+        │         STK Prompt     Guarantor Accept     Disbursement Alert  Receipt PDF│
+        │               │                │                   │                  │
+        │               └────────────────┴───────────────────┘                  │
+        │                                    │                                     │
+        │                                    ▼                                     │
+        │                              ┌────────────┐                              │
+        └────────────────────────────────│ Ledger &   │◄─────────────────────────────│
+                                          │ Reconciliation│
+                                          └────────────┘
+```
+
+### D. Meeting Lifecycle Flow
+```
+[PLACEHOLDER: Attach screenshots/UserFlow_MeetingLifecycle.png]
+
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Meetings │ -> │ Schedule │ -> │ Pre-Join │ -> │ Active   │ -> │ Post     │
+│ Tab      │    │ New      │    │ (Check   │    │ Call     │    │ Meeting  │
+│          │    │ Meeting  │    │ Device   │    │ (WebRTC) │    │ Minutes  │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
+                                     │               │                  │
+                                     ▼               ▼                  ▼
+                                Audio/Video   Screen Share      Attendance Marked
+                                Permission    / Recording      Action Items Created
+                                Check
+```
+
+### E. Profile Settings & Security Flow
+```
+[PLACEHOLDER: Attach screenshots/UserFlow_Settings.png]
+
+Profile Tab -> Settings Icon
+    ↓
+├── Account Settings
+│     ├── Edit Profile (name, phone, email, bio)
+│     ├── Change Password (current + new + confirm)
+│     └── Delete Account (confirmation modal)
+├── Security Settings
+│     ├── Enable Biometric Login
+│     ├── View Active Sessions
+│     └── Notification Preferences (push, email, SMS)
+├── Preferences
+│     ├── Language (en / sw)
+│     ├── Theme (light / dark / system)
+│     └── Privacy (profile visibility, data sharing)
+└── Support
+      ├── FAQs
+      ├── Contact Support (form)
+      └── Report Bug
+```
+
+---
+
+## Database Simulation & Conceptual Diagrams
+
+### A. Core Entity Relationship (Mobile App Perspective)
+```
+[PLACEHOLDER: Attach screenshots/ER_Diagram_Mobile.png]
+
+┌─────────────┐          ┌─────────────┐          ┌─────────────┐
+│   User      │1       * │   Chama     │1       * │  Chama_Member│
+│             │─────────>│             │─────────>│              │
+│ - id        │          │ - id        │          │ - id         │
+│ - email     │          │ - name      │          │ - chama_id   │
+│ - phone     │          │ - type      │          │ - user_id    │
+│ - role      │          │ - status    │          │ - role       │
+│ - onboarded │          │ - funds     │          │ - joined_at  │
+└─────────────┘          └─────────────┘          └─────────────┘
+       │                        │                        │
+       │ 1                     │ *                      │ *
+       │                       │                        │
+       ▼                       ▼                        ▼
+┌─────────────┐          ┌─────────────┐          ┌─────────────┐
+│  Wallet     │1       * │ Sub_Wallet  │1       * │ Transaction │
+│             │─────────>│             │─────────>│             │
+│ - id        │          │ - id        │          │ - id        │
+│ - type      │          │ - chama_id  │          │ - wallet_id │
+│ - balance   │          │ - type      │          │ - amount    │
+│ - owner_id  │          │ - balance   │          │ - type      │
+└─────────────┘          └─────────────┘          │ - status    │
+       ▲                        ▲                 │ - ref       │
+       │ *                      │ *               └─────────────┘
+       │                        │
+┌─────────────┐          ┌─────────────┐
+│ Transaction │          │  Loan       │
+│             │          │             │
+│ - initiated │          │ - id        │
+│   by user   │          │ - amount    │
+│ - chama_id  │          │ - status    │
+└─────────────┘          └─────────────┘
+       ▲                        ▲
+       │                        │
+┌─────────────┐          ┌─────────────┐
+│  Loan_Payment│         │ Guarantor   │
+│             │          │             │
+│ - id        │          │ - id        │
+│ - loan_id   │          │ - user_id   │
+│ - amount    │          │ - status    │
+└─────────────┘          └─────────────┘
+
+┌─────────────┐          ┌─────────────┐
+│Meeting_Room │1       * │Meeting_     │
+│             │─────────>│Participant  │
+│ - id        │          │             │
+│ - type      │          │ - user_id   │
+│ - status    │          │ - role      │
+└─────────────┘          └─────────────┘
+
+┌─────────────┐          ┌─────────────┐
+│Chat_Room    │1       * │Chat_Message│
+│             │─────────>│             │
+│ - id        │          │ - room_id   │
+│ - type      │          │ - sender_id │
+│ - chama_id  │          │ - content   │
+└─────────────┘          │ - type     │
+       ▲                 │ - read_at  │
+       │ *               └─────────────┘
+       │
+┌─────────────┐
+│Chat_Room_   │
+│Member       │
+│             │
+│ - room_id   │
+│ - user_id   │
+│ - role      │
+│ - joined_at │
+└─────────────┘
+```
+
+### B. Mobile Offline Queue Data Model (Local SQLite / MMKV)
+```
+[PLACEHOLDER: Attach screenshots/OfflineQueue_Schema.png]
+
+CREATE TABLE offline_queue (
+    id TEXT PRIMARY KEY,
+    mutation_type TEXT NOT NULL,   -- 'create','update','delete'
+    entity TEXT NOT NULL,           -- 'loan','welfare','transaction','message'
+    payload TEXT NOT NULL,          -- JSON
+    created_at TIMESTAMP NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    last_error TEXT,
+    status TEXT DEFAULT 'pending'   -- pending, processing, completed, failed
+);
+
+CREATE TABLE local_chat_messages (
+    id TEXT PRIMARY KEY,
+    room_id TEXT,
+    temp_id TEXT,                   -- UUID assigned before server ACK
+    content TEXT,
+    type TEXT,
+    sender_id TEXT,
+    created_at TIMESTAMP,
+    sync_status TEXT DEFAULT 'pending' -- pending, sent, failed
+);
+
+CREATE TABLE cached_chamas (
+    chama_id TEXT PRIMARY KEY,
+    data TEXT,
+    last_synced TIMESTAMP
+);
+```
+
+---
+
+## Additional Missing Data Flow Diagrams
+
+### C. Quote / Debit / Credit Money Flow (End-to-End)
+```
+[PLACEHOLDER: Attach screenshots/MoneyFlow_EndToEnd.png]
+
+Mobile Client                           Backend                                  External
+     │                                       │                                       │
+     │  1. Intent (deposit / transfer /       │                                       │
+     │     loan disbursement / welfare)       │                                       │
+     │───────────────────────────────────────>│                                       │
+     │                                       │  2. Validate balance, limits,           │
+     │                                       │     membership, KYC                     │
+     │                                       │───────────────────────────────────────> │  M-Pesa / Bank
+     │                                       │     3. Initiate STK Push / B2C          │
+     │                                       │<─────────────────────────────────────── │  Callback URL
+     │  4. Status: pending (optimistic)       │                                       │
+     │<───────────────────────────────────────│                                       │
+     │                                       │  5. Process callback, credit/debit      │
+     │                                       │     wallets atomically                  │
+     │                                       │  6. Emit Transaction(id, status=done)   │
+     │  6. Webhook / WS event / Poll           │<───────────────────────────────────────│
+     │<───────────────────────────────────────│                                       │
+     │  7. Update local cache + UI            │                                       │
+     │  8. Trigger notification                │                                       │
+```
+
+**Atomicity Rules:**
+- Debit + Credit wrapped in database transaction.
+- If credit fails, debit is rolled back automatically.
+- All financial mutations emit `TransactionStatus.completed` only after wallet balances reflect delta.
+
+### D. Real-time Notification Pipeline
+```
+[PLACEHOLDER: Attach screenshots/Notification_Pipeline.png]
+
+External Event (M-Pesa callback, New Message, Meeting starting)
+         │
+         ▼
+   Backend Event Emitter
+         │
+    ┌────┴────────────────────────┐
+    │                             │
+    ▼                             ▼
+Push Notification               In-app Notification WS
+(FCM / APNs via Expo)          (WebSocket broadcast to user device)
+    │                             │
+    ▼                             ▼
+OS tray / lock screen          UI badge / toast sound
+    │                             │
+    └───────────┬─────────────────┘
+                ▼
+         Inbox stored locally + remote DB
+```
+
+### E. Media Upload & Storage Flow
+```
+[PLACEHOLDER: Attach screenshots/MediaUpload_Flow.png]
+
+User selects file (camera / gallery / document)
+    → Client compresses / resizes
+    → POST /api/v1/upload  (multipart/form-data)
+        → Virus scan (ClamAV)
+        → Encrypt if sensitive
+        → Upload to cloud store (e.g., S3-compatible or Google Drive integration)
+        → Return signed URL + metadata
+    → UI displays inline
+    → On failure: retry queue with exponential backoff
+```
+
+### F. Deep Link & Invitation Flow
+```
+[PLACEHOLDER: Attach screenshots/DeepLink_Flow.png]
+
+Invitation Link:
+    vaultke://chama/invite/{token}
+        │
+        ▼
+    App opens via linking.ts handler
+        │
+        ▼
+    Check auth state
+        ├── Authenticated → Verify token → Join chama → Navigate to ChamaDetail
+        └── Not authenticated → Navigate to Register → Onboarding → Back to Join flow
+```
+
+### G. Webhook / Callback Ingestion Flow
+```
+[PLACEHOLDER: Attach screenshots/Webhook_Callback_Flow.png]
+
+M-Pesa / Bank / External Provider
+         │
+         │ HTTPS POST callback to /api/v1/payments/mpesa/callback
+         ▼
+    API Gateway
+         │
+         ├── Verify signature (shared secret / TLS)
+         ├── Parse payload (transaction_id, status, amount)
+         ├── Fetch transaction by idempotency key
+         ├── Update status + amount in transactions table
+         ├── If success:
+         │     ├── Credit receiving wallet
+         │     ├── Debit source wallet (if not already)
+         │     ├── Emit ws event to mobile clients (balance update)
+         │     └── Audit log entry
+         └── Return 200 OK to provider
+```
+
+---
+
+## Additional Backend Data Flow Diagrams (Added)
+
+### Notification Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/NotificationService_DataFlow.png]
+
+Mobile App / Admin UI                API Gateway:8085                PostgreSQL / Redis
+       │                                     │                            │
+       │   POST /notifications/system        │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create notification        │
+       │                                     │ Read preferences           │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { id, status: queued }            │                            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   WS /push event                    │                            │
+       │   (real-time in-app)               │                            │
+       │                                     │                            │
+       │   [External Push via FCM/APNs]     │                            │
+       │<───────────────────────────────────>│                            │
+       │                                     │                            │
+       │   User opens notification           │                            │
+       │   PUT /notifications/:id/read       │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Mark as read               │
+       │<────────────────────────────────────│                            │
+```
+
+### Disbursement / Transparency Log Flow
+```
+[PLACEHOLDER: Attach screenshots/Disbursement_DataFlow.png]
+
+Admin / System                         API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   POST /disbursement-batches        │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create batch               │
+       │                                     │ Validate items             │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { batch_id, status: pending }     │                            │
+       │                                     │                            │
+       │   POST /disbursement-batches/:id/execute │                       │
+       │────────────────────────────────────>│                            │
+       │                                     │ For each item:             │
+       │                                     │   - Create transaction     │
+       │                                     │   - Credit wallet          │
+       │                                     │   - Write transparency log │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: completed }             │                            │
+       │                                     │                            │
+       │   GET /disbursement-batches/:id     │                            │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+       │   { items[], logs[] }               │                            │
+```
+
+### Learning / Course Enrollment Flow
+```
+[PLACEHOLDER: Attach screenshots/Learning_DataFlow.png]
+
+Mobile / Admin                         API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   GET /learning/courses             │                            │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+       │   { categories[], courses[] }       │                            │
+       │                                     │                            │
+       │   POST /learning/courses/:id/start  │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create user_course_progress│
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { progress_id, enrolled_at }      │                            │
+       │                                     │                            │
+       │   POST /learning/courses/:id/submit-quiz                       │
+       │────────────────────────────────────>│                            │
+       │                                     │ Grade quiz                 │
+       │                                     │ Update progress            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { score, passed, next_lesson }    │                            │
+```
+
+### Reminder / Scheduling Flow
+```
+[PLACEHOLDER: Attach screenshots/Reminder_DataFlow.png]
+
+Mobile / Admin                         API Gateway:8085                PostgreSQL / Scheduler
+       │                                     │                            │
+       │   POST /reminders                   │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Validate chama             │
+       │                                     │ Schedule Job               │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { reminder_id, scheduled_at }     │                            │
+       │                                     │                            │
+       │   [Scheduler fires at scheduled_at] │                            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   Push + In-app notification        │                            │
+       │                                     │                            │
+       │   PUT /reminders/:id/complete       │                            │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+```
+
+### Onboarding / KYC Document Flow
+```
+[PLACEHOLDER: Attach screenshots/KYC_Onboarding_Flow.png]
+
+Mobile App                              API Gateway:8085                PostgreSQL / External
+       │                                     │                            │
+       │   Select ID Document                │                            │
+       │   (Camera / Gallery)                │                            │
+       │   Compress & Encrypt                │                            │
+       │                                     │                            │
+       │   POST /api/v1/users/avatar         │                            │
+       │   OR /api/v1/upload                 │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Virus scan                 │
+       │                                     │ Store encrypted            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { url, secure_token }             │                            │
+       │                                     │                            │
+       │   PUT /api/v1/users/profile         │                            │
+       │   { id_number, id_url, ... }        │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Update user                │
+       │                                     │ Mark verification pending  │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: pending_verification }  │                            │
+       │                                     │                            │
+       │   [Admin review]                     │                            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   Push: Verification Complete       │                            │
+```
+
+### Map / Location-Based Discovery Flow
+```
+[PLACEHOLDER: Attach screenshots/LocationDiscovery_Flow.png]
+
+Mobile App                              API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   Request location permission       │                            │
+       │   Get GPS coordinates                │                            │
+       │                                     │                            │
+       │   GET /api/v1/chamas?lat=&lng=&radius=                      │
+       │────────────────────────────────────>│                            │
+       │                                     │ Geospatial query           │
+       │                                     │ Filter by distance         │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { chamas[], distance }            │                            │
+       │                                     │                            │
+       │   Display on React Native Maps      │                            │
+       │   Clustering for density            │                            │
+       │                                     │                            │
+       │   Tap chama pin                     │                            │
+       │   Navigate to ChamaDetail           │                            │
+```
+
+### Admin Analytics Export Flow
+```
+[PLACEHOLDER: Attach screenshots/AdminAnalytics_Flow.png]
+
+Admin Portal (Web / Mobile)             API Gateway:8085                PostgreSQL / S3
+       │                                     │                            │
+       │   GET /api/v1/users/admin/statistics                         │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+       │   { users, chamas, transactions }   │                            │
+       │                                     │                            │
+       │   POST /api/v1/chamas/:id/export    │                            │
+       │   (CSV / PDF / Excel)               │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Query transactions         │
+       │                                     │ Generate file              │
+       │                                     │ Upload to cloud            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { download_url, expires_at }      │                            │
+```
+
+---
+
+## Mobile Testing Strategy
+
+### Unit & Integration Tests
+- Jest for components and hooks
+- React Native Testing Library for UI
+- MSW (Mock Service Worker) for API mocking
+- Hooks tested in isolation with dependency injection for sockets/stores
+
+### E2E Tests
+- Detox (preferred for RN) or Maestro
+- Suggested flows:
+  - Onboarding → Create Chama → Add Member → Contribute → View Balance
+  - Login → Chat → Send Message → Receive Notification → Reply
+  - Login → Schedule Meeting → Join → Screen Share → Leave → View Minutes
+
+### Performance Budgets
+- Cold Start: < 2 seconds on mid-range devices
+- First Meaningful Paint: < 1.5s
+- Screen transition: 60 fps
+- Chat message roundtrip: < 500ms when online
+- Offline write-to-queue latency: < 100ms
+
+---
+
+## Security Hardening on Mobile
+
+| Concern | Implementation |
+|---------|----------------|
+| Token Storage | iOS Keychain + Android EncryptedSharedPreferences / Expo SecureStore |
+| Biometric Auth | Optional app unlock (face/touch) before showing sensitive tabs |
+| Screenshot Protection | `FLAG_SECURE` on Android, private recording on iOS |
+| Certificate Pinning | Pin API gateway TLS certs to prevent MITM |
+| Sensitive Data Masking | Auto-detect & mask phone numbers, amounts in logs/screenshots |
+| Jailbreak/Root Detection | Block sensitive features on compromised devices |
+| Code Obfuscation | ProGuard / Hermes bytecode + stripping debug symbols in production |
+| Push Token Rotation | Auto-refresh FCM/APNs tokens on app start |
+
+---
+
+## Mobile Deployment & Release
+
+### iOS
+- Target: iOS 13+ (or 14+ if using visionOS-ready code)
+- Capabilities: Push Notifications, Associated Domains (Universal Links), Background Modes (audio, voip, fetch)
+- Distribution: App Store / TestFlight
+
+### Android
+- Target: SDK 24+ (Android 7.0)
+- Permissions: CAMERA, RECORD_AUDIO, POST_NOTIFICATIONS (Android 13+), ACCESS_FINE_LOCATION, READ_EXTERNAL_STORAGE
+- Distribution: Google Play, APK direct, or Firebase App Distribution
+
+### CI/CD
+- GitHub Actions / Bitrise / EAS Build (Expo Application Services)
+- Steps:
+  1. Lint + Unit Tests
+  2. Build iOS (simulator + archive)
+  3. Build Android (debug + release AAB)
+  4. Run Detox E2E on Firebase Test Lab / Bitrise
+  5. Upload artifacts to TestFlight / Play Store internal track
+
+---
+
+## Monitoring & Observability (Mobile)
+
+### App Performance
+- React Native Performance Monitor (Flipper / Hermes tracing)
+- Firebase Performance Monitoring for startup, screen load, API latency
+- Sentry for crash reporting with breadcrumbs for network/DB events
+
+### Business Analytics
+- Event tracking:
+  - `screen_view` + screen name + params
+  - `chama_created`, `contribution_paid`, `loan_applied`, `meeting_joined`
+  - `error_occurred` with code + stack (sampling)
+- Funnels:
+  - Onboarding completion rate
+  - Payment success rate (STK push confirmation)
+  - Meeting join success rate
+- Cohorts:
+  - Active chama members vs. inactive users
+  - Platform engagement by region / language
+
+---
+
+## Accessibility & Internationalization
+
+### i18n
+- i18next / expo-localization
+- Supported: English (en), Swahili (sw)
+- RTL support preparation (future: Arabic)
+- Currency formatting per locale (KES default)
+
+### Accessibility
+- Accessibility labels on all interactive elements
+- Dynamic type support (font scaling)
+- Color contrast ratios meeting WCAG AA
+- TalkBack / VoiceOver compatibility
+- Alternative text for media uploads
+
+---
+
+## Future Architecture Enhancements
+
+1. **Expo Application Services (EAS)** - OTA updates, build hosting, submit automation
+2. **Hermes Engine** - Default JS engine for startup time optimization
+3. **FlashList** - Replace FlatList for large transaction/chat scroll performance
+4. **Reanimated 3** - Gesture-driven transitions and meeting controls
+5. **Skia** - Custom charts for financial analytics (transaction trends, chama growth)
+6. **Contact Sync** - Native address book mapping to user IDs (privacy-preserving hash)
+7. **Widgets** - iOS/Android home widgets for quick balance / upcoming meetings
+8. **Watch/Companion Support** - Companion apps for quick approval workflows
+
+---
+
+## API Client Configuration (Mobile Specific)
+
+```typescript
+// src/api/client.ts
+import axios from 'axios';
+import { store } from '../stores';
+import { refreshToken } from './auth';
+
+export const api = axios.create({
+  baseURL: __DEV__ ? 'http://localhost:8085' : 'https://api.vaultke.com/api/v1',
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Device-Type': 'mobile',
+  },
+});
+
+api.interceptors.request.use((config) => {
+  const token = store.getState().auth.accessToken;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error.config;
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+      try {
+        const newToken = await refreshToken();
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      } catch {
+        store.getState().auth.reset();
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+```
+
+```typescript
+// src/sockets/chatSocket.ts
+import { io, Socket } from 'socket.io-client';
+
+const CHAT_URL = __DEV__
+  ? 'http://localhost:8084'
+  : 'https://api.vaultke.com';
+
+export let chatSocket: Socket | null = null;
+
+export const connectChatSocket = (token: string) => {
+  if (chatSocket?.connected) return chatSocket;
+  chatSocket = io(`${CHAT_URL}/rooms`, {
+    transports: ['websocket'],
+    auth: { token },
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+  });
+
+  chatSocket.on('connect', () => console.log('Chat WS connected'));
+  chatSocket.on('connect_error', (err) => console.warn('Chat WS error', err));
+  chatSocket.on('message', (payload) => handleIncomingMessage(payload));
+  chatSocket.on('room_state', (state) => updateRoomState(state));
+
+  return chatSocket;
+};
+```
+
+---
+
+## Mobile Data Flow Summary Matrix
+
+| Feature               | Source        | Transport         | Cache            | Sync Strategy                      |
+|-----------------------|---------------|-------------------|------------------|------------------------------------|
+| Auth / Profile        | Backend REST  | Axios + Interceptors | MMKV       | Immediate, revalidate on focus     |
+| Chamas / Members      | Backend REST  | TanStack Query     | SQLite + React Query cache | staleWhileRevalidate (5 min) |
+| Wallets / Transactions| Backend REST  | TanStack Query + WS | SQLite       | Real-time via WS, fallback polling |
+| Chat Messages         | Chat WS       | Socket.io-client   | SQLite           | Optimistic + WS ACK               |
+| Meeting Signaling     | Meeting WS    | Socket.io-client   | In-memory only   | Ephemeral, no offline support      |
+| Notifications         | FCM / APNs    | Expo Notifications | MMKV             | Delivered by platform, ack via REST|
+| Loan / Welfare Queue  | Backend REST  | Offline Queue      | SQLite           | Flush sequential on reconnect      |
+
+---
+
+## Simulated Backend Data Flow (From Mobile to Database)
+
+```
+[Mobile App]
+   │
+   │ HTTPS POST /api/v1/chamas
+   │ Headers: Authorization: Bearer <jwt>
+   │ Body: { name, type, contribution_amount, ... }
+   ▼
+[API Gateway:8085]
+   │
+   ├── Middleware: Auth (validate JWT -> user_id, role)
+   ├── Middleware: Security (rate limit, size, content-type)
+   │
+   ├── Handler: chama_core_handlers.go
+   │     ├── Validate input (chama type, limits)
+   │     ├── Begin DB Transaction
+   │     ├── Insert chamas row
+   │     ├── Insert chama_members (creator as admin)
+   │     ├── Create wallet for chama (type: chama)
+   │     ├── Create chat_room tied to chama_id
+   │     ├── Commit DB Transaction
+   │     └── Return 201 Created { chama, chat_room_id }
+   │
+   ▼
+[PostgreSQL]
+   chamas
+   chama_members
+   wallets
+   chat_rooms
+```
+
+---
+
+## Backend Data Flow Diagrams (Added)
+
+### Chat Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/ChatService_DataFlow.png]
+
+Api Gateway                        Chat Service:8084                  PostgreSQL
+     │                                     │                               │
+     │  Proxy /chat/*                      │                               │
+     │────────────────────────────────────>│                               │
+     │                                     │  Auth Middleware              │
+     │                                     │  Validate X-User-ID/jwt       │
+     │                                     │                               │
+     │                                     │  HTTP Handlers                 │
+     │                                     │  - Create Room                │
+     │                                     │  - List Messages              │
+     │                                     │  - Send Message               │
+     │                                     │                               │
+     │                                     │  WS Handlers                   │
+     │                                     │  - /rooms/:id/ws              │
+     │                                     │    - join_room                │
+     │                                     │    - send_message             │
+     │                                     │    - mark_read                │
+     │                                     │                               │
+     │                                     │  Write to:                    │
+     │                                     │  1. chat_rooms                │
+     │                                     │  2. chat_messages             │
+     │                                     │  3. chat_room_members         │
+     │                                     │                               │
+     │                                     │  Broadcast to room via Hub    │
+     │                                     │──────────────────────────────>│
+     │                                     │  Redis (presence / pubsub)    │
+     │                                     │<──────────────────────────────│
+     │                                     │                               │
+     │<────────────────────────────────────│                               │
+```
+
+### Meeting Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/MeetingService_DataFlow.png]
+
+Api Gateway                       Meeting Service:8086                PostgreSQL
+     │                                     │                               │
+     │  Proxy /online-meetings/*           │                               │
+     │────────────────────────────────────>│                               │
+     │                                     │  HTTP Handlers                │
+     │                                     │  - Create Room                │
+     │                                     │  - Join/Leave                 │
+     │                                     │  - Participants               │
+     │                                     │                               │
+     │                                     │  Signaling WS:                │
+     │                                     │  - /rooms/:id/signal          │
+     │                                     │    - offer/answer exchange    │
+     │                                     │    - ICE candidate relay      │
+     │                                     │                               │
+     │                                     │  SFU Manager                  │
+     │                                     │  - Peer connections           │
+     │                                     │  - Track negotiation          │
+     │                                     │                               │
+     │                                     │  Write to:                    │
+     │                                     │  1. meeting_rooms             │
+     │                                     │  2. meeting_participants      │
+     │                                     │  3. webrtc_sessions           │
+     │<────────────────────────────────────│                               │
+```
+
+### Loan Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/LoanService_DataFlow.png]
+
+Mobile / Admin UI                     API Gateway:8085                 PostgreSQL
+       │                                     │                            │
+       │   POST /loans/apply                 │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Validate eligibility        │
+       │                                     │ - chama membership           │
+       │                                     │ - credit score               │
+       │                                     │ - guarantors                 │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { id, status: pending }           │                            │
+       │                                     │                            │
+       │   POST /loans/:id/approve           │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Update loan_status          │
+       │                                     │ Create loan_payments rows   │
+       │                                     │ Emit notification           │
+       │<────────────────────────────────────│                            │
+       │                                     │                            │
+       │   POST /loans/:id/disburse          │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Transfer: ChamaWallet       │
+       │                                     │         -> UserWallet       │
+       │                                     │ Create transaction          │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: disbursed }             │                            │
+```
+
+### Welfare Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/WelfareService_DataFlow.png]
+
+Member / Admin                        API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   POST /welfare                     │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create welfare_request      │
+       │                                     │ Link chama + member         │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { id, status: pending_vote }      │                            │
+       │                                     │                            │
+       │   POST /welfare/:id/vote            │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Validate member voting      │
+       │                                     │ Update welfare_contributions │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: approved, votes }       │                            │
+       │                                     │                            │
+       │   POST /welfare/contribute           │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Debit wallet               │
+       │                                     │ Credit welfare subwallet   │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { contribution_id, amount }       │                            │
+```
+
+---
+
+## Additional Backend Data Flow Diagrams (Added)
+
+### Notification Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/NotificationService_DataFlow.png]
+
+Mobile App / Admin UI                API Gateway:8085                PostgreSQL / Redis
+       │                                     │                            │
+       │   POST /notifications/system        │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create notification        │
+       │                                     │ Read preferences           │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { id, status: queued }            │                            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   WS /push event                    │                            │
+       │   (real-time in-app)               │                            │
+       │                                     │                            │
+       │   [External Push via FCM/APNs]     │                            │
+       │<───────────────────────────────────>│                            │
+       │                                     │                            │
+       │   User opens notification           │                            │
+       │   PUT /notifications/:id/read       │                            │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+```
+
+### Disbursement / Transparency Log Flow
+```
+[PLACEHOLDER: Attach screenshots/Disbursement_DataFlow.png]
+
+Admin / System                         API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   POST /disbursement-batches        │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create batch               │
+       │                                     │ Validate items             │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { batch_id, status: pending }     │                            │
+       │                                     │                            │
+       │   POST /disbursement-batches/:id/execute │                       │
+       │────────────────────────────────────>│                            │
+       │                                     │ For each item:             │
+       │                                     │   - Create transaction     │
+       │                                     │   - Credit wallet          │
+       │                                     │   - Write transparency log │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: completed }             │                            │
+       │                                     │                            │
+       │   GET /disbursement-batches/:id     │                            │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+       │   { items[], logs[] }               │                            │
+```
+
+### Learning / Course Enrollment Flow
+```
+[PLACEHOLDER: Attach screenshots/Learning_DataFlow.png]
+
+Mobile / Admin                         API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   GET /learning/courses             │                            │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+       │   { categories[], courses[] }       │                            │
+       │                                     │                            │
+       │   POST /learning/courses/:id/start  │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create user_course_progress│
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { progress_id, enrolled_at }      │                            │
+       │                                     │                            │
+       │   POST /learning/courses/:id/submit-quiz                       │
+       │────────────────────────────────────>│                            │
+       │                                     │ Grade quiz                 │
+       │                                     │ Update progress            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { score, passed, next_lesson }    │                            │
+```
+
+### Reminder / Scheduling Flow
+```
+[PLACEHOLDER: Attach screenshots/Reminder_DataFlow.png]
+
+Mobile / Admin                         API Gateway:8085                PostgreSQL / Scheduler
+       │                                     │                            │
+       │   POST /reminders                   │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Validate chama             │
+       │                                     │ Schedule Job               │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { reminder_id, scheduled_at }     │                            │
+       │                                     │                            │
+       │   [Scheduler fires at scheduled_at] │                            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   Push + In-app notification        │                            │
+       │                                     │                            │
+       │   PUT /reminders/:id/complete       │                            │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+```
+
+### Onboarding / KYC Document Flow
+```
+[PLACEHOLDER: Attach screenshots/KYC_Onboarding_Flow.png]
+
+Mobile App                              API Gateway:8085                PostgreSQL / External
+       │                                     │                            │
+       │   Select ID Document                │                            │
+       │   (Camera / Gallery)                │                            │
+       │   Compress & Encrypt                │                            │
+       │                                     │                            │
+       │   POST /api/v1/users/avatar         │                            │
+       │   OR /api/v1/upload                 │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Virus scan                 │
+       │                                     │ Store encrypted            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { url, secure_token }             │                            │
+       │                                     │                            │
+       │   PUT /api/v1/users/profile         │                            │
+       │   { id_number, id_url, ... }        │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Update user                │
+       │                                     │ Mark verification pending  │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: pending_verification }  │                            │
+       │                                     │                            │
+       │   [Admin review]                     │                            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   Push: Verification Complete       │                            │
+```
+
+### Map / Location-Based Discovery Flow
+```
+[PLACEHOLDER: Attach screenshots/LocationDiscovery_Flow.png]
+
+Mobile App                              API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   Request location permission       │                            │
+       │   Get GPS coordinates                │                            │
+       │                                     │                            │
+       │   GET /api/v1/chamas?lat=&lng=&radius=                      │
+       │────────────────────────────────────>│                            │
+       │                                     │ Geospatial query           │
+       │                                     │ Filter by distance         │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { chamas[], distance }            │                            │
+       │                                     │                            │
+       │   Display on React Native Maps      │                            │
+       │   Clustering for density            │                            │
+       │                                     │                            │
+       │   Tap chama pin                     │                            │
+       │   Navigate to ChamaDetail           │                            │
+```
+
+### Admin Analytics Export Flow
+```
+[PLACEHOLDER: Attach screenshots/AdminAnalytics_Flow.png]
+
+Admin Portal (Web / Mobile)             API Gateway:8085                PostgreSQL / S3
+       │                                     │                            │
+       │   GET /api/v1/users/admin/statistics                         │
+       │────────────────────────────────────>│                            │
+       │<────────────────────────────────────│                            │
+       │   { users, chamas, transactions }   │                            │
+       │                                     │                            │
+       │   POST /api/v1/chamas/:id/export    │                            │
+       │   (CSV / PDF / Excel)               │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Query transactions         │
+       │                                     │ Generate file              │
+       │                                     │ Upload to cloud            │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { download_url, expires_at }      │                            │
+```
+
+---
+
+## Mobile Testing Strategy
+
+### Unit & Integration Tests
+- Jest for components and hooks
+- React Native Testing Library for UI
+- MSW (Mock Service Worker) for API mocking
+- Hooks tested in isolation with dependency injection for sockets/stores
+
+### E2E Tests
+- Detox (preferred for RN) or Maestro
+- Suggested flows:
+  - Onboarding → Create Chama → Add Member → Contribute → View Balance
+  - Login → Chat → Send Message → Receive Notification → Reply
+  - Login → Schedule Meeting → Join → Screen Share → Leave → View Minutes
+
+### Performance Budgets
+- Cold Start: < 2 seconds on mid-range devices
+- First Meaningful Paint: < 1.5s
+- Screen transition: 60 fps
+- Chat message roundtrip: < 500ms when online
+- Offline write-to-queue latency: < 100ms
+
+---
+
+## Security Hardening on Mobile
+
+| Concern | Implementation |
+|---------|----------------|
+| Token Storage | iOS Keychain + Android EncryptedSharedPreferences / Expo SecureStore |
+| Biometric Auth | Optional app unlock (face/touch) before showing sensitive tabs |
+| Screenshot Protection | `FLAG_SECURE` on Android, private recording on iOS |
+| Certificate Pinning | Pin API gateway TLS certs to prevent MITM |
+| Sensitive Data Masking | Auto-detect & mask phone numbers, amounts in logs/screenshots |
+| Jailbreak/Root Detection | Block sensitive features on compromised devices |
+| Code Obfuscation | ProGuard / Hermes bytecode + stripping debug symbols in production |
+| Push Token Rotation | Auto-refresh FCM/APNs tokens on app start |
+
+---
+
+## Mobile Deployment & Release
+
+### iOS
+- Target: iOS 13+ (or 14+ if using visionOS-ready code)
+- Capabilities: Push Notifications, Associated Domains (Universal Links), Background Modes (audio, voip, fetch)
+- Distribution: App Store / TestFlight
+
+### Android
+- Target: SDK 24+ (Android 7.0)
+- Permissions: CAMERA, RECORD_AUDIO, POST_NOTIFICATIONS (Android 13+), ACCESS_FINE_LOCATION, READ_EXTERNAL_STORAGE
+- Distribution: Google Play, APK direct, or Firebase App Distribution
+
+### CI/CD
+- GitHub Actions / Bitrise / EAS Build (Expo Application Services)
+- Steps:
+  1. Lint + Unit Tests
+  2. Build iOS (simulator + archive)
+  3. Build Android (debug + release AAB)
+  4. Run Detox E2E on Firebase Test Lab / Bitrise
+  5. Upload artifacts to TestFlight / Play Store internal track
+
+---
+
+## Monitoring & Observability (Mobile)
+
+### App Performance
+- React Native Performance Monitor (Flipper / Hermes tracing)
+- Firebase Performance Monitoring for startup, screen load, API latency
+- Sentry for crash reporting with breadcrumbs for network/DB events
+
+### Business Analytics
+- Event tracking:
+  - `screen_view` + screen name + params
+  - `chama_created`, `contribution_paid`, `loan_applied`, `meeting_joined`
+  - `error_occurred` with code + stack (sampling)
+- Funnels:
+  - Onboarding completion rate
+  - Payment success rate (STK push confirmation)
+  - Meeting join success rate
+- Cohorts:
+  - Active chama members vs. inactive users
+  - Platform engagement by region / language
+
+---
+
+## Accessibility & Internationalization
+
+### i18n
+- i18next / expo-localization
+- Supported: English (en), Swahili (sw)
+- RTL support preparation (future: Arabic)
+- Currency formatting per locale (KES default)
+
+### Accessibility
+- Accessibility labels on all interactive elements
+- Dynamic type support (font scaling)
+- Color contrast ratios meeting WCAG AA
+- TalkBack / VoiceOver compatibility
+- Alternative text for media uploads
+
+---
+
+## Future Architecture Enhancements
+
+1. **Expo Application Services (EAS)** - OTA updates, build hosting, submit automation
+2. **Hermes Engine** - Default JS engine for startup time optimization
+3. **FlashList** - Replace FlatList for large transaction/chat scroll performance
+4. **Reanimated 3** - Gesture-driven transitions and meeting controls
+5. **Skia** - Custom charts for financial analytics (transaction trends, chama growth)
+6. **Contact Sync** - Native address book mapping to user IDs (privacy-preserving hash)
+7. **Widgets** - iOS/Android home widgets for quick balance / upcoming meetings
+8. **Watch/Companion Support** - Companion apps for quick approval workflows
+
+---
+
+## API Client Configuration (Mobile Specific)
+
+```typescript
+// src/api/client.ts
+import axios from 'axios';
+import { store } from '../stores';
+import { refreshToken } from './auth';
+
+export const api = axios.create({
+  baseURL: __DEV__ ? 'http://localhost:8085' : 'https://api.vaultke.com/api/v1',
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Device-Type': 'mobile',
+  },
+});
+
+api.interceptors.request.use((config) => {
+  const token = store.getState().auth.accessToken;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error.config;
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+      try {
+        const newToken = await refreshToken();
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      } catch {
+        store.getState().auth.reset();
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+```
+
+```typescript
+// src/sockets/chatSocket.ts
+import { io, Socket } from 'socket.io-client';
+
+const CHAT_URL = __DEV__
+  ? 'http://localhost:8084'
+  : 'https://api.vaultke.com';
+
+export let chatSocket: Socket | null = null;
+
+export const connectChatSocket = (token: string) => {
+  if (chatSocket?.connected) return chatSocket;
+  chatSocket = io(`${CHAT_URL}/rooms`, {
+    transports: ['websocket'],
+    auth: { token },
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+  });
+
+  chatSocket.on('connect', () => console.log('Chat WS connected'));
+  chatSocket.on('connect_error', (err) => console.warn('Chat WS error', err));
+  chatSocket.on('message', (payload) => handleIncomingMessage(payload));
+  chatSocket.on('room_state', (state) => updateRoomState(state));
+
+  return chatSocket;
+};
+```
+
+---
+
+## Mobile Data Flow Summary Matrix
+
+| Feature               | Source        | Transport         | Cache            | Sync Strategy                      |
+|-----------------------|---------------|-------------------|------------------|------------------------------------|
+| Auth / Profile        | Backend REST  | Axios + Interceptors | MMKV       | Immediate, revalidate on focus     |
+| Chamas / Members      | Backend REST  | TanStack Query     | SQLite + React Query cache | staleWhileRevalidate (5 min) |
+| Wallets / Transactions| Backend REST  | TanStack Query + WS | SQLite       | Real-time via WS, fallback polling |
+| Chat Messages         | Chat WS       | Socket.io-client   | SQLite           | Optimistic + WS ACK               |
+| Meeting Signaling     | Meeting WS    | Socket.io-client   | In-memory only   | Ephemeral, no offline support      |
+| Notifications         | FCM / APNs    | Expo Notifications | MMKV             | Delivered by platform, ack via REST|
+| Loan / Welfare Queue  | Backend REST  | Offline Queue      | SQLite           | Flush sequential on reconnect      |
+
+---
+
+## Simulated Backend Data Flow (From Mobile to Database)
+
+```
+[Mobile App]
+   │
+   │ HTTPS POST /api/v1/chamas
+   │ Headers: Authorization: Bearer <jwt>
+   │ Body: { name, type, contribution_amount, ... }
+   ▼
+[API Gateway:8085]
+   │
+   ├── Middleware: Auth (validate JWT -> user_id, role)
+   ├── Middleware: Security (rate limit, size, content-type)
+   │
+   ├── Handler: chama_core_handlers.go
+   │     ├── Validate input (chama type, limits)
+   │     ├── Begin DB Transaction
+   │     ├── Insert chamas row
+   │     ├── Insert chama_members (creator as admin)
+   │     ├── Create wallet for chama (type: chama)
+   │     ├── Create chat_room tied to chama_id
+   │     ├── Commit DB Transaction
+   │     └── Return 201 Created { chama, chat_room_id }
+   │
+   ▼
+[PostgreSQL]
+   chamas
+   chama_members
+   wallets
+   chat_rooms
+```
+
+---
+
+## Backend Data Flow Diagrams (Added)
+
+### Chat Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/ChatService_DataFlow.png]
+
+Api Gateway                        Chat Service:8084                  PostgreSQL
+     │                                     │                               │
+     │  Proxy /chat/*                      │                               │
+     │────────────────────────────────────>│                               │
+     │                                     │  Auth Middleware              │
+     │                                     │  Validate X-User-ID/jwt       │
+     │                                     │                               │
+     │                                     │  HTTP Handlers                 │
+     │                                     │  - Create Room                │
+     │                                     │  - List Messages              │
+     │                                     │  - Send Message               │
+     │                                     │                               │
+     │                                     │  WS Handlers                   │
+     │                                     │  - /rooms/:id/ws              │
+     │                                     │    - join_room                │
+     │                                     │    - send_message             │
+     │                                     │    - mark_read                │
+     │                                     │                               │
+     │                                     │  Write to:                    │
+     │                                     │  1. chat_rooms                │
+     │                                     │  2. chat_messages             │
+     │                                     │  3. chat_room_members         │
+     │                                     │                               │
+     │                                     │  Broadcast to room via Hub    │
+     │                                     │──────────────────────────────>│
+     │                                     │  Redis (presence / pubsub)    │
+     │                                     │<──────────────────────────────│
+     │                                     │                               │
+     │<────────────────────────────────────│                               │
+```
+
+### Meeting Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/MeetingService_DataFlow.png]
+
+Api Gateway                       Meeting Service:8086                PostgreSQL
+     │                                     │                               │
+     │  Proxy /online-meetings/*           │                               │
+     │────────────────────────────────────>│                               │
+     │                                     │  HTTP Handlers                │
+     │                                     │  - Create Room                │
+     │                                     │  - Join/Leave                 │
+     │                                     │  - Participants               │
+     │                                     │                               │
+     │                                     │  Signaling WS:                │
+     │                                     │  - /rooms/:id/signal          │
+     │                                     │    - offer/answer exchange    │
+     │                                     │    - ICE candidate relay      │
+     │                                     │                               │
+     │                                     │  SFU Manager                  │
+     │                                     │  - Peer connections           │
+     │                                     │  - Track negotiation          │
+     │                                     │                               │
+     │                                     │  Write to:                    │
+     │                                     │  1. meeting_rooms             │
+     │                                     │  2. meeting_participants      │
+     │                                     │  3. webrtc_sessions           │
+     │<────────────────────────────────────│                               │
+```
+
+### Loan Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/LoanService_DataFlow.png]
+
+Mobile / Admin UI                     API Gateway:8085                 PostgreSQL
+       │                                     │                            │
+       │   POST /loans/apply                 │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Validate eligibility        │
+       │                                     │ - chama membership           │
+       │                                     │ - credit score               │
+       │                                     │ - guarantors                 │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { id, status: pending }           │                            │
+       │                                     │                            │
+       │   POST /loans/:id/approve           │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Update loan_status          │
+       │                                     │ Create loan_payments rows   │
+       │                                     │ Emit notification           │
+       │<────────────────────────────────────│                            │
+       │                                     │                            │
+       │   POST /loans/:id/disburse          │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Transfer: ChamaWallet       │
+       │                                     │         -> UserWallet       │
+       │                                     │ Create transaction          │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: disbursed }             │                            │
+```
+
+### Welfare Service Data Flow
+```
+[PLACEHOLDER: Attach screenshots/WelfareService_DataFlow.png]
+
+Member / Admin                        API Gateway:8085                PostgreSQL
+       │                                     │                            │
+       │   POST /welfare                     │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Create welfare_request      │
+       │                                     │ Link chama + member         │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { id, status: pending_vote }      │                            │
+       │                                     │                            │
+       │   POST /welfare/:id/vote            │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Validate member voting      │
+       │                                     │ Update welfare_contributions │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { status: approved, votes }       │                            │
+       │                                     │                            │
+       │   POST /welfare/contribute           │                            │
+       │────────────────────────────────────>│                            │
+       │                                     │ Debit wallet               │
+       │                                     │ Credit welfare subwallet   │
+       │                                     │                            │
+       │<────────────────────────────────────│                            │
+       │   { contribution_id, amount }       │                            │
+```
+
+---
