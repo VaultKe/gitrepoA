@@ -201,9 +201,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
 
       if (membersResponse.success) {
-        setMembers(membersResponse.data || []);
+        const uniqueMembers = Array.from(
+          new Map((membersResponse.data || []).map((m) => [m.id, m])).values()
+        );
+        setMembers(uniqueMembers);
         const currentUserId = String(user?.id);
-        const membership = membersResponse.data?.find(member =>
+        const membership = uniqueMembers.find(member =>
           String(member.user_id) === currentUserId ||
           String(member.user?.id) === currentUserId
         );
