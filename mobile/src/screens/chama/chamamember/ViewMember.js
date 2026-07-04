@@ -47,7 +47,6 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const PAY_COOLDOWN_MS = 30000;
 
 const [receiptLoading, setReceiptLoading] = useState(false);
-   const [invoiceLoading, setInvoiceLoading] = useState(false);
    const [approvalHistory, setApprovalHistory] = useState([]);
   const [approvalHistoryLoading, setApprovalHistoryLoading] = useState(false);
   const [showOTPModal, setShowOTPModal] = useState(false);
@@ -332,7 +331,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
       }
       const token = await api.getAuthToken();
 
-      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${encodeURIComponent(transactionId)}/download`, {
+      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${encodeURIComponent(transactionId)}/download?format=pdf`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,

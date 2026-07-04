@@ -5,15 +5,23 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
-
 	"vaultke-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jung-kurt/gofpdf"
 )
+
+// truncateString safely truncates a string to the specified length
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
+}
 
 // ReceiptHandlers handles receipt-related API endpoints
 type ReceiptHandlers struct {
@@ -168,11 +176,17 @@ func (h *ReceiptHandlers) DownloadTransactionReceipt(c *gin.Context) {
 
 	// Generate receipt data
 	receiptData := h.generateReceiptData(transaction, userInfo)
-	receiptID := fmt.Sprintf("RCP-%s", transaction.ID[:8])
+	receiptID := fmt.Sprintf("RCP-%s", truncateString(transaction.ID, 8))
 	fileName := fmt.Sprintf("VaultKe_Receipt_%s_%s.%s",
 		receiptID,
 		time.Now().Format("2006-01-02"),
 		format)
+	
+	// Set CORS headers explicitly
+	origin := c.GetHeader("Origin")
+	if origin != "" {
+		c.Header("Access-Control-Allow-Origin", origin)
+	}
 
 	switch format {
 	case "json":
@@ -189,7 +203,13 @@ func (h *ReceiptHandlers) DownloadTransactionReceipt(c *gin.Context) {
 		pdfBytes := h.generateReceiptPDF(receiptData)
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 		c.Header("Content-Type", "application/pdf")
-		c.Writer.Write(pdfBytes)
+		c.Header("Access-Control-Expose-Headers", "Content-Disposition, Content-Length")
+		c.Header("Content-Length", fmt.Sprintf("%d", len(pdfBytes)))
+		log.Printf("DEBUG: Serving PDF receipt for transaction %s, size=%d bytes", receiptData.Transaction.ID, len(pdfBytes))
+		if len(pdfBytes) == 0 {
+			log.Printf("ERROR: PDF bytes is empty for transaction %s", receiptData.Transaction.ID)
+		}
+		c.Data(http.StatusOK, "application/pdf", pdfBytes)
 	}
 }
 
@@ -207,7 +227,7 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 			   description, reference, payment_method, metadata, fees, initiated_by,
 			   approved_by, requires_approval, approval_deadline, created_at, updated_at
 		FROM transactions 
-		WHERE id = $1
+		WHERE id = $1 OR transaction_id = $1
 	`
 
 	var transaction models.Transaction
@@ -237,24 +257,34 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 	)
 
 	if err != nil {
+		log.Printf("DEBUG: Failed to scan transaction %s: %v", resolvedTransactionID, err)
 		return nil, err
+	}
+
+	// Parse metadata FIRST - needed for authorization check
+	transaction.Metadata = make(map[string]interface{})
+	if metadataJSON != "" {
+		json.Unmarshal([]byte(metadataJSON), &transaction.Metadata)
 	}
 
 	// Authorize: direct initiator/approver OR chama admin
 	if transaction.InitiatedBy != userID && (transaction.ApprovedBy == nil || *transaction.ApprovedBy != userID) {
-		var metadata map[string]interface{}
-		if metadataJSON != "" {
-			_ = json.Unmarshal([]byte(metadataJSON), &metadata)
-		}
-		if chamaID, ok := metadata["chama_id"].(string); ok && chamaID != "" {
+		// Check if user is a chama admin by looking up chama_id in metadata
+		var isChamaAdmin bool
+		if chamaID, ok := transaction.Metadata["chama_id"].(string); ok && chamaID != "" {
 			var count int
 			if scanErr := h.db.QueryRow(
 				"SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND role IN ($3, $4, $5)",
 				chamaID, userID, "chairperson", "treasurer", "secretary",
-			).Scan(&count); scanErr != nil || count == 0 {
+			).Scan(&count); scanErr == nil && count > 0 {
+				isChamaAdmin = true
+			}
+			if !isChamaAdmin {
+				log.Printf("DEBUG: Auth denied - user %s not admin of chama %s for transaction %s", userID, chamaID, transaction.ID)
 				return nil, sql.ErrNoRows
 			}
 		} else {
+			log.Printf("DEBUG: Auth denied - no chama_id in metadata for transaction %s, user %s", transaction.ID, userID)
 			return nil, sql.ErrNoRows
 		}
 	}
@@ -273,10 +303,9 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 		transaction.ApprovalDeadline = &approvalDeadline.Time
 	}
 
-	// Parse metadata
-	if metadataJSON != "" {
-		_ = json.Unmarshal([]byte(metadataJSON), &transaction.Metadata)
-	}
+	// Log transaction info for debugging
+	log.Printf("DEBUG: Transaction found id=%s status=%s type=%s initiatedBy=%s metadataChamaID=%v", 
+		transaction.ID, transaction.Status, transaction.Type, transaction.InitiatedBy, transaction.Metadata["chama_id"])
 
 	return &transaction, nil
 }
@@ -376,7 +405,7 @@ func (h *ReceiptHandlers) getUserInfo(userID string) (map[string]interface{}, er
 
 // generateReceiptData creates the complete receipt data structure
 func (h *ReceiptHandlers) generateReceiptData(transaction *models.Transaction, userInfo map[string]interface{}) *ReceiptData {
-	receiptID := fmt.Sprintf("RCP-%s", transaction.ID[:8])
+	receiptID := fmt.Sprintf("RCP-%s", truncateString(transaction.ID, 8))
 
 	companyInfo := CompanyInfo{
 		Name:    "VaultKe",
@@ -523,7 +552,7 @@ func (h *ReceiptHandlers) generateReceiptHTML(receiptData *ReceiptData) string {
 		receiptData.ReceiptID,
 		receiptData.CompanyInfo.Name,
 		receiptData.ReceiptID,
-		receiptData.Transaction.ID[:16],
+		receiptData.Transaction.ID, // Use full ID instead of slicing to avoid crash
 		transactionDate,
 		receiptData.Transaction.Status,
 		receiptData.Transaction.Status,
@@ -586,44 +615,46 @@ func (h *ReceiptHandlers) generateReceiptHTML(receiptData *ReceiptData) string {
 func (h *ReceiptHandlers) generateReceiptPDF(receiptData *ReceiptData) []byte {
 	pdf := gofpdf.New(gofpdf.OrientationPortrait, "mm", "A4", "")
 	pdf.AddPage()
-	pdf.SetFont("Arial", "B", 16)
+	
+	// Use core fonts that are always available
+	pdf.SetFont("Helvetica", "B", 16)
 	pdf.Cell(0, 10, receiptData.CompanyInfo.Name)
 	pdf.Ln(12)
-	pdf.SetFont("Arial", "", 10)
+	pdf.SetFont("Helvetica", "", 10)
 	pdf.Cell(0, 6, receiptData.CompanyInfo.Address)
 	pdf.Ln(6)
 	pdf.Cell(0, 6, fmt.Sprintf("Phone: %s | Email: %s", receiptData.CompanyInfo.Phone, receiptData.CompanyInfo.Email))
 	pdf.Ln(10)
 
-	pdf.SetFont("Arial", "B", 14)
+	pdf.SetFont("Helvetica", "B", 14)
 	pdf.Cell(0, 10, "Transaction Receipt")
 	pdf.Ln(12)
 
-	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFont("Helvetica", "B", 10)
 	pdf.Cell(50, 8, "Receipt ID:")
-	pdf.SetFont("Arial", "", 10)
+	pdf.SetFont("Helvetica", "", 10)
 	pdf.Cell(0, 8, receiptData.ReceiptID)
 	pdf.Ln(8)
 
-	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFont("Helvetica", "B", 10)
 	pdf.Cell(50, 8, "Transaction ID:")
-	pdf.SetFont("Arial", "", 10)
+	pdf.SetFont("Helvetica", "", 10)
 	pdf.Cell(0, 8, receiptData.Transaction.ID)
 	pdf.Ln(8)
 
-	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFont("Helvetica", "B", 10)
 	pdf.Cell(50, 8, "Date:")
-	pdf.SetFont("Arial", "", 10)
+	pdf.SetFont("Helvetica", "", 10)
 	pdf.Cell(0, 8, receiptData.Transaction.CreatedAt.Format("January 2, 2006 at 3:04:05 PM"))
 	pdf.Ln(8)
 
-	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFont("Helvetica", "B", 10)
 	pdf.Cell(50, 8, "Status:")
-	pdf.SetFont("Arial", "", 10)
+	pdf.SetFont("Helvetica", "", 10)
 	pdf.Cell(0, 8, strings.ToUpper(string(receiptData.Transaction.Status)))
 	pdf.Ln(12)
 
-	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFont("Helvetica", "B", 10)
 	pdf.Cell(0, 8, "Transaction Details")
 	pdf.Ln(8)
 
@@ -641,56 +672,58 @@ func (h *ReceiptHandlers) generateReceiptPDF(receiptData *ReceiptData) []byte {
 	}
 
 	for _, row := range details {
-		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFont("Helvetica", "B", 10)
 		pdf.Cell(50, 8, row[0])
-		pdf.SetFont("Arial", "", 10)
+		pdf.SetFont("Helvetica", "", 10)
 		pdf.Cell(0, 8, row[1])
 		pdf.Ln(8)
 	}
 
 	if receiptData.Transaction.Reference != nil && *receiptData.Transaction.Reference != "" {
 		pdf.Ln(4)
-		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFont("Helvetica", "B", 10)
 		pdf.Cell(50, 8, "Reference:")
-		pdf.SetFont("Arial", "", 10)
+		pdf.SetFont("Helvetica", "", 10)
 		pdf.Cell(0, 8, *receiptData.Transaction.Reference)
 		pdf.Ln(8)
 	}
 
 	if receiptData.Transaction.PaymentMethod != "" {
 		pdf.Ln(4)
-		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFont("Helvetica", "B", 10)
 		pdf.Cell(50, 8, "Payment Method:")
-		pdf.SetFont("Arial", "", 10)
+		pdf.SetFont("Helvetica", "", 10)
 		pdf.Cell(0, 8, string(receiptData.Transaction.PaymentMethod))
 		pdf.Ln(8)
 	}
 
 	if mpesaReceipt, ok := receiptData.Transaction.Metadata["mpesa_receipt_number"].(string); ok && mpesaReceipt != "" {
 		pdf.Ln(4)
-		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFont("Helvetica", "B", 10)
 		pdf.Cell(50, 8, "M-Pesa Code:")
-		pdf.SetFont("Arial", "", 10)
+		pdf.SetFont("Helvetica", "", 10)
 		pdf.Cell(0, 8, mpesaReceipt)
 		pdf.Ln(8)
 	}
 
 	if phone, ok := receiptData.Transaction.Metadata["mpesa_phone_number"].(string); ok && phone != "" {
 		pdf.Ln(4)
-		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFont("Helvetica", "B", 10)
 		pdf.Cell(50, 8, "Phone:")
-		pdf.SetFont("Arial", "", 10)
+		pdf.SetFont("Helvetica", "", 10)
 		pdf.Cell(0, 8, phone)
 		pdf.Ln(8)
 	}
 
 	pdf.Ln(12)
-	pdf.SetFont("Arial", "", 8)
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.Cell(0, 6, fmt.Sprintf("Generated: %s", receiptData.GeneratedAt.Format("January 2, 2006 at 3:04:05 PM")))
 	pdf.Ln(6)
 	pdf.Cell(0, 6, "This is a computer-generated receipt and does not require a signature.")
 
 	var buf bytes.Buffer
-	_ = pdf.Output(&buf)
+	if err := pdf.Output(&buf); err != nil {
+		log.Printf("Warning: Failed to generate PDF output: %v", err)
+	}
 	return buf.Bytes()
 }

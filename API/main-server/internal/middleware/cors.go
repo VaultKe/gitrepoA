@@ -45,6 +45,14 @@ func (w *corsResponseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+func (w *corsResponseWriter) Write(data []byte) (int, error) {
+	// Ensure headers are set even if Write is called without WriteHeader
+	if w.Header().Get("Access-Control-Allow-Origin") == "" {
+		setCORSHeaders(w.Header(), w.origin)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
 // CORSMiddleware applies strict CORS handling
 func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 	allowedOrigins := make(map[string]struct{})
