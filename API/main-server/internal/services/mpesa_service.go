@@ -233,7 +233,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		// Find the pending transaction by checkout request ID
 		// The checkout_request_id is stored in the reference field during STK initiation
 		findQuery := `
-			SELECT id, to_wallet_id, metadata
+			SELECT id, to_wallet_id, metadata, initiated_by
 			FROM transactions
 			WHERE reference = $1 AND status = $2 AND payment_method = $3
 			LIMIT 1
@@ -241,7 +241,8 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		var transactionID string
 		var toWalletID sql.NullString
 		var metadataJSON sql.NullString
-		err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID, &toWalletID, &metadataJSON)
+		var initiatedBy string
+		err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID, &toWalletID, &metadataJSON, &initiatedBy)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Printf("No pending transaction found for checkout request ID: %s - rejecting callback to prevent arbitrary deposits", callback.CheckoutRequestID)
@@ -301,6 +302,35 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 			return fmt.Errorf("failed to commit callback transaction: %w", err)
 		}
 		log.Printf("Successfully processed callback for transaction %s - credited %s with %.2f", transactionID, toWalletID.String, amount)
+
+		// Update service-fee payment records when this was a chama registration fee
+		if chamaID, hasChama := metadata["chama_id"].(string); hasChama && chamaID != "" {
+			if paymentType, ok := metadata["payment_type"].(string); ok && paymentType == "fees" {
+				var sfpID string
+				sfpErr := s.db.QueryRow(
+					"SELECT id FROM service_fee_payments WHERE transaction_id = $1 AND chama_id = $2 AND user_id = $3",
+					transactionID, chamaID, initiatedBy,
+				).Scan(&sfpID)
+				if sfpErr == nil {
+					if _, dbErr := s.db.Exec(
+						"UPDATE service_fee_payments SET status = $1, paid_at = $2, updated_at = $3 WHERE id = $4",
+						"paid", time.Now(), time.Now(), sfpID,
+					); dbErr != nil {
+						log.Printf("[MpesaService] Failed to update service fee payment %s: %v", sfpID, dbErr)
+					}
+
+					if _, dbErr := s.db.Exec(
+						"UPDATE chama_members SET service_fee_paid = true, service_fee_paid_at = $1, service_fee_status = 'paid' WHERE chama_id = $2 AND user_id = $3",
+						time.Now(), chamaID, initiatedBy,
+					); dbErr != nil {
+						log.Printf("[MpesaService] Failed to update chama member service fee status chama=%s user=%s: %v", chamaID, initiatedBy, dbErr)
+					}
+				} else if sfpErr != sql.ErrNoRows {
+					log.Printf("[MpesaService] Failed to lookup service fee payment for transaction %s: %v", transactionID, sfpErr)
+				}
+			}
+		}
+
 		return nil
 	}
 

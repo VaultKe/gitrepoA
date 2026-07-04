@@ -12,7 +12,6 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,8 +21,6 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
-import { generatePDFOptimizedReceiptHTML } from '../../../services/receiptService/html/template';
-import { COMPANY_INFO } from '../../../services/receiptService/config';
 import Button from '../../../components/common/Button';
 import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
@@ -324,148 +321,90 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
     }
   };
 
-  const getReceiptId = (payment, member) => {
-    return `RCP-${String(payment?.id || member?.id || Date.now()).substring(0, 8).toUpperCase()}`;
-  };
-
-  const getReceiptFileName = (receiptId) => {
-    return `VaultKe_Receipt_${receiptId}_${new Date().toISOString().split('T')[0]}.html`;
-  };
-
-  const getReceiptBodyHTML = (html) => {
-    const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-    return match ? match[1].trim() : html;
-  };
-
-  const openReceiptPrintWindow = (html, title, receiptId) => {
-    console.log('[Receipt][openReceiptPrintWindow] start', { title, receiptId, isWeb: Platform.OS, hasWindow: typeof window, canOpen: typeof window !== 'undefined' && !!window.open });
-    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.open) {
-      return { success: false, error: 'Print is not available on this device' };
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      return { success: false, error: 'Popup blocked. Allow popups to print receipts.' };
-    }
-    console.log('[Receipt][openReceiptPrintWindow] popup opened', printWindow);
-
-    const isFullHTMLDocument = /<!DOCTYPE html>[\s\S]*<\/html>/i.test(html) || /<html[\s\S]*<\/html>/i.test(html);
-    const documentHTML = isFullHTMLDocument
-      ? html
-      : `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${title}</title>
-            <style>
-              @page { size: A4; margin: 15mm; }
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body { font-family: Arial, sans-serif !important; color: #000 !important; background: white !important; }
-            </style>
-          </head>
-          <body>${html}</body>
-        </html>
-      `;
-
-    printWindow.document.open();
-    printWindow.document.write(documentHTML);
-    printWindow.document.close();
-    printWindow.focus();
-
-    setTimeout(() => {
-      console.log('[Receipt][openReceiptPrintWindow] calling print()');
-      printWindow.print();
-    }, 500);
-
-    return { success: true, fileName: getReceiptFileName(receiptId) };
-  };
-
-  const printReceiptHTML = async (html, title, receiptId) => {
-    console.log('[Receipt][printReceiptHTML] start', { platform: Platform.OS, receiptId });
-    if (Platform.OS === 'web') {
-      const res = openReceiptPrintWindow(getReceiptBodyHTML(html), title, receiptId);
-      console.log('[Receipt][printReceiptHTML] web result', res);
-      return res;
-    }
-
-    if (!Print?.printAsync) {
-      return { success: false, error: 'Print is not available on this device' };
-    }
-
-    await Print.printAsync({ html, base64: false });
-    console.log('[Receipt][printReceiptHTML] native printAsync done');
-    return { success: true, fileName: getReceiptFileName(receiptId) };
-  };
-
-  const downloadReceiptHTML = async (html, fileName) => {
-    console.log('[Receipt][downloadReceiptHTML] start', { platform: Platform.OS, fileName });
-    if (Platform.OS === 'web') {
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-      return { success: true, fileName };
-    }
-
-    if (!FileSystem?.documentDirectory || !Sharing?.isAvailableAsync) {
-      return { success: false, error: 'Download is not available on this device' };
-    }
-
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (!isAvailable) {
-      return { success: false, error: 'Download is not available on this device' };
-    }
-
-    const uri = `${FileSystem.documentDirectory}${fileName}`;
-    await FileSystem.writeAsStringAsync(uri, html, { encoding: FileSystem.EncodingType.UTF8 });
-
-    await Sharing.shareAsync(uri, {
-      mimeType: 'text/html',
-      dialogTitle: 'Download service fee receipt',
-      UTI: 'public.html',
-    });
-
-    return { success: true, fileName, uri };
-  };
-
-  const buildReceiptHTML = (member, payment) => {
-    const transaction = {
-      id: payment?.id || member?.id || Date.now(),
-      date: payment?.paidAt || payment?.createdAt || member?.service_fee_paid_at || member?.joined_at,
-      amount: 50,
-      status: 'paid',
-      type: 'payment',
-      description: 'Service Fee Payment',
-      reference: payment?.transactionId || payment?.id || member?.transactionId || 'N/A',
-      fees: 0,
-    };
-    console.log('[Receipt][buildReceiptHTML] member=', member && member.id, 'payment=', payment && payment.id, 'transaction=', JSON.stringify(transaction));
-    return generatePDFOptimizedReceiptHTML(transaction, 'Service Fee Payment', `${member?.user?.first_name || member?.first_name} ${member?.user?.last_name || member?.last_name}`, COMPANY_INFO);
-  };
-
-  const handlePrintReceipt = async (member, payment) => {
-    if (!member) return;
+  const handleDownloadReceipt = async (member, payment) => {
+    if (!member || !payment?.id) return;
     setReceiptLoading(true);
     try {
-      const receiptId = getReceiptId(payment, member);
-      const html = buildReceiptHTML(member, payment);
-      const result = await printReceiptHTML(
-        html,
-        `Transaction Receipt - ${receiptId}`,
-        receiptId
-      );
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to print receipt');
+      const transactionId = payment.transactionId || payment.transaction_id;
+      if (!transactionId) {
+        throw new Error('Payment transaction ID not found. Please contact support or try again after payment is confirmed.');
       }
+      const token = await api.getAuthToken();
+      
+      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${transactionId}/download?format=pdf`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Receipt download failed: ${response.status} ${errorText}`);
+      }
+
+      const blob = await response.blob();
+      const fileName = `VaultKe_Receipt_${String(transactionId).substring(0, 8).toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+        Toast.show({
+          type: 'success',
+          text1: 'Receipt Downloaded',
+          text2: 'PDF receipt has been downloaded.',
+        });
+        return;
+      }
+
+      if (!FileSystem?.documentDirectory || !Sharing?.isAvailableAsync) {
+        throw new Error('Download is not available on this device');
+      }
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        throw new Error('Download is not available on this device');
+      }
+
+      const reader = new FileReader();
+      const base64Data = await new Promise((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result === 'string') {
+            resolve(result.split(',')[1]);
+          } else {
+            reject(new Error('Failed to read PDF'));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Download service fee receipt',
+        UTI: 'com.adobe.pdf',
+      });
+
+      Toast.show({
+        type: 'success',
+        text1: 'Receipt Ready',
+        text2: 'PDF receipt has been generated.',
+      });
     } catch (error) {
-      Alert.alert('Print Failed', error.message || 'Failed to print receipt.', [{ text: 'OK' }]);
+      console.error('Receipt download failed:', error);
+      Alert.alert('Receipt Failed', error.message || 'Failed to download receipt.', [{ text: 'OK' }]);
     } finally {
       setReceiptLoading(false);
     }
@@ -855,28 +794,20 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
               <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
               <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
             </View>
-            <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
-                {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
-              </Text>
-              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
-                KES 50
-              </Text>
-              <View style={styles.feeStatusCell}>
-                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                <Text style={[styles.feeStatusText, { color: colors.success }]}>
-                  Paid
+              <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                  {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
                 </Text>
+                <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                  KES 50
+                </Text>
+                <View style={styles.feeStatusCell}>
+                  <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                  <Text style={[styles.feeStatusText, { color: colors.success }]}>
+                    Paid
+                  </Text>
+                </View>
               </View>
-              <TouchableOpacity
-                style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-                onPress={() => handlePrintReceipt(memberData)}
-              >
-                <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
-                  Print Receipt
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
         ) : (
           <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
@@ -939,10 +870,10 @@ const [cooldownRemaining, setCooldownRemaining] = useState(0);
                     {isPaymentVerifiedPaid(payment) && (
                       <TouchableOpacity
                         style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
-                        onPress={() => handlePrintReceipt(memberData, payment)}
+                        onPress={() => handleDownloadReceipt(memberData, payment)}
                       >
                         <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
-                          Print Receipt
+                          ETR Receipt
                         </Text>
                       </TouchableOpacity>
                     )}

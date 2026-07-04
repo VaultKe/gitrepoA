@@ -1,15 +1,18 @@
 package api
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"vaultke-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jung-kurt/gofpdf"
 )
 
 // ReceiptHandlers handles receipt-related API endpoints
@@ -132,10 +135,10 @@ func (h *ReceiptHandlers) DownloadTransactionReceipt(c *gin.Context) {
 	}
 
 	format := c.DefaultQuery("format", "json")
-	if format != "json" && format != "html" {
+	if format != "json" && format != "html" && format != "pdf" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Supported formats: json, html",
+			"error":   "Supported formats: json, html, pdf",
 		})
 		return
 	}
@@ -182,17 +185,29 @@ func (h *ReceiptHandlers) DownloadTransactionReceipt(c *gin.Context) {
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 		c.Header("Content-Type", "text/html")
 		c.String(http.StatusOK, html)
+	case "pdf":
+		pdfBytes := h.generateReceiptPDF(receiptData)
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+		c.Header("Content-Type", "application/pdf")
+		c.Writer.Write(pdfBytes)
 	}
 }
 
 // getTransactionByID retrieves a transaction by ID for a specific user
 func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*models.Transaction, error) {
+	resolvedTransactionID := transactionID
+	if resolved, err := h.resolveTransactionID(transactionID); err == nil {
+		resolvedTransactionID = resolved
+	} else if err != sql.ErrNoRows {
+		return nil, err
+	}
+
 	query := `
 		SELECT id, from_wallet_id, to_wallet_id, type, status, amount, currency,
 			   description, reference, payment_method, metadata, fees, initiated_by,
 			   approved_by, requires_approval, approval_deadline, created_at, updated_at
 		FROM transactions 
-		WHERE id = $1 AND (initiated_by = $2 OR approved_by = $3)
+		WHERE id = $1
 	`
 
 	var transaction models.Transaction
@@ -200,7 +215,7 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 	var approvalDeadline sql.NullTime
 	var metadataJSON string
 
-	err := h.db.QueryRow(query, transactionID, userID, userID).Scan(
+	err := h.db.QueryRow(query, resolvedTransactionID).Scan(
 		&transaction.ID,
 		&fromWalletID,
 		&toWalletID,
@@ -225,6 +240,25 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 		return nil, err
 	}
 
+	// Authorize: direct initiator/approver OR chama admin
+	if transaction.InitiatedBy != userID && (transaction.ApprovedBy == nil || *transaction.ApprovedBy != userID) {
+		var metadata map[string]interface{}
+		if metadataJSON != "" {
+			_ = json.Unmarshal([]byte(metadataJSON), &metadata)
+		}
+		if chamaID, ok := metadata["chama_id"].(string); ok && chamaID != "" {
+			var count int
+			if scanErr := h.db.QueryRow(
+				"SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND role IN ($3, $4, $5)",
+				chamaID, userID, "chairperson", "treasurer", "secretary",
+			).Scan(&count); scanErr != nil || count == 0 {
+				return nil, sql.ErrNoRows
+			}
+		} else {
+			return nil, sql.ErrNoRows
+		}
+	}
+
 	// Handle nullable fields
 	if fromWalletID.Valid {
 		transaction.FromWalletID = &fromWalletID.String
@@ -241,10 +275,33 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 
 	// Parse metadata
 	if metadataJSON != "" {
-		json.Unmarshal([]byte(metadataJSON), &transaction.Metadata)
+		_ = json.Unmarshal([]byte(metadataJSON), &transaction.Metadata)
 	}
 
 	return &transaction, nil
+}
+
+// resolveTransactionID attempts to map an external payment reference (e.g. an M-Pesa receipt number)
+// to an internal transaction ID by searching transaction metadata.
+func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, error) {
+	var actualID string
+	lookupQuery := `
+		SELECT id
+		FROM transactions
+		WHERE payment_method = $1
+		  AND lower(metadata) LIKE $2
+		LIMIT 1
+	`
+	err := h.db.QueryRow(lookupQuery, models.PaymentMethodMpesa,
+		fmt.Sprintf(`%%"mpesa_receipt_number":"%s"%%`, strings.ToLower(transactionID)),
+	).Scan(&actualID)
+	if err == nil {
+		return actualID, nil
+	}
+	if err == sql.ErrNoRows {
+		return "", sql.ErrNoRows
+	}
+	return "", err
 }
 
 // getUserInfo retrieves user information for the receipt
@@ -316,6 +373,11 @@ func (h *ReceiptHandlers) generateReceiptHTML(receiptData *ReceiptData) string {
 		return fmt.Sprintf("KES %.2f", amount)
 	}
 
+	transactionDate := receiptData.Transaction.CreatedAt.Format("January 2, 2006 at 3:04:05 PM")
+	amount := formatCurrency(receiptData.Transaction.Amount)
+	fees := formatCurrency(receiptData.Transaction.Fees)
+	totalAmount := formatCurrency(receiptData.Transaction.Amount + receiptData.Transaction.Fees)
+
 	getTransactionTypeLabel := func(txType models.TransactionType) string {
 		switch txType {
 		case models.TransactionTypeDeposit:
@@ -340,11 +402,6 @@ func (h *ReceiptHandlers) generateReceiptHTML(receiptData *ReceiptData) string {
 			return "Transaction"
 		}
 	}
-
-	transactionDate := receiptData.Transaction.CreatedAt.Format("January 2, 2006 at 3:04:05 PM")
-	amount := formatCurrency(receiptData.Transaction.Amount)
-	fees := formatCurrency(receiptData.Transaction.Fees)
-	totalAmount := formatCurrency(receiptData.Transaction.Amount + receiptData.Transaction.Fees)
 
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
@@ -493,4 +550,117 @@ func (h *ReceiptHandlers) generateReceiptHTML(receiptData *ReceiptData) string {
 	)
 
 	return html
+}
+
+// generateReceiptPDF creates a PDF receipt from receipt data
+func (h *ReceiptHandlers) generateReceiptPDF(receiptData *ReceiptData) []byte {
+	pdf := gofpdf.New(gofpdf.OrientationPortrait, "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetFont("Arial", "B", 16)
+	pdf.Cell(0, 10, receiptData.CompanyInfo.Name)
+	pdf.Ln(12)
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(0, 6, receiptData.CompanyInfo.Address)
+	pdf.Ln(6)
+	pdf.Cell(0, 6, fmt.Sprintf("Phone: %s | Email: %s", receiptData.CompanyInfo.Phone, receiptData.CompanyInfo.Email))
+	pdf.Ln(10)
+
+	pdf.SetFont("Arial", "B", 14)
+	pdf.Cell(0, 10, "Transaction Receipt")
+	pdf.Ln(12)
+
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(50, 8, "Receipt ID:")
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(0, 8, receiptData.ReceiptID)
+	pdf.Ln(8)
+
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(50, 8, "Transaction ID:")
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(0, 8, receiptData.Transaction.ID)
+	pdf.Ln(8)
+
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(50, 8, "Date:")
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(0, 8, receiptData.Transaction.CreatedAt.Format("January 2, 2006 at 3:04:05 PM"))
+	pdf.Ln(8)
+
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(50, 8, "Status:")
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(0, 8, strings.ToUpper(string(receiptData.Transaction.Status)))
+	pdf.Ln(12)
+
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(0, 8, "Transaction Details")
+	pdf.Ln(8)
+
+	description := "N/A"
+	if receiptData.Transaction.Description != nil && *receiptData.Transaction.Description != "" {
+		description = *receiptData.Transaction.Description
+	}
+
+	details := [][]string{
+		{"Type", strings.ToUpper(string(receiptData.Transaction.Type))},
+		{"Description", description},
+		{"Amount", fmt.Sprintf("%.2f KES", receiptData.Transaction.Amount)},
+		{"Fees", fmt.Sprintf("%.2f KES", receiptData.Transaction.Fees)},
+		{"Total", fmt.Sprintf("%.2f KES", receiptData.Transaction.Amount+receiptData.Transaction.Fees)},
+	}
+
+	for _, row := range details {
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(50, 8, row[0])
+		pdf.SetFont("Arial", "", 10)
+		pdf.Cell(0, 8, row[1])
+		pdf.Ln(8)
+	}
+
+	if receiptData.Transaction.Reference != nil && *receiptData.Transaction.Reference != "" {
+		pdf.Ln(4)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(50, 8, "Reference:")
+		pdf.SetFont("Arial", "", 10)
+		pdf.Cell(0, 8, *receiptData.Transaction.Reference)
+		pdf.Ln(8)
+	}
+
+	if receiptData.Transaction.PaymentMethod != "" {
+		pdf.Ln(4)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(50, 8, "Payment Method:")
+		pdf.SetFont("Arial", "", 10)
+		pdf.Cell(0, 8, string(receiptData.Transaction.PaymentMethod))
+		pdf.Ln(8)
+	}
+
+	if mpesaReceipt, ok := receiptData.Transaction.Metadata["mpesa_receipt_number"].(string); ok && mpesaReceipt != "" {
+		pdf.Ln(4)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(50, 8, "M-Pesa Code:")
+		pdf.SetFont("Arial", "", 10)
+		pdf.Cell(0, 8, mpesaReceipt)
+		pdf.Ln(8)
+	}
+
+	if phone, ok := receiptData.Transaction.Metadata["mpesa_phone_number"].(string); ok && phone != "" {
+		pdf.Ln(4)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(50, 8, "Phone:")
+		pdf.SetFont("Arial", "", 10)
+		pdf.Cell(0, 8, phone)
+		pdf.Ln(8)
+	}
+
+	pdf.Ln(12)
+	pdf.SetFont("Arial", "", 8)
+	pdf.Cell(0, 6, fmt.Sprintf("Generated: %s", receiptData.GeneratedAt.Format("January 2, 2006 at 3:04:05 PM")))
+	pdf.Ln(6)
+	pdf.Cell(0, 6, "This is a computer-generated receipt and does not require a signature.")
+
+	var buf bytes.Buffer
+	_ = pdf.Output(&buf)
+	return buf.Bytes()
 }
