@@ -26,7 +26,7 @@ import ApiService from '../../../services/api';
 const ContributeScreen = ({ route, navigation }) => {
   // Extract all parameters - handle both direct chamaId and nested params
   const chamaId = route.params?.chamaId || route.params?.id;
-  const contributionType = route.params?.contributionType || 'regular';
+  const initialContributionType = route.params?.contributionType || 'regular';
   const roundId = route.params?.roundId;
   const roundName = route.params?.roundName;
   const proposalId = route.params?.proposalId;
@@ -46,6 +46,17 @@ const ContributeScreen = ({ route, navigation }) => {
   const [walletBalance, setWalletBalance] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contributions
+  
+  // New states for contribution type selection
+  const [contributionType, setContributionType] = useState(initialContributionType);
+  const [showContributionTypeDropdown, setShowContributionTypeDropdown] = useState(false);
+  const [merryGoRounds, setMerryGoRounds] = useState([]);
+  const [selectedMerryGoRound, setSelectedMerryGoRound] = useState(null);
+  const [showMerryGoRoundDropdown, setShowMerryGoRoundDropdown] = useState(false);
+  const [welfareContributions, setWelfareContributions] = useState([]);
+  const [selectedWelfare, setSelectedWelfare] = useState(null);
+  const [showWelfareDropdown, setShowWelfareDropdown] = useState(false);
+  const [loadingContributionOptions, setLoadingContributionOptions] = useState(false);
 
   // Pay for someone contribution specific states
   const [chamaMembers, setChamaMembers] = useState([]);
@@ -60,20 +71,115 @@ const ContributeScreen = ({ route, navigation }) => {
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
 
   useEffect(() => {
-    // For merry-go-round contributions, set amount immediately from route params
-    if (contributionType === 'merry-go-round' && amountPerRound && amountPerRound > 0) {
-      setAmount(amountPerRound.toString());
-    }
-
     loadChamaDetails();
     loadWalletBalance();
     checkUserRole();
-
-    // For merry-go-round contributions, fetch current recipient info
-    if (contributionType === 'merry-go-round' && chamaId) {
-      loadCurrentRecipient();
+    
+    // Load contribution options based on type
+    if (chamaId) {
+      loadContributionOptions();
     }
-  }, [chamaId, contributionType, amountPerRound]);
+
+    // For merry-go-round contributions with route params, pre-select the round
+    // Note: This runs only once on mount due to dependency array below
+    const initializeContribution = async () => {
+      if (initialContributionType === 'merry-go-round' && chamaId && roundId && amountPerRound) {
+        // Pre-populate from route params for backward compatibility
+        setSelectedMerryGoRound({ id: roundId, name: roundName, amountPerRound });
+        setAmount(amountPerRound.toString());
+        setContributionType('merry-go-round');
+      }
+      
+      // For welfare contributions with route params, pre-select the welfare
+      if (initialContributionType === 'welfare' && proposalId && requestedAmount) {
+        setSelectedWelfare({ id: proposalId, title: proposalTitle, amount: requestedAmount });
+        setAmount(requestedAmount.toString());
+        setContributionType('welfare');
+        if (proposalTitle) {
+          setDescription(`Welfare contribution for: ${proposalTitle}`);
+        }
+      }
+    };
+    
+    initializeContribution();
+  }, [chamaId]); // Run once on mount
+
+  // Load merry-go-rounds and welfare contributions for the chama
+  const loadContributionOptions = async () => {
+    try {
+      setLoadingContributionOptions(true);
+      
+      // Load merry-go-rounds
+      const mgrResponse = await ApiService.getMerryGoRounds(chamaId);
+      if (mgrResponse.success && mgrResponse.data) {
+        setMerryGoRounds(mgrResponse.data);
+      }
+      
+      // Load approved welfare contributions
+      const welfareResponse = await ApiService.getWelfareRequests(chamaId);
+      if (welfareResponse.success && welfareResponse.data) {
+        // Filter to only show approved/active welfare contributions that people can pay to
+        const approvedWelfare = (welfareResponse.data || []).filter(
+          req => req.status === 'approved' || req.status === 'active' || req.status === 'pending'
+        );
+        setWelfareContributions(approvedWelfare);
+      }
+    } catch (error) {
+      console.error('Failed to load contribution options:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load contribution options',
+        position: 'top',
+        visibilityTime: 3000,
+        topOffset: 60,
+      });
+    } finally {
+      setLoadingContributionOptions(false);
+    }
+  };
+
+  // Handle contribution type selection and reset related state
+  const handleContributionTypeChange = async (type) => {
+    setContributionType(type);
+    setShowContributionTypeDropdown(false);
+    setSelectedMerryGoRound(null);
+    setSelectedWelfare(null);
+    setAmount('');
+    setDescription('');
+    setShowMerryGoRoundDropdown(false);
+    setShowWelfareDropdown(false);
+  };
+
+  // Handle merry-go-round cycle selection
+  const handleMerryGoRoundSelect = async (round) => {
+    setSelectedMerryGoRound(round);
+    setShowMerryGoRoundDropdown(false);
+    // Set amount from the selected cycle's amountPerRound or amount
+    const cycleAmount = round.amountPerRound || round.amount || amountPerRound;
+    if (cycleAmount && cycleAmount > 0) {
+      setAmount(cycleAmount.toString());
+    } else {
+      setAmount('');
+    }
+  };
+
+  // Handle welfare contribution selection
+  const handleWelfareSelect = (welfare) => {
+    setSelectedWelfare(welfare);
+    setShowWelfareDropdown(false);
+    setAmount(welfare.amount ? welfare.amount.toString() : '');
+    if (welfare.title) {
+      setDescription(`Welfare contribution for: ${welfare.title}`);
+    }
+  };
+
+  // Close all dropdowns
+  const closeAllDropdowns = () => {
+    setShowContributionTypeDropdown(false);
+    setShowMerryGoRoundDropdown(false);
+    setShowWelfareDropdown(false);
+  };
 
   // Handle screen focus/blur for status checking
   useFocusEffect(
@@ -360,6 +466,12 @@ const ContributeScreen = ({ route, navigation }) => {
   };
 
   const handleContribute = async () => {
+    // Check if merry-go-round cycle is selected when merry-go-round type is chosen
+    if (contributionType === 'merry-go-round' && !selectedMerryGoRound) {
+      Alert.alert('Select Merry-Go-Round Cycle', 'Please select a merry-go-round cycle to contribute to.');
+      return;
+    }
+
     if (!amount || parseFloat(amount) <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid contribution amount');
       return;
@@ -644,8 +756,8 @@ const ContributeScreen = ({ route, navigation }) => {
       type: validContributionType,
       paymentMethod: 'wallet',
       isAnonymous: chama?.category === 'contribution' ? isAnonymous : false,
-      ...(roundId ? { roundId } : {}),
-      ...(proposalId ? { proposalId } : {}),
+      ...(selectedMerryGoRound ? { roundId: selectedMerryGoRound.id } : {}),
+      ...(selectedWelfare ? { proposalId: selectedWelfare.id } : {}),
     };
 
     const response = await ApiService.makeRequest('/contributions', {
@@ -696,11 +808,13 @@ const ContributeScreen = ({ route, navigation }) => {
   const getContributionDescription = () => {
     switch (contributionType) {
       case 'merry-go-round':
-        return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+        return `Merry-Go-Round contribution to ${selectedMerryGoRound?.name || roundName || 'round'}`;
       case 'welfare':
-        return proposalTitle
-          ? `Welfare support for: ${proposalTitle}`
-          : `Welfare contribution to ${chama?.name}`;
+        return selectedWelfare?.title
+          ? `Welfare support for: ${selectedWelfare.title}`
+          : proposalTitle
+            ? `Welfare support for: ${proposalTitle}`
+            : `Welfare contribution to ${chama?.name}`;
       case 'savings':
         return `Savings contribution to ${chama?.name}`;
       default:
@@ -714,7 +828,7 @@ const ContributeScreen = ({ route, navigation }) => {
     let baseMessage;
     switch (contributionType) {
       case 'merry-go-round':
-        baseMessage = `You have successfully contributed KES ${amountText} to ${roundName || 'the merry-go-round'} from your VaultKe wallet.`;
+        baseMessage = `You have successfully contributed KES ${amountText} to ${selectedMerryGoRound?.name || roundName || 'the merry-go-round'} from your VaultKe wallet.`;
         break;
       case 'welfare':
         baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to the welfare fund.`;
@@ -736,7 +850,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
   if (contributionType === 'welfare') {
     // Use welfare contribute endpoint for welfare contributions
     const welfareData = {
-      welfareRequestId: proposalId,
+      welfareRequestId: selectedWelfare?.id || proposalId,
       amount: parseFloat(amount),
       message: description || getDefaultDescription(),
       chamaId: cleanChamaId,
@@ -809,13 +923,13 @@ const handleMpesaContribution = async (cleanChamaId) => {
     function getDefaultDescription() {
       switch (contributionType) {
         case 'merry-go-round':
-          return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+          return `Merry-Go-Round contribution to ${selectedMerryGoRound?.name || roundName || 'round'}`;
         case 'welfare':
-          return proposalTitle
-            ? `Welfare support for: ${proposalTitle}`
-            : `Welfare contribution to ${chama.name}`;
+          return selectedWelfare?.title || proposalTitle
+            ? `Welfare support for: ${selectedWelfare?.title || proposalTitle}`
+            : `Welfare contribution to ${chama?.name}`;
         default:
-          return `Contribution to ${chama.name}`;
+          return `Contribution to ${chama?.name}`;
       }
     }
     const mpesaResponse = await ApiService.makeContribution({
@@ -826,6 +940,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
       paymentMethod: 'mpesa',
       mpesaReference: accountReference,
       status: 'pending',
+      ...(selectedMerryGoRound ? { roundId: selectedMerryGoRound.id } : {}),
+      ...(selectedWelfare ? { proposalId: selectedWelfare.id } : {}),
     });
 
     if (mpesaResponse.success) {
@@ -863,10 +979,10 @@ const handleMpesaContribution = async (cleanChamaId) => {
   const getDefaultDescription = () => {
     switch (contributionType) {
       case 'merry-go-round':
-        return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+        return `Merry-Go-Round contribution to ${selectedMerryGoRound?.name || roundName || 'round'}`;
       case 'welfare':
-        return proposalTitle
-          ? `Welfare support for: ${proposalTitle}`
+        return selectedWelfare?.title || proposalTitle
+          ? `Welfare support for: ${selectedWelfare?.title || proposalTitle}`
           : `Welfare contribution to ${chama?.name}`;
       default:
         return `${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)} contribution to ${chama?.name}`;
@@ -936,8 +1052,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
       contributorId: selectedContributor.id,
       paidForBy: user.id,
       isAnonymous: false,
-      ...(roundId ? { roundId } : {}),
-      ...(proposalId ? { proposalId } : {}),
+      ...(selectedMerryGoRound ? { roundId: selectedMerryGoRound.id } : {}),
+      ...(selectedWelfare ? { proposalId: selectedWelfare.id } : {}),
     };
 
     const response = await ApiService.makeRequest('/contributions', {
@@ -1078,8 +1194,12 @@ const handleMpesaContribution = async (cleanChamaId) => {
   // Validate amount for merry-go-round contributions (matches backend assertions)
   const validateContributionAmount = (amount) => {
     if (contributionType === 'merry-go-round') {
-      // Get expected amount from contribution status, current recipient, or route params
-      const expectedAmount = contributionStatus?.amountPerRound || currentRecipient?.amountPerRound || amountPerRound || 0;
+      // Get expected amount from selected merry-go-round cycle, contribution status, current recipient, or route params
+      const expectedAmount = selectedMerryGoRound?.amountPerRound || 
+                           selectedMerryGoRound?.amount ||
+                           contributionStatus?.amountPerRound || 
+                           currentRecipient?.amountPerRound || 
+                           amountPerRound || 0;
 
       if (expectedAmount > 0) {
         const inputAmount = parseFloat(amount);
@@ -1447,8 +1567,232 @@ const handleMpesaContribution = async (cleanChamaId) => {
 
         <Card style={styles.formCard} variant="outlined">
           <Text style={[styles.formTitle, { color: colors.text }]}>
-            {contributionType === 'regular' ? 'Contribution Options' : `${getContributionTitle()} Details`}
+            Choose What to Pay
           </Text>
+
+          {/* Contribution Type Selection */}
+          <View style={styles.contributionTypeWrapper}>
+            <View style={styles.contributionTypeContainer}>
+              <Text style={[styles.contributionTypeLabel, { color: colors.text }]}>
+                Contribution Type
+              </Text>
+              
+              {/* Contribution Type Dropdown Trigger */}
+              <TouchableOpacity
+                style={[styles.contributionTypeSelector, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => setShowContributionTypeDropdown(!showContributionTypeDropdown)}
+              >
+                <View style={styles.contributionTypeSelectorContent}>
+                  <Ionicons
+                    name={
+                      contributionType === 'merry-go-round' ? 'refresh-circle' :
+                      contributionType === 'welfare' ? 'heart' :
+                      contributionType === 'savings' ? 'wallet' : 'people'
+                    }
+                    size={20}
+                    color={
+                      contributionType === 'merry-go-round' ? colors.warning :
+                      contributionType === 'welfare' ? '#EC4899' :
+                      contributionType === 'savings' ? colors.success : colors.primary
+                    }
+                  />
+                  <Text style={[styles.contributionTypeSelectorText, { color: colors.text }]}>
+                    {contributionType === 'merry-go-round' ? 'Merry-Go-Round' :
+                     contributionType === 'welfare' ? 'Welfare' :
+                     contributionType === 'savings' ? 'Savings' : 'Regular'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              {/* Contribution Type Options Dropdown */}
+              {showContributionTypeDropdown && (
+                <View style={[styles.contributionTypeDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.contributionTypeOption,
+                      { backgroundColor: contributionType === 'merry-go-round' ? colors.primary + '15' : 'transparent' }
+                    ]}
+                    onPress={() => handleContributionTypeChange('merry-go-round')}
+                  >
+                    <Ionicons name="refresh-circle" size={20} color={colors.warning} />
+                    <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
+                      Merry-Go-Round
+                    </Text>
+                    {contributionType === 'merry-go-round' && (
+                      <Ionicons name="checkmark" size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.contributionTypeOption,
+                      { backgroundColor: contributionType === 'welfare' ? colors.primary + '15' : 'transparent' }
+                    ]}
+                    onPress={() => handleContributionTypeChange('welfare')}
+                  >
+                    <Ionicons name="heart" size={20} color="#EC4899" />
+                    <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
+                      Welfare
+                    </Text>
+                    {contributionType === 'welfare' && (
+                      <Ionicons name="checkmark" size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.contributionTypeOption,
+                      { backgroundColor: contributionType === 'savings' ? colors.primary + '15' : 'transparent' }
+                    ]}
+                    onPress={() => handleContributionTypeChange('savings')}
+                  >
+                    <Ionicons name="wallet" size={20} color={colors.success} />
+                    <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
+                      Savings
+                    </Text>
+                    {contributionType === 'savings' && (
+                      <Ionicons name="checkmark" size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Merry-Go-Round Cycle Selection - Conditional Dropdown */}
+              {contributionType === 'merry-go-round' && (
+                <View style={styles.conditionalDropdownContainer}>
+                  <Text style={[styles.contributionTypeLabel, { color: colors.text }]}>
+                    Select Merry-Go-Round Cycle
+                  </Text>
+                  
+                  <TouchableOpacity
+                    style={[styles.contributionTypeSelector, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => setShowMerryGoRoundDropdown(!showMerryGoRoundDropdown)}
+                    disabled={loadingContributionOptions || merryGoRounds.length === 0}
+                  >
+                    <View style={styles.contributionTypeSelectorContent}>
+                      <Ionicons name="refresh-circle" size={20} color={colors.warning} />
+                      <Text style={[styles.contributionTypeSelectorText, { color: colors.text }]}>
+                        {selectedMerryGoRound 
+                          ? selectedMerryGoRound.name || `Cycle ${selectedMerryGoRound.position || ''}`
+                          : loadingContributionOptions 
+                            ? 'Loading cycles...' 
+                            : merryGoRounds.length === 0 
+                              ? 'No cycles available' 
+                              : 'Select a cycle'
+                        }
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+
+                  {/* Merry-Go-Round Cycles Dropdown */}
+                  {showMerryGoRoundDropdown && merryGoRounds.length > 0 && (
+                    <View style={[styles.contributionTypeDropdown, { backgroundColor: colors.surface, borderColor: colors.border, maxHeight: 200 }]}>
+                      <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                        {merryGoRounds.map((round) => (
+                          <TouchableOpacity
+                            key={round.id}
+                            style={[
+                              styles.contributionTypeOption,
+                              { backgroundColor: selectedMerryGoRound?.id === round.id ? colors.primary + '15' : 'transparent' }
+                            ]}
+                            onPress={() => handleMerryGoRoundSelect(round)}
+                          >
+                            <View style={styles.merryGoRoundOptionContent}>
+                              <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
+                                {round.name || `Cycle ${round.position || round.id?.slice(-4)}`}
+                              </Text>
+                              <Text style={[styles.merryGoRoundAmountText, { color: colors.textSecondary }]}>
+                                Amount: {round.amountPerRound ? formatCurrency(round.amountPerRound) : round.amount ? formatCurrency(round.amount) : 'Variable'}
+                              </Text>
+                            </View>
+                            {selectedMerryGoRound?.id === round.id && (
+                              <Ionicons name="checkmark" size={18} color={colors.primary} />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Welfare Contribution Selection - Conditional Dropdown */}
+              {contributionType === 'welfare' && (
+                <View style={styles.conditionalDropdownContainer}>
+                  <Text style={[styles.contributionTypeLabel, { color: colors.text }]}>
+                    Select Welfare Contribution
+                  </Text>
+                  
+                  <TouchableOpacity
+                    style={[styles.contributionTypeSelector, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => setShowWelfareDropdown(!showWelfareDropdown)}
+                    disabled={loadingContributionOptions || welfareContributions.length === 0}
+                  >
+                    <View style={styles.contributionTypeSelectorContent}>
+                      <Ionicons name="heart" size={20} color="#EC4899" />
+                      <Text style={[styles.contributionTypeSelectorText, { color: colors.text }]}>
+                        {selectedWelfare
+                          ? selectedWelfare.title || selectedWelfare.purpose || `Welfare #${selectedWelfare.id?.slice(-4)}`
+                          : loadingContributionOptions
+                            ? 'Loading contributions...'
+                            : welfareContributions.length === 0
+                              ? 'No welfare contributions available'
+                              : 'Select a contribution'
+                        }
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+
+                  {/* Welfare Contributions Dropdown */}
+                  {showWelfareDropdown && welfareContributions.length > 0 && (
+                    <View style={[styles.contributionTypeDropdown, { backgroundColor: colors.surface, borderColor: colors.border, maxHeight: 200 }]}>
+                      <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                        {welfareContributions.map((welfare) => (
+                          <TouchableOpacity
+                            key={welfare.id}
+                            style={[
+                              styles.contributionTypeOption,
+                              { backgroundColor: selectedWelfare?.id === welfare.id ? colors.primary + '15' : 'transparent' }
+                            ]}
+                            onPress={() => handleWelfareSelect(welfare)}
+                          >
+                            <View style={styles.welfareOptionContent}>
+                              <Text style={[styles.contributionTypeOptionText, { color: colors.text }]} numberOfLines={1}>
+                                {welfare.title || welfare.purpose || `Welfare Request`}
+                              </Text>
+                              <Text style={[styles.welfareAmountText, { color: colors.textSecondary }]}>
+                                Amount: {welfare.amount ? formatCurrency(welfare.amount) : 'Any amount'}
+                              </Text>
+                              <Text style={[styles.welfareStatusText, { color: colors.textTertiary }]}>
+                                Status: {welfare.status || 'active'}
+                              </Text>
+                            </View>
+                            {selectedWelfare?.id === welfare.id && (
+                              <Ionicons name="checkmark" size={18} color={colors.primary} />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Savings Notice */}
+              {contributionType === 'savings' && (
+                <View style={[styles.savingsNotice, { backgroundColor: colors.success + '10', borderColor: colors.success }]}>
+                  <Ionicons name="information-circle" size={20} color={colors.success} />
+                  <Text style={[styles.savingsNoticeText, { color: colors.textSecondary }]}>
+                    Savings contributions allow you to save any amount to your chama savings subwallet.
+                  </Text>
+                </View>
+              )}
+
+            </View>
+          </View>
 
           {/* Payment Method Selection */}
           <View style={styles.paymentMethodContainer}>
@@ -1689,11 +2033,19 @@ const handleMpesaContribution = async (cleanChamaId) => {
           <Input
             label="Amount (KES)"
             value={amount}
-            onChangeText={contributionType === 'merry-go-round' ? undefined : setAmount}
+            onChangeText={
+              contributionType === 'merry-go-round' 
+                ? undefined 
+                : setAmount
+            }
             placeholder={
               contributionType === 'merry-go-round'
-                ? (amount && amount !== '0' ? "Amount set automatically" : "Loading amount...")
-                : "Enter contribution amount"
+                ? (selectedMerryGoRound 
+                    ? "Amount set automatically from cycle"
+                    : "Select a merry-go-round cycle first")
+                : contributionType === 'welfare' && selectedWelfare
+                  ? "Amount from selected welfare"
+                  : "Enter contribution amount"
             }
             keyboardType="numeric"
             leftIcon="wallet"
@@ -1818,12 +2170,14 @@ const handleMpesaContribution = async (cleanChamaId) => {
               contributionType === 'merry-go-round' && contributionStatus?.hasContributed
                 ? "✅ You have already contributed!"
                 : contributionType === 'merry-go-round'
-                  ? (!amount || amount === '0')
-                    ? (amountPerRound && amountPerRound > 0)
-                      ? `Contribute ${formatCurrency(amountPerRound)}`
+                  ? !selectedMerryGoRound
+                    ? "Select a merry-go-round cycle first"
+                    : amount && amount !== '0'
+                      ? `Contribute ${formatCurrency(parseFloat(amount))}`
                       : "Loading Contribution Details..."
-                    : `Contribute ${formatCurrency(parseFloat(amount))}`
-                  : "Make Contribution"
+                  : contributionType === 'welfare' && !selectedWelfare
+                    ? "Select a welfare contribution first"
+                    : "Make Contribution"
             }
             onPress={handleContribute}
             loading={loading}
@@ -1831,7 +2185,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
               !amount ||
               parseFloat(amount) <= 0 ||
               (contributionType === 'merry-go-round' && contributionStatus?.hasContributed) ||
-              (contributionType === 'merry-go-round' && (!amount || amount === '0') && !(amountPerRound && amountPerRound > 0))
+              (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
+              (contributionType === 'welfare' && !selectedWelfare)
             }
             variant="outline"
             style={styles.contributeButton}
@@ -1840,15 +2195,18 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 name={
                   contributionType === 'merry-go-round' && contributionStatus?.hasContributed
                     ? "checkmark-circle"
-                    : contributionType === 'merry-go-round' && (!amount || amount === '0') && !(amountPerRound && amountPerRound > 0)
+                    : contributionType === 'merry-go-round' && !selectedMerryGoRound
                       ? "time"
-                      : "add-circle"
+                      : contributionType === 'welfare' && !selectedWelfare
+                        ? "time"
+                        : "add-circle"
                 }
                 size={20}
                 color={
                   !amount || parseFloat(amount) <= 0 ||
                   (contributionType === 'merry-go-round' && contributionStatus?.hasContributed) ||
-                  (contributionType === 'merry-go-round' && (!amount || amount === '0') && !(amountPerRound && amountPerRound > 0))
+                  (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
+                  (contributionType === 'welfare' && !selectedWelfare)
                     ? colors.textSecondary
                     : colors.primary
                 }
@@ -2762,6 +3120,100 @@ const styles = StyleSheet.create({
   noMembersSubtext: {
     fontSize: typography.fontSize.sm,
     textAlign: 'center',
+  },
+  // Contribution Type Selector Styles
+  contributionTypeWrapper: {
+    marginBottom: spacing.lg,
+  },
+  contributionTypeContainer: {
+    marginBottom: spacing.sm,
+  },
+  contributionTypeLabel: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing.sm,
+  },
+  contributionTypeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+    ...shadows.sm,
+  },
+  contributionTypeSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  contributionTypeSelectorText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.md,
+    flex: 1,
+  },
+  contributionTypeDropdown: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+    maxHeight: 200,
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  contributionTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  contributionTypeOptionText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  conditionalDropdownContainer: {
+    marginTop: spacing.md,
+  },
+  merryGoRoundOptionContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  merryGoRoundAmountText: {
+    fontSize: typography.fontSize.xs,
+    marginTop: spacing.xs,
+  },
+  welfareOptionContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  welfareAmountText: {
+    fontSize: typography.fontSize.xs,
+    marginTop: spacing.xs,
+  },
+  welfareStatusText: {
+    fontSize: typography.fontSize.xs,
+    marginTop: spacing.xs,
+  },
+  savingsNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginTop: spacing.md,
+  },
+  savingsNoticeText: {
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+    flex: 1,
+    lineHeight: 18,
   },
 });
 
