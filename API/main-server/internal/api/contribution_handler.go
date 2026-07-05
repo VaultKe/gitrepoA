@@ -206,20 +206,21 @@ func MakeContribution(c *gin.Context) {
 
 	// Validate payment method
 	validPaymentMethods := map[string]bool{
-		"wallet": true,
-		"mpesa":  true,
-		"cash":   true,
+		"wallet":  true,
+		"mpesa":   true,
+		"cash":    true,
+		"pay_for": true, // Pay for another member (treasurer records contribution on behalf of another member)
 	}
 	if !validPaymentMethods[req.PaymentMethod] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Invalid payment method. Must be 'wallet', 'mpesa', 'cash'",
+			"error":   "Invalid payment method. Must be 'wallet', 'mpesa', 'cash', or 'pay_for'",
 		})
 		return
 	}
 
-	// For cash contributions, validate treasurer role and additional fields
-	if req.PaymentMethod == "cash" {
+	// For cash and pay_for contributions, validate treasurer role and additional fields
+	if req.PaymentMethod == "cash" || req.PaymentMethod == "pay_for" {
 		// Get database connection
 		db, exists := c.Get("db")
 		if !exists {
@@ -247,23 +248,18 @@ func MakeContribution(c *gin.Context) {
 		if userRole != "treasurer" && userRole != "chairperson" {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
-				"error":   "Only treasurers and chairpersons can record cash contributions",
+				"error":   "Only treasurers and chairpersons can use this payment method",
 			})
 			return
 		}
 
-		// Validate required fields for cash contributions
+		// Validate required fields for cash/pay_for contributions
 		if req.ContributorID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "Contributor ID is required for cash contributions",
+				"error":   "Contributor ID is required for this payment method",
 			})
 			return
-		}
-
-		// Set cash type based on payment method
-		if req.CashType == "" {
-			req.CashType = req.PaymentMethod // "cash""
 		}
 
 		// Verify that the contributor is a member of the chama
@@ -294,7 +290,7 @@ func MakeContribution(c *gin.Context) {
 	var transactionID string
 
 	// Handle different payment methods
-	if req.PaymentMethod == "wallet" {
+	if req.PaymentMethod == "wallet" || req.PaymentMethod == "pay_for" {
 		walletService := services.NewWalletService(db.(*sql.DB))
 
 		// Get or create user's personal wallet
@@ -414,7 +410,7 @@ func MakeContribution(c *gin.Context) {
 		// Skip the duplicate transaction insert below for wallet payments
 		// Update member contributions and chama stats within the outer transaction
 		contributorUserID := userID
-		if req.PaymentMethod == "cash" {
+		if req.PaymentMethod == "cash" || req.PaymentMethod == "pay_for" {
 			contributorUserID = req.ContributorID
 		} else {
 			contributorUserID = userID

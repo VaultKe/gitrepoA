@@ -32,15 +32,22 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
 
   const chamaId = routeChamaId || currentChamaId;
 
-  const [merryGoRounds, setMerryGoRounds] = useState([]);
+const [merryGoRounds, setMerryGoRounds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRound, setSelectedRound] = useState(null);
 
   const [contributorFilter, setContributorFilter] = useState('all');
   const [contributorSearch, setContributorSearch] = useState('');
+  const [roundContributions, setRoundContributions] = useState([]);
 
   useEffect(() => { loadMerryGoRounds(); }, [chamaId]);
+
+  useEffect(() => {
+    if (selectedRound) {
+      loadRoundContributions();
+    }
+  }, [selectedRound]);
 
   useEffect(() => {
     return () => {};
@@ -92,10 +99,41 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-  const onRefresh = async () => {
+const onRefresh = async () => {
     setRefreshing(true);
     await loadMerryGoRounds();
+    if (selectedRound) {
+      await loadRoundContributions();
+    }
     setRefreshing(false);
+  };
+
+  // Load contributions for the current merry-go-round round
+  const loadRoundContributions = async () => {
+    if (!selectedRound) return;
+    try {
+      let allContributions = [];
+
+      // Get contributions from contributions endpoint
+      const contribResponse = await ApiService.getContributions(chamaId);
+      if (contribResponse.success && contribResponse.data) {
+        allContributions = [...allContributions, ...(contribResponse.data || [])];
+      }
+
+      // Also check transactions endpoint for merry-go-round contributions
+      const txResponse = await ApiService.getChamaTransactions(chamaId, 100, 0);
+      if (txResponse.success && txResponse.data) {
+        const merryTx = (txResponse.data || []).filter(item =>
+          item.type === 'merry-go-round' || item.transaction_type === 'merry-go-round'
+        );
+        allContributions = [...allContributions, ...merryTx];
+      }
+
+      console.log('[MGR] Loaded', allContributions.length, 'contributions for round', selectedRound.id);
+      setRoundContributions(allContributions);
+    } catch (error) {
+      console.error('Failed to load round contributions:', error);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -292,18 +330,69 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     );
   };
 
-  const getRowData = () => {
+const getRowData = () => {
     if (!selectedRound) return [];
     const participants = selectedRound.members || selectedRound.participants || [];
     const currentPosition = selectedRound.current_position || selectedRound.currentRound || 1;
     const roundComplete = selectedRound.roundComplete || false;
     const amountPerRound = selectedRound.amount_per_round || selectedRound.amountPerRound || 0;
 
+    // Get the current recipient's user ID(s)
+    const currentRecipientIds = participants
+      .filter((p, idx) => (idx + 1) === currentPosition)
+      .map(p => p.user_id || (p.user && p.user.id));
+
+    // Filter contributions to only this specific merry-go-round round
+    const thisRoundContributions = roundContributions.filter(c => {
+      const roundIdMatch = c.roundId === selectedRound.id ||
+                          c.merry_go_round_id === selectedRound.id ||
+                          c.merryGoRoundId === selectedRound.id ||
+                          c.metadata?.roundId === selectedRound.id ||
+                          c.metadata?.merryGoRoundId === selectedRound.id;
+      return roundIdMatch;
+    });
+
+    // Build a map of user IDs whose contribution obligation is fulfilled for THIS ROUND
+    const fulfilledUserIds = new Set(
+      thisRoundContributions
+        .flatMap(c => {
+          const userIds = [];
+          // For regular contributions: user_id is the contributor
+          if (c.user_id) userIds.push(c.user_id);
+          // For pay_for contributions: contributorId is who was paid for (their obligation is fulfilled)
+          if (c.contributorId) userIds.push(c.contributorId);
+          if (c.contributor_id) userIds.push(c.contributor_id);
+          if (c.metadata?.contributorId) userIds.push(c.metadata.contributorId);
+          // Also check for participant ID in merry-go-round transactions
+          if (c.participant_id) userIds.push(c.participant_id);
+          if (c.metadata?.participantId) userIds.push(c.metadata.participantId);
+          // Check participant.user_id for nested participant structure
+          if (c.participant?.user_id) userIds.push(c.participant.user_id);
+          if (c.participant?.id) userIds.push(c.participant.id);
+          return userIds;
+        })
+        .filter(id => id)
+    );
+
     return participants.map((p, idx) => {
       const position = idx + 1;
       const member = p.user || p;
-      const hasContributed = p.has_contributed_this_cycle || p.has_contributed || (!roundComplete && position < currentPosition);
+      const userId = p.user_id || (p.user && p.user.id);
+
+      // hasContributed: either flagged by backend OR found in actual contributions, OR already passed their turn
+      const hasContributed = p.has_contributed_this_cycle ||
+                            p.has_contributed ||
+                            fulfilledUserIds.has(userId) ||
+                            (!roundComplete && position < currentPosition);
+
+      // paidToCurrent: fulfilled contribution obligation AND is not the current recipient
+      const isCurrentRecipient = currentRecipientIds.includes(userId);
+
+      // Someone has paid to current if their obligation is fulfilled and they're not the recipient
+      const paidToCurrent = fulfilledUserIds.has(userId) && !isCurrentRecipient;
+
       const eligibleToContributeToAll = position <= currentPosition || roundComplete;
+
       return {
         id: p.id || `${selectedRound.id}-${position}`,
         name: getMemberName(member),
@@ -312,6 +401,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
         contributed: hasContributed,
         amount: hasContributed ? amountPerRound : 0,
         eligibleToContributeToAll,
+        paidToCurrent,
       };
     });
   };
@@ -322,6 +412,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     let rows = getRowData();
 
     if (contributorFilter === 'contributed') rows = rows.filter(r => r.contributed);
+    if (contributorFilter === 'paid_to_current') rows = rows.filter(r => r.paidToCurrent);
     if (contributorFilter === 'pending') rows = rows.filter(r => !r.contributed);
     if (contributorSearch.trim()) {
       const q = contributorSearch.toLowerCase();
@@ -330,6 +421,16 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
 
     const totalContributed = rows.filter(r => r.contributed).length;
     const totalAmount = rows.filter(r => r.contributed).reduce((sum, r) => sum + r.amount, 0);
+    const totalPaidToCurrent = rows.filter(r => r.paidToCurrent).length;
+    const totalPaidToCurrentAmount = rows.filter(r => r.paidToCurrent).reduce((sum, r) => sum + r.amount, 0);
+
+    const getFilterSummary = () => {
+      if (contributorFilter === 'all') return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
+      if (contributorFilter === 'contributed') return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
+      if (contributorFilter === 'paid_to_current') return `${totalPaidToCurrent} paid to current recipient • ${formatCurrency(totalPaidToCurrentAmount)}`;
+      if (contributorFilter === 'pending') return `${rows.length} pending payments`;
+      return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
+    };
 
     const getPayoutDate = (row) => {
       if (!selectedRound) return '—';
@@ -348,8 +449,15 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
       <Card variant="outlined" style={styles.statsCard,{ borderRadius: 8, overflow: 'hidden' }}>
         <View style={styles.tableSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ minWidth: width - 32 }}>
-              <View style={styles.tableHeaderRow}>
+             <View style={{ minWidth: width - 32 }}>
+               {contributorFilter === 'paid_to_current' && (
+                 <View style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.success + '12', borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                   <Text style={{ fontSize: typography.fontSize.sm, color: colors.success, fontWeight: 'medium' }}>
+                     Showing members who have paid to the current recipient
+                   </Text>
+                 </View>
+               )}
+               <View style={styles.tableHeaderRow}>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 0.5 }]}>#</Text>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 3 }]}>Member</Text>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Status</Text>
@@ -395,7 +503,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
           </ScrollView>
           <View style={[styles.tableFooter, { borderTopColor: colors.border }]}>
             <Text style={[styles.tableFooterText, { color: colors.textSecondary }]}>
-              {totalContributed} paid • {formatCurrency(totalAmount)} raised
+              {getFilterSummary()}
             </Text>
           </View>
         </View>
@@ -621,14 +729,14 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
                 </View> 
 
                 <View style={styles.statsCard,{ flexDirection: 'row' }}>
-                  {['all', 'contributed', 'pending'].map(tab => (
+                  {['all', 'contributed', 'paid_to_current', 'pending'].map(tab => (
                     <TouchableOpacity
                       key={tab}
                       style={[styles.filterTab, { borderColor: contributorFilter === tab ? colors.primary : colors.border, backgroundColor: contributorFilter === tab ? colors.primary + '18' : colors.backgroundSecondary }]}
                       onPress={() => { setContributorFilter(tab); }}
                     >
                       <Text style={[styles.filterTabText, { color: contributorFilter === tab ? colors.primary : colors.textSecondary }]}>
-                        {tab === 'all' ? 'All' : tab === 'contributed' ? 'Paid' : 'Pending'}
+                        {tab === 'all' ? 'All' : tab === 'contributed' ? 'Paid' : tab === 'paid_to_current' ? 'Paid to Current' : 'Pending'}
                       </Text>
                     </TouchableOpacity>
                   ))}

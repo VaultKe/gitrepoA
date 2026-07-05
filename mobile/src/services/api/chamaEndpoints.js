@@ -51,6 +51,11 @@ const getMerryGoRounds = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/merry-go-rounds`);
 };
 
+const getMerryGoRoundContributionStatus = async (chamaId, roundId = null) => {
+  const queryParams = roundId ? `?roundId=${roundId}` : '';
+  return await makeRequest(`/merry-go-rounds/contribution-status/${chamaId}${queryParams}`);
+};
+
 const createMerryGoRound = async (data) => {
   return await makeRequest('/merry-go-rounds/', {
     method: 'POST',
@@ -213,6 +218,7 @@ export {
   exportChamaMembers,
   getChamaTransactions,
   getMerryGoRounds,
+  getMerryGoRoundContributionStatus,
   createMerryGoRound,
   joinChama,
   leaveChama,

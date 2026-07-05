@@ -503,6 +503,7 @@ chamas.GET("/admin/all", api.GetAllChamasForAdmin)
 		{
 			merryGoRounds.GET("/", api.GetMerryGoRounds)
 			merryGoRounds.POST("/", api.CreateMerryGoRound)
+			merryGoRounds.GET("/contribution-status/:chamaId", api.CheckUserContributionStatus)
 		}
 
 			welfare := protected.Group("/welfare")

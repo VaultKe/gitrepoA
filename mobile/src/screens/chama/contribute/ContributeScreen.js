@@ -7,10 +7,7 @@ import {
   Alert,
   ScrollView,
   TouchableOpacity,
-  Modal,
   Image,
-  Dimensions,
-  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -21,12 +18,21 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import ApiService from '../../../services/api';
+import ContributionTypeSelector from './components/ContributionTypeSelector';
+import PaymentMethodSelector from './components/PaymentMethodSelector';
+import MemberListingSection from './components/MemberListingSection';
+import CurrentRecipientInfo from './components/CurrentRecipientInfo';
+import PaymentConfirmationModal from './components/PaymentConfirmationModal';
+import MerryGoRoundRules from './components/MerryGoRoundRules';
+import AnonymousContribution from './components/AnonymousContribution';
+import ValidationMessage from './components/ValidationMessage';
+import PhoneNumberDisplay from './components/PhoneNumberDisplay';
 
 
 const ContributeScreen = ({ route, navigation }) => {
   // Extract all parameters - handle both direct chamaId and nested params
   const chamaId = route.params?.chamaId || route.params?.id;
-  const contributionType = route.params?.contributionType || 'regular';
+  const initialContributionType = route.params?.contributionType || 'regular';
   const roundId = route.params?.roundId;
   const roundName = route.params?.roundName;
   const proposalId = route.params?.proposalId;
@@ -45,35 +51,140 @@ const ContributeScreen = ({ route, navigation }) => {
   const [paymentMethod, setPaymentMethod] = useState('wallet'); // 'wallet', 'mpesa', or 'pay_for'
   const [walletBalance, setWalletBalance] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contributions
-
-  // Pay for someone contribution specific states
-  const [chamaMembers, setChamaMembers] = useState([]);
-  const [selectedContributor, setSelectedContributor] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [phone, setPhone] = useState(user?.phone || '');
-  const [currentRecipient, setCurrentRecipient] = useState(null);
-  const [failedAvatars, setFailedAvatars] = useState(new Set()); // Track failed avatar loads
-  const [contributionStatus, setContributionStatus] = useState(null);
-  const [statusCheckInterval, setStatusCheckInterval] = useState(null);
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
-  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contributions
+   
+   // New states for contribution type selection
+   const [contributionType, setContributionType] = useState(initialContributionType);
+   const [showContributionTypeDropdown, setShowContributionTypeDropdown] = useState(false);
+   const [merryGoRounds, setMerryGoRounds] = useState([]);
+   const [selectedMerryGoRound, setSelectedMerryGoRound] = useState(null);
+   const [showMerryGoRoundDropdown, setShowMerryGoRoundDropdown] = useState(false);
+   const [welfareContributions, setWelfareContributions] = useState([]);
+   const [selectedWelfare, setSelectedWelfare] = useState(null);
+   const [showWelfareDropdown, setShowWelfareDropdown] = useState(false);
+   const [loadingContributionOptions, setLoadingContributionOptions] = useState(false);
+ 
+   // Pay for someone contribution specific states
+   const [chamaMembers, setChamaMembers] = useState([]);
+   const [selectedContributor, setSelectedContributor] = useState(null);
+   const [userRole, setUserRole] = useState(null);
+   const [currentRecipient, setCurrentRecipient] = useState(null);
+   const [failedAvatars, setFailedAvatars] = useState(new Set()); // Track failed avatar loads
+   const [contributionStatus, setContributionStatus] = useState(null);
+   const [statusCheckInterval, setStatusCheckInterval] = useState(null);
+   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+   const [memberSearchQuery, setMemberSearchQuery] = useState('');
 
   useEffect(() => {
-    // For merry-go-round contributions, set amount immediately from route params
-    if (contributionType === 'merry-go-round' && amountPerRound && amountPerRound > 0) {
-      setAmount(amountPerRound.toString());
-    }
-
     loadChamaDetails();
     loadWalletBalance();
     checkUserRole();
-
-    // For merry-go-round contributions, fetch current recipient info
-    if (contributionType === 'merry-go-round' && chamaId) {
-      loadCurrentRecipient();
+    
+    // Load contribution options based on type
+    if (chamaId) {
+      loadContributionOptions();
     }
-  }, [chamaId, contributionType, amountPerRound]);
+
+    // For merry-go-round contributions with route params, pre-select the round
+    // Note: This runs only once on mount due to dependency array below
+    const initializeContribution = async () => {
+      if (initialContributionType === 'merry-go-round' && chamaId && roundId && amountPerRound) {
+        // Pre-populate from route params for backward compatibility
+        setSelectedMerryGoRound({ id: roundId, name: roundName, amountPerRound });
+        setAmount(amountPerRound.toString());
+        setContributionType('merry-go-round');
+      }
+      
+      // For welfare contributions with route params, pre-select the welfare
+      if (initialContributionType === 'welfare' && proposalId && requestedAmount) {
+        setSelectedWelfare({ id: proposalId, title: proposalTitle, amount: requestedAmount });
+        setAmount(requestedAmount.toString());
+        setContributionType('welfare');
+        if (proposalTitle) {
+          setDescription(`Welfare contribution for: ${proposalTitle}`);
+        }
+      }
+    };
+    
+    initializeContribution();
+  }, [chamaId]); // Run once on mount
+
+  // Load merry-go-rounds and welfare contributions for the chama
+  const loadContributionOptions = async () => {
+    try {
+      setLoadingContributionOptions(true);
+      
+      // Load merry-go-rounds
+      const mgrResponse = await ApiService.getMerryGoRounds(chamaId);
+      if (mgrResponse.success && mgrResponse.data) {
+        setMerryGoRounds(mgrResponse.data);
+      }
+      
+      // Load approved welfare contributions
+      const welfareResponse = await ApiService.getWelfareRequests(chamaId);
+      if (welfareResponse.success && welfareResponse.data) {
+        // Filter to only show approved/active welfare contributions that people can pay to
+        const approvedWelfare = (welfareResponse.data || []).filter(
+          req => req.status === 'approved' || req.status === 'active' || req.status === 'pending'
+        );
+        setWelfareContributions(approvedWelfare);
+      }
+    } catch (error) {
+      console.error('Failed to load contribution options:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load contribution options',
+        position: 'top',
+        visibilityTime: 3000,
+        topOffset: 60,
+      });
+    } finally {
+      setLoadingContributionOptions(false);
+    }
+  };
+
+  // Handle contribution type selection and reset related state
+  const handleContributionTypeChange = async (type) => {
+    setContributionType(type);
+    setShowContributionTypeDropdown(false);
+    setSelectedMerryGoRound(null);
+    setSelectedWelfare(null);
+    setAmount('');
+    setDescription('');
+    setShowMerryGoRoundDropdown(false);
+    setShowWelfareDropdown(false);
+  };
+
+  // Handle merry-go-round cycle selection
+  const handleMerryGoRoundSelect = async (round) => {
+    setSelectedMerryGoRound(round);
+    setShowMerryGoRoundDropdown(false);
+    // Set amount from the selected cycle's amountPerRound or amount
+    const cycleAmount = round.amountPerRound || round.amount || amountPerRound;
+    if (cycleAmount && cycleAmount > 0) {
+      setAmount(cycleAmount.toString());
+    } else {
+      setAmount('');
+    }
+  };
+
+  // Handle welfare contribution selection
+  const handleWelfareSelect = (welfare) => {
+    setSelectedWelfare(welfare);
+    setShowWelfareDropdown(false);
+    setAmount(welfare.amount ? welfare.amount.toString() : '');
+    if (welfare.title) {
+      setDescription(`Welfare contribution for: ${welfare.title}`);
+    }
+  };
+
+  // Close all dropdowns
+  const closeAllDropdowns = () => {
+    setShowContributionTypeDropdown(false);
+    setShowMerryGoRoundDropdown(false);
+    setShowWelfareDropdown(false);
+  };
 
   // Handle screen focus/blur for status checking
   useFocusEffect(
@@ -360,6 +471,12 @@ const ContributeScreen = ({ route, navigation }) => {
   };
 
   const handleContribute = async () => {
+    // Check if merry-go-round cycle is selected when merry-go-round type is chosen
+    if (contributionType === 'merry-go-round' && !selectedMerryGoRound) {
+      Alert.alert('Select Merry-Go-Round Cycle', 'Please select a merry-go-round cycle to contribute to.');
+      return;
+    }
+
     if (!amount || parseFloat(amount) <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid contribution amount');
       return;
@@ -644,8 +761,8 @@ const ContributeScreen = ({ route, navigation }) => {
       type: validContributionType,
       paymentMethod: 'wallet',
       isAnonymous: chama?.category === 'contribution' ? isAnonymous : false,
-      ...(roundId ? { roundId } : {}),
-      ...(proposalId ? { proposalId } : {}),
+      ...(selectedMerryGoRound ? { roundId: selectedMerryGoRound.id } : {}),
+      ...(selectedWelfare ? { proposalId: selectedWelfare.id } : {}),
     };
 
     const response = await ApiService.makeRequest('/contributions', {
@@ -696,11 +813,13 @@ const ContributeScreen = ({ route, navigation }) => {
   const getContributionDescription = () => {
     switch (contributionType) {
       case 'merry-go-round':
-        return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+        return `Merry-Go-Round contribution to ${selectedMerryGoRound?.name || roundName || 'round'}`;
       case 'welfare':
-        return proposalTitle
-          ? `Welfare support for: ${proposalTitle}`
-          : `Welfare contribution to ${chama?.name}`;
+        return selectedWelfare?.title
+          ? `Welfare support for: ${selectedWelfare.title}`
+          : proposalTitle
+            ? `Welfare support for: ${proposalTitle}`
+            : `Welfare contribution to ${chama?.name}`;
       case 'savings':
         return `Savings contribution to ${chama?.name}`;
       default:
@@ -714,7 +833,7 @@ const ContributeScreen = ({ route, navigation }) => {
     let baseMessage;
     switch (contributionType) {
       case 'merry-go-round':
-        baseMessage = `You have successfully contributed KES ${amountText} to ${roundName || 'the merry-go-round'} from your VaultKe wallet.`;
+        baseMessage = `You have successfully contributed KES ${amountText} to ${selectedMerryGoRound?.name || roundName || 'the merry-go-round'} from your VaultKe wallet.`;
         break;
       case 'welfare':
         baseMessage = `You have successfully contributed ${amountText} from your VaultKe wallet to the welfare fund.`;
@@ -736,7 +855,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
   if (contributionType === 'welfare') {
     // Use welfare contribute endpoint for welfare contributions
     const welfareData = {
-      welfareRequestId: proposalId,
+      welfareRequestId: selectedWelfare?.id || proposalId,
       amount: parseFloat(amount),
       message: description || getDefaultDescription(),
       chamaId: cleanChamaId,
@@ -809,13 +928,13 @@ const handleMpesaContribution = async (cleanChamaId) => {
     function getDefaultDescription() {
       switch (contributionType) {
         case 'merry-go-round':
-          return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+          return `Merry-Go-Round contribution to ${selectedMerryGoRound?.name || roundName || 'round'}`;
         case 'welfare':
-          return proposalTitle
-            ? `Welfare support for: ${proposalTitle}`
-            : `Welfare contribution to ${chama.name}`;
+          return selectedWelfare?.title || proposalTitle
+            ? `Welfare support for: ${selectedWelfare?.title || proposalTitle}`
+            : `Welfare contribution to ${chama?.name}`;
         default:
-          return `Contribution to ${chama.name}`;
+          return `Contribution to ${chama?.name}`;
       }
     }
     const mpesaResponse = await ApiService.makeContribution({
@@ -826,6 +945,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
       paymentMethod: 'mpesa',
       mpesaReference: accountReference,
       status: 'pending',
+      ...(selectedMerryGoRound ? { roundId: selectedMerryGoRound.id } : {}),
+      ...(selectedWelfare ? { proposalId: selectedWelfare.id } : {}),
     });
 
     if (mpesaResponse.success) {
@@ -863,10 +984,10 @@ const handleMpesaContribution = async (cleanChamaId) => {
   const getDefaultDescription = () => {
     switch (contributionType) {
       case 'merry-go-round':
-        return `Merry-Go-Round contribution to ${roundName || 'round'}`;
+        return `Merry-Go-Round contribution to ${selectedMerryGoRound?.name || roundName || 'round'}`;
       case 'welfare':
-        return proposalTitle
-          ? `Welfare support for: ${proposalTitle}`
+        return selectedWelfare?.title || proposalTitle
+          ? `Welfare support for: ${selectedWelfare?.title || proposalTitle}`
           : `Welfare contribution to ${chama?.name}`;
       default:
         return `${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)} contribution to ${chama?.name}`;
@@ -936,8 +1057,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
       contributorId: selectedContributor.id,
       paidForBy: user.id,
       isAnonymous: false,
-      ...(roundId ? { roundId } : {}),
-      ...(proposalId ? { proposalId } : {}),
+      ...(selectedMerryGoRound ? { roundId: selectedMerryGoRound.id } : {}),
+      ...(selectedWelfare ? { proposalId: selectedWelfare.id } : {}),
     };
 
     const response = await ApiService.makeRequest('/contributions', {
@@ -1078,8 +1199,12 @@ const handleMpesaContribution = async (cleanChamaId) => {
   // Validate amount for merry-go-round contributions (matches backend assertions)
   const validateContributionAmount = (amount) => {
     if (contributionType === 'merry-go-round') {
-      // Get expected amount from contribution status, current recipient, or route params
-      const expectedAmount = contributionStatus?.amountPerRound || currentRecipient?.amountPerRound || amountPerRound || 0;
+      // Get expected amount from selected merry-go-round cycle, contribution status, current recipient, or route params
+      const expectedAmount = selectedMerryGoRound?.amountPerRound || 
+                           selectedMerryGoRound?.amount ||
+                           contributionStatus?.amountPerRound || 
+                           currentRecipient?.amountPerRound || 
+                           amountPerRound || 0;
 
       if (expectedAmount > 0) {
         const inputAmount = parseFloat(amount);
@@ -1349,458 +1474,140 @@ const handleMpesaContribution = async (cleanChamaId) => {
            </View>
          </Card>
 
-         {/* Current Recipient Info for Merry-Go-Round */}
-         {contributionType === 'merry-go-round' && currentRecipient && (
-            <Card style={[styles.chamaInfoCard, { backgroundColor: colors.primary + '10', borderColor: colors.primary }]} variant="outlined">
-             <View style={styles.recipientInfo}>
-               <View style={[styles.recipientIcon, { backgroundColor: colors.primary }]}>
-                 <Ionicons name="person" size={20} color={colors.white} />
-               </View>
-               <View style={styles.recipientDetails}>
-                 <Text style={[styles.recipientLabel, { color: colors.textSecondary }]}>
-                   Contributing to:
-                 </Text>
-                 <Text style={[styles.recipientName, { color: colors.primary }]}>
-                   {currentRecipient.fullName}
-                 </Text>
-                 <Text style={[styles.recipientPosition, { color: colors.textSecondary }]}>
-                   Position {currentRecipient.position} • Round {currentRecipient.position}
-                 </Text>
-               </View>
-             </View>
+{/* Current Recipient Info for Merry-Go-Round */}
+          {contributionType === 'merry-go-round' && currentRecipient && (
+            <CurrentRecipientInfo
+              currentRecipient={currentRecipient}
+              contributionStatus={contributionStatus}
+              formatCurrency={formatCurrency}
+            />
+          )}
 
-             {/* Real-time Contribution Status */}
-             {contributionStatus && (
-               <View style={styles.statusContainer}>
-                 {/* Prominent Contribution Status Banner */}
-                 <View style={[
-                   styles.contributionStatusBanner,
-                   {
-                     backgroundColor: contributionStatus.hasContributed
-                       ? colors.success + '20'
-                       : colors.warning + '20',
-                     borderColor: contributionStatus.hasContributed
-                       ? colors.success
-                       : colors.warning
-                   }
-                 ]}>
-                   <View style={styles.statusBannerContent}>
-                     <Ionicons
-                       name={contributionStatus.hasContributed ? "checkmark-circle" : "radio-button-off"}
-                       size={24}
-                       color={contributionStatus.hasContributed ? colors.success : colors.warning}
-                     />
-                     <View style={styles.statusBannerText}>
-                       <Text style={[
-                         styles.statusBannerTitle,
-                         { color: contributionStatus.hasContributed ? colors.success : colors.warning }
-                       ]}>
-                         {contributionStatus.hasContributed ? "✅ You already Contributed.No need to!" : "⏳ You Haven't Contributed Yet"}
-                       </Text>
-                       <Text style={[
-                         styles.statusBannerSubtitle,
-                         { color: colors.textSecondary }
-                       ]}>
-                         {contributionStatus.hasContributed
-                           ? `You successfully contributed ${formatCurrency(contributionStatus.amountPerRound || 0)} to this round`
-                           : `You need to contribute exactly ${formatCurrency(contributionStatus.amountPerRound || 0)} to participate in this round`
-                         }
-                       </Text>
-                     </View>
-                   </View>
-                 </View>
-
-                 <View style={styles.statusRow}>
-                   <Text style={[styles.statusLabel, { color: colors.textSecondary }]}>
-                     Round Progress:
-                   </Text>
-                   <View style={styles.progressContainer}>
-                     <Text style={[styles.progressText, { color: colors.text }]}>
-                       {contributionStatus.contributionStats?.totalContributions || 0}/{contributionStatus.contributionStats?.totalParticipants || 0} members
-                     </Text>
-                     <View style={styles.progressBar}>
-                       <View
-                         style={[
-                           styles.progressFill,
-                           {
-                             width: `${contributionStatus.contributionStats?.progressPercentage || 0}%`,
-                             backgroundColor: contributionStatus.contributionStats?.progressPercentage === 100 ? colors.success : colors.primary
-                           }
-                         ]}
-                       />
-                     </View>
-                   </View>
-                 </View>
-
-                 {contributionStatus.roundComplete && (
-                   <View style={[styles.roundCompleteNotice, { backgroundColor: colors.success + '20', borderColor: colors.success }]}>
-                     <Ionicons name="trophy" size={16} color={colors.success} />
-                     <Text style={[styles.roundCompleteText, { color: colors.success }]}>
-                       🎉 Round Complete! The merry-go-round will advance to the next member automatically.
-                     </Text>
-                   </View>
-                 )}
-               </View>
-             )}
-           </Card>
-         )}
-
-        <Card style={styles.formCard} variant="outlined">
-          <Text style={[styles.formTitle, { color: colors.text }]}>
-            {contributionType === 'regular' ? 'Contribution Options' : `${getContributionTitle()} Details`}
-          </Text>
-
-          {/* Payment Method Selection */}
-          <View style={styles.paymentMethodContainer}>
-            <Text style={[styles.paymentMethodLabel, { color: colors.text }]}>
-              Payment Method
+          <Card style={styles.formCard} variant="outlined">
+            <Text style={[styles.formTitle, { color: colors.text }]}>
+              Choose What to Pay
             </Text>
-            <View style={styles.paymentMethodOptions}>
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethodOption,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: paymentMethod === 'wallet' ? colors.primary : colors.border,
-                    borderWidth: paymentMethod === 'wallet' ? 2 : 1,
-                  }
-                ]}
-                onPress={() => setPaymentMethod('wallet')}
-              >
-                <Ionicons
-                  name="wallet"
-                  size={20}
-                  color={paymentMethod === 'wallet' ? colors.primary : colors.text}
-                />
-                <Text
-                  style={[
-                    styles.paymentMethodText,
-                    { color: paymentMethod === 'wallet' ? colors.primary : colors.text }
-                  ]}
-                >
-                  VaultKe Wallet
-                </Text>
-                {paymentMethod === 'wallet' && (
-                  <View style={styles.walletBalanceContainer}>
-                    <Text
-                      style={[
-                        styles.paymentMethodBalance,
-                        { color: paymentMethod === 'wallet' ? colors.primary : colors.textSecondary }
-                      ]}
-                    >
-                      Balance: {formatCurrency(walletBalance)}
-                    </Text>
-                    {walletBalance <= 0 && (
-                      <Text
-                        style={[
-                          styles.balanceWarning,
-                          { color: colors.error }
-                        ]}
-                      >
-                        ⚠️ No balance
-                      </Text>
-                    )}
-                    {walletBalance > 0 && amount && parseFloat(amount) > walletBalance && (
-                      <Text
-                        style={[
-                          styles.balanceWarning,
-                          { color: colors.error }
-                        ]}
-                      >
-                        ⚠️ Insufficient
-                      </Text>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethodOption,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: paymentMethod === 'mpesa' ? colors.success : colors.border,
-                    borderWidth: paymentMethod === 'mpesa' ? 2 : 1,
-                  }
-                ]}
-                onPress={() => setPaymentMethod('mpesa')}
-              >
-                <Ionicons
-                  name="phone-portrait"
-                  size={20}
-                  color={paymentMethod === 'mpesa' ? colors.success : colors.text}
-                />
-                <Text
-                  style={[
-                    styles.paymentMethodText,
-                    { color: paymentMethod === 'mpesa' ? colors.success : colors.text }
-                  ]}
-                >
-                  M-Pesa
-                </Text>
-              </TouchableOpacity>
+            {/* Contribution Type Selection */}
+            <ContributionTypeSelector
+              contributionType={contributionType}
+              selectedMerryGoRound={selectedMerryGoRound}
+              selectedWelfare={selectedWelfare}
+              merryGoRounds={merryGoRounds}
+              welfareContributions={welfareContributions}
+              loadingContributionOptions={loadingContributionOptions}
+              showContributionTypeDropdown={showContributionTypeDropdown}
+              showMerryGoRoundDropdown={showMerryGoRoundDropdown}
+              showWelfareDropdown={showWelfareDropdown}
+              onContributionTypeChange={handleContributionTypeChange}
+              onMerryGoRoundSelect={handleMerryGoRoundSelect}
+              onWelfareSelect={handleWelfareSelect}
+              onToggleContributionType={() => setShowContributionTypeDropdown(!showContributionTypeDropdown)}
+              onToggleMerryGoRound={() => setShowMerryGoRoundDropdown(!showMerryGoRoundDropdown)}
+              onToggleWelfare={() => setShowWelfareDropdown(!showWelfareDropdown)}
+              formatCurrency={formatCurrency}
+            />
 
-              {/* Pay for Someone Payment Method */}
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethodOption,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: paymentMethod === 'pay_for' ? colors.primary : colors.border,
-                    borderWidth: paymentMethod === 'pay_for' ? 2 : 1,
-                  }
-                ]}
-                onPress={() => setPaymentMethod('pay_for')}
-              >
-                <Ionicons
-                  name="people"
-                  size={20}
-                  color={paymentMethod === 'pay_for' ? colors.primary : colors.text}
-                />
-                <Text
-                  style={[
-                    styles.paymentMethodText,
-                    { color: paymentMethod === 'pay_for' ? colors.primary : colors.text }
-                  ]}
-                >
-                  Pay for Someone
-                </Text>
-                <Text
-                  style={[
-                    styles.paymentMethodSubtext,
-                    { color: colors.textSecondary }
-                  ]}
-                >
-                  Select a member to pay for
-                </Text>
-              </TouchableOpacity>
-            </View>
-            </View>
- 
-             {/* Member Listing Section for Pay for Someone Contributions */}
-             {paymentMethod === 'pay_for' && (
-              <View style={styles.memberListingSection}>
-                <View style={styles.memberListingHeader}>
-                  <Text style={[styles.memberListingTitle, { color: colors.text }]}>
-                    {contributionType === 'merry-go-round'
-                      ? `Select ${roundName || 'Merry-Go-Round'} Participant`
-                      : `Select Member to Pay For`
-                    }
-                  </Text>
-                  <Text style={[styles.memberListingSubtitle, { color: colors.textSecondary }]}>
-                    {contributionType === 'merry-go-round'
-                      ? `Only members of this merry-go-round circle can be paid for`
-                      : `Choose the member you want to pay for. The amount will be deducted from your wallet.`
-                    }
-                  </Text>
-                </View>
- 
-                 {chamaMembers.length > 0 ? (
-                   <View style={styles.memberPickerContainer}>
-                     <View style={styles.memberSearchContainer}>
-                       <Ionicons name="search" size={16} color={colors.textSecondary} />
-                       <TextInput
-                         style={styles.memberSearchInput}
-                         placeholder="Search members..."
-                         placeholderTextColor={colors.textSecondary}
-                         value={memberSearchQuery}
-                         onChangeText={setMemberSearchQuery}
-                       />
-                       {memberSearchQuery ? (
-                         <TouchableOpacity onPress={() => setMemberSearchQuery('')}>
-                           <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
-                         </TouchableOpacity>
-                       ) : null}
-                     </View>
-                     <ScrollView
-                       nestedScrollEnabled
-                       showsVerticalScrollIndicator={false}
-                       style={styles.memberGridScroll}
-                       contentContainerStyle={styles.memberGridContent}
-                     >
-                       {chamaMembers
-                         .filter(member => {
-                           const name = getMemberName(member).toLowerCase();
-                           return !memberSearchQuery || name.includes(memberSearchQuery.toLowerCase());
-                         })
-                         .map((member) => (
-                           <View key={member.id} style={styles.memberChipWrapper}>
-                             {renderMemberCard({ item: member })}
-                           </View>
-                         ))}
-                     </ScrollView>
-                   </View>
-                 ) : (
-                  <View style={[styles.noMembersContainer, { backgroundColor: colors.surface }]}>
-                    <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
-                    <Text style={[styles.noMembersText, { color: colors.textSecondary }]}>
-                      {contributionType === 'merry-go-round'
-                        ? `No participants in ${roundName || 'this merry-go-round'}`
-                        : 'No members available for selection'
-                      }
-                    </Text>
-                    <Text style={[styles.noMembersSubtext, { color: colors.textTertiary }]}>
-                      {contributionType === 'merry-go-round'
-                        ? 'Only circle participants can make contributions'
-                        : 'Members will appear here once loaded'
-                      }
-                    </Text>
-                  </View>
-                )}
-              </View>
+            {/* Payment Method Selection */}
+            <PaymentMethodSelector
+              paymentMethod={paymentMethod}
+              walletBalance={walletBalance}
+              amount={amount}
+              setPaymentMethod={setPaymentMethod}
+              formatCurrency={formatCurrency}
+            />
+
+            {/* Member Listing Section for Pay for Someone Contributions */}
+            {paymentMethod === 'pay_for' && (
+              <MemberListingSection
+                chamaMembers={chamaMembers}
+                selectedContributor={selectedContributor}
+                memberSearchQuery={memberSearchQuery}
+                setMemberSearchQuery={setMemberSearchQuery}
+                contributionType={contributionType}
+                roundName={roundName}
+                setSelectedContributor={setSelectedContributor}
+                getMemberName={getMemberName}
+                renderMemberAvatar={renderMemberAvatar}
+                validateMemberSelection={validateMemberSelection}
+              />
             )}
- 
+
             {/* M-Pesa Phone Number Display */}
             {paymentMethod === 'mpesa' && (
-            <View style={styles.phoneNumberContainer}>
-              <Text style={[styles.phoneNumberLabel, { color: colors.text }]}>
-                M-Pesa Phone Number
-              </Text>
-              <View style={[styles.phoneNumberDisplay, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="call" size={20} color={colors.textSecondary} style={styles.phoneIcon} />
-                <Text style={[styles.phoneNumberText, { color: colors.text }]}>
-                  {user?.phone || 'No phone number registered'}
-                </Text>
-                <View style={[styles.readOnlyBadge, { borderColor: colors.primary, backgroundColor: 'transparent' }]}>
-                  <Text style={[styles.readOnlyText, { color: colors.primary }]}>
-                    Registered
+              <PhoneNumberDisplay user={user} />
+            )}
+
+{/* Pay for Someone Notice */}
+            {paymentMethod === 'pay_for' && (
+              <View style={styles.cashContributionContainer}>
+                <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
+                  <Ionicons name="information-circle" size={20} color={colors.warning} />
+                  <Text style={[styles.cashNoticeText, { color: colors.text }]}>
+                    You are paying for a member. The amount will be deducted from your VaultKe wallet and the selected member will appear to have paid.
                   </Text>
                 </View>
               </View>
-              <Text style={[styles.phoneNumberHint, { color: colors.textSecondary }]}>
-                You will receive the M-Pesa prompt on this number
-              </Text>
-            </View>
-          )}
+            )}
 
-           {/* Pay for Someone Notice */}
-           {paymentMethod === 'pay_for' && (
-             <View style={styles.cashContributionContainer}>
+            <Input
+              label="Amount (KES)"
+              value={amount}
+              onChangeText={
+                contributionType === 'merry-go-round' 
+                  ? undefined 
+                  : setAmount
+              }
+              placeholder={
+                contributionType === 'merry-go-round'
+                  ? (selectedMerryGoRound 
+                      ? "Amount set automatically from cycle"
+                      : "Select a merry-go-round cycle first")
+                  : contributionType === 'welfare' && selectedWelfare
+                    ? "Amount from selected welfare"
+                    : "Enter contribution amount"
+              }
+              keyboardType="numeric"
+              leftIcon="wallet"
+              editable={contributionType !== 'merry-go-round'}
+              style={contributionType === 'merry-go-round' ? { backgroundColor: colors.surface + '80' } : undefined}
+            />
 
-               <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
-                 <Ionicons name="information-circle" size={20} color={colors.warning} />
-                 <Text style={[styles.cashNoticeText, { color: colors.text }]}>
-                   You are paying for a member. The amount will be deducted from your VaultKe wallet and the selected member will appear to have paid.
-                 </Text>
-               </View>
-             </View>
-           )}
+            {/* Real-time validation for wallet payments */}
+            {paymentMethod === 'wallet' && amount && (
+              <ValidationMessage
+                amount={amount}
+                walletBalance={walletBalance}
+                formatCurrency={formatCurrency}
+              />
+            )}
 
-          <Input
-            label="Amount (KES)"
-            value={amount}
-            onChangeText={contributionType === 'merry-go-round' ? undefined : setAmount}
-            placeholder={
-              contributionType === 'merry-go-round'
-                ? (amount && amount !== '0' ? "Amount set automatically" : "Loading amount...")
-                : "Enter contribution amount"
-            }
-            keyboardType="numeric"
-            leftIcon="wallet"
-            editable={contributionType !== 'merry-go-round'}
-            style={contributionType === 'merry-go-round' ? { backgroundColor: colors.surface + '80' } : undefined}
-          />
+            <Input
+              label="Description (Optional)"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Add a note for this contribution..."
+              multiline
+              numberOfLines={3}
+              leftIcon="document-text"
+            />
 
-          {/* Real-time validation for wallet payments */}
-          {paymentMethod === 'wallet' && amount && (
-            <View style={styles.validationContainer}>
-              {parseFloat(amount) > walletBalance ? (
-                <View style={styles.validationMessage}>
-                  <Ionicons name="warning" size={16} color={colors.error} />
-                  <Text style={[styles.validationText, { color: colors.error }]}>
-                    Insufficient balance. You need KES {formatCurrency(parseFloat(amount) - walletBalance)} more.
-                  </Text>
-                </View>
-              ) : walletBalance <= 0 ? (
-                <View style={styles.validationMessage}>
-                  <Ionicons name="alert-circle" size={16} color={colors.error} />
-                  <Text style={[styles.validationText, { color: colors.error }]}>
-                    Your wallet balance is KES 0.00. Please deposit money first.
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.validationMessage}>
-                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                  <Text style={[styles.validationText, { color: colors.success }]}>
-                    Sufficient balance. Remaining: KES {formatCurrency(walletBalance - parseFloat(amount))}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
+            {/* Anonymous Contribution Option - Only for Contribution Groups, not for Merry-Go-Round */}
+            {chama?.category === 'contribution' && contributionType !== 'merry-go-round' && (
+              <AnonymousContribution
+                isAnonymous={isAnonymous}
+                setIsAnonymous={setIsAnonymous}
+              />
+            )}
 
-          <Input
-            label="Description (Optional)"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Add a note for this contribution..."
-            multiline
-            numberOfLines={3}
-            leftIcon="document-text"
-          />
-
-          {/* Anonymous Contribution Option - Only for Contribution Groups, not for Merry-Go-Round */}
-          {chama?.category === 'contribution' && contributionType !== 'merry-go-round' && (
-            <View style={styles.anonymousContainer}>
-              <TouchableOpacity
-                style={styles.anonymousOption}
-                onPress={() => setIsAnonymous(!isAnonymous)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.anonymousCheckbox}>
-                  <Ionicons
-                    name={isAnonymous ? 'checkbox' : 'square-outline'}
-                    size={24}
-                    color={isAnonymous ? colors.primary : colors.textSecondary}
-                  />
-                </View>
-                <View style={styles.anonymousTextContainer}>
-                  <Text style={[styles.anonymousLabel, { color: colors.text }]}>
-                    Contribute Anonymously
-                  </Text>
-                  <Text style={[styles.anonymousDescription, { color: colors.textSecondary }]}>
-                    Your name will not be shown in the transaction history
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {isAnonymous && (
-                <View style={styles.anonymousNotice}>
-                  <Ionicons name="information-circle" size={16} color={colors.info} />
-                  <Text style={[styles.anonymousNoticeText, { color: colors.info }]}>
-                    This contribution will appear as "Anonymous" in all transaction records
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Merry-Go-Round Restrictions Notice */}
-          {contributionType === 'merry-go-round' && (
-            <View style={[styles.anonymousContainer, { backgroundColor: colors.warning + '10', borderColor: colors.warning }]}>
-              <View style={styles.anonymousOption}>
-                <View style={styles.anonymousCheckbox}>
-                  <Ionicons
-                    name="information-circle"
-                    size={24}
-                    color={colors.warning}
-                  />
-                </View>
-                <View style={styles.anonymousTextContainer}>
-                  <Text style={[styles.anonymousLabel, { color: colors.text }]}>
-                    Merry-Go-Round Rules
-                  </Text>
-                  <Text style={[styles.anonymousDescription, { color: colors.textSecondary }]}>
-                    • Exact amount required: {contributionStatus?.amountPerRound || currentRecipient?.amountPerRound || amountPerRound || 'Loading...'} KES{'\n'}
-                    • Only wallet and M-Pesa payments allowed{'\n'}
-                    • Anonymous contributions not permitted{'\n'}
-                    • Each member can contribute only once per round{'\n'}
-                    • Round advances automatically when all members contribute
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
+            {/* Merry-Go-Round Restrictions Notice */}
+            {contributionType === 'merry-go-round' && (
+              <MerryGoRoundRules
+                contributionStatus={contributionStatus}
+                currentRecipient={currentRecipient}
+                amountPerRound={amountPerRound}
+              />
+            )}
 
           <View style={styles.summaryContainer}>
             <View style={styles.summaryRow}>
@@ -1813,17 +1620,19 @@ const handleMpesaContribution = async (cleanChamaId) => {
             </View>
           </View>
 
-          <Button
+<Button
             title={
               contributionType === 'merry-go-round' && contributionStatus?.hasContributed
                 ? "✅ You have already contributed!"
                 : contributionType === 'merry-go-round'
-                  ? (!amount || amount === '0')
-                    ? (amountPerRound && amountPerRound > 0)
-                      ? `Contribute ${formatCurrency(amountPerRound)}`
+                  ? !selectedMerryGoRound
+                    ? "Select a merry-go-round cycle first"
+                    : amount && amount !== '0'
+                      ? `Contribute ${formatCurrency(parseFloat(amount))}`
                       : "Loading Contribution Details..."
-                    : `Contribute ${formatCurrency(parseFloat(amount))}`
-                  : "Make Contribution"
+                  : contributionType === 'welfare' && !selectedWelfare
+                    ? "Select a welfare contribution first"
+                    : "Make Contribution"
             }
             onPress={handleContribute}
             loading={loading}
@@ -1831,7 +1640,8 @@ const handleMpesaContribution = async (cleanChamaId) => {
               !amount ||
               parseFloat(amount) <= 0 ||
               (contributionType === 'merry-go-round' && contributionStatus?.hasContributed) ||
-              (contributionType === 'merry-go-round' && (!amount || amount === '0') && !(amountPerRound && amountPerRound > 0))
+              (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
+              (contributionType === 'welfare' && !selectedWelfare)
             }
             variant="outline"
             style={styles.contributeButton}
@@ -1840,170 +1650,41 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 name={
                   contributionType === 'merry-go-round' && contributionStatus?.hasContributed
                     ? "checkmark-circle"
-                    : contributionType === 'merry-go-round' && (!amount || amount === '0') && !(amountPerRound && amountPerRound > 0)
+                    : contributionType === 'merry-go-round' && !selectedMerryGoRound
                       ? "time"
-                      : "add-circle"
+                      : contributionType === 'welfare' && !selectedWelfare
+                        ? "time"
+                        : "add-circle"
                 }
                 size={20}
                 color={
                   !amount || parseFloat(amount) <= 0 ||
                   (contributionType === 'merry-go-round' && contributionStatus?.hasContributed) ||
-                  (contributionType === 'merry-go-round' && (!amount || amount === '0') && !(amountPerRound && amountPerRound > 0))
+                  (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
+                  (contributionType === 'welfare' && !selectedWelfare)
                     ? colors.textSecondary
                     : colors.primary
                 }
               />
             }
           />
-        </Card>
+</Card>
       </ScrollView>
 
-
       {/* Payment Confirmation Modal */}
-      <Modal
+      <PaymentConfirmationModal
         visible={showPaymentModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowPaymentModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Confirm Contribution
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowPaymentModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.confirmationRow}>
-                <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                  Amount:
-                </Text>
-                <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                  {formatCurrency(parseFloat(amount || 0))}
-                </Text>
-              </View>
-
-              <View style={styles.confirmationRow}>
-                <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                  Payment Method:
-                </Text>
-                <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                {paymentMethod === 'wallet' ? 'VaultKe Wallet' :
-                 paymentMethod === 'mpesa' ? 'M-Pesa' :
-                 paymentMethod === 'pay_for' ? 'Pay for Someone' : 'Unknown'}
-                </Text>
-              </View>
-
-              {paymentMethod === 'wallet' && (
-                <View style={styles.confirmationRow}>
-                  <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                    Wallet Balance:
-                  </Text>
-                  <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                    {formatCurrency(walletBalance)}
-                  </Text>
-                </View>
-              )}
-
-              {paymentMethod === 'mpesa' && (
-                <View style={styles.confirmationRow}>
-                  <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                    M-Pesa Number:
-                  </Text>
-                  <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                    {user?.phone || 'Not available'}
-                  </Text>
-                </View>
-              )}
-
-              {paymentMethod === 'pay_for' && (
-                <>
-                  <View style={styles.confirmationRow}>
-                    <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                      Paying For:
-                    </Text>
-                    <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                      {selectedContributor?.fullName || 'Not selected'}
-                    </Text>
-                  </View>
-
-                  <View style={styles.confirmationRow}>
-                    <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                      Your Wallet Balance:
-                    </Text>
-                    <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                      {formatCurrency(walletBalance)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.confirmationRow}>
-                    <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                      After Payment:
-                    </Text>
-                    <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                      {formatCurrency(Math.max(0, walletBalance - parseFloat(amount || 0)))}
-                    </Text>
-                  </View>
-
-                  <View style={[styles.cashConfirmationNotice, { backgroundColor: colors.info + '20', borderColor: colors.info }]}>
-                    <Ionicons name="information-circle" size={16} color={colors.info} />
-                    <Text style={[styles.cashConfirmationNoticeText, { color: colors.text }]}>
-                      KES {formatCurrency(parseFloat(amount || 0))} will be deducted from your wallet. {selectedContributor?.fullName || 'The selected member'} will appear to have paid this amount.
-                    </Text>
-                  </View>
-                </>
-              )}
-
-              <View style={styles.confirmationRow}>
-                <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                  Contributing to:
-                </Text>
-                <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                  {chama?.name}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setShowPaymentModal(false)}
-                style={styles.modalCancelButton}
-              />
-              <Button
-                title={
-                  paymentMethod === 'wallet' ? 'Confirm Transfer' :
-                  paymentMethod === 'mpesa' ? 'Pay with M-Pesa' :
-                  paymentMethod === 'pay_for' ? 'Confirm Payment for Member' : 'Confirm'
-                }
-                onPress={confirmContribution}
-                loading={loading}
-                variant="outline"
-                style={styles.modalConfirmButton}
-                icon={
-                  <Ionicons
-                    name={
-                      paymentMethod === 'wallet' ? 'wallet' :
-                      paymentMethod === 'mpesa' ? 'phone-portrait' :
-                      paymentMethod === 'pay_for' ? 'people' : 'checkmark'
-                    }
-                    size={20}
-                    color={colors.primary}
-                  />
-                }
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowPaymentModal(false)}
+        amount={amount}
+        paymentMethod={paymentMethod}
+        walletBalance={walletBalance}
+        selectedContributor={selectedContributor}
+        chama={chama}
+        user={user}
+        loading={loading}
+        onConfirm={confirmContribution}
+        formatCurrency={formatCurrency}
+      />
     </SafeAreaView>
   );
 };
@@ -2101,221 +1782,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     ...shadows.sm,
   },
-  // Payment Method Styles
-  paymentMethodContainer: {
-    marginBottom: spacing.lg,
-  },
-  paymentMethodLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.sm,
-  },
-  paymentMethodOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  paymentMethodOption: {
-    width: '48%', // Two columns layout
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    minHeight: 85,
-    justifyContent: 'center',
-    ...shadows.sm,
-  },
-  paymentMethodText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
-  paymentMethodBalance: {
-    fontSize: typography.fontSize.xs,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  walletBalanceContainer: {
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  balanceWarning: {
-    fontSize: typography.fontSize.xs,
-    marginTop: 2,
-    textAlign: 'center',
-    fontWeight: typography.fontWeight.medium,
-  },
-  // Validation Styles
-  validationContainer: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  validationMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  validationText: {
-    fontSize: typography.fontSize.sm,
-    marginLeft: spacing.xs,
-    flex: 1,
-  },
-  // Phone Number Display Styles
-  phoneNumberContainer: {
-    marginBottom: spacing.lg,
-  },
-  phoneNumberLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.sm,
-  },
-  phoneNumberDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    marginBottom: spacing.xs,
-  },
-  phoneIcon: {
-    marginRight: spacing.sm,
-  },
-  phoneNumberText: {
-    fontSize: typography.fontSize.base,
-    flex: 1,
-  },
-  readOnlyBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-  },
-  readOnlyText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
-  },
-  phoneNumberHint: {
-    fontSize: typography.fontSize.sm,
-    fontStyle: 'italic',
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: borderRadius.lg,
-    ...shadows.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  modalTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-  },
-  modalCloseButton: {
-    padding: spacing.xs,
-  },
-  modalBody: {
-    padding: spacing.lg,
-  },
-  confirmationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  confirmationLabel: {
-    fontSize: typography.fontSize.sm,
-    flex: 1,
-  },
-  confirmationValue: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    flex: 1,
-    textAlign: 'right',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalCancelButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    marginRight: spacing.xs,
-  },
-  modalConfirmButton: {
-    flex: 2,
-    minHeight: 48,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    marginLeft: spacing.xs,
-  },
-  // Anonymous contribution styles
-  anonymousContainer: {
-    marginVertical: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    backgroundColor: 'rgba(0, 0, 0, 0.02)',
-  },
-  anonymousOption: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm,
-  },
-  anonymousCheckbox: {
-    marginRight: spacing.md,
-    marginTop: 2, // Align with text
-  },
-  anonymousTextContainer: {
-    flex: 1,
-  },
-  anonymousLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs,
-  },
-  anonymousDescription: {
-    fontSize: typography.fontSize.sm,
-    lineHeight: 18,
-  },
-  anonymousNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)', // Light blue background
-    marginTop: spacing.sm,
-  },
-  anonymousNoticeText: {
-    fontSize: typography.fontSize.sm,
-    marginLeft: spacing.sm,
-    flex: 1,
-    lineHeight: 18,
-  },
-  // Cash Contribution Styles
+  // Cash Contribution Styles (kept for Pay for Someone Notice)
   paymentMethodSubtext: {
     fontSize: typography.fontSize.xs,
     marginTop: spacing.xs,
@@ -2324,46 +1791,6 @@ const styles = StyleSheet.create({
   cashContributionContainer: {
     marginBottom: spacing.lg,
   },
-  memberSelectionContainer: {
-    marginBottom: spacing.lg,
-  },
-  memberSelectionLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.sm,
-  },
-  memberSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    minHeight: 60,
-  },
-  selectedMemberInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  selectedMemberName: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
-  selectedMemberRole: {
-    fontSize: typography.fontSize.sm,
-    marginLeft: spacing.sm,
-  },
-  memberSelectorPlaceholder: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  memberSelectorText: {
-    fontSize: typography.fontSize.base,
-    marginLeft: spacing.sm,
-  },
-
   cashNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2377,391 +1804,19 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-  // Member Search Modal Styles
-  memberSearchModal: {
-    flex: 1,
-    marginTop: 50,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    ...shadows.lg,
-  },
-  searchContainer: {
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-  },
-  searchInput: {
-    marginBottom: 0,
-  },
-  membersList: {
-    flex: 1,
-    padding: spacing.lg,
-  },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.sm,
-    ...shadows.sm,
-  },
-  memberInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  // Member Avatar Styles (used in renderMemberAvatar)
   memberAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  memberInitials: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-  },
-  memberDetails: {
-    marginLeft: spacing.md,
-    flex: 1,
-  },
-  memberName: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-  },
-  memberEmail: {
-    fontSize: typography.fontSize.sm,
-    marginTop: spacing.xs,
-  },
-  memberMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  memberRole: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
-    marginRight: spacing.md,
-  },
-  memberContributions: {
-    fontSize: typography.fontSize.xs,
-  },
-  noMembersFound: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  noMembersText: {
-    fontSize: typography.fontSize.base,
-    marginTop: spacing.md,
-    textAlign: 'center',
-  },
-  // Cash confirmation modal styles
-  cashConfirmationNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    marginTop: spacing.sm,
-  },
-  cashConfirmationNoticeText: {
-    fontSize: typography.fontSize.sm,
-    marginLeft: spacing.sm,
-    flex: 1,
-    lineHeight: 18,
-  },
-  // Recipient Info Styles for Merry-Go-Round
-  recipientInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  recipientIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  recipientDetails: {
-    flex: 1,
-  },
-  recipientLabel: {
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.xs,
-  },
-  recipientName: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
-  },
-  recipientPosition: {
-    fontSize: typography.fontSize.sm,
-  },
-  // Real-time Status Styles
-  statusContainer: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  statusLabel: {
-    fontSize: typography.fontSize.sm,
-    flex: 1,
-  },
-  statusIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  statusText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginLeft: spacing.xs,
-  },
-  progressContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  progressText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs,
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 3,
-    width: 80,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  roundCompleteNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    marginTop: spacing.sm,
-  },
-  roundCompleteText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
-  // Contribution Status Banner Styles
-  contributionStatusBanner: {
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  statusBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusBannerText: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  statusBannerTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.xs,
-  },
-  statusBannerSubtitle: {
-    fontSize: typography.fontSize.sm,
-    lineHeight: 16,
-  },
-  // Member Listing Section Styles
-  memberListingSection: {
-    marginTop: spacing.xxxl,
-    marginBottom: spacing.lg,
-  },
-  memberListingHeader: {
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.xs,
-  },
-  memberListingTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
-  },
-  memberListingSubtitle: {
-    fontSize: typography.fontSize.sm,
-  },
-  memberListContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  memberPickerContainer: {
-    maxHeight: 320,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-  },
-  memberSearchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  memberSearchInput: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-  },
-  memberGridScroll: {
-    flex: 1,
-  },
-  memberGridContent: {
-    padding: spacing.sm,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  memberChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-    minWidth: 100,
-    flexShrink: 1,
-    overflow: 'hidden',
-  },
-  memberChipContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flexShrink: 1,
-  },
-  memberChipAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    flexShrink: 0,
-  },
-  memberChipName: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
-    flexShrink: 1,
-    numberOfLines: 1,
-  },
-  memberChipCheck: {
-    marginLeft: spacing.xs,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memberListCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    ...shadows.sm,
-    minHeight: 80, // Ensure consistent card height
-  },
-  memberListContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  memberListAvatar: {
-    marginRight: spacing.md,
-  },
-  memberAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
     overflow: 'hidden',
     backgroundColor: '#f0f0f0',
   },
   memberInitials: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
-  },
-  memberListInfo: {
-    flex: 1,
-  },
-  memberListName: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs,
-  },
-  memberListRole: {
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.xs,
-  },
-  memberListContributions: {
-    fontSize: typography.fontSize.xs,
-  },
-  selectedIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-  },
-  viewAllMembersButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    marginTop: spacing.sm,
-  },
-  viewAllMembersText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginRight: spacing.xs,
-  },
-  noMembersContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  noMembersText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    textAlign: 'center',
-  },
-  noMembersSubtext: {
-    fontSize: typography.fontSize.sm,
-    textAlign: 'center',
   },
 });
 
