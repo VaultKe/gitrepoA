@@ -144,7 +144,7 @@ const PaymentConfirmationModal = ({
               title={
                 paymentMethod === 'wallet' ? 'Confirm Transfer' :
                 paymentMethod === 'mpesa' ? 'Pay with M-Pesa' :
-                paymentMethod === 'pay_for' ? 'Confirm Payment for Member' : 'Confirm'
+                paymentMethod === 'pay_for' ? 'Confirm Payment' : 'Confirm'
               }
               onPress={onConfirm}
               loading={loading}

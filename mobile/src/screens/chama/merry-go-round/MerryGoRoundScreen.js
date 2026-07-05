@@ -304,6 +304,8 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
       const member = p.user || p;
       const hasContributed = p.has_contributed_this_cycle || p.has_contributed || (!roundComplete && position < currentPosition);
       const eligibleToContributeToAll = position <= currentPosition || roundComplete;
+      const isCurrentMember = user?.id && (p.user_id === user.id);
+      const paidToCurrent = hasContributed && !isCurrentMember;
       return {
         id: p.id || `${selectedRound.id}-${position}`,
         name: getMemberName(member),
@@ -312,6 +314,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
         contributed: hasContributed,
         amount: hasContributed ? amountPerRound : 0,
         eligibleToContributeToAll,
+        paidToCurrent,
       };
     });
   };
@@ -322,6 +325,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     let rows = getRowData();
 
     if (contributorFilter === 'contributed') rows = rows.filter(r => r.contributed);
+    if (contributorFilter === 'paid_to_current') rows = rows.filter(r => r.paidToCurrent);
     if (contributorFilter === 'pending') rows = rows.filter(r => !r.contributed);
     if (contributorSearch.trim()) {
       const q = contributorSearch.toLowerCase();
@@ -330,6 +334,16 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
 
     const totalContributed = rows.filter(r => r.contributed).length;
     const totalAmount = rows.filter(r => r.contributed).reduce((sum, r) => sum + r.amount, 0);
+    const totalPaidToCurrent = rows.filter(r => r.paidToCurrent).length;
+    const totalPaidToCurrentAmount = rows.filter(r => r.paidToCurrent).reduce((sum, r) => sum + r.amount, 0);
+
+    const getFilterSummary = () => {
+      if (contributorFilter === 'all') return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
+      if (contributorFilter === 'contributed') return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
+      if (contributorFilter === 'paid_to_current') return `${totalPaidToCurrent} paid to current recipient • ${formatCurrency(totalPaidToCurrentAmount)}`;
+      if (contributorFilter === 'pending') return `${rows.length} pending payments`;
+      return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
+    };
 
     const getPayoutDate = (row) => {
       if (!selectedRound) return '—';
@@ -348,8 +362,15 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
       <Card variant="outlined" style={styles.statsCard,{ borderRadius: 8, overflow: 'hidden' }}>
         <View style={styles.tableSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ minWidth: width - 32 }}>
-              <View style={styles.tableHeaderRow}>
+             <View style={{ minWidth: width - 32 }}>
+               {contributorFilter === 'paid_to_current' && (
+                 <View style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.success + '12', borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                   <Text style={{ fontSize: typography.fontSize.sm, color: colors.success, fontWeight: 'medium' }}>
+                     Showing members who have paid to the current recipient
+                   </Text>
+                 </View>
+               )}
+               <View style={styles.tableHeaderRow}>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 0.5 }]}>#</Text>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 3 }]}>Member</Text>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Status</Text>
@@ -395,7 +416,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
           </ScrollView>
           <View style={[styles.tableFooter, { borderTopColor: colors.border }]}>
             <Text style={[styles.tableFooterText, { color: colors.textSecondary }]}>
-              {totalContributed} paid • {formatCurrency(totalAmount)} raised
+              {getFilterSummary()}
             </Text>
           </View>
         </View>
@@ -621,14 +642,14 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
                 </View> 
 
                 <View style={styles.statsCard,{ flexDirection: 'row' }}>
-                  {['all', 'contributed', 'pending'].map(tab => (
+                  {['all', 'contributed', 'paid_to_current', 'pending'].map(tab => (
                     <TouchableOpacity
                       key={tab}
                       style={[styles.filterTab, { borderColor: contributorFilter === tab ? colors.primary : colors.border, backgroundColor: contributorFilter === tab ? colors.primary + '18' : colors.backgroundSecondary }]}
                       onPress={() => { setContributorFilter(tab); }}
                     >
                       <Text style={[styles.filterTabText, { color: contributorFilter === tab ? colors.primary : colors.textSecondary }]}>
-                        {tab === 'all' ? 'All' : tab === 'contributed' ? 'Paid' : 'Pending'}
+                        {tab === 'all' ? 'All' : tab === 'contributed' ? 'Paid' : tab === 'paid_to_current' ? 'Paid to Current' : 'Pending'}
                       </Text>
                     </TouchableOpacity>
                   ))}

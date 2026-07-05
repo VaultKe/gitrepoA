@@ -1620,10 +1620,10 @@ const handleMpesaContribution = async (cleanChamaId) => {
             </View>
           </View>
 
-          <Button
-title={
-               contributionType === 'merry-go-round' && contributionStatus?.hasContributed
-                 ? "✅ You have already contributed!"
+<Button
+            title={
+              contributionType === 'merry-go-round' && contributionStatus?.hasContributed
+                ? "✅ You have already contributed!"
                 : contributionType === 'merry-go-round'
                   ? !selectedMerryGoRound
                     ? "Select a merry-go-round cycle first"
