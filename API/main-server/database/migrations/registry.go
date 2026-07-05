@@ -51,5 +51,8 @@ func MigrateAll(db *sql.DB) error {
 	if err := MigrateReminders(db); err != nil {
 		return fmt.Errorf("reminders: %w", err)
 	}
+	if err := MigrateMerryGoRoundPayments(db); err != nil {
+		return fmt.Errorf("merry_go_round_payments: %w", err)
+	}
 	return nil
 }

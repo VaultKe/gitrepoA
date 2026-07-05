@@ -390,6 +390,13 @@ func MakeContribution(c *gin.Context) {
 			},
 		}
 
+		// Add merry-go-round specific metadata
+		if req.Type == "merry-go-round" {
+			transferTx.Metadata["merryGoRoundId"] = merryGoRoundID
+			transferTx.Metadata["roundNumber"] = currentRound
+			transferTx.Metadata["recipientId"] = currentRecipientID
+		}
+
 		processedTx, err := walletService.CreateTransaction(transferTx, userID.(string))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -616,6 +623,13 @@ func MakeContribution(c *gin.Context) {
 				"payerId":                  userID.(string),
 				"beneficiaryId":            req.ContributorID,
 			},
+		}
+
+		// Add merry-go-round specific metadata for cash contributions to merry-go-round
+		if req.Type == "merry-go-round" {
+			transferTx.Metadata["merryGoRoundId"] = merryGoRoundID
+			transferTx.Metadata["roundNumber"] = currentRound
+			transferTx.Metadata["recipientId"] = currentRecipientID
 		}
 
 		processedTx, err := walletService.CreateTransaction(transferTx, userID.(string))
