@@ -1,4 +1,5 @@
 import { makeRequest, makeRequestWithRetry } from './client';
+import { Platform } from 'react-native';
 import { getAllKeys } from '@react-native-async-storage/async-storage';
 
 const getProfile = async () => {
@@ -17,8 +18,6 @@ const updateProfile = async (profileData) => {
 };
 
 const updateProfileWithImage = async (profileData) => {
-  const { getAuthToken } = await import('./auth');
-  const token = await getAuthToken();
   const formData = new FormData();
   const imageUri = profileData.profile_image || profileData.avatar;
 
@@ -29,11 +28,18 @@ const updateProfileWithImage = async (profileData) => {
       const filename = imageUri.split('/').pop() || 'profile.jpg';
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
-      formData.append('profile_image', {
-        uri: imageUri,
-        name: filename,
-        type: type,
-      });
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        formData.append('profile_image', blob, filename);
+      } else {
+        formData.append('profile_image', {
+          uri: imageUri,
+          name: filename,
+          type: type,
+        });
+      }
     }
   }
 
@@ -43,25 +49,46 @@ const updateProfileWithImage = async (profileData) => {
     }
   });
 
-  const response = await fetch(`${(await import('./client')).API_BASE_URL}/users/profile`, {
+  return await makeRequest('/users/profile', {
     method: 'PUT',
-    headers: {
-      ...(token && { Authorization: `Bearer ${token}` }),
-    },
     body: formData,
   });
+};
 
-  const contentType = response.headers.get('content-type');
-  if (!contentType || !contentType.includes('application/json')) {
-    throw new Error('Server returned non-JSON response');
+const uploadAvatar = async (imageUri) => {
+  try {
+    const formData = new FormData();
+
+    if (imageUri) {
+      if (imageUri instanceof File) {
+        formData.append('avatar', imageUri, imageUri.name);
+      } else {
+        const filename = imageUri.split('/').pop() || 'profile.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+        if (Platform.OS === 'web') {
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          formData.append('avatar', blob, filename);
+        } else {
+          formData.append('avatar', {
+            uri: imageUri,
+            name: filename,
+            type: type,
+          });
+        }
+      }
+    }
+
+    return await makeRequest('/users/avatar', {
+      method: 'POST',
+      body: formData,
+    });
+  } catch (error) {
+    console.error('uploadAvatar error:', error);
+    throw error;
   }
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-  }
-
-  return data;
 };
 
 const getUsers = async (limit = 50, offset = 0, query = '') => {
@@ -296,6 +323,7 @@ const updateUserPaymentStatus = async (userId, hasPaid) => {
 export {
   getProfile,
   updateProfile,
+  uploadAvatar,
   getUsers,
   searchUsers,
   searchUserByCredentials,

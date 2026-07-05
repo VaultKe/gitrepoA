@@ -2,14 +2,20 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"vaultke-backend/internal/services"
 	"vaultke-backend/internal/utils"
 )
 
@@ -137,13 +143,206 @@ func UpdateProfile(c *gin.Context) {
 }
 
 func UploadAvatar(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	contentType := c.GetHeader("Content-Type")
+	if !strings.Contains(contentType, "multipart/form-data") {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Content-Type must be multipart/form-data",
+		})
+		return
+	}
+
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Failed to parse multipart form: " + err.Error(),
+		})
+		return
+	}
+
+	form := c.Request.MultipartForm
+	var fileHeader *multipart.FileHeader
+	for _, headers := range form.File {
+		if len(headers) > 0 {
+			fileHeader = headers[0]
+			break
+		}
+	}
+
+	if fileHeader == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "No file uploaded",
+		})
+		return
+	}
+
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/jpg":  true,
+		"image/png":  true,
+	}
+
+	fileType := fileHeader.Header.Get("Content-Type")
+	if !allowedTypes[fileType] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid file type. Only JPEG and PNG images are allowed",
+		})
+		return
+	}
+
+	if fileHeader.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "File too large. Maximum size is 5MB",
+		})
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	allowedExtensions := map[string]bool{".jpg": true, ".jpeg": true, ".png": true}
+	if !allowedExtensions[ext] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid file extension. Only .jpg and .png are allowed",
+		})
+		return
+	}
+
+	uploadDir := "./uploads/avatars"
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create upload directory",
+		})
+		return
+	}
+
+	filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), userID, ext)
+	dstPath := filepath.Join(uploadDir, filename)
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to open uploaded file",
+		})
+		return
+	}
+	defer src.Close()
+
+	tmpFile, err := os.CreateTemp("", "avatar_upload_*"+ext)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create temp file",
+		})
+		return
+	}
+	tmpFilePath := tmpFile.Name()
+
+	if _, err := io.Copy(tmpFile, src); err != nil {
+		os.Remove(tmpFilePath)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save uploaded file",
+		})
+		return
+	}
+	tmpFile.Close()
+
+	scanResult := services.ScanFileWithClamAV(tmpFilePath)
+	if services.IsClamAVAvailable() {
+		if scanResult.ScanError != nil {
+			os.Remove(tmpFilePath)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Virus scan failed: " + scanResult.ScanError.Error(),
+			})
+			return
+		}
+		if scanResult.Infected || !scanResult.IsClean {
+			os.Remove(tmpFilePath)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error":   "File rejected by security policy: malware detected",
+			})
+			return
+		}
+	} else {
+		log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tmpFilePath)
+	}
+
+	if err := os.Rename(tmpFilePath, dstPath); err != nil {
+		os.Remove(tmpFilePath)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to move uploaded file",
+		})
+		return
+	}
+
+	avatarURL := "/uploads/avatars/" + filename
+
+	var db interface{}
+	if val, exists := c.Get("db"); exists {
+		db = val
+	}
+
+	if db == nil {
+		os.Remove(dstPath)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	database, ok := db.(*sql.DB)
+	if !ok {
+		os.Remove(dstPath)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Invalid database connection",
+		})
+		return
+	}
+
+	_, err = database.Exec(
+		"UPDATE users SET avatar = $1, updated_at = NOW() WHERE id = $2",
+		avatarURL, userID,
+	)
+	if err != nil {
+		os.Remove(dstPath)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update avatar in database: " + err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Upload avatar endpoint - coming soon",
+		"message": "Avatar uploaded successfully",
+		"data": map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":     userID,
+				"avatar": avatarURL,
+			},
+		},
 	})
 }
 
-// OnboardUser creates a new user during chama member onboarding
 func OnboardUser(c *gin.Context) {
 	userID := c.GetString("userID")
 	if userID == "" {

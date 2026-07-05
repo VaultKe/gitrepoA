@@ -38,6 +38,7 @@ const ApiService = {
   storeUserData,
   getDeviceInfo,
   getApiBaseUrl: () => API_BASE_URL,
+  baseURL: API_BASE_URL,
 };
 
 export default ApiService;

@@ -60,6 +60,17 @@ const ProfileScreen = ({ navigation }) => {
     county.toLowerCase().includes(countySearch.toLowerCase())
   );
 
+  const resolveAvatarUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    if (url.startsWith('/')) {
+      const base = apiService.baseURL || '';
+      const origin = base.replace(/\/+$/, '').replace(/\/api\/v\d+$/, '');
+      return `${origin}${url}`;
+    }
+    return `${apiService.baseURL}/${url}`;
+  };
+
   const selectCounty = (county) => {
     setProfileData(prev => ({
       ...prev,
@@ -124,7 +135,7 @@ const ProfileScreen = ({ navigation }) => {
       });
 
       if (userData.avatar && userData.avatar !== 'avatar://cached-base64-image') {
-        setProfileImage(userData.avatar.startsWith('http') ? userData.avatar : `${apiService.baseURL}/${userData.avatar.startsWith('/') ? '' : '/'}${userData.avatar}`);
+        setProfileImage(resolveAvatarUrl(userData.avatar));
       }
     }
   };
@@ -147,26 +158,14 @@ const ProfileScreen = ({ navigation }) => {
         const userData = response.data.User || response.data.user || response.data;
         await updateUser(userData);
 
-        // Set profile image with proper URL handling
-        const avatarUrl = userData.avatar || userData.profile_image;
-        if (avatarUrl) {
-          let fullAvatarUrl;
-
-          // Check if it's already a complete URL (http/https) or data URL
-          if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
-            fullAvatarUrl = avatarUrl;
-          } else if (avatarUrl.includes('base64') || avatarUrl.includes('data:')) {
-            fullAvatarUrl = avatarUrl;
-          } else if (apiService.baseURL) {
-            // If it's a relative path, make it absolute
-            fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+          // Set profile image with proper URL handling
+          const avatarUrl = userData.avatar || userData.profile_image;
+          if (avatarUrl) {
+            let fullAvatarUrl = resolveAvatarUrl(avatarUrl);
+            setProfileImage(fullAvatarUrl);
           } else {
-            fullAvatarUrl = avatarUrl;
+             setProfileImage(null);
           }
-          setProfileImage(fullAvatarUrl);
-        } else {
-           setProfileImage(null);
-        }
       } else {
         console.warn('Failed to fetch profile data:', response.error);
       }
@@ -195,17 +194,7 @@ const ProfileScreen = ({ navigation }) => {
     // Handle profile image URL - check user context first, then preserve existing component state
     const avatarUrl = user?.avatar || user?.profile_image;
     if (avatarUrl && avatarUrl !== 'avatar://cached-base64-image') {
-      let fullAvatarUrl;
-
-      if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
-        fullAvatarUrl = avatarUrl;
-      } else if (avatarUrl.includes('base64') || avatarUrl.includes('data:')) {
-        fullAvatarUrl = avatarUrl;
-      } else if (apiService.baseURL) {
-        fullAvatarUrl = `${apiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
-      } else {
-        fullAvatarUrl = avatarUrl;
-      }
+      let fullAvatarUrl = resolveAvatarUrl(avatarUrl);
       setProfileImage(fullAvatarUrl);
     } else if (avatarUrl === 'avatar://cached-base64-image') {
       setProfileImage(null);
@@ -263,6 +252,27 @@ const ProfileScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
+      const hasImage = profileImage && (
+        profileImage.startsWith('file://') ||
+        profileImage.startsWith('blob:') ||
+        profileImage.includes('ImagePicker')
+      );
+
+      // Upload avatar first using dedicated endpoint if there's a new image
+      let avatarResponse = null;
+      if (hasImage) {
+        try {
+          avatarResponse = await apiService.uploadAvatar(profileImage);
+          if (!avatarResponse?.success) {
+            throw new Error(avatarResponse?.error || 'Failed to upload avatar');
+          }
+        } catch (avatarError) {
+          console.error('Avatar upload failed:', avatarError);
+          Alert.alert('Avatar Upload Failed', avatarError.message || 'Could not upload profile picture. Text fields will still be saved.');
+        }
+      }
+
+      // Build update payload for text fields only
       const updateData = {
         firstName: profileData.firstName,
         lastName: profileData.lastName,
@@ -278,100 +288,61 @@ const ProfileScreen = ({ navigation }) => {
         ...(profileData.gender && profileData.gender.trim() !== '' && {
           gender: profileData.gender
         }),
-        profile_image: profileImage,
       };
 
-      try {
-        const response = await apiService.updateProfile(updateData);
-        if (response.success) {
-          const updatedUserData = response.data?.user || response.data;
-          await updateUser(updatedUserData);
+      const response = await apiService.updateProfile(updateData);
+      if (response.success) {
+        const userData = response.Data?.User || response.data?.User || response.data?.user || response.Data || response.data;
+        await updateUser(userData);
 
-          setProfileData(prevData => ({
-            ...prevData,
-            firstName: updatedUserData.firstName || prevData.firstName,
-            lastName: updatedUserData.lastName || prevData.lastName,
-            idNumber: updatedUserData.idNumber || prevData.idNumber,
-            phone: updatedUserData.phone || prevData.phone,
-            county: updatedUserData.county || prevData.county,
-            town: updatedUserData.town || prevData.town,
-            bio: updatedUserData.bio || prevData.bio,
-            occupation: updatedUserData.occupation || prevData.occupation,
-            dateOfBirth: updatedUserData.dateOfBirth || prevData.dateOfBirth,
-            gender: updatedUserData.gender || prevData.gender,
-          }));
+        // Merge avatar upload response into user data if we uploaded separately
+        const finalUserData = avatarResponse?.data?.user || userData;
 
-          setTimeout(() => {
-            if (updatedUserData) {
-              setProfileData(prevData => ({
-                ...prevData,
-                firstName: updatedUserData.firstName || prevData.firstName,
-                lastName: updatedUserData.lastName || prevData.lastName,
-                idNumber: updatedUserData.idNumber || prevData.idNumber,
-                phone: updatedUserData.phone || prevData.phone,
-                county: updatedUserData.county || prevData.county,
-                town: updatedUserData.town || prevData.town,
-                bio: updatedUserData.bio || prevData.bio,
-                occupation: updatedUserData.occupation || prevData.occupation,
-                dateOfBirth: updatedUserData.dateOfBirth || prevData.dateOfBirth,
-                gender: updatedUserData.gender || prevData.gender,
-              }));
-            }
-          }, 100);
+        setProfileData(prevData => ({
+          ...prevData,
+          firstName: finalUserData.firstName || prevData.firstName,
+          lastName: finalUserData.lastName || prevData.lastName,
+          idNumber: finalUserData.idNumber || prevData.idNumber,
+          phone: finalUserData.phone || prevData.phone,
+          county: finalUserData.county || prevData.county,
+          town: finalUserData.town || prevData.town,
+          bio: finalUserData.bio || prevData.bio,
+          occupation: finalUserData.occupation || prevData.occupation,
+          dateOfBirth: finalUserData.dateOfBirth || prevData.dateOfBirth,
+          gender: finalUserData.gender || prevData.gender,
+        }));
 
-          const newAvatarUrl = updatedUserData?.avatar || updatedUserData?.profile_image;
+        setTimeout(() => {
+          if (finalUserData) {
+            setProfileData(prevData => ({
+              ...prevData,
+              firstName: finalUserData.firstName || prevData.firstName,
+              lastName: finalUserData.lastName || prevData.lastName,
+              idNumber: finalUserData.idNumber || prevData.idNumber,
+              phone: finalUserData.phone || prevData.phone,
+              county: finalUserData.county || prevData.county,
+              town: finalUserData.town || prevData.town,
+              bio: finalUserData.bio || prevData.bio,
+              occupation: finalUserData.occupation || prevData.occupation,
+              dateOfBirth: finalUserData.dateOfBirth || prevData.dateOfBirth,
+              gender: finalUserData.gender || prevData.gender,
+            }));
+          }
+        }, 100);
+
+          const newAvatarUrl = finalUserData?.avatar || finalUserData?.profile_image;
           if (newAvatarUrl) {
-            let fullAvatarUrl;
-            if (newAvatarUrl.startsWith('http') || newAvatarUrl.startsWith('data:') || newAvatarUrl.includes('base64')) {
-              fullAvatarUrl = newAvatarUrl;
-            } else if (apiService.baseURL) {
-              fullAvatarUrl = `${apiService.baseURL}${newAvatarUrl.startsWith('/') ? '' : '/'}${newAvatarUrl}`;
-            } else {
-              fullAvatarUrl = newAvatarUrl;
-            }
+            let fullAvatarUrl = resolveAvatarUrl(newAvatarUrl);
             setProfileImage(fullAvatarUrl);
           } else {
-            // If no new avatar URL, preserve the existing one
+            setProfileImage(null);
           }
-
-          setEditing(false);
-          Alert.alert('Success', 'Profile updated successfully');
-          return;
-        } else {
-          throw new Error(response.error || 'Failed to update profile');
-        }
-      } catch (apiError) {
-        console.warn('API profile update failed, using offline mode:', apiError);
-
-        // Fallback: Update locally for offline mode
-        const updatedUserData = {
-          ...user,
-          ...profileData,
-          avatar: profileImage,
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-        };
-
-        await updateUser(updatedUserData);
-
-        // Update offline users storage
-        try {
-          const existingUsers = await AsyncStorage.getItem('offlineUsers');
-          if (existingUsers) {
-            const users = JSON.parse(existingUsers);
-            const userIndex = users.findIndex(u => u.id === user.id || u.email === user.email);
-
-            if (userIndex !== -1) {
-              users[userIndex] = { ...users[userIndex], ...updatedUserData };
-              await AsyncStorage.setItem('offlineUsers', JSON.stringify(users));
-            }
-          }
-        } catch (storageError) {
-          console.warn('Failed to update offline users storage:', storageError);
-        }
 
         setEditing(false);
-        Alert.alert('Success', 'Profile updated successfully (Offline Mode)');
+        Alert.alert('Success', 'Profile updated successfully');
+        return;
+      } else {
+        throw new Error(response.error || response.Data?.Message || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Profile update failed:', error);

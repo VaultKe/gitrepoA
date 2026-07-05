@@ -42,12 +42,12 @@ const ContributeScreen = ({ route, navigation }) => {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [chamaLoading, setChamaLoading] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState('wallet'); // 'wallet' or 'mpesa'
+  const [paymentMethod, setPaymentMethod] = useState('wallet'); // 'wallet', 'mpesa', or 'pay_for'
   const [walletBalance, setWalletBalance] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contributions
 
-  // Cash contribution specific states
+  // Pay for someone contribution specific states
   const [chamaMembers, setChamaMembers] = useState([]);
   const [selectedContributor, setSelectedContributor] = useState(null);
   const [userRole, setUserRole] = useState(null);
@@ -90,7 +90,7 @@ const ContributeScreen = ({ route, navigation }) => {
     }, [contributionType, chamaId])
   );
 
-  // Load chama members for cash contributions (only for treasurers)
+  // Load chama members for pay for someone contributions (only for treasurers)
   const loadChamaMembers = async () => {
     try {
       // For merry-go-round contributions, load members from the merry-go-round circle
@@ -492,9 +492,9 @@ const ContributeScreen = ({ route, navigation }) => {
         Alert.alert('Phone Number Required', 'Your account does not have a valid phone number. Please update your profile to use M-Pesa payments.');
         return;
       }
-    } else if (paymentMethod === 'cash') {
+    } else if (paymentMethod === 'pay_for') {
       if (!selectedContributor) {
-        Alert.alert('Member Required', 'Please select the member who made this cash contribution.');
+        Alert.alert('Member Required', 'Please select the member you want to pay for.');
         return;
       }
     }
@@ -517,16 +517,16 @@ const ContributeScreen = ({ route, navigation }) => {
 
       if (paymentMethod === 'mpesa') {
         await handleMpesaContribution(cleanChamaId);
-      } else if (paymentMethod === 'cash') {
+      } else if (paymentMethod === 'pay_for') {
         if (!selectedContributor) {
           Alert.alert(
             'Member Required',
-            'Please select the member who made this cash contribution before proceeding.',
+            'Please select the member you want to pay for before proceeding.',
             [{ text: 'OK' }]
           );
           return;
         }
-        await handleCashContribution(cleanChamaId);
+        await handlePayForContribution(cleanChamaId);
       } else {
         await handleWalletContribution(cleanChamaId);
       }
@@ -873,9 +873,53 @@ const handleMpesaContribution = async (cleanChamaId) => {
     }
   };
 
-  const handleCashContribution = async (cleanChamaId) => {
+  const handlePayForContribution = async (cleanChamaId) => {
     if (!selectedContributor) {
-      throw new Error('Please select the member who made this contribution');
+      throw new Error('Please select the member you want to pay for');
+    }
+
+    const contributionAmount = parseFloat(amount);
+
+    // Check wallet balance - same logic as wallet contribution
+    if (walletBalance <= 0) {
+      Alert.alert(
+        'No Wallet Balance',
+        'Your VaultKe wallet balance is KES 0.00. Please deposit money into your wallet before paying for someone.',
+        [
+          {
+            text: 'Deposit Now',
+            onPress: () => {
+              navigation.navigate('WalletScreen', { tab: 'deposit' });
+            }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      );
+      return;
+    }
+
+    if (contributionAmount > walletBalance) {
+      const shortfall = contributionAmount - walletBalance;
+      Alert.alert(
+        'Insufficient Wallet Balance',
+        `Your VaultKe wallet balance is KES ${formatCurrency(walletBalance)}.\n\nYou need KES ${formatCurrency(shortfall)} more to pay KES ${formatCurrency(contributionAmount)} for ${selectedContributor.fullName}.`,
+        [
+          {
+            text: 'Deposit Money',
+            onPress: () => {
+              navigation.navigate('WalletScreen', { tab: 'deposit' });
+            }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      );
+      return;
     }
 
     const validContributionType = (() => {
@@ -885,13 +929,15 @@ const handleMpesaContribution = async (cleanChamaId) => {
 
     const contributionData = {
       chamaId: cleanChamaId,
-      amount: parseFloat(amount),
-      description: description || getDefaultDescription(),
+      amount: contributionAmount,
+      description: description || getContributionDescription(),
       type: validContributionType,
-      paymentMethod: paymentMethod,
+      paymentMethod: 'pay_for',
       contributorId: selectedContributor.id,
-      cashType: paymentMethod,
+      paidForBy: user.id,
       isAnonymous: false,
+      ...(roundId ? { roundId } : {}),
+      ...(proposalId ? { proposalId } : {}),
     };
 
     const response = await ApiService.makeRequest('/contributions', {
@@ -900,21 +946,35 @@ const handleMpesaContribution = async (cleanChamaId) => {
     });
 
     if (response.success) {
+      // Deduct from current user's wallet
+      await loadWalletBalance();
+      try {
+        await refreshSpecificData('wallet');
+      } catch {}
+
+      setTimeout(async () => {
+        try {
+          const balanceRes = await ApiService.getWalletBalance();
+          if (balanceRes.success && balanceRes.data?.balance !== undefined) {
+            setWalletBalance(balanceRes.data.balance);
+          }
+        } catch {}
+      }, 1500);
+
       const contributorName = selectedContributor.fullName;
-      const paymentTypeText = paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1);
 
       Toast.show({
         type: 'success',
-        text1: `${paymentTypeText} Contribution Recorded`,
-        text2: `${paymentTypeText} contribution by ${contributorName} recorded successfully`,
+        text1: 'Payment for Someone Successful!',
+        text2: `You paid KES ${formatCurrency(contributionAmount)} for ${contributorName}. KES ${formatCurrency(contributionAmount)} has been deducted from your wallet.`,
         position: 'top',
         visibilityTime: 4000,
         topOffset: 60,
       });
 
       Alert.alert(
-        'Contribution Recorded Successfully',
-        `${contributorName}'s ${paymentMethod} contribution of ${formatCurrency(parseFloat(amount))} has been recorded.`,
+        'Payment Recorded Successfully',
+        `You have paid KES ${formatCurrency(contributionAmount)} for ${contributorName}. The amount has been deducted from your VaultKe wallet.`,
         [
           {
             text: 'OK',
@@ -925,7 +985,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
         ]
       );
     } else {
-      throw new Error(response.error || 'Failed to record cash contribution');
+      throw new Error(response.error || 'Failed to record payment for someone');
     }
   };
 
@@ -980,19 +1040,19 @@ const handleMpesaContribution = async (cleanChamaId) => {
         return false;
       }
 
-      // Assertion: Only wallet, mpesa, and cash are valid payment methods for contributions
-      const validMethods = ['wallet', 'mpesa', 'cash'];
+      // Assertion: Only wallet, mpesa, and pay_for are valid payment methods for contributions
+      const validMethods = ['wallet', 'mpesa', 'pay_for'];
       if (!validMethods.includes(method)) {
         Alert.alert(
           'Invalid Payment Method',
-          `Only wallet, M-Pesa, and cash payments are permitted.`,
+          `Only wallet, M-Pesa, and pay for someone payments are permitted.`,
           [{ text: 'OK' }]
         );
         return false;
       }
 
-      // Backend assertion: Only wallet and M-Pesa allowed
-      if (method !== 'wallet' && method !== 'mpesa') {
+      // Backend assertion: Only wallet, M-Pesa, and pay_for allowed
+      if (method !== 'wallet' && method !== 'mpesa' && method !== 'pay_for') {
         Alert.alert(
           'Invalid Payment Method',
           'Only wallet and M-Pesa payments are allowed for merry-go-round contributions.',
@@ -1480,79 +1540,57 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 </Text>
               </TouchableOpacity>
 
-              {/* Cash Payment Method */}
+              {/* Pay for Someone Payment Method */}
               <TouchableOpacity
                 style={[
                   styles.paymentMethodOption,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: paymentMethod === 'cash' ? colors.warning : colors.border,
-                    borderWidth: paymentMethod === 'cash' ? 2 : 1,
-                    opacity: (userRole === 'treasurer' || userRole === 'chairperson') ? 1 : 0.6,
+                    borderColor: paymentMethod === 'pay_for' ? colors.primary : colors.border,
+                    borderWidth: paymentMethod === 'pay_for' ? 2 : 1,
                   }
                 ]}
-                onPress={() => {
-                  if (userRole === 'treasurer' || userRole === 'chairperson') {
-                    setPaymentMethod('cash');
-                  } else {
-                    Alert.alert(
-                      'Access Restricted',
-                      'Only treasurers and chairpersons can record cash contributions for members.',
-                      [{ text: 'OK' }]
-                    );
-                  }
-                }}
+                onPress={() => setPaymentMethod('pay_for')}
               >
                 <Ionicons
-                  name="cash"
+                  name="people"
                   size={20}
-                  color={paymentMethod === 'cash' ? colors.warning : colors.text}
+                  color={paymentMethod === 'pay_for' ? colors.primary : colors.text}
                 />
                 <Text
                   style={[
                     styles.paymentMethodText,
-                    { color: paymentMethod === 'cash' ? colors.warning : colors.text }
+                    { color: paymentMethod === 'pay_for' ? colors.primary : colors.text }
                   ]}
                 >
-                  Cash
+                  Pay for Someone
                 </Text>
-                {(userRole === 'treasurer' || userRole === 'chairperson') ? (
-                  <Text
-                    style={[
-                      styles.paymentMethodSubtext,
-                      { color: colors.textSecondary }
-                    ]}
-                  >
-                    Record for member
-                  </Text>
-                ) : (
-                  <Text
-                    style={[
-                      styles.paymentMethodSubtext,
-                      { color: colors.textSecondary }
-                    ]}
-                  >
-                    Treasurer/Chair only
-                  </Text>
-                )}
+                <Text
+                  style={[
+                    styles.paymentMethodSubtext,
+                    { color: colors.textSecondary }
+                  ]}
+                >
+                  Select a member to pay for
+                </Text>
               </TouchableOpacity>
             </View>
             </View>
  
-            {/* Member Listing Section for Cash Contributions */}
-            {paymentMethod === 'cash' && (
+             {/* Member Listing Section for Pay for Someone Contributions */}
+             {paymentMethod === 'pay_for' && (
               <View style={styles.memberListingSection}>
                 <View style={styles.memberListingHeader}>
                   <Text style={[styles.memberListingTitle, { color: colors.text }]}>
                     {contributionType === 'merry-go-round'
                       ? `Select ${roundName || 'Merry-Go-Round'} Participant`
-                      : `Select Member for ${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)} Contribution`
+                      : `Select Member to Pay For`
                     }
                   </Text>
                   <Text style={[styles.memberListingSubtitle, { color: colors.textSecondary }]}>
                     {contributionType === 'merry-go-round'
-                      ? `Only members of this merry-go-round circle can contribute`
-                      : `Choose the member who made this contribution`
+                      ? `Only members of this merry-go-round circle can be paid for`
+                      : `Choose the member you want to pay for. The amount will be deducted from your wallet.`
                     }
                   </Text>
                 </View>
@@ -1635,21 +1673,18 @@ const handleMpesaContribution = async (cleanChamaId) => {
             </View>
           )}
 
-          {/* Cash Contribution Form */}
-          {paymentMethod === 'cash' && (
-            <View style={styles.cashContributionContainer}>
+           {/* Pay for Someone Notice */}
+           {paymentMethod === 'pay_for' && (
+             <View style={styles.cashContributionContainer}>
 
-              <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
-                <Ionicons name="information-circle" size={20} color={colors.warning} />
-                <Text style={[styles.cashNoticeText, { color: colors.text }]}>
-                  {contributionType === 'merry-go-round'
-                    ? `As ${userRole}, you're recording a ${paymentMethod} contribution to ${roundName || 'this merry-go-round'} made by a circle participant.`
-                    : `As ${userRole}, you're recording a ${paymentMethod} contribution made by the selected member.`
-                  }
-                </Text>
-              </View>
-            </View>
-          )}
+               <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
+                 <Ionicons name="information-circle" size={20} color={colors.warning} />
+                 <Text style={[styles.cashNoticeText, { color: colors.text }]}>
+                   You are paying for a member. The amount will be deducted from your VaultKe wallet and the selected member will appear to have paid.
+                 </Text>
+               </View>
+             </View>
+           )}
 
           <Input
             label="Amount (KES)"
@@ -1860,9 +1895,9 @@ const handleMpesaContribution = async (cleanChamaId) => {
                   Payment Method:
                 </Text>
                 <Text style={[styles.confirmationValue, { color: colors.text }]}>
-                  {paymentMethod === 'wallet' ? 'VaultKe Wallet' :
-                   paymentMethod === 'mpesa' ? 'M-Pesa' :
-                   paymentMethod === 'cash' ? 'Cash' : 'Unknown'}
+                {paymentMethod === 'wallet' ? 'VaultKe Wallet' :
+                 paymentMethod === 'mpesa' ? 'M-Pesa' :
+                 paymentMethod === 'pay_for' ? 'Pay for Someone' : 'Unknown'}
                 </Text>
               </View>
 
@@ -1888,24 +1923,39 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 </View>
               )}
 
-              {paymentMethod === 'cash' && (
+              {paymentMethod === 'pay_for' && (
                 <>
                   <View style={styles.confirmationRow}>
                     <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
-                      Contributor:
+                      Paying For:
                     </Text>
                     <Text style={[styles.confirmationValue, { color: colors.text }]}>
                       {selectedContributor?.fullName || 'Not selected'}
                     </Text>
                   </View>
 
-                  <View style={[styles.cashConfirmationNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
-                    <Ionicons name="information-circle" size={16} color={colors.warning} />
+                  <View style={styles.confirmationRow}>
+                    <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
+                      Your Wallet Balance:
+                    </Text>
+                    <Text style={[styles.confirmationValue, { color: colors.text }]}>
+                      {formatCurrency(walletBalance)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.confirmationRow}>
+                    <Text style={[styles.confirmationLabel, { color: colors.textSecondary }]}>
+                      After Payment:
+                    </Text>
+                    <Text style={[styles.confirmationValue, { color: colors.text }]}>
+                      {formatCurrency(Math.max(0, walletBalance - parseFloat(amount || 0)))}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.cashConfirmationNotice, { backgroundColor: colors.info + '20', borderColor: colors.info }]}>
+                    <Ionicons name="information-circle" size={16} color={colors.info} />
                     <Text style={[styles.cashConfirmationNoticeText, { color: colors.text }]}>
-                      {contributionType === 'merry-go-round'
-                        ? `As ${userRole}, you are recording this ${paymentMethod} contribution to ${roundName || 'the merry-go-round'} on behalf of ${selectedContributor?.fullName}, a circle participant.`
-                        : `As ${userRole}, you are recording this ${paymentMethod} contribution on behalf of ${selectedContributor?.fullName}`
-                      }
+                      KES {formatCurrency(parseFloat(amount || 0))} will be deducted from your wallet. {selectedContributor?.fullName || 'The selected member'} will appear to have paid this amount.
                     </Text>
                   </View>
                 </>
@@ -1932,7 +1982,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 title={
                   paymentMethod === 'wallet' ? 'Confirm Transfer' :
                   paymentMethod === 'mpesa' ? 'Pay with M-Pesa' :
-                  paymentMethod === 'cash' ? 'Record Contribution' : 'Confirm'
+                  paymentMethod === 'pay_for' ? 'Confirm Payment for Member' : 'Confirm'
                 }
                 onPress={confirmContribution}
                 loading={loading}
@@ -1943,7 +1993,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
                     name={
                       paymentMethod === 'wallet' ? 'wallet' :
                       paymentMethod === 'mpesa' ? 'phone-portrait' :
-                      paymentMethod === 'cash' ? 'cash' : 'checkmark'
+                      paymentMethod === 'pay_for' ? 'people' : 'checkmark'
                     }
                     size={20}
                     color={colors.primary}
