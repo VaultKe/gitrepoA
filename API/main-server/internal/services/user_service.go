@@ -298,7 +298,7 @@ func (s *UserService) UpdateUser(userID string, update *models.UserProfileUpdate
 	}
 	if update.Phone != nil {
 		setParts = append(setParts, fmt.Sprintf("phone = $%d", len(args)+1))
-		args = append(args, *update.Phone)
+		args = append(args, utils.FormatPhoneNumber(*update.Phone))
 	}
 	if update.Avatar != nil {
 		setParts = append(setParts, fmt.Sprintf("avatar = $%d", len(args)+1))

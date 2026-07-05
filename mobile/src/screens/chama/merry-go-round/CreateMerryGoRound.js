@@ -286,43 +286,45 @@ const CreateMerryGoRound = ({ route, navigation }) => {
                 Loading members...
               </Text>
             ) : (
-              <View style={styles.membersGrid}>
-                {chamaMembers.map((member) => {
-                  const memberId = member.user_id || member.id;
-                  const isSelected = selectedParticipants.find(p => (p.user_id || p.id) === memberId);
-                  return (
-                    <TouchableOpacity
-                      key={member.id}
-                      style={[
-                        styles.memberOption,
-                        {
-                          backgroundColor: isSelected ? colors.primary + '20' : colors.background,
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        }
-                      ]}
-                      onPress={() => toggleParticipant(member)}
-                    >
-                      <View style={styles.memberInfo}>
-                        <Text style={[
-                          styles.memberName,
-                          { color: isSelected ? colors.primary : colors.text }
-                        ]}>
-                          {member.user?.first_name || member.first_name} {member.user?.last_name || member.last_name}
-                        </Text>
-                        <Text style={[
-                          styles.memberUsername,
-                          { color: isSelected ? colors.primary : colors.textSecondary }
-                        ]}>
-                          @{member.user?.username || member.username || member.user?.email?.split('@')[0] || member.email?.split('@')[0] || 'user'}
-                        </Text>
-                      </View>
-                      {isSelected && (
-                        <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <ScrollView style={styles.membersScrollContainer} showsVerticalScrollIndicator={false}>
+                <View style={styles.membersGrid}>
+                  {chamaMembers.map((member) => {
+                    const memberId = member.user_id || member.id;
+                    const isSelected = selectedParticipants.find(p => (p.user_id || p.id) === memberId);
+                    return (
+                      <TouchableOpacity
+                        key={member.id}
+                        style={[
+                          styles.memberOption,
+                          {
+                            backgroundColor: isSelected ? colors.primary + '20' : colors.background,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          }
+                        ]}
+                        onPress={() => toggleParticipant(member)}
+                      >
+                        <View style={styles.memberInfo}>
+                          <Text style={[
+                            styles.memberName,
+                            { color: isSelected ? colors.primary : colors.text }
+                          ]}>
+                            {member.user?.first_name || member.first_name} {member.user?.last_name || member.last_name}
+                          </Text>
+                          <Text style={[
+                            styles.memberUsername,
+                            { color: isSelected ? colors.primary : colors.textSecondary }
+                          ]}>
+                            @{member.user?.username || member.username || member.user?.email?.split('@')[0] || member.email?.split('@')[0] || 'user'}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
             )}
           </Card>
 
@@ -635,6 +637,10 @@ const styles = StyleSheet.create({
   orderButton: {
     padding: spacing.xs,
     borderRadius: borderRadius.sm,
+  },
+  membersScrollContainer: {
+    maxHeight: 300,
+    marginTop: spacing.md,
   },
 });
 

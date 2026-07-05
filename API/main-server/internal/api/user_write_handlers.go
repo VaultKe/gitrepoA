@@ -67,7 +67,7 @@ func UpdateProfile(c *gin.Context) {
 	}
 	if request.Phone != "" {
 		setParts = append(setParts, "phone = $3")
-		args = append(args, request.Phone)
+		args = append(args, utils.FormatPhoneNumber(request.Phone))
 	}
 	if request.County != "" {
 		setParts = append(setParts, "county = $4")
@@ -220,7 +220,8 @@ func OnboardUser(c *gin.Context) {
 	}
 
 	var existingPhone string
-	err := database.QueryRow("SELECT id FROM users WHERE phone = $1", req.Phone).Scan(&existingPhone)
+	formattedPhone := utils.FormatPhoneNumber(req.Phone)
+	err := database.QueryRow("SELECT id FROM users WHERE phone = $1", formattedPhone).Scan(&existingPhone)
 	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{
 			"success": false,
@@ -280,7 +281,7 @@ func OnboardUser(c *gin.Context) {
 		CreatedAt string
 	}
 
-	err = database.QueryRow(query, newUserID, emailStr, req.Phone, req.FirstName, req.LastName, passwordHash, req.IDNumber, genderStr).Scan(
+	err = database.QueryRow(query, newUserID, emailStr, formattedPhone, req.FirstName, req.LastName, passwordHash, req.IDNumber, genderStr).Scan(
 		&newUser.ID, &newUser.Email, &newUser.Phone, &newUser.FirstName, &newUser.LastName, &newUser.CreatedAt,
 	)
 
