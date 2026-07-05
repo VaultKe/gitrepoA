@@ -499,10 +499,11 @@ chamas.GET("/admin/all", api.GetAllChamasForAdmin)
 			chatWS.GET("/ws", chatWSHandler(cfg))
 		}
 
-			merryGoRounds := protected.Group("/merry-go-rounds")
-			{
-				merryGoRounds.GET("/", api.GetMerryGoRounds)
-			}
+		merryGoRounds := protected.Group("/merry-go-rounds")
+		{
+			merryGoRounds.GET("/", api.GetMerryGoRounds)
+			merryGoRounds.POST("/", api.CreateMerryGoRound)
+		}
 
 			welfare := protected.Group("/welfare")
 			{
