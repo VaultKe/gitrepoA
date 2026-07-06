@@ -362,24 +362,14 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const handleCreateChatRoom = () => {
-    console.log('[ChamaDetails] handleCreateChatRoom called');
-    console.log('[ChamaDetails] chamaId:', chamaId);
-    console.log('[ChamaDetails] chama:', chama);
-    console.log('[ChamaDetails] userMembership:', userMembership);
-
     const existingChatRoomId = getExistingChatRoomId();
-    console.log('[ChamaDetails] existingChatRoomId:', existingChatRoomId);
-
     if (existingChatRoomId) {
-      console.log('[ChamaDetails] Navigating to existing chat room:', existingChatRoomId);
       navigateToChatRoom(existingChatRoomId);
       return;
     }
 
     const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
-    console.log('[ChamaDetails] canCreateChatRoom:', canCreateChatRoom, 'role:', userMembership?.role);
     if (!canCreateChatRoom) {
-      console.log('[ChamaDetails] Create blocked: insufficient permissions');
         Alert.alert(
           'Access Denied',
           'Only chairperson, secretary, and treasurer can create a chat room for this group.'
@@ -387,35 +377,26 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       return;
     }
 
-    console.log('[ChamaDetails] Creating chat room immediately');
     confirmCreateChatRoom();
   };
 
   const confirmCreateChatRoom = async () => {
-    console.log('[ChamaDetails] confirmCreateChatRoom called');
     try {
       setChatRoomLoading(true);
 
-      console.log('[ChamaDetails] Calling ApiService.createChamaChatRoom with chamaId:', chamaId);
       const response = await ApiService.createChamaChatRoom(chamaId);
-      console.log('[ChamaDetails] ApiService.createChamaChatRoom response:', response);
-
       if (!response.success) {
-        console.log('[ChamaDetails] API returned failure:', response);
         throw new Error(response.error || 'Failed to create chat room');
       }
 
       const roomId = response.data?.roomId || response.data?.id || getExistingChatRoomId();
-      console.log('[ChamaDetails] resolved roomId:', roomId, 'response.data:', response.data);
       if (!roomId) {
-        console.log('[ChamaDetails] API success but no roomId returned');
         throw new Error('Chat room was created but no room ID was returned');
       }
 
       setChama(prev => prev ? { ...prev, chat_room_id: roomId } : prev);
       setSelectedChama(prev => prev && prev.id === chamaId ? { ...prev, chat_room_id: roomId } : prev);
 
-      console.log('[ChamaDetails] Chat room created successfully, navigating to roomId:', roomId);
       Alert.alert(
         'Chat Room Created',
         'Chat room has been created for this group.'

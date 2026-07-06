@@ -121,7 +121,6 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
         if (date && time) {
           // Combine date and time into RFC3339 format with EAT timezone
           newData.scheduledAt = `${date}T${time}:00+03:00`;
-          console.log('🔍 Auto-calculated scheduledAt:', newData.scheduledAt);
         } else {
           newData.scheduledAt = '';
         }
@@ -239,21 +238,12 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleSubmit = async () => {
-    console.log('🔄 Meeting form submitted!');
-    console.log('📋 Form data:', formData);
-
     if (!validateForm()) {
-      console.log('❌ Form validation failed');
       return;
     }
 
-    console.log('✅ Form validation passed');
-
     try {
       setLoading(true);
-      console.log('🔄 Setting loading to true');
-
-      // Convert date format to RFC3339 with East African Time (EAT)
       let scheduledAtRFC3339 = formData.scheduledAt.trim();
 
       // Parse the input as EAT time
@@ -264,10 +254,6 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
         // Add EAT timezone if no timezone specified
         scheduledAtRFC3339 += '+03:00';
       }
-
-      console.log('📅 Original input:', formData.scheduledAt.trim());
-      console.log('📅 Converted to EAT RFC3339:', scheduledAtRFC3339);
-
       // Verify the date is valid (this should already be validated in validateForm)
       const testDate = new Date(scheduledAtRFC3339);
       if (isNaN(testDate.getTime())) {
@@ -275,15 +261,8 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
         console.error('Date validation failed in handleSubmit - this should be caught earlier');
         return;
       }
-
-      console.log('📅 Parsed date object:', testDate);
-      console.log('📅 ISO string:', testDate.toISOString());
-      console.log('📅 Will display as:', formatDate(testDate, 'datetime'));
-
       // Additional verification - show what time it will actually display
       const displayTime = formatDate(testDate, 'time');
-      console.log('📅 Display time will be:', displayTime);
-
       // Parse attendee emails
       const attendeeEmails = formData.attendeeEmails.trim()
         ? formData.attendeeEmails.split(',').map(email => email.trim()).filter(email => email)
@@ -303,10 +282,7 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
         calendarId: formData.addToCalendar ? formData.calendarId : null,
       };
 
-      console.log('📤 Sending meeting data:', meetingData);
-      console.log('🔗 API call starting...');
-
-      // Choose the appropriate endpoint based on features needed
+     // Choose the appropriate endpoint based on features needed
       let endpoint = '/meetings/';
 
       if (formData.addToCalendar && attendeeEmails.length > 0) {
@@ -321,14 +297,9 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
         method: 'POST',
         body: meetingData,
       });
-
-      console.log('📥 API response received:', response);
-      
+     
       if (response.success) {
-        console.log('🎉 Meeting created successfully!');
-
         // Navigate back immediately with the new meeting data
-        console.log('🔙 Navigating back with new meeting data...');
         if (onRouteChange) {
           onRouteChange('meetings', 'ChamaMeetingsScreen');
         } else {
@@ -339,7 +310,6 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
           });
         }
       } else {
-        console.log('❌ Meeting creation failed:', response.error);
         Alert.alert('Error', response.error || 'Failed to schedule meeting');
       }
     } catch (error) {
@@ -351,7 +321,6 @@ const CreateMeeting = ({ route, navigation, onRouteChange }) => {
       });
       Alert.alert('Error', 'Failed to schedule meeting. Please try again.');
     } finally {
-      console.log('🔄 Setting loading to false');
       setLoading(false);
     }
   };

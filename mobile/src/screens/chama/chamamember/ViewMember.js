@@ -129,7 +129,6 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         setServiceFeePayments(response.data);
       }
     } catch (error) {
-      console.log('Service fee payments not available:', error);
     } finally {
       setFeePaymentsLoading(false);
     }
@@ -159,8 +158,6 @@ const [receiptLoading, setReceiptLoading] = useState(false);
           setMemberStats(statsResponse.data);
         }
       } catch (error) {
-        console.log('Member stats not available:', error);
-        // Stats are optional, don't fail if not available
       }
     } catch (error) {
       console.error('Error loading member details:', error);
@@ -183,7 +180,6 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         setApprovalHistory(response.data);
       }
     } catch (error) {
-      console.log('Approval history not available:', error);
     } finally {
       setApprovalHistoryLoading(false);
     }
@@ -576,8 +572,6 @@ const [receiptLoading, setReceiptLoading] = useState(false);
           source={{ uri: fullAvatarUrl }}
           style={avatarStyle}
           onError={(error) => {
-            console.log('Member avatar load error:', error);
-            // Fallback to initials if image fails to load
           }}
         />
       );

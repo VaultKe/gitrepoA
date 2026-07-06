@@ -127,9 +127,6 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
       }
 
       const fileName = document.name || fileUrl.split('/').pop() || 'document';
-
-      console.log('📄 Document download:', { fileUrl, fileName, platform: Platform.OS });
-
       if (Platform.OS === 'web') {
         // For web, open in new tab/window instead of download to avoid CORS issues
         window.open(fileUrl, '_blank');
@@ -145,8 +142,6 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
         try {
           const localUri = FileSystem.documentDirectory + fileName;
           Toast.show({ type: 'info', text1: 'Starting Download', text2: `Downloading ${fileName}...` });
-
-          console.log('📥 Downloading from:', fileUrl, 'to:', localUri);
 
           const { uri } = await FileSystem.downloadAsync(fileUrl, localUri);
           Toast.show({ type: 'success', text1: 'Download Complete', text2: `${fileName} saved.` });

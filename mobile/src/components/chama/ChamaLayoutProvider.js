@@ -32,7 +32,6 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
   // Set the selected chama when entering the chama dashboard
   useEffect(() => {
     if (chama) {
-      console.log('🎯 ChamaLayoutProvider: Setting selected chama from route params:', chama);
       setSelectedChama(chama);
     } else if (chamaId && chamaName) {
       // Create a basic chama object if we only have id and name
@@ -40,7 +39,6 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
         id: chamaId,
         name: chamaName
       };
-      console.log('🎯 ChamaLayoutProvider: Setting selected chama from basic info:', basicChama);
       setSelectedChama(basicChama);
     }
   }, [chama, chamaId, chamaName, setSelectedChama]);

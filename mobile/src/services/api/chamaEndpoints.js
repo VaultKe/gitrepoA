@@ -130,7 +130,6 @@ const createRoleEscalationPoll = async (chamaId, data) => {
 
 const getChamaSubscriptionPayments = async (chamaId) => {
   const url = `/chamas/${chamaId}/subscription-payments`;
-  console.log('[API Sub] GET', url);
   return await makeRequest(url);
 };
 

@@ -78,15 +78,12 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   // Load user role for security purposes
   const loadUserRole = async () => {
     try {
-      console.log('🔐 Loading user role for security check');
       const response = await ApiService.getMemberRole(chamaId, user.id);
       if (response.success) {
         const role = response.data?.role || 'member';
         setUserRole(role);
-        console.log('🔐 User role loaded:', role);
       } else {
         setUserRole('member'); // Default to member for security
-        console.log('🔐 Failed to load role, defaulting to member');
       }
     } catch (error) {
       console.error('🔐 Error loading user role:', error);
@@ -285,13 +282,9 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
           return;
       }
 
-      console.log(`🔍 API response for ${action}:`, response);
-
       if (response.success) {
-        console.log(`✅ Loan ${action} successful`);
         loadLoans();
       } else {
-        console.log(`❌ Loan ${action} failed with response:`, response);
         Alert.alert('Error', `Failed to ${action} loan: ${response.error || 'Unknown error'}`);
       }
     } catch (error) {

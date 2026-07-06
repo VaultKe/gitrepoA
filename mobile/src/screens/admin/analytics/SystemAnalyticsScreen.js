@@ -19,7 +19,6 @@ import ApiService from '../../../services/api';
 const { width } = Dimensions.get('window');
 
 export default function SystemAnalyticsScreen() {
-  console.log('📊 REAL: SystemAnalyticsScreen rendering...');
   const { theme } = useApp();
   const colors = getThemeColors(theme);
   const [selectedPeriod, setSelectedPeriod] = useState('7d');

@@ -155,11 +155,9 @@ const ReminderScreen = () => {
       if (storedReminders) {
         const localReminders = JSON.parse(storedReminders);
         if (localReminders.length > 0) {
-          // console.log('Migrating local reminders to backend...');
           await ReminderService.syncLocalReminders(localReminders);
           // Clear local storage after successful migration
           await AsyncStorage.removeItem(REMINDER_STORAGE_KEY);
-          // console.log('Local reminders migrated successfully');
         }
       }
     } catch (error) {

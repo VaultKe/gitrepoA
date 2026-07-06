@@ -127,7 +127,6 @@ useEffect(() => {
           setUserProfile(profileData);
         }
       } catch (e) {
-        console.log('Failed to fetch user profile for chairperson row:', e);
       }
     };
     fetchUserProfile();
@@ -150,8 +149,6 @@ useEffect(() => {
 
     try {
       const response = await ApiService.searchUserByCredentials(phoneNumber, nationalId);
-      console.log('Search credentials response:', response);
-
       if (response.success && response.data && response.match) {
         setFoundUser(response.data);
         setOnboardingPhase('confirm');
@@ -191,7 +188,6 @@ useEffect(() => {
         idNumber: nationalId,
       }));
     } catch (error) {
-      console.log('Search error:', error);
       Toast.show({ type: 'error', text1: 'Search failed', text2: error.message });
       setShowUserForm(true);
       setOnboardingPhase('new_user');
@@ -241,9 +237,6 @@ useEffect(() => {
 
   const generateDevTOTP = () => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log('========================================');
-    console.log('DEV TOTP (onboarding verification):', code);
-    console.log('========================================');
     Toast.show({ type: 'info', text1: 'Dev mode: TOTP printed to terminal', text2: `Code: ${code}`, visibilityTime: 5000 });
     return code;
   };
@@ -256,16 +249,12 @@ useEffect(() => {
       const response = await ApiService.sendOnboardingTOTP(phone, userId);
       if (response.success) {
         const devCode = response.data?.devCode || generateDevTOTP();
-        console.log('========================================');
-        console.log('DEV TOTP (onboarding verification):', devCode);
-        console.log('========================================');
         setTotpCode(devCode);
         Toast.show({ type: 'success', text1: 'Verification code sent to phone', text2: `Dev: ${devCode}`, visibilityTime: 5000 });
       } else {
         throw new Error(response.error || 'Failed to send code');
       }
     } catch (error) {
-      console.log('TOTP API failed (expected in dev):', error.message);
       const devCode = generateDevTOTP();
       setTotpCode(devCode);
     } finally {

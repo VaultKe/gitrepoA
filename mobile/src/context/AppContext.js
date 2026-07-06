@@ -229,8 +229,6 @@ export function AppProvider({ children }) {
         dispatch({ type: ActionTypes.SET_LOADING, payload: false });
       }, 1500); // Reduced from 10s to 1.5s
 
-      // Database service removed per requirement - app works without SQLite DB in frontend
-      console.log('Database service disabled - app running in memory-only mode');
 
       // Check for existing auth token (parallel for speed)
       const [authToken, userData, theme, language] = await Promise.all([
@@ -321,8 +319,6 @@ export function AppProvider({ children }) {
           await AsyncStorage.removeItem('userData');
         }
       } else {
-        // No existing auth data - user needs to login
-        console.log('No existing auth data found, user needs to login');
       }
 
       clearTimeout(timeoutId);
@@ -1187,7 +1183,6 @@ export function AppProvider({ children }) {
         global.gc();
       }
 
-      console.log('✅ Storage cache cleared successfully');
     } catch (error) {
       console.error('Failed to clear storage cache:', error);
     }

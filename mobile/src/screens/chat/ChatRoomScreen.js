@@ -196,7 +196,6 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const handleReactionSelect = useCallback((emoji) => {
     if (reactingToMessage) {
       // TODO: Send reaction to backend
-      console.log('Reacting to message:', reactingToMessage.id, 'with emoji:', emoji);
     }
     setShowReactionPicker(false);
     setReactingToMessage(null);

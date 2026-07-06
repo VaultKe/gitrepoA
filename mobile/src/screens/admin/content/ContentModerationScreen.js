@@ -287,7 +287,6 @@ const ContentModerationScreen = ({ navigation }) => {
             icon="settings"
             variant="primary"
             size="small"
-            onPress={() => console.log('Moderation Rules')}
             theme={theme}
             style={styles.quickActionButtonBordered}
           />

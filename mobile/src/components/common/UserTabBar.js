@@ -98,7 +98,6 @@ const UserTabBar = ({ state, descriptors, navigation: navProp }) => {
         if (userRole === 'admin' || userRole === 'super_admin') {
           switchToAdminDashboard();
         } else {
-          console.log('⚠️ User does not have admin access');
         }
       },
     },

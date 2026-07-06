@@ -115,9 +115,6 @@ const NotificationToneScreen = ({ navigation }) => {
         soundUri = `${baseUrl}/${sound.file_path}`;
       }
 
-      // console.log('🎵 Loading sound from URI:', soundUri);
-      // console.log('🎵 Original file_path:', sound.file_path);
-
       await soundObject.loadAsync({
         uri: soundUri,
         shouldPlay: false, // Don't auto-play, we'll control it
@@ -127,7 +124,6 @@ const NotificationToneScreen = ({ navigation }) => {
       // Set up playback status listener with better error handling
       soundObject.setOnPlaybackStatusUpdate((status) => {
         if (status.didJustFinish) {
-          // console.log('🎵 Sound finished playing:', sound.name);
           setPlayingSound(null);
           soundObject.unloadAsync().catch(console.error);
           setCurrentSoundObject(null);
@@ -140,8 +136,6 @@ const NotificationToneScreen = ({ navigation }) => {
       });
 
       await soundObject.playAsync();
-      // console.log('✅ Sound playback started:', sound.name);
-
     } catch (error) {
       console.error('❌ Failed to play sound:', error);
 
@@ -181,9 +175,6 @@ const NotificationToneScreen = ({ navigation }) => {
 
   const selectNotificationTone = async (soundId) => {
     try {
-      console.log('🔧 Selecting notification tone:', soundId);
-
-      // Stop any currently playing sound first
       if (currentSoundObject) {
         try {
           await currentSoundObject.stopAsync();
@@ -201,9 +192,6 @@ const NotificationToneScreen = ({ navigation }) => {
 
       if (response.success) {
         setSelectedSoundId(soundId);
-        console.log('✅ Notification tone updated successfully');
-
-        // Show success message without causing reload
         Alert.alert(
           'Success',
           'Notification tone updated successfully',

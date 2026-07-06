@@ -59,19 +59,7 @@ export default function UserManagementScreen() {
 
   // FAST: Process users when lightning data loads
   useEffect(() => {
-    console.log('🔍 FAST: useEffect triggered with allUsers:', {
-      allUsers: allUsers,
-      isArray: Array.isArray(allUsers),
-      length: Array.isArray(allUsers) ? allUsers.length : 'not array',
-      usersError: usersError,
-      usersLoading: usersLoading,
-      usersSource: usersSource
-    });
-
     if (allUsers && Array.isArray(allUsers)) {
-      console.log(`📊 FAST: Processing ${allUsers.length} users from lightning data`);
-      console.log('🔍 FAST: First few users:', allUsers.slice(0, 3));
-
       try {
         // Remove any remaining duplicates (extra safety)
         const uniqueUsers = allUsers.reduce((acc, user) => {
@@ -81,7 +69,6 @@ export default function UserManagementScreen() {
           return acc;
         }, []);
 
-        console.log(`🔍 FAST: After deduplication: ${uniqueUsers.length} unique users`);
 
         // Calculate statistics
         const stats = {
@@ -93,7 +80,6 @@ export default function UserManagementScreen() {
         };
 
         setUserStats(stats);
-        console.log(`✅ FAST: User statistics calculated:`, stats);
 
         // Filter users immediately
         filterUsers(uniqueUsers);
@@ -101,7 +87,6 @@ export default function UserManagementScreen() {
         // FAST: Mark data as ready and stop loading
         setDataReady(true);
         setLocalLoading(false);
-        console.log(`✅ FAST: UI loading state updated - data ready with ${uniqueUsers.length} users`);
 
       } catch (error) {
         console.error('❌ FAST: Error processing users:', error);
@@ -117,14 +102,12 @@ export default function UserManagementScreen() {
         setDataReady(false);
       }
     } else if (allUsers === null || allUsers === undefined) {
-      console.log('⏳ FAST: allUsers is null/undefined, waiting for data...');
     } else if (!Array.isArray(allUsers)) {
       console.error('❌ FAST: allUsers is not an array:', typeof allUsers, allUsers);
       setFilteredUsers([]);
       setLocalLoading(false);
       setDataReady(false);
     } else if (Array.isArray(allUsers) && allUsers.length === 0) {
-      console.log('⚠️ FAST: allUsers is empty array');
       setFilteredUsers([]);
       setUserStats({
         total: 0,
@@ -147,107 +130,21 @@ export default function UserManagementScreen() {
 
   // FAST: Force immediate user loading on mount
   useEffect(() => {
-    console.log('🚀 FAST: Triggering immediate user loading...');
     setLocalLoading(true);
     setDataReady(false);
 
     const loadImmediate = async () => {
       try {
-        // Clear any existing cache first
-        console.log('🧹 FAST: Clearing user cache before fresh load...');
 
         const result = await lightningDataService.getData('users-complete', {
           forceRefresh: true,
           immediate: true,
           clearCache: true
         });
-
-        console.log('🔍 FAST: Immediate load result:', {
-          success: result.success,
-          dataLength: Array.isArray(result.data) ? result.data.length : 'not array',
-          dataType: typeof result.data,
-          source: result.source,
-          error: result.error || 'none',
-          firstUser: result.data?.[0] || 'no first user'
-        });
-
         if (result.success && result.data) {
-          console.log(`⚡ FAST: Got ${result.data.length} users immediately`);
-          console.log('🔍 FAST: Sample user data:', result.data.slice(0, 2));
-          // Data will be processed in the other useEffect
         } else {
-          console.error('❌ FAST: Immediate user load failed:', result.error);
-          // Try direct API call as fallback
-          console.log('🔄 FAST: Trying direct users API call as fallback...');
+          console.error('FAST: Immediate user load failed:', result.error);
           const directResult = await lightningDataService.getImmediateUsers();
-          console.log('🔍 FAST: Direct users API result:', {
-            success: directResult.success,
-            dataLength: Array.isArray(directResult.data) ? directResult.data.length : 'not array',
-            error: directResult.error || 'none'
-          });
-
-          if (!directResult.success) {
-            console.error('❌ FAST: Direct API call also failed');
-            console.log('🔄 FAST: Using fallback test data for development...');
-
-            // FALLBACK: Create test users for development
-            const testUsers = [
-              {
-                id: 1,
-                firstName: 'John',
-                lastName: 'Doe',
-                email: 'john.doe@example.com',
-                phone: '+254712345678',
-                status: 'active',
-                role: 'admin',
-                county: 'Nairobi',
-                town: 'Nairobi',
-                createdAt: new Date().toISOString()
-              },
-              {
-                id: 2,
-                firstName: 'Jane',
-                lastName: 'Smith',
-                email: 'jane.smith@example.com',
-                phone: '+254723456789',
-                status: 'active',
-                role: 'user',
-                county: 'Kiambu',
-                town: 'Thika',
-                createdAt: new Date().toISOString()
-              },
-              {
-                id: 3,
-                firstName: 'Bob',
-                lastName: 'Johnson',
-                email: 'bob.johnson@example.com',
-                phone: '+254734567890',
-                status: 'inactive',
-                role: 'user',
-                county: 'Mombasa',
-                town: 'Mombasa',
-                createdAt: new Date().toISOString()
-              }
-            ];
-
-            console.log('🔍 FAST: Using test users:', testUsers.length);
-
-            // Process test users
-            const stats = {
-              total: testUsers.length,
-              active: testUsers.filter(u => u.status === 'active').length,
-              inactive: testUsers.filter(u => u.status !== 'active').length,
-              admins: testUsers.filter(u => u.role === 'admin').length,
-              duplicatesRemoved: 0
-            };
-
-            setUserStats(stats);
-            filterUsers(testUsers);
-            setDataReady(true);
-            setLocalLoading(false);
-
-            console.log('✅ FAST: Test users loaded successfully');
-          }
         }
       } catch (error) {
         console.error('❌ FAST: Immediate user load failed:', error.message);
@@ -260,14 +157,12 @@ export default function UserManagementScreen() {
 
   // FAST: Refresh users using lightning data with better error handling
   const handleRefresh = async () => {
-    console.log('🔄 FAST: Refreshing all users...');
     setLocalLoading(true);
     setDataReady(false);
 
     try {
       // Force refresh to bypass any backoff
       await refreshUsers({ forceRefresh: true });
-      console.log('✅ FAST: Users refreshed successfully');
     } catch (error) {
       console.error('❌ FAST: User refresh failed:', error);
 
@@ -299,23 +194,12 @@ export default function UserManagementScreen() {
 
   // FAST: Manual API test function
   const testAPIDirectly = async () => {
-    console.log('🧪 FAST: Testing API directly...');
     setLocalLoading(true);
     setDataReady(false);
 
     try {
       const apiResult = await ApiService.getAllUsersComplete();
-      console.log('🧪 FAST: Direct API test result:', {
-        success: apiResult.success,
-        dataLength: Array.isArray(apiResult.data) ? apiResult.data.length : 'not array',
-        totalCount: apiResult.totalCount,
-        error: apiResult.error || 'none'
-      });
-
       if (apiResult.success && apiResult.data) {
-        console.log('✅ FAST: Direct API test successful');
-
-        // Process the data directly
         const stats = {
           total: apiResult.data.length,
           active: apiResult.data.filter(u => u.status === 'active').length,
@@ -350,8 +234,6 @@ export default function UserManagementScreen() {
       setFilteredUsers([]);
       return;
     }
-
-    console.log(`🔍 FAST: Filtering ${usersToFilter.length} users...`);
     let filtered = [...usersToFilter];
 
     // Apply search query (comprehensive search)
@@ -394,7 +276,6 @@ export default function UserManagementScreen() {
     });
 
     setFilteredUsers(filtered);
-    console.log(`✅ FAST: Filtered to ${filtered.length} users (from ${usersToFilter.length} total)`);
   };
 
   // FAST: Simple refresh using lightning data
@@ -473,9 +354,6 @@ export default function UserManagementScreen() {
     try {
       setActionLoading(true);
       setProcessingUserId(user.id);
-      console.log(`🔄 Performing ${action} on user:`, user.email);
-
-      // Optimistic update - update UI immediately for instant feedback
       const updateUserInList = (userId, updates) => {
         setUsers(prevUsers =>
           prevUsers.map(u => u.id === userId ? { ...u, ...updates } : u)
@@ -489,7 +367,6 @@ export default function UserManagementScreen() {
           updateUserInList(user.id, { status: 'suspended' });
           response = await ApiService.updateUserStatus(user.id, 'suspended');
           if (response && response.success) {
-            console.log('✅ User suspended successfully');
           } else {
             // Revert on failure
             updateUserInList(user.id, { status: user.status });
@@ -501,7 +378,6 @@ export default function UserManagementScreen() {
           updateUserInList(user.id, { status: 'active' });
           response = await ApiService.updateUserStatus(user.id, 'active');
           if (response && response.success) {
-            console.log('✅ User activated successfully');
           } else {
             // Revert on failure
             updateUserInList(user.id, { status: user.status });
@@ -513,7 +389,6 @@ export default function UserManagementScreen() {
           setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
           response = await ApiService.deleteUser(user.id);
           if (response && response.success) {
-            console.log('✅ User deleted successfully');
           } else {
             // Revert on failure - add back to list
             setUsers(prevUsers => [...prevUsers, user]);
@@ -525,7 +400,6 @@ export default function UserManagementScreen() {
           updateUserInList(user.id, { role: 'admin' });
           response = await ApiService.updateUserRole(user.id, 'admin');
           if (response && response.success) {
-            console.log('✅ User role updated to admin successfully');
           } else {
             // Revert on failure
             updateUserInList(user.id, { role: user.role });
@@ -537,7 +411,6 @@ export default function UserManagementScreen() {
           updateUserInList(user.id, { role: 'user' });
           response = await ApiService.updateUserRole(user.id, 'user');
           if (response && response.success) {
-            console.log('✅ User role updated to user successfully');
           } else {
             // Revert on failure
             updateUserInList(user.id, { role: user.role });

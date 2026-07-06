@@ -69,11 +69,7 @@ const ContactSupportScreen = ({ navigation }) => {
           lastName: user?.lastName || user?.last_name,
         },
       };
-
-      console.log('Creating support request:', supportRequest);
-
       const response = await ApiService.createSupportRequest(supportRequest);
-
       if (response.success) {
         Alert.alert(
           'Support Request Submitted',

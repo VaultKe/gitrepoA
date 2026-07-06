@@ -323,15 +323,10 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
               if (currentRecipient) {
                 const userId = currentRecipient.user_id || currentRecipient.user?.id || currentRecipient.id;
                 if (userId) {
-                  console.log(`🔍 Enriching cycle ${cycle.id} with recipient user ID: ${userId}`);
                   const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                  console.log(`🔍 User response for recipient ${userId}:`, userResponse);
-
                   if (userResponse.success && userResponse.data) {
                     const userData = userResponse.data;
                     const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-                    console.log(`✅ Enriched cycle ${cycle.id} with recipient: ${fullName}`);
-
                     return {
                       ...cycle,
                       recipientId: userId,

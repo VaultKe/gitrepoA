@@ -21,7 +21,6 @@ class DevHelper {
   log(message, data = null) {
     if (this.isDevelopment) {
       const timestamp = new Date().toLocaleTimeString();
-      console.log(`🔧 [DEV ${timestamp}] ${message}`, data || '');
     }
   }
 

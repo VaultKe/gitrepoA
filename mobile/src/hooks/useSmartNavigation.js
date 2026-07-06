@@ -68,7 +68,6 @@ export const useSmartNavigation = () => {
           navigation.goBack();
           return;
         } catch (error) {
-          console.log('❌ Force goBack() failed:', error);
         }
       }
 
@@ -103,7 +102,6 @@ export const useSmartNavigation = () => {
             break;
         }
       } else {
-        console.log('No clear fallback path - letting user navigate manually');
       }
     } catch (error) {
       console.warn(' Navigation error in goBack:', error);

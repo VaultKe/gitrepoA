@@ -71,7 +71,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (!hasLoadedData) {
-      console.log('🏢 Loading PhysicalMeetingScreen data for the first time...');
       setHasLoadedData(true);
       loadMeetingData();
       loadChamaMembers();
@@ -110,18 +109,13 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
   // Safe wrapper for loading attendance list
   const loadAttendanceListSafely = async () => {
     if (hasBackendSchemaIssue) {
-      console.log('🔧 SKIPPING attendance list load - backend schema issue already detected');
       return;
     }
-
-    console.log('📋 Attempting to load attendance list...');
 
     try {
       const response = await api.makeRequest(`/meetings/${meetingId}/attendance`);
       if (response.success && response.data) {
         setAttendanceList(response.data);
-        console.log('📋 Loaded attendance list:', response.data.length, 'attendees');
-
         // Update memberAttendance state based on existing attendance records
         const attendanceMap = {};
         response.data.forEach(attendance => {
@@ -131,7 +125,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
         });
         setMemberAttendance(prev => ({ ...prev, ...attendanceMap }));
       } else {
-        // console.log('📝 No attendance data available yet');
         setAttendanceList([]);
       }
     } catch (error) {
@@ -140,8 +133,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
 
       // Handle specific database schema error
       if (error.message.includes('converting NULL to string is unsupported')) {
-        console.log('🔧 BACKEND SCHEMA ISSUE DETECTED - Disabling future attendance list loads.');
-        console.log('🔧 Attendance marking will still work, but list sync is disabled until backend is fixed.');
         setHasBackendSchemaIssue(true);
 
         // Show helpful message only once
@@ -169,7 +160,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
         }
       } else {
         // Use initial meeting data if API call fails
-        console.log('📊 Using initial meeting data from navigation params');
         if (initialMeetingData) {
           try {
             await loadPreviousMeetingAndMinutes(initialMeetingData);
@@ -180,7 +170,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
       console.error('Failed to load meeting data:', error);
       // Don't show error toast for 404s - just use initial data
       if (error.message && error.message.includes('404')) {
-        console.log('📊 Meeting endpoint not found (404), using initial data');
       } else {
         Toast.show({
           type: 'error',
@@ -233,14 +222,12 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
     try {
       const currentChamaId = chamaId || meetingData?.chamaId;
       if (!currentChamaId) {
-        console.log('👥 No chamaId available, cannot load chama members');
         return;
       }
 
       const response = await api.makeRequest(`/chamas/${currentChamaId}/members`);
       if (response.success && response.data) {
         const members = response.data || [];
-        console.log('👥 Loaded chama members:', members.length);
         setChamaMembers(members);
 
         // Initialize attendance tracking for all members
@@ -251,7 +238,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
         });
         setMemberAttendance(initialAttendance);
       } else {
-        console.log('👥 No chama members data received');
         setChamaMembers([]);
         setMemberAttendance({});
       }
@@ -265,18 +251,12 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
   const loadAttendanceList = async () => {
     // Don't make API call if we know there's a backend schema issue
     if (hasBackendSchemaIssue) {
-      console.log('🔧 SKIPPING attendance list refresh - backend schema issue already detected');
       return;
     }
-
-    console.log('📋 Attempting to refresh attendance list...');
-
     try {
       const response = await api.makeRequest(`/meetings/${meetingId}/attendance`);
       if (response.success && response.data) {
         setAttendanceList(response.data);
-        console.log('📋 Loaded attendance list:', response.data.length, 'attendees');
-
         // Update memberAttendance state based on existing attendance records
         const attendanceMap = {};
         response.data.forEach(attendance => {
@@ -286,7 +266,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
         });
         setMemberAttendance(prev => ({ ...prev, ...attendanceMap }));
       } else {
-        // console.log('📝 No attendance data available yet');
         setAttendanceList([]);
       }
     } catch (error) {
@@ -295,7 +274,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
 
       // Handle specific database schema error
       if (error.message.includes('converting NULL to string is unsupported')) {
-        console.log('🔧 Backend database schema issue detected. Disabling future calls.');
         setHasBackendSchemaIssue(true);
       } else if (!error.message?.includes('404')) {
         // Show error for other unexpected issues
@@ -317,10 +295,8 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
       const response = await api.makeRequest(`/meetings/${meetingId}/documents`);
       if (response.success && response.data) {
         const documents = response.data || [];
-        console.log('📄 Loaded meeting documents:', documents.length);
         setUploadedDocuments(documents);
       } else {
-        console.log('📄 No meeting documents found');
         setUploadedDocuments([]);
       }
     } catch (error) {
@@ -363,8 +339,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
       });
 
       if (response.success) {
-        console.log(`✅ Attendance updated for user ${userId}: ${newStatus ? 'Present' : 'Absent'}`);
-
         // Show subtle feedback
         Toast.show({
           type: 'success',
@@ -378,17 +352,13 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
           try {
             await loadAttendanceList();
           } catch (refreshError) {
-            console.log('⚠️ Could not refresh attendance list, but attendance was saved:', refreshError.message);
-
             // If it's the database schema issue, don't keep trying to refresh
             if (refreshError.message.includes('converting NULL to string is unsupported')) {
-              console.log('🔧 Detected backend schema issue, disabling future attendance list refreshes');
               setHasBackendSchemaIssue(true);
             }
             // Don't show error to user since the main action (marking attendance) succeeded
           }
         } else {
-          console.log('🔧 Skipping attendance list refresh due to known backend schema issue');
         }
       } else {
         // Revert local state if backend save failed
@@ -427,11 +397,7 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
       setIsSaving(true);
       let savedItems = [];
 
-      // Since attendance is now saved immediately when marked,
-      // we just need to ensure all current attendance is synced
-      console.log('💾 Syncing final attendance data...');
-
-      // Get all present members
+     // Get all present members
       const presentMembers = Object.entries(memberAttendance)
         .filter(([, isPresent]) => isPresent)
         .map(([userId]) => userId);
@@ -451,7 +417,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
             },
           });
         } catch (error) {
-          console.log(`⚠️ Failed to sync attendance for user ${userId}:`, error.message);
           return null; // Don't fail the entire operation
         }
       });
@@ -487,7 +452,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
         });
         savedItems.push('meeting status');
       } catch (statusError) {
-        console.log('⚠️ Could not update meeting status (endpoint may not exist):', statusError.message);
         // Don't fail the entire save operation for this
       }
 
@@ -565,13 +529,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
         try {
           const formData = new FormData();
 
-          console.log('📄 Document details:', {
-            uri: document.uri,
-            type: document.mimeType,
-            name: document.name,
-            size: document.size,
-          });
-
           let fileToUpload;
           if (document.uri.startsWith('data:')) {
             const response = await fetch(document.uri);
@@ -589,9 +546,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
           formData.append('meetingId', meetingId);
           formData.append('documentType', 'meeting_document');
           formData.append('description', `Document uploaded during physical meeting: ${meetingTitle}`);
-
-          console.log('📄 FormData created, about to upload...');
-
           const response = await api.makeRequest(`/meetings/${meetingId}/documents`, {
             method: 'POST',
             body: formData,

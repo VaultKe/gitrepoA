@@ -123,7 +123,6 @@ const ApplyForLoanScreen = () => {
   };
 
    const handleSubmit = async () => {
-    console.log('[ApplyForLoan] handleSubmit called', { chamaId: !!chamaId, userId: user?.id, loan: newLoan });
     if (!chamaId || !user?.id || typeof chamaId !== 'string') {
       Alert.alert('Error', `Missing chama or user context: chamaId=${chamaId}`);
       return;
@@ -157,7 +156,6 @@ const ApplyForLoanScreen = () => {
 
     try {
       setSubmitting(true);
-      console.log('[ApplyForLoan] Preflight: token exists', !!await ApiService.getAuthToken ? await ApiService.getAuthToken().then(t => !!t).catch(() => false) : false);
 
       const payload = {
         chamaId,
@@ -172,10 +170,8 @@ const ApplyForLoanScreen = () => {
         businessPlan: newLoan.businessPlan,
         otherLoans: newLoan.otherLoans,
       };
-      console.log('[ApplyForLoan] Submitting payload', payload);
 
       const response = await ApiService.applyForLoan(payload);
-      console.log('[ApplyForLoan] API response', response);
 
       if (response?.success || response?.data) {
         Alert.alert('Success', 'Loan application submitted successfully', [
