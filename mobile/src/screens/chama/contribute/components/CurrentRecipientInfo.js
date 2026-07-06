@@ -56,7 +56,7 @@ const CurrentRecipientInfo = ({
                   styles.statusBannerTitle,
                   { color: contributionStatus.hasContributed ? colors.success : colors.warning }
                 ]}>
-                  {contributionStatus.hasContributed ? "✅ You already Contributed.No need to!" : "⏳ You Haven't Contributed Yet"}
+                  {contributionStatus.hasContributed ? "You already Contributed.No need to!" : "You Haven't Contributed Yet"}
                 </Text>
                 <Text style={[styles.statusBannerSubtitle, { color: colors.textSecondary }]}>
                   {contributionStatus.hasContributed

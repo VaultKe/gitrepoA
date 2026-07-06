@@ -347,7 +347,8 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
         setContributionStatus(statusData);
 
         // If user has already contributed, show notification (only once)
-        if (statusData.hasContributed && !contributionStatus?.hasContributed) {
+        // Skip this notification when using pay_for, since payer can pay for multiple members
+        if (statusData.hasContributed && !contributionStatus?.hasContributed && paymentMethod !== 'pay_for') {
           Alert.alert(
             'Already Contributed',
             'You have already contributed to this merry-go-round round. Each member can only contribute once per round.',
@@ -493,7 +494,8 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
       await checkContributionStatus();
 
       // Backend assertion: Check if user has already contributed to this round
-      if (contributionStatus?.hasContributed) {
+      // Allow pay_for payments even if the payer has already contributed for themselves
+      if (contributionStatus?.hasContributed && paymentMethod !== 'pay_for') {
         Alert.alert(
           'Already Contributed',
           'You have already contributed to this merry-go-round round. Each member can only contribute once per round.',
@@ -1622,7 +1624,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
 
 <Button
             title={
-              contributionType === 'merry-go-round' && contributionStatus?.hasContributed
+              contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for'
                 ? "✅ You have already contributed!"
                 : contributionType === 'merry-go-round'
                   ? !selectedMerryGoRound
@@ -1639,7 +1641,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
             disabled={
               !amount ||
               parseFloat(amount) <= 0 ||
-              (contributionType === 'merry-go-round' && contributionStatus?.hasContributed) ||
+              (contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for') ||
               (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
               (contributionType === 'welfare' && !selectedWelfare)
             }
@@ -1648,7 +1650,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
             icon={
               <Ionicons
                 name={
-                  contributionType === 'merry-go-round' && contributionStatus?.hasContributed
+                  contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for'
                     ? "checkmark-circle"
                     : contributionType === 'merry-go-round' && !selectedMerryGoRound
                       ? "time"
@@ -1659,7 +1661,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
                 size={20}
                 color={
                   !amount || parseFloat(amount) <= 0 ||
-                  (contributionType === 'merry-go-round' && contributionStatus?.hasContributed) ||
+                  (contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for') ||
                   (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
                   (contributionType === 'welfare' && !selectedWelfare)
                     ? colors.textSecondary

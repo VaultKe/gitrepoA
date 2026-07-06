@@ -257,6 +257,13 @@ func MakeContribution(c *gin.Context) {
 
 		// PREVENT DUPLICATE CONTRIBUTIONS: Check if user has already contributed to this round
 		var hasContributed bool
+		contributionCheckerUserID := userID.(string)
+
+		// For pay_for payments, check if the CONTRIBUTOR (not the initiator/payer) has already contributed
+		if req.PaymentMethod == "pay_for" && req.ContributorID != "" {
+			contributionCheckerUserID = req.ContributorID
+		}
+
 		err = db.(*sql.DB).QueryRow(`
 			SELECT EXISTS(
 				SELECT 1 FROM transactions t
@@ -268,7 +275,7 @@ func MakeContribution(c *gin.Context) {
 					AND t.initiated_by = $4
 					AND t.status = 'completed'
 			)
-		`, req.ChamaID, merryGoRoundID, currentRound, userID).Scan(&hasContributed)
+		`, req.ChamaID, merryGoRoundID, currentRound, contributionCheckerUserID).Scan(&hasContributed)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -278,7 +285,7 @@ func MakeContribution(c *gin.Context) {
 			return
 		}
 
-		if hasContributed {
+		if hasContributed && req.PaymentMethod != "pay_for" {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
 				"error":   "You have already contributed to this merry-go-round round. Each member can only contribute once per round.",
