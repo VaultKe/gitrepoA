@@ -370,7 +370,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 		return
 	}
 
-	chamaID := c.Param("chamaId")
+	chamaID := c.Param("id")
 	if chamaID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -379,7 +379,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 		return
 	}
 
-	merryGoRoundID := c.Param("merryGoRoundId")
+	merryGoRoundID := c.Param("cycleId")
 	if merryGoRoundID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,

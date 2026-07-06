@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,8 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRound, setSelectedRound] = useState(null);
+  const selectedRoundRef = useRef(selectedRound);
+  useEffect(() => { selectedRoundRef.current = selectedRound; }, [selectedRound]);
 
   const [contributorFilter, setContributorFilter] = useState('all');
   const [contributorSearch, setContributorSearch] = useState('');
@@ -49,9 +51,14 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
     }
   }, [selectedRound]);
 
+  // Poll for round completion every 15s when a round is selected
   useEffect(() => {
-    return () => {};
-  }, []);
+    if (!selectedRound) return;
+    const interval = setInterval(() => {
+      loadRoundContributions();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selectedRound?.id]);
 
   useEffect(() => {
     if (newMerryGoRound && refresh) {
@@ -90,7 +97,11 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
           });
         }
         setMerryGoRounds(rounds);
-        if (rounds.length > 0 && !selectedRound) setSelectedRound(rounds[0]);
+        if (rounds.length > 0) {
+          const current = selectedRound;
+          const updated = rounds.find(r => r.id === (current && current.id));
+          setSelectedRound(updated || rounds[0]);
+        }
       }
     } catch (error) {
       console.error('Failed to load merry-go-rounds:', error);
@@ -110,7 +121,8 @@ const onRefresh = async () => {
 
   // Load contributions for the current merry-go-round round
   const loadRoundContributions = async () => {
-    if (!selectedRound) return;
+    const currentRound = selectedRoundRef.current;
+    if (!currentRound) return;
     try {
       let allContributions = [];
 
@@ -121,7 +133,7 @@ const onRefresh = async () => {
       }
 
       // Also check merry_go_round_payments endpoint (dedicated merry-go-round payments table)
-      const paymentsResponse = await ApiService.makeRequest(`/merry-go-rounds/${selectedRound.id}/payments`);
+      const paymentsResponse = await ApiService.makeRequest(`/merry-go-rounds/${currentRound.id}/payments`);
       if (paymentsResponse.success && paymentsResponse.data) {
         allContributions = [...allContributions, ...(paymentsResponse.data || [])];
       }
@@ -139,10 +151,69 @@ const onRefresh = async () => {
         allContributions = [...allContributions, ...merryTx];
       }
 
-      console.log('[MGR] Loaded', allContributions.length, 'contributions for round', selectedRound.id);
+      console.log('[MGR] Loaded', allContributions.length, 'contributions for round', currentRound.id);
       setRoundContributions(allContributions);
+
+      // Auto-advance round if all non-recipient members have contributed
+      await checkAndAutoAdvanceRound(allContributions, currentRound);
     } catch (error) {
       console.error('Failed to load round contributions:', error);
+    }
+  };
+
+  const checkAndAutoAdvanceRound = async (allContributions, currentRound) => {
+    if (!currentRound) return;
+    const participants = currentRound.members || currentRound.participants || [];
+    const currentPosition = currentRound.current_position || currentRound.currentRound || 1;
+
+    // Need at least 2 participants to advance (current recipient + at least 1 contributor)
+    if (participants.length < 2) return;
+
+    const nonRecipientCount = participants.length - 1;
+    if (nonRecipientCount <= 0) return;
+
+    // Collect contributor IDs from loaded contributions for the current round only
+    const contributorIds = new Set();
+    for (const c of allContributions) {
+      const roundMatch = c.metadata?.roundNumber === currentPosition
+        || c.roundNumber === currentPosition
+        || c.round_number === currentPosition
+        || c.metadata?.merryGoRoundId === currentRound.id
+        || c.merryGoRoundId === currentRound.id
+        || c.merry_go_round_id === currentRound.id;
+
+      if (!roundMatch) continue;
+
+      const id = c.initiated_by || c.user_id || c.contributorId || c.contributor_id
+        || c.contributorUserId || c.payerUserId || (c.participant && c.participant.user_id)
+        || (c.user && c.user.id);
+      if (id) contributorIds.add(id);
+    }
+
+    if (contributorIds.size >= nonRecipientCount) {
+      try {
+        console.log('[MGR] All members contributed, auto-advancing round...');
+        const response = await ApiService.makeRequest(
+          `/chamas/${chamaId}/mgr-check-advance/${currentRound.id}`,
+          { method: 'POST' }
+        );
+
+        if (response.success) {
+          console.log('[MGR] Round advanced successfully:', response.message);
+          Toast.show({
+            type: 'success',
+            text1: 'Round Complete! 🎉',
+            text2: 'Moving to the next member...',
+            position: 'top',
+            visibilityTime: 3000,
+            topOffset: 60,
+          });
+          // Refresh merry-go-rounds to show the new current recipient
+          await loadMerryGoRounds();
+        }
+      } catch (error) {
+        console.error('Failed to auto-advance round:', error);
+      }
     }
   };
 
@@ -509,8 +580,8 @@ const getRowData = () => {
                  </View>
                )}
                <View style={styles.tableHeaderRow}>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 0.5 }]}>#</Text>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 3 }]}>Member</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>#</Text>
+                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Member</Text>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Status</Text>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Amount</Text>
                 <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Payout Date</Text>
