@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -34,20 +35,34 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 	}
 
 	// Count contributions for the current round (contributions made TO the current recipient)
-	// Exclude contributions from the recipient to themselves
+	// Check both transactions and merry_go_round_payments tables
 	var contributionCount int
+	// First try merry_go_round_payments table (our dedicated table)
 	err = db.QueryRow(`
-		SELECT COUNT(DISTINCT t.initiated_by)
-		FROM transactions t
-		WHERE t.type = 'contribution'
-			AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
-			AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
-			AND (t.metadata::jsonb)->>'roundNumber' = $2
-			AND (t.metadata::jsonb)->>'chamaId' = $3
-			AND t.status = 'completed'
+		SELECT COUNT(DISTINCT mp.contributor_user_id)
+		FROM merry_go_round_payments mp
+		WHERE mp.merry_go_round_id = $1
+			AND mp.round_number = $2
+			AND mp.chama_id = $3
+			AND mp.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
 
 	if err != nil {
+		// Fallback to transactions table for backward compatibility
+		err = db.QueryRow(`
+			SELECT COUNT(DISTINCT t.initiated_by)
+			FROM transactions t
+			WHERE t.type = 'contribution'
+				AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+				AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+				AND (t.metadata::jsonb)->>'roundNumber' = $2
+				AND (t.metadata::jsonb)->>'chamaId' = $3
+				AND t.status = 'completed'
+		`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
+
+		if err != nil {
+			contributionCount = 0
+		}
 	}
 
 	// Check if all non-recipient participants have contributed (100% completion)
@@ -77,12 +92,13 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 			SELECT frequency, start_date FROM merry_go_rounds WHERE id = $1
 		`, merryGoRoundID).Scan(&frequency, &startDate)
 		if err != nil {
+			log.Printf("Warning: Failed to get frequency for merry-go-round %s: %v", merryGoRoundID, err)
 		}
 
 		var nextPayoutDate time.Time
 		if frequency == "weekly" {
 			nextPayoutDate = startDate.AddDate(0, 0, nextRound*7)
-		} else { // monthly
+		} else { // monthly or empty
 			nextPayoutDate = startDate.AddDate(0, nextRound, 0)
 		}
 
@@ -94,6 +110,7 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 		`, nextRound, nextPayoutDate, merryGoRoundID)
 
 		if err != nil {
+			return fmt.Errorf("failed to advance merry-go-round: %v", err)
 		}
 		return nil
 	}
@@ -202,32 +219,47 @@ func CheckUserContributionStatus(c *gin.Context) {
 	queryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// First check merry_go_round_payments table (our dedicated table)
 	err := db.(*sql.DB).QueryRowContext(queryCtx, `
 		SELECT EXISTS(
-			SELECT 1 FROM transactions t
-			WHERE t.type = 'contribution'
-				AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
-				AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
-				AND (t.metadata::jsonb)->>'roundNumber' = $2
-				AND (t.metadata::jsonb)->>'chamaId' = $3
-				AND t.initiated_by = $4
-				AND t.status = 'completed'
+			SELECT 1 FROM merry_go_round_payments mp
+			WHERE mp.merry_go_round_id = $1
+				AND mp.round_number = $2
+				AND mp.chama_id = $3
+				AND mp.contributor_user_id = $4
+				AND mp.status = 'completed'
 		)
 	`, merryGoRoundID, currentRound, chamaID, userID).Scan(&hasContributed)
 
 	if err != nil {
-		if err == context.DeadlineExceeded {
-			c.JSON(http.StatusRequestTimeout, gin.H{
+		// Fallback to transactions table
+		err = db.(*sql.DB).QueryRowContext(queryCtx, `
+			SELECT EXISTS(
+				SELECT 1 FROM transactions t
+				WHERE t.type = 'contribution'
+					AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+					AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+					AND (t.metadata::jsonb)->>'roundNumber' = $2
+					AND (t.metadata::jsonb)->>'chamaId' = $3
+					AND t.initiated_by = $4
+					AND t.status = 'completed'
+			)
+		`, merryGoRoundID, currentRound, chamaID, userID).Scan(&hasContributed)
+
+		if err != nil {
+			if err == context.DeadlineExceeded {
+				c.JSON(http.StatusRequestTimeout, gin.H{
+					"success": false,
+					"error":   "Request timed out. Please try again.",
+				})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"error":   "Request timed out. Please try again.",
+				"error":   "Failed to check contribution status",
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to check contribution status",
-		})
-		return
 	}
 
 	// Get current recipient info
@@ -244,21 +276,33 @@ func CheckUserContributionStatus(c *gin.Context) {
 		recipientName = "Unknown"
 	}
 
-	// Count total contributions for this round
+	// Count total contributions for this round - check merry_go_round_payments first
 	var totalContributions int
 	err = db.(*sql.DB).QueryRow(`
-		SELECT COUNT(DISTINCT t.initiated_by)
-		FROM transactions t
-		WHERE t.type = 'contribution'
-			AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
-			AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
-			AND (t.metadata::jsonb)->>'roundNumber' = $2
-			AND (t.metadata::jsonb)->>'chamaId' = $3
-			AND t.status = 'completed'
+		SELECT COUNT(DISTINCT mp.contributor_user_id)
+		FROM merry_go_round_payments mp
+		WHERE mp.merry_go_round_id = $1
+			AND mp.round_number = $2
+			AND mp.chama_id = $3
+			AND mp.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&totalContributions)
 
 	if err != nil {
-		totalContributions = 0
+		// Fallback to transactions table
+		err = db.(*sql.DB).QueryRow(`
+			SELECT COUNT(DISTINCT t.initiated_by)
+			FROM transactions t
+			WHERE t.type = 'contribution'
+				AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+				AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+				AND (t.metadata::jsonb)->>'roundNumber' = $2
+				AND (t.metadata::jsonb)->>'chamaId' = $3
+				AND t.status = 'completed'
+		`, merryGoRoundID, currentRound, chamaID).Scan(&totalContributions)
+
+		if err != nil {
+			totalContributions = 0
+		}
 	}
 
 	// Get total participants
@@ -429,25 +473,36 @@ func CheckAndAdvanceRound(c *gin.Context) {
 	}
 
 	// Count current contributions (contributions made TO the current recipient)
-	// Exclude contributions from the recipient to themselves
+	// Check merry_go_round_payments table first, then fallback to transactions
 	var contributionCount int
 	err = db.(*sql.DB).QueryRow(`
-		SELECT COUNT(DISTINCT t.initiated_by)
-		FROM transactions t
-		WHERE t.type = 'contribution'
-			AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
-			AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
-			AND (t.metadata::jsonb)->>'roundNumber' = $2
-			AND (t.metadata::jsonb)->>'chamaId' = $3
-			AND t.status = 'completed'
+		SELECT COUNT(DISTINCT mp.contributor_user_id)
+		FROM merry_go_round_payments mp
+		WHERE mp.merry_go_round_id = $1
+			AND mp.round_number = $2
+			AND mp.chama_id = $3
+			AND mp.status = 'completed'
 	`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to count contributions",
-		})
-		return
+		err = db.(*sql.DB).QueryRow(`
+			SELECT COUNT(DISTINCT t.initiated_by)
+			FROM transactions t
+			WHERE t.type = 'contribution'
+				AND (t.metadata::jsonb)->>'contributionType' = 'merry-go-round'
+				AND (t.metadata::jsonb)->>'merryGoRoundId' = $1
+				AND (t.metadata::jsonb)->>'roundNumber' = $2
+				AND (t.metadata::jsonb)->>'chamaId' = $3
+				AND t.status = 'completed'
+		`, merryGoRoundID, currentRound, chamaID).Scan(&contributionCount)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to count contributions",
+			})
+			return
+		}
 	}
 
 	// Return appropriate response based on status

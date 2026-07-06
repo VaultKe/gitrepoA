@@ -51,6 +51,10 @@ const getMerryGoRounds = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/merry-go-rounds`);
 };
 
+const getMerryGoRoundPayments = async (roundId) => {
+  return await makeRequest(`/merry-go-rounds/${roundId}/payments`);
+};
+
 const getMerryGoRoundContributionStatus = async (chamaId, roundId = null) => {
   const queryParams = roundId ? `?roundId=${roundId}` : '';
   return await makeRequest(`/merry-go-rounds/contribution-status/${chamaId}${queryParams}`);

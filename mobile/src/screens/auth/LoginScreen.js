@@ -79,7 +79,7 @@ export default function LoginScreen({ navigation }) {
       const phoneRegex = /^(\+254|254|0)[17]\d{8}$/;
 
       if (!emailRegex.test(id) && !phoneRegex.test(id)) {
-        newErrors.identifier = 'Please enter a valid email or Kenyan phone number (+2547XXXXXXXX or 07XXXXXXXX)';
+        newErrors.identifier = 'Please enter a valid email or phone number ';
       }
     }
 

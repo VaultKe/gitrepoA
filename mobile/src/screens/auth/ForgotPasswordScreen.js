@@ -44,7 +44,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     const phoneRegex = /^(\+254|254|0)[17]\d{8}$/;
 
     if (!emailRegex.test(identifier.trim()) && !phoneRegex.test(identifier.trim())) {
-      setErrors({ identifier: 'Please enter a valid Kenyan phone number (+2547XXXXXXXX or 07XXXXXXXX) or email address' });
+      setErrors({ identifier: 'Please enter a validcphone numberor email address' });
       return;
     }
 

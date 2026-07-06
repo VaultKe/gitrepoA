@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -280,7 +281,8 @@ func GetMerryGoRounds(c *gin.Context) {
 	})
 }
 
-func CreateMerryGoRound(c *gin.Context) {
+// GetMerryGoRound returns a single merry-go-round by ID with its participants
+func GetMerryGoRound(c *gin.Context) {
 	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("userID")
 	if !exists {
@@ -291,75 +293,11 @@ func CreateMerryGoRound(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		ChamaID           string  `json:"chamaId" binding:"required"`
-		Name              string  `json:"name" binding:"required"`
-		Description       string  `json:"description"`
-		AmountPerRound    float64 `json:"amountPerRound" binding:"required"`
-		Frequency         string  `json:"frequency" binding:"required"`
-		TotalParticipants int     `json:"totalParticipants" binding:"required"`
-		StartDate         string  `json:"startDate" binding:"required"`
-		Participants      []struct {
-			UserID   string `json:"userId"`
-			Position int    `json:"position"`
-			Name     string `json:"name"`
-			Email    string `json:"email"`
-		} `json:"participants"`
-		ParticipantOrder string `json:"participantOrder"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
+	merryGoRoundID := c.Param("id")
+	if merryGoRoundID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Invalid request data: " + err.Error(),
-		})
-		return
-	}
-
-	// Validate amount
-	if req.AmountPerRound <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Amount per round must be greater than 0",
-		})
-		return
-	}
-
-	// Validate total participants
-	if req.TotalParticipants < 2 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "At least 2 participants are required",
-		})
-		return
-	}
-
-	// Validate frequency
-	validFrequencies := map[string]bool{"weekly": true, "monthly": true}
-	if !validFrequencies[req.Frequency] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Frequency must be 'weekly' or 'monthly'",
-		})
-		return
-	}
-
-	// Parse start date
-	startDate, err := time.Parse("2006-01-02", req.StartDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid start date format. Use YYYY-MM-DD",
-		})
-		return
-	}
-
-	// Check if start date is not too far in the past (allow today and future dates)
-	today := time.Now().Truncate(24 * time.Hour)
-	if startDate.Before(today) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Start date cannot be in the past. Please select today or a future date.",
+			"error":   "Merry-go-round ID is required",
 		})
 		return
 	}
@@ -374,6 +312,56 @@ func CreateMerryGoRound(c *gin.Context) {
 		return
 	}
 
+	// First get the merry-go-round details
+	var mgr struct {
+		ID                string     `json:"id"`
+		ChamaID           string     `json:"chamaId"`
+		Name              string     `json:"name"`
+		Description       string     `json:"description"`
+		AmountPerRound    float64    `json:"amountPerRound"`
+		Frequency         string     `json:"frequency"`
+		TotalParticipants int        `json:"totalParticipants"`
+		CurrentRound      int        `json:"currentRound"`
+		Status            string     `json:"status"`
+		StartDate         time.Time  `json:"startDate"`
+		NextPayoutDate    *time.Time `json:"nextPayoutDate"`
+		CreatedBy         string     `json:"createdBy"`
+		CreatedAt         time.Time  `json:"createdAt"`
+		CreatorFirstName  string     `json:"creatorFirstName"`
+		CreatorLastName   string     `json:"creatorLastName"`
+		CreatorEmail      string     `json:"creatorEmail"`
+	}
+
+	err := db.(*sql.DB).QueryRow(`
+		SELECT mgr.id, mgr.chama_id, mgr.name, mgr.description, mgr.amount_per_round,
+			mgr.frequency, mgr.total_participants, mgr.current_round, mgr.status,
+			mgr.start_date, mgr.next_payout_date, mgr.created_by, mgr.created_at,
+			u.first_name, u.last_name, u.email
+		FROM merry_go_rounds mgr
+		JOIN users u ON mgr.created_by = u.id
+		WHERE mgr.id = $1
+	`, merryGoRoundID).Scan(
+		&mgr.ID, &mgr.ChamaID, &mgr.Name, &mgr.Description, &mgr.AmountPerRound,
+		&mgr.Frequency, &mgr.TotalParticipants, &mgr.CurrentRound, &mgr.Status,
+		&mgr.StartDate, &mgr.NextPayoutDate, &mgr.CreatedBy, &mgr.CreatedAt,
+		&mgr.CreatorFirstName, &mgr.CreatorLastName, &mgr.CreatorEmail,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Merry-go-round not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch merry-go-round: " + err.Error(),
+		})
+		return
+	}
+
 	// Check if user is a member of the chama
 	var membershipExists bool
 	err = db.(*sql.DB).QueryRow(`
@@ -381,16 +369,9 @@ func CreateMerryGoRound(c *gin.Context) {
 			SELECT 1 FROM chama_members
 			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
 		)
-	`, req.ChamaID, userID).Scan(&membershipExists)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to verify chama membership",
-		})
-		return
-	}
+	`, mgr.ChamaID, userID).Scan(&membershipExists)
 
-	if !membershipExists {
+	if err == nil && !membershipExists {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"error":   "Access denied. You are not a member of this chama.",
@@ -398,88 +379,305 @@ func CreateMerryGoRound(c *gin.Context) {
 		return
 	}
 
-	// Generate merry-go-round ID
-	mgrID := fmt.Sprintf("mgr-%d", time.Now().UnixNano())
+	// Get participants for this merry-go-round
+	participantRows, err := db.(*sql.DB).Query(`
+		SELECT
+			mgrp.user_id, mgrp.position, mgrp.has_received,
+			u.first_name, u.last_name, u.email
+		FROM merry_go_round_participants mgrp
+		JOIN users u ON mgrp.user_id = u.id
+		WHERE mgrp.merry_go_round_id = $1
+		ORDER BY mgrp.position ASC
+	`, mgr.ID)
 
-	// Calculate next payout date
-	var nextPayoutDate time.Time
-	if req.Frequency == "weekly" {
-		nextPayoutDate = startDate.AddDate(0, 0, 7)
-	} else { // monthly
-		nextPayoutDate = startDate.AddDate(0, 1, 0)
+	var participants []map[string]interface{}
+	if err == nil {
+		defer participantRows.Close()
+		for participantRows.Next() {
+			var p struct {
+				UserID      string `json:"userId"`
+				Position    int    `json:"position"`
+				HasReceived bool   `json:"hasReceived"`
+				FirstName   string `json:"firstName"`
+				LastName    string `json:"lastName"`
+				Email       string `json:"email"`
+			}
+
+			err := participantRows.Scan(&p.UserID, &p.Position, &p.HasReceived, &p.FirstName, &p.LastName, &p.Email)
+			if err == nil {
+				participant := map[string]interface{}{
+					"id":                       fmt.Sprintf("%s-%d", mgr.ID, p.Position),
+					"user_id":                  p.UserID,
+					"position":                 p.Position,
+					"status":                   "pending",
+					"has_received":             p.HasReceived,
+					"has_contributed_this_cycle": false,
+					"user": map[string]interface{}{
+						"id":         p.UserID,
+						"first_name": p.FirstName,
+						"last_name":  p.LastName,
+						"email":      p.Email,
+						"username":   p.Email,
+						"full_name":  p.FirstName + " " + p.LastName,
+					},
+				}
+				participants = append(participants, participant)
+			}
+		}
 	}
 
-	// Insert merry-go-round into database
-	_, err = db.(*sql.DB).Exec(`
-		INSERT INTO merry_go_rounds (
-			id, chama_id, name, description, amount_per_round, frequency,
-			total_participants, current_round, status, start_date, next_payout_date,
-			created_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, 1, 'active', $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, mgrID, req.ChamaID, req.Name, req.Description, req.AmountPerRound, req.Frequency, req.TotalParticipants, startDate, nextPayoutDate, userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	nextPayoutDateStr := ""
+	if mgr.NextPayoutDate != nil {
+		nextPayoutDateStr = mgr.NextPayoutDate.Format(time.RFC3339)
+	}
+
+	// Calculate total payout
+	totalPayout := mgr.AmountPerRound * float64(len(participants))
+
+	mgrMap := map[string]interface{}{
+		"id":                 mgr.ID,
+		"chamaId":            mgr.ChamaID,
+		"name":               mgr.Name,
+		"description":        mgr.Description,
+		"amountPerRound":     mgr.AmountPerRound,
+		"amount_per_round":   mgr.AmountPerRound,
+		"frequency":          mgr.Frequency,
+		"totalParticipants":  mgr.TotalParticipants,
+		"total_participants": len(participants),
+		"currentRound":       mgr.CurrentRound,
+		"current_round":      mgr.CurrentRound,
+		"current_position":   mgr.CurrentRound - 1,
+		"round_number":       mgr.CurrentRound,
+		"position":           mgr.CurrentRound - 1,
+		"status":             mgr.Status,
+		"startDate":          mgr.StartDate.Format("2006-01-02"),
+		"start_date":         mgr.StartDate.Format("2006-01-02"),
+		"nextPayoutDate":     nextPayoutDateStr,
+		"next_payout_date":   nextPayoutDateStr,
+		"createdBy":          mgr.CreatedBy,
+		"created_by":         mgr.CreatedBy,
+		"createdAt":          mgr.CreatedAt.Format(time.RFC3339),
+		"created_at":         mgr.CreatedAt.Format(time.RFC3339),
+		"total_payout":       totalPayout,
+		"members":            participants,
+		"participants":       participants,
+		"roundComplete":      false,
+		"creator": map[string]interface{}{
+			"id":        mgr.CreatedBy,
+			"firstName": mgr.CreatorFirstName,
+			"lastName":  mgr.CreatorLastName,
+			"email":     mgr.CreatorEmail,
+			"fullName":  mgr.CreatorFirstName + " " + mgr.CreatorLastName,
+		},
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    mgrMap,
+		"message": "Merry-go-round found",
+	})
+}
+
+// GetMerryGoRoundPayments returns payments for a specific merry-go-round
+func GetMerryGoRoundPayments(c *gin.Context) {
+	// Get user ID from context (set by auth middleware)
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
-			"error":   "Failed to create merry-go-round: " + err.Error(),
+			"error":   "User not authenticated",
 		})
 		return
 	}
 
-	// Insert participants into merry_go_round_participants table
-	if len(req.Participants) > 0 {
-		for i, participant := range req.Participants {
-			participantID := fmt.Sprintf("mgrp-%d-%d", time.Now().UnixNano(), i)
-
-			_, err = db.(*sql.DB).Exec(`
-				INSERT INTO merry_go_round_participants (
-					id, merry_go_round_id, user_id, position, has_received, received_at,
-					total_contributed, joined_at
-				) VALUES ($1, $2, $3, $4, FALSE, NULL, 0, CURRENT_TIMESTAMP)
-			`, participantID, mgrID, participant.UserID, participant.Position)
-
-			if err != nil {
-				// Continue with other participants instead of failing completely
-			} else {
-			}
-		}
-
-		// Verify participants were inserted
-		var participantCount int
-		err = db.(*sql.DB).QueryRow(`
-			SELECT COUNT(*) FROM merry_go_round_participants
-			WHERE merry_go_round_id = $1
-		`, mgrID).Scan(&participantCount)
-
-		if err == nil {
-		}
-	} else {
+	merryGoRoundID := c.Param("id")
+	if merryGoRoundID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Merry-go-round ID is required",
+		})
+		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	// Get database connection
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	// First verify the merry-go-round exists and get its chama_id
+	var chamaID string
+	err := db.(*sql.DB).QueryRow(`
+		SELECT chama_id FROM merry_go_rounds WHERE id = $1
+	`, merryGoRoundID).Scan(&chamaID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Merry-go-round not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch merry-go-round: " + err.Error(),
+		})
+		return
+	}
+
+	// Check if user is a member of the chama
+	var membershipExists bool
+	err = db.(*sql.DB).QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM chama_members
+			WHERE chama_id = $1 AND user_id = $2 AND is_active = TRUE
+		)
+	`, chamaID, userID).Scan(&membershipExists)
+
+	if err == nil && !membershipExists {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Access denied. You are not a member of this chama.",
+		})
+		return
+	}
+
+	// Query payments for this merry-go-round
+	rows, err := db.(*sql.DB).Query(`
+		SELECT
+			mp.id, mp.merry_go_round_id, mp.chama_id, mp.payer_user_id, mp.payee_user_id,
+			mp.contributor_user_id, mp.amount, mp.round_number, mp.position,
+			mp.payment_method, mp.status, mp.transaction_id, mp.description,
+			mp.metadata, mp.created_at, mp.updated_at,
+			payer.first_name AS payer_first_name, payer.last_name AS payer_last_name, payer.email AS payer_email,
+			payee.first_name AS payee_first_name, payee.last_name AS payee_last_name, payee.email AS payee_email,
+			contributor.first_name AS contributor_first_name, contributor.last_name AS contributor_last_name, contributor.email AS contributor_email
+		FROM merry_go_round_payments mp
+		LEFT JOIN users payer ON mp.payer_user_id = payer.id
+		LEFT JOIN users payee ON mp.payee_user_id = payee.id
+		LEFT JOIN users contributor ON mp.contributor_user_id = contributor.id
+		WHERE mp.merry_go_round_id = $1
+		ORDER BY mp.created_at DESC
+	`, merryGoRoundID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch payments: " + err.Error(),
+		})
+		return
+	}
+	defer rows.Close()
+
+	var payments []map[string]interface{}
+	for rows.Next() {
+		var p struct {
+			ID                string
+			MerryGoRoundID    string
+			ChamaID           string
+			PayerUserID       string
+			PayeeUserID       string
+			ContributorUserID string
+			Amount            float64
+			RoundNumber       int
+			Position          int
+			PaymentMethod     string
+			Status            string
+			TransactionID     sql.NullString
+			Description       sql.NullString
+			MetadataJSON      sql.NullString
+			CreatedAt         time.Time
+			UpdatedAt         time.Time
+			PayerFirstName    sql.NullString
+			PayerLastName     sql.NullString
+			PayerEmail        sql.NullString
+			PayeeFirstName    sql.NullString
+			PayeeLastName     sql.NullString
+			PayeeEmail        sql.NullString
+			ContributorFirstName sql.NullString
+			ContributorLastName  sql.NullString
+			ContributorEmail     sql.NullString
+		}
+
+		err := rows.Scan(
+			&p.ID, &p.MerryGoRoundID, &p.ChamaID, &p.PayerUserID, &p.PayeeUserID,
+			&p.ContributorUserID, &p.Amount, &p.RoundNumber, &p.Position,
+			&p.PaymentMethod, &p.Status, &p.TransactionID, &p.Description,
+			&p.MetadataJSON, &p.CreatedAt, &p.UpdatedAt,
+			&p.PayerFirstName, &p.PayerLastName, &p.PayerEmail,
+			&p.PayeeFirstName, &p.PayeeLastName, &p.PayeeEmail,
+			&p.ContributorFirstName, &p.ContributorLastName, &p.ContributorEmail,
+		)
+		if err != nil {
+			continue
+		}
+
+		// Parse metadata
+		metadata := map[string]interface{}{}
+		if p.MetadataJSON.Valid && p.MetadataJSON.String != "" {
+			json.Unmarshal([]byte(p.MetadataJSON.String), &metadata)
+		}
+
+		payment := map[string]interface{}{
+			"id":                p.ID,
+			"merryGoRoundId":    p.MerryGoRoundID,
+			"chamaId":           p.ChamaID,
+			"payerUserId":       p.PayerUserID,
+			"payeeUserId":       p.PayeeUserID,
+			"contributorUserId": p.ContributorUserID,
+			"amount":            p.Amount,
+			"roundNumber":       p.RoundNumber,
+			"position":          p.Position,
+			"paymentMethod":     p.PaymentMethod,
+			"status":            p.Status,
+			"transactionId":     p.TransactionID.String,
+			"description":       p.Description.String,
+			"metadata":          metadata,
+			"createdAt":         p.CreatedAt.Format(time.RFC3339),
+			"updatedAt":         p.UpdatedAt.Format(time.RFC3339),
+			"payer": map[string]interface{}{
+				"id":        p.PayerUserID,
+				"firstName": p.PayerFirstName.String,
+				"lastName":  p.PayerLastName.String,
+				"email":     p.PayerEmail.String,
+				"fullName":  p.PayerFirstName.String + " " + p.PayerLastName.String,
+			},
+			"payee": map[string]interface{}{
+				"id":        p.PayeeUserID,
+				"firstName": p.PayeeFirstName.String,
+				"lastName":  p.PayeeLastName.String,
+				"email":     p.PayeeEmail.String,
+				"fullName":  p.PayeeFirstName.String + " " + p.PayeeLastName.String,
+			},
+			"contributor": map[string]interface{}{
+				"id":        p.ContributorUserID,
+				"firstName": p.ContributorFirstName.String,
+				"lastName":  p.ContributorLastName.String,
+				"email":     p.ContributorEmail.String,
+				"fullName":  p.ContributorFirstName.String + " " + p.ContributorLastName.String,
+			},
+		}
+
+		payments = append(payments, payment)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Merry-go-round created successfully! Members can now join.",
-		"data": map[string]interface{}{
-			"id":                mgrID,
-			"chamaId":           req.ChamaID,
-			"name":              req.Name,
-			"description":       req.Description,
-			"amountPerRound":    req.AmountPerRound,
-			"frequency":         req.Frequency,
-			"totalParticipants": req.TotalParticipants,
-			"currentRound":      1,
-			"status":            "active",
-			"startDate":         req.StartDate,
-			"nextPayoutDate":    nextPayoutDate.Format("2006-01-02"),
-			"createdBy":         userID,
-			"createdAt":         time.Now().Format(time.RFC3339),
-		},
+		"data":    payments,
+		"count":   len(payments),
+		"message": fmt.Sprintf("Found %d payments", len(payments)),
 	})
 }
 
-func GetMerryGoRound(c *gin.Context) {
+func CreateMerryGoRound(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Get merry-go-round endpoint - coming soon",
+		"message": "Create merry-go-round endpoint - coming soon",
 	})
 }
 

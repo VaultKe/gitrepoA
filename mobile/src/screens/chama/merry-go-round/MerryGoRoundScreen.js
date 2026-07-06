@@ -120,12 +120,22 @@ const onRefresh = async () => {
         allContributions = [...allContributions, ...(contribResponse.data || [])];
       }
 
+      // Also check merry_go_round_payments endpoint (dedicated merry-go-round payments table)
+      const paymentsResponse = await ApiService.makeRequest(`/merry-go-rounds/${selectedRound.id}/payments`);
+      if (paymentsResponse.success && paymentsResponse.data) {
+        allContributions = [...allContributions, ...(paymentsResponse.data || [])];
+      }
+
       // Also check transactions endpoint for merry-go-round contributions
       const txResponse = await ApiService.getChamaTransactions(chamaId, 100, 0);
       if (txResponse.success && txResponse.data) {
-        const merryTx = (txResponse.data || []).filter(item =>
-          item.type === 'merry-go-round' || item.transaction_type === 'merry-go-round'
-        );
+        const merryTx = (txResponse.data || []).filter(item => {
+          const isContribution = item.type === 'contribution' || item.transaction_type === 'contribution';
+          const isMgr = item.metadata?.contributionType === 'merry-go-round'
+            || item.metadata?.type === 'merry-go-round'
+            || item.transaction_type === 'merry-go-round';
+          return isContribution && isMgr;
+        });
         allContributions = [...allContributions, ...merryTx];
       }
 
@@ -341,6 +351,7 @@ const getRowData = () => {
     const currentRecipientIds = participants
       .filter((p, idx) => (idx + 1) === currentPosition)
       .map(p => p.user_id || (p.user && p.user.id));
+    const currentRecipientId = currentRecipientIds[0];
 
     // Filter contributions to only this specific merry-go-round round
     const thisRoundContributions = roundContributions.filter(c => {
@@ -357,6 +368,10 @@ const getRowData = () => {
       thisRoundContributions
         .flatMap(c => {
           const userIds = [];
+          // For transactions: initiated_by is the contributor
+          if (c.initiated_by) userIds.push(c.initiated_by);
+          // Also check recipient_id
+          if (c.recipient_id) userIds.push(c.recipient_id);
           // For regular contributions: user_id is the contributor
           if (c.user_id) userIds.push(c.user_id);
           // For pay_for contributions: contributorId is who was paid for (their obligation is fulfilled)
@@ -366,9 +381,42 @@ const getRowData = () => {
           // Also check for participant ID in merry-go-round transactions
           if (c.participant_id) userIds.push(c.participant_id);
           if (c.metadata?.participantId) userIds.push(c.metadata.participantId);
+          if (c.metadata?.recipientId) userIds.push(c.metadata.recipientId);
           // Check participant.user_id for nested participant structure
           if (c.participant?.user_id) userIds.push(c.participant.user_id);
           if (c.participant?.id) userIds.push(c.participant.id);
+          // For merry_go_round_payments endpoint response
+          if (c.contributorUserId) userIds.push(c.contributorUserId);
+          if (c.payerUserId) userIds.push(c.payerUserId);
+          if (c.payeeUserId) userIds.push(c.payeeUserId);
+          return userIds;
+        })
+        .filter(id => id)
+    );
+
+    // Build a set of user IDs who contributed specifically to the current recipient in this round
+    const paidToCurrentUserIds = new Set(
+      thisRoundContributions
+        .filter(c => {
+          // Only contributions for the current round that were paid to the current recipient
+          const roundMatches = c.roundNumber === currentPosition || c.round_number === currentPosition || c.metadata?.roundNumber === currentPosition;
+          const recipientMatches = c.payeeUserId === currentRecipientId || c.payee_user_id === currentRecipientId || c.metadata?.recipientId === currentRecipientId;
+          return roundMatches && recipientMatches;
+        })
+        .flatMap(c => {
+          const userIds = [];
+          if (c.initiated_by) userIds.push(c.initiated_by);
+          if (c.user_id) userIds.push(c.user_id);
+          if (c.contributorId) userIds.push(c.contributorId);
+          if (c.contributor_id) userIds.push(c.contributor_id);
+          if (c.metadata?.contributorId) userIds.push(c.metadata.contributorId);
+          if (c.participant_id) userIds.push(c.participant_id);
+          if (c.metadata?.participantId) userIds.push(c.metadata.participantId);
+          if (c.participant?.user_id) userIds.push(c.participant.user_id);
+          if (c.participant?.id) userIds.push(c.participant.id);
+          // For merry_go_round_payments endpoint response
+          if (c.contributorUserId) userIds.push(c.contributorUserId);
+          if (c.payerUserId) userIds.push(c.payerUserId);
           return userIds;
         })
         .filter(id => id)
@@ -378,6 +426,7 @@ const getRowData = () => {
       const position = idx + 1;
       const member = p.user || p;
       const userId = p.user_id || (p.user && p.user.id);
+      const hasReceivedDisbursement = p.has_received === true || p.hasReceived === true;
 
       // hasContributed: either flagged by backend OR found in actual contributions, OR already passed their turn
       const hasContributed = p.has_contributed_this_cycle ||
@@ -385,11 +434,11 @@ const getRowData = () => {
                             fulfilledUserIds.has(userId) ||
                             (!roundComplete && position < currentPosition);
 
-      // paidToCurrent: fulfilled contribution obligation AND is not the current recipient
-      const isCurrentRecipient = currentRecipientIds.includes(userId);
+      // paidToCurrent: contributed specifically to the current recipient in this round
+      const paidToCurrent = paidToCurrentUserIds.has(userId);
 
-      // Someone has paid to current if their obligation is fulfilled and they're not the recipient
-      const paidToCurrent = fulfilledUserIds.has(userId) && !isCurrentRecipient;
+      // hasBeenPaidOut: disbursement completed for this member in this round
+      const hasBeenPaidOut = position < currentPosition && hasReceivedDisbursement;
 
       const eligibleToContributeToAll = position <= currentPosition || roundComplete;
 
@@ -397,11 +446,13 @@ const getRowData = () => {
         id: p.id || `${selectedRound.id}-${position}`,
         name: getMemberName(member),
         position,
-        role: position === currentPosition ? 'Current' : position < currentPosition ? 'Completed' : 'Pending',
+        role: hasBeenPaidOut ? 'Paid' : position === currentPosition ? 'Current' : position < currentPosition ? 'Completed' : 'Pending',
         contributed: hasContributed,
         amount: hasContributed ? amountPerRound : 0,
         eligibleToContributeToAll,
         paidToCurrent,
+        hasReceivedDisbursement,
+        hasBeenPaidOut,
       };
     });
   };
@@ -489,8 +540,8 @@ const getRowData = () => {
                   </View>
                   <Text style={[styles.tableCell, { color: colors.text }, { flex: 1.5 }]}>{formatCurrency(row.amount)}</Text>
                   <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 1.5 }]}>{getPayoutDate(row)}</Text>
-                  <Text style={[styles.tableCell, { color: row.eligibleToContributeToAll ? colors.success : colors.textTertiary }, { flex: 1.5 }]}>
-                    {row.eligibleToContributeToAll ? 'Yes' : 'Partial'}
+                  <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary }, { flex: 1.5 }]}>
+                    {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
                   </Text>
                 </View>
               ))}

@@ -151,7 +151,6 @@ const DividendsScreen = ({ navigation, route }) => {
         if (rawPhone) {
           userPhone = rawPhone.replace(/\D/g, ''); // Remove all non-digits
           if (userPhone.startsWith('0') && userPhone.length === 10) {
-            // Convert 07XXXXXXXX to 2547XXXXXXXX
             userPhone = '254' + userPhone.substring(1);
           } else if (userPhone.length === 9) {
             // Add 254 prefix if missing

@@ -14,6 +14,7 @@ import (
 	"vaultke-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // Contribution handlers
@@ -27,10 +28,106 @@ func GetContributions(c *gin.Context) {
 		return
 	}
 
+	// Get database connection
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	// Get contributions from transactions table
+	rows, err := db.(*sql.DB).Query(`
+		SELECT
+			t.id, t.type, t.amount, t.currency, t.description, t.status, t.payment_method,
+			t.chama_id, t.initiated_by, t.recipient_id, t.metadata, t.created_at, t.updated_at,
+			u.first_name, u.last_name, u.email
+		FROM transactions t
+		LEFT JOIN users u ON t.initiated_by = u.id
+		WHERE t.chama_id = $1
+			AND t.type = 'contribution'
+		ORDER BY t.created_at DESC
+		LIMIT 100
+	`, chamaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch contributions: " + err.Error(),
+		})
+		return
+	}
+	defer rows.Close()
+
+	var contributions []map[string]interface{}
+	for rows.Next() {
+		var tx struct {
+			ID           string
+			Type         string
+			Amount       float64
+			Currency     string
+			Description  string
+			Status       string
+			PaymentMethod string
+			ChamaID      string
+			InitiatedBy  string
+			RecipientID  sql.NullString
+			MetadataJSON sql.NullString
+			CreatedAt    time.Time
+			UpdatedAt    time.Time
+			FirstName    sql.NullString
+			LastName     sql.NullString
+			Email        sql.NullString
+		}
+
+		err := rows.Scan(
+			&tx.ID, &tx.Type, &tx.Amount, &tx.Currency, &tx.Description, &tx.Status, &tx.PaymentMethod,
+			&tx.ChamaID, &tx.InitiatedBy, &tx.RecipientID, &tx.MetadataJSON, &tx.CreatedAt, &tx.UpdatedAt,
+			&tx.FirstName, &tx.LastName, &tx.Email,
+		)
+		if err != nil {
+			continue
+		}
+
+		// Parse metadata
+		metadata := map[string]interface{}{}
+		if tx.MetadataJSON.Valid && tx.MetadataJSON.String != "" {
+			json.Unmarshal([]byte(tx.MetadataJSON.String), &metadata)
+		}
+
+		contribution := map[string]interface{}{
+			"id":            tx.ID,
+			"type":          tx.Type,
+			"amount":        tx.Amount,
+			"currency":      tx.Currency,
+			"description":   tx.Description,
+			"status":        tx.Status,
+			"paymentMethod": tx.PaymentMethod,
+			"chamaId":       tx.ChamaID,
+			"user_id":       tx.InitiatedBy,
+			"initiated_by":  tx.InitiatedBy,
+			"recipient_id":  tx.RecipientID.String,
+			"metadata":      metadata,
+			"createdAt":     tx.CreatedAt.Format(time.RFC3339),
+			"updatedAt":     tx.UpdatedAt.Format(time.RFC3339),
+			"user": map[string]interface{}{
+				"id":        tx.InitiatedBy,
+				"first_name": tx.FirstName.String,
+				"last_name":  tx.LastName.String,
+				"email":      tx.Email.String,
+				"full_name":  tx.FirstName.String + " " + tx.LastName.String,
+			},
+		}
+
+		contributions = append(contributions, contribution)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    []interface{}{},
-		"message": "No contributions found",
+		"data":    contributions,
+		"count":   len(contributions),
+		"message": fmt.Sprintf("Found %d contributions", len(contributions)),
 	})
 }
 
@@ -437,6 +534,44 @@ func MakeContribution(c *gin.Context) {
 
 		fmt.Printf("✅ Successfully updated contributions for user %s\n", contributorUserID)
 
+		// Insert into merry_go_round_payments table for merry-go-round contributions
+		if req.Type == "merry-go-round" && merryGoRoundID != "" {
+			// Get contributor's position in the merry-go-round
+			var contributorPosition int
+			err = tx.QueryRow(`
+				SELECT position FROM merry_go_round_participants
+				WHERE merry_go_round_id = $1 AND user_id = $2
+			`, merryGoRoundID, contributorUserID).Scan(&contributorPosition)
+			if err != nil {
+				// If position not found, default to 0
+				contributorPosition = 0
+			}
+
+			metadataJSON, _ := json.Marshal(map[string]interface{}{
+				"contributionType": req.Type,
+				"chamaId":          req.ChamaID,
+				"merryGoRoundId":   merryGoRoundID,
+				"roundNumber":      currentRound,
+				"recipientId":      currentRecipientID,
+			})
+
+			paymentID := uuid.New().String()
+			_, err = tx.Exec(`
+				INSERT INTO merry_go_round_payments (
+					id, merry_go_round_id, chama_id, payer_user_id, payee_user_id,
+					contributor_user_id, amount, round_number, position, payment_method,
+					status, transaction_id, description, metadata, created_at, updated_at
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			`, paymentID, merryGoRoundID, req.ChamaID, userID.(string), currentRecipientID,
+			 contributorUserID, req.Amount, currentRound, contributorPosition, req.PaymentMethod,
+			 "completed", transactionID, req.Description, string(metadataJSON))
+			if err != nil {
+				fmt.Printf("❌ Error inserting into merry_go_round_payments: %v\n", err)
+			} else {
+				fmt.Printf("✅ Successfully recorded payment in merry_go_round_payments: %s\n", paymentID)
+			}
+		}
+
 		// Commit the outer transaction
 		if err = tx.Commit(); err != nil {
 			fmt.Printf("❌ Failed to commit transaction: %v\n", err)
@@ -505,6 +640,19 @@ func MakeContribution(c *gin.Context) {
 			return
 		}
 
+		// Update transaction metadata with merry-go-round details if applicable
+		if req.Type == "merry-go-round" && merryGoRoundID != "" {
+			mgrMetadata := map[string]interface{}{
+				"contributionType": req.Type,
+				"chamaId":          req.ChamaID,
+				"merryGoRoundId":   merryGoRoundID,
+				"roundNumber":      currentRound,
+				"recipientId":      currentRecipientID,
+			}
+			mgrMetadataJSON, _ := json.Marshal(mgrMetadata)
+			db.(*sql.DB).Exec("UPDATE transactions SET metadata = $1 WHERE id = $2", string(mgrMetadataJSON), transactionID)
+		}
+
 		cfg, exists := c.Get("config")
 		if !exists {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -538,6 +686,43 @@ func MakeContribution(c *gin.Context) {
 		}
 
 		updateTransactionCheckoutRequestID(db.(*sql.DB), transactionID, stkResponse.CheckoutRequestID)
+
+		// Insert into merry_go_round_payments table for merry-go-round mpesa contributions
+		if req.Type == "merry-go-round" && merryGoRoundID != "" {
+			// Get contributor's position in the merry-go-round
+			var contributorPosition int
+			err = db.(*sql.DB).QueryRow(`
+				SELECT position FROM merry_go_round_participants
+				WHERE merry_go_round_id = $1 AND user_id = $2
+			`, merryGoRoundID, userID).Scan(&contributorPosition)
+			if err != nil {
+				contributorPosition = 0
+			}
+
+			metadataJSON, _ := json.Marshal(map[string]interface{}{
+				"contributionType": req.Type,
+				"chamaId":          req.ChamaID,
+				"merryGoRoundId":   merryGoRoundID,
+				"roundNumber":      currentRound,
+				"recipientId":      currentRecipientID,
+			})
+
+			paymentID := uuid.New().String()
+			_, err = db.(*sql.DB).Exec(`
+				INSERT INTO merry_go_round_payments (
+					id, merry_go_round_id, chama_id, payer_user_id, payee_user_id,
+					contributor_user_id, amount, round_number, position, payment_method,
+					status, transaction_id, description, metadata, created_at, updated_at
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			`, paymentID, merryGoRoundID, req.ChamaID, userID.(string), currentRecipientID,
+			 userID.(string), req.Amount, currentRound, contributorPosition, req.PaymentMethod,
+			 "pending", transactionID, req.Description, string(metadataJSON))
+			if err != nil {
+				fmt.Printf("❌ Error inserting into merry_go_round_payments (mpesa): %v\n", err)
+			} else {
+				fmt.Printf("✅ Successfully recorded payment in merry_go_round_payments (mpesa): %s\n", paymentID)
+			}
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
@@ -670,6 +855,43 @@ func MakeContribution(c *gin.Context) {
 		`, req.Amount, req.ChamaID, req.ContributorID)
 		if err != nil {
 			fmt.Printf("❌ Error updating member contributions for cash: %v\n", err)
+		}
+
+		// Insert into merry_go_round_payments table for merry-go-round cash contributions
+		if req.Type == "merry-go-round" && merryGoRoundID != "" {
+			// Get contributor's position in the merry-go-round
+			var contributorPosition int
+			err = tx.QueryRow(`
+				SELECT position FROM merry_go_round_participants
+				WHERE merry_go_round_id = $1 AND user_id = $2
+			`, merryGoRoundID, req.ContributorID).Scan(&contributorPosition)
+			if err != nil {
+				contributorPosition = 0
+			}
+
+			metadataJSON, _ := json.Marshal(map[string]interface{}{
+				"contributionType": req.Type,
+				"chamaId":          req.ChamaID,
+				"merryGoRoundId":   merryGoRoundID,
+				"roundNumber":      currentRound,
+				"recipientId":      currentRecipientID,
+			})
+
+			paymentID := uuid.New().String()
+			_, err = tx.Exec(`
+				INSERT INTO merry_go_round_payments (
+					id, merry_go_round_id, chama_id, payer_user_id, payee_user_id,
+					contributor_user_id, amount, round_number, position, payment_method,
+					status, transaction_id, description, metadata, created_at, updated_at
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			`, paymentID, merryGoRoundID, req.ChamaID, userID.(string), currentRecipientID,
+			 req.ContributorID, req.Amount, currentRound, contributorPosition, req.PaymentMethod,
+			 "completed", transactionID, req.Description, string(metadataJSON))
+			if err != nil {
+				fmt.Printf("❌ Error inserting into merry_go_round_payments (cash): %v\n", err)
+			} else {
+				fmt.Printf("✅ Successfully recorded payment in merry_go_round_payments (cash): %s\n", paymentID)
+			}
 		}
 
 		// Commit the outer transaction

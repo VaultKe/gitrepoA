@@ -303,6 +303,33 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		}
 		log.Printf("Successfully processed callback for transaction %s - credited %s with %.2f", transactionID, toWalletID.String, amount)
 
+		// Update merry_go_round_payments status to completed for merry-go-round contributions
+		if merryGoRoundId, hasMgr := metadata["merryGoRoundId"].(string); hasMgr && merryGoRoundId != "" {
+			if _, ok := metadata["roundNumber"]; ok {
+				if _, dbErr := s.db.Exec(
+					"UPDATE merry_go_round_payments SET status = $1, updated_at = $2 WHERE transaction_id = $3",
+					"completed", time.Now(), transactionID,
+				); dbErr != nil {
+					log.Printf("[MpesaService] Failed to update merry_go_round_payments status for transaction %s: %v", transactionID, dbErr)
+				} else {
+					log.Printf("[MpesaService] Updated merry_go_round_payments status to completed for transaction %s", transactionID)
+				}
+
+				// Also update chama total_funds after successful mpesa contribution
+				if chamaId, hasChama := metadata["chamaId"].(string); hasChama && chamaId != "" {
+					s.db.Exec(`
+						UPDATE chamas
+						SET total_funds = (
+							SELECT COALESCE(balance, 0)
+							FROM wallets
+							WHERE owner_id = $1 AND type = 'chama'
+						), updated_at = CURRENT_TIMESTAMP
+						WHERE id = $2
+					`, chamaId, chamaId)
+				}
+			}
+		}
+
 		// Update service-fee payment records when this was a chama registration fee
 		if chamaID, hasChama := metadata["chama_id"].(string); hasChama && chamaID != "" {
 			if paymentType, ok := metadata["payment_type"].(string); ok && paymentType == "fees" {
