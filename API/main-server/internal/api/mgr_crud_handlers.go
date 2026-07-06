@@ -207,11 +207,11 @@ func GetMerryGoRounds(c *gin.Context) {
 					}
 
 					participant := map[string]interface{}{
-						"id":                       fmt.Sprintf("%s-%d", mgr.ID, p.Position), // Unique participant ID
-						"user_id":                  p.UserID,
-						"position":                 p.Position,
-						"status":                   status,
-						"has_received":             p.HasReceived,
+						"id":           fmt.Sprintf("%s-%d", mgr.ID, p.Position), // Unique participant ID
+						"user_id":      p.UserID,
+						"position":     p.Position,
+						"status":       status,
+						"has_received": p.HasReceived,
 						"user": map[string]interface{}{
 							"id":         p.UserID,
 							"first_name": p.FirstName,
@@ -406,11 +406,11 @@ func GetMerryGoRound(c *gin.Context) {
 			err := participantRows.Scan(&p.UserID, &p.Position, &p.HasReceived, &p.FirstName, &p.LastName, &p.Email)
 			if err == nil {
 				participant := map[string]interface{}{
-					"id":                       fmt.Sprintf("%s-%d", mgr.ID, p.Position),
-					"user_id":                  p.UserID,
-					"position":                 p.Position,
-					"status":                   "pending",
-					"has_received":             p.HasReceived,
+					"id":                         fmt.Sprintf("%s-%d", mgr.ID, p.Position),
+					"user_id":                    p.UserID,
+					"position":                   p.Position,
+					"status":                     "pending",
+					"has_received":               p.HasReceived,
 					"has_contributed_this_cycle": false,
 					"user": map[string]interface{}{
 						"id":         p.UserID,
@@ -577,28 +577,28 @@ func GetMerryGoRoundPayments(c *gin.Context) {
 	var payments []map[string]interface{}
 	for rows.Next() {
 		var p struct {
-			ID                string
-			MerryGoRoundID    string
-			ChamaID           string
-			PayerUserID       string
-			PayeeUserID       string
-			ContributorUserID string
-			Amount            float64
-			RoundNumber       int
-			Position          int
-			PaymentMethod     string
-			Status            string
-			TransactionID     sql.NullString
-			Description       sql.NullString
-			MetadataJSON      sql.NullString
-			CreatedAt         time.Time
-			UpdatedAt         time.Time
-			PayerFirstName    sql.NullString
-			PayerLastName     sql.NullString
-			PayerEmail        sql.NullString
-			PayeeFirstName    sql.NullString
-			PayeeLastName     sql.NullString
-			PayeeEmail        sql.NullString
+			ID                   string
+			MerryGoRoundID       string
+			ChamaID              string
+			PayerUserID          string
+			PayeeUserID          string
+			ContributorUserID    string
+			Amount               float64
+			RoundNumber          int
+			Position             int
+			PaymentMethod        string
+			Status               string
+			TransactionID        sql.NullString
+			Description          sql.NullString
+			MetadataJSON         sql.NullString
+			CreatedAt            time.Time
+			UpdatedAt            time.Time
+			PayerFirstName       sql.NullString
+			PayerLastName        sql.NullString
+			PayerEmail           sql.NullString
+			PayeeFirstName       sql.NullString
+			PayeeLastName        sql.NullString
+			PayeeEmail           sql.NullString
 			ContributorFirstName sql.NullString
 			ContributorLastName  sql.NullString
 			ContributorEmail     sql.NullString

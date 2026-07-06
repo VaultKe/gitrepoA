@@ -63,22 +63,22 @@ func GetContributions(c *gin.Context) {
 	var contributions []map[string]interface{}
 	for rows.Next() {
 		var tx struct {
-			ID           string
-			Type         string
-			Amount       float64
-			Currency     string
-			Description  string
-			Status       string
+			ID            string
+			Type          string
+			Amount        float64
+			Currency      string
+			Description   string
+			Status        string
 			PaymentMethod string
-			ChamaID      string
-			InitiatedBy  string
-			RecipientID  sql.NullString
-			MetadataJSON sql.NullString
-			CreatedAt    time.Time
-			UpdatedAt    time.Time
-			FirstName    sql.NullString
-			LastName     sql.NullString
-			Email        sql.NullString
+			ChamaID       string
+			InitiatedBy   string
+			RecipientID   sql.NullString
+			MetadataJSON  sql.NullString
+			CreatedAt     time.Time
+			UpdatedAt     time.Time
+			FirstName     sql.NullString
+			LastName      sql.NullString
+			Email         sql.NullString
 		}
 
 		err := rows.Scan(
@@ -112,7 +112,7 @@ func GetContributions(c *gin.Context) {
 			"createdAt":     tx.CreatedAt.Format(time.RFC3339),
 			"updatedAt":     tx.UpdatedAt.Format(time.RFC3339),
 			"user": map[string]interface{}{
-				"id":        tx.InitiatedBy,
+				"id":         tx.InitiatedBy,
 				"first_name": tx.FirstName.String,
 				"last_name":  tx.LastName.String,
 				"email":      tx.Email.String,
@@ -285,7 +285,7 @@ func MakeContribution(c *gin.Context) {
 			return
 		}
 
-		if hasContributed && req.PaymentMethod != "pay_for" {
+		if hasContributed {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
 				"error":   "You have already contributed to this merry-go-round round. Each member can only contribute once per round.",
@@ -488,8 +488,8 @@ func MakeContribution(c *gin.Context) {
 			Description:   &description,
 			PaymentMethod: models.PaymentMethodWalletTransfer,
 			Metadata: map[string]interface{}{
-				"contributionType": req.Type,
-				"chamaId":          req.ChamaID,
+				"contributionType":    req.Type,
+				"chamaId":             req.ChamaID,
 				"savingsContribution": req.Type == "savings",
 			},
 		}
@@ -570,8 +570,8 @@ func MakeContribution(c *gin.Context) {
 					status, transaction_id, description, metadata, created_at, updated_at
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			`, paymentID, merryGoRoundID, req.ChamaID, userID.(string), currentRecipientID,
-			 contributorUserID, req.Amount, currentRound, contributorPosition, req.PaymentMethod,
-			 "completed", transactionID, req.Description, string(metadataJSON))
+				contributorUserID, req.Amount, currentRound, contributorPosition, req.PaymentMethod,
+				"completed", transactionID, req.Description, string(metadataJSON))
 			if err != nil {
 				fmt.Printf("❌ Error inserting into merry_go_round_payments: %v\n", err)
 			} else {
@@ -722,8 +722,8 @@ func MakeContribution(c *gin.Context) {
 					status, transaction_id, description, metadata, created_at, updated_at
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			`, paymentID, merryGoRoundID, req.ChamaID, userID.(string), currentRecipientID,
-			 userID.(string), req.Amount, currentRound, contributorPosition, req.PaymentMethod,
-			 "pending", transactionID, req.Description, string(metadataJSON))
+				userID.(string), req.Amount, currentRound, contributorPosition, req.PaymentMethod,
+				"pending", transactionID, req.Description, string(metadataJSON))
 			if err != nil {
 				fmt.Printf("❌ Error inserting into merry_go_round_payments (mpesa): %v\n", err)
 			} else {
@@ -892,8 +892,8 @@ func MakeContribution(c *gin.Context) {
 					status, transaction_id, description, metadata, created_at, updated_at
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			`, paymentID, merryGoRoundID, req.ChamaID, userID.(string), currentRecipientID,
-			 req.ContributorID, req.Amount, currentRound, contributorPosition, req.PaymentMethod,
-			 "completed", transactionID, req.Description, string(metadataJSON))
+				req.ContributorID, req.Amount, currentRound, contributorPosition, req.PaymentMethod,
+				"completed", transactionID, req.Description, string(metadataJSON))
 			if err != nil {
 				fmt.Printf("❌ Error inserting into merry_go_round_payments (cash): %v\n", err)
 			} else {
@@ -1016,7 +1016,6 @@ func MakeContribution(c *gin.Context) {
 		`
 		insertArgs = []interface{}{transactionID, req.Amount, req.Description, transactionStatus, req.PaymentMethod, req.ChamaID, transactionInitiator, transactionRecipient, string(metadataJSON)}
 	}
-
 
 	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {

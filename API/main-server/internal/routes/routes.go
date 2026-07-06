@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"vaultke-backend/config"
 	"vaultke-backend/internal/api"
 	"vaultke-backend/internal/middleware"
@@ -227,24 +227,24 @@ func SetupRoutes(
 			chamas := protected.Group("/chamas")
 			{
 				chamas.GET("/", api.GetChamas)
-chamas.GET("/admin/all", api.GetAllChamasForAdmin)
- 				chamas.POST("/", api.CreateChama)
- 				chamas.GET("/my", api.GetUserChamas)
- 				chamas.GET("/:id", api.GetChama)
- 				chamas.PUT("/:id", api.UpdateChama)
- 				chamas.DELETE("/:id", api.DeleteChama)
- 				chamas.GET("/:id/members", api.GetChamaMembers)
- 				chamas.GET("/:id/members/:memberId/role", api.GetMemberRole)
- 				chamas.GET("/:id/members/:memberId/stats", api.GetChamaMemberStatistics)
- 				chamas.GET("/:id/members/export", api.ExportChamaMembers)
- 				chamas.GET("/:id/transactions", api.GetChamaTransactions)
- 				chamas.GET("/:id/statistics", api.GetChamaStatistics)
- 				chamas.GET("/:id/merry-go-rounds", api.GetMerryGoRounds)
- 				chamas.GET("/:id/savings/export", api.ExportSavingsTransactions)
+				chamas.GET("/admin/all", api.GetAllChamasForAdmin)
+				chamas.POST("/", api.CreateChama)
+				chamas.GET("/my", api.GetUserChamas)
+				chamas.GET("/:id", api.GetChama)
+				chamas.PUT("/:id", api.UpdateChama)
+				chamas.DELETE("/:id", api.DeleteChama)
+				chamas.GET("/:id/members", api.GetChamaMembers)
+				chamas.GET("/:id/members/:memberId/role", api.GetMemberRole)
+				chamas.GET("/:id/members/:memberId/stats", api.GetChamaMemberStatistics)
+				chamas.GET("/:id/members/export", api.ExportChamaMembers)
+				chamas.GET("/:id/transactions", api.GetChamaTransactions)
+				chamas.GET("/:id/statistics", api.GetChamaStatistics)
+				chamas.GET("/:id/merry-go-rounds", api.GetMerryGoRounds)
+				chamas.GET("/:id/savings/export", api.ExportSavingsTransactions)
 
-			chamas.POST("/:id/invite", api.SendChamaInvitation)
-			chamas.POST("/:id/create-chat-room", api.CreateChamaChatRoom)
-			chamas.GET("/:id/invitations/sent", api.GetChamaSentInvitations)
+				chamas.POST("/:id/invite", api.SendChamaInvitation)
+				chamas.POST("/:id/create-chat-room", api.CreateChamaChatRoom)
+				chamas.GET("/:id/invitations/sent", api.GetChamaSentInvitations)
 				chamas.GET("/invitations", api.GetUserInvitations)
 				chamas.POST("/:id/invitations/:invitationId/respond", api.RespondToInvitation)
 				chamas.POST("/:id/invitations/:invitationId/cancel", api.CancelInvitation)
@@ -254,17 +254,17 @@ chamas.GET("/admin/all", api.GetAllChamasForAdmin)
 				chamas.GET("/:id/eligible-welfare-members", api.GetEligibleWelfareMembers)
 				chamas.GET("/:id/eligible-savings-members", api.GetEligibleSavingsMembers)
 				chamas.GET("/:id/eligible-dividend-members", api.GetEligibleDividendMembers)
-			chamas.GET("/:id/eligible-shares-members", api.GetChamaSharesOfferings)
-			chamas.GET("/:id/eligible-other-members", api.GetEligibleOtherMembers)
-			chamas.POST("/:id/shares/offering/", api.CreateChamaShares)
-			chamas.GET("/:id/shares/offerings", api.GetChamaShareOfferingsList)
-			chamas.GET("/:id/dividends/", api.GetChamaDividendDeclarations)
-			chamas.POST("/:id/dividends/", api.DeclareChamaDividends)
-			chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
-			chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
-			chamas.POST("/:id/mgr-disbursements/:cycleId", api.DisburseMerryGoRoundCycle)
-			chamas.POST("/:id/mgr-disbursements/bulk", api.DisburseMerryGoRoundCyclesBulk)
-			chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
+				chamas.GET("/:id/eligible-shares-members", api.GetChamaSharesOfferings)
+				chamas.GET("/:id/eligible-other-members", api.GetEligibleOtherMembers)
+				chamas.POST("/:id/shares/offering/", api.CreateChamaShares)
+				chamas.GET("/:id/shares/offerings", api.GetChamaShareOfferingsList)
+				chamas.GET("/:id/dividends/", api.GetChamaDividendDeclarations)
+				chamas.POST("/:id/dividends/", api.DeclareChamaDividends)
+				chamas.POST("/:id/disbursements/individual", api.CreateIndividualDisbursement)
+				chamas.POST("/:id/disbursements/bulk", api.CreateBulkDisbursement)
+				chamas.POST("/:id/mgr-disbursements/:cycleId", api.DisburseMerryGoRoundCycle)
+				chamas.POST("/:id/mgr-disbursements/bulk", api.DisburseMerryGoRoundCyclesBulk)
+				chamas.GET("/:id/subscription-payments", api.GetChamaSubscriptionPayments)
 				chamas.POST("/:id/subscription-payments/:paymentId/pay", api.PaySubscriptionPayment)
 				chamas.GET("/:id/service-fee-payments", api.GetChamaServiceFeePayments)
 				chamas.GET("/:id/members/:memberId/service-fee-payments", api.GetMemberServiceFeePayments)
@@ -486,27 +486,27 @@ chamas.GET("/admin/all", api.GetAllChamasForAdmin)
 				onlineMeetings.Any("/*path", proxyTo(cfg.MeetingServiceURL, "/online-meetings"))
 			}
 
-		chat := apiGroup.Group("/chat")
-		{
-			chat.Use(authMiddleware.AuthRequired())
-			chat.Use(meetingAuthPassthrough)
-			chat.Any("/*path", proxyTo(cfg.ChatServiceURL, "/chat"))
-		}
+			chat := apiGroup.Group("/chat")
+			{
+				chat.Use(authMiddleware.AuthRequired())
+				chat.Use(meetingAuthPassthrough)
+				chat.Any("/*path", proxyTo(cfg.ChatServiceURL, "/chat"))
+			}
 
-		chatWS := apiGroup.Group("/chat-ws")
-		{
-			chatWS.POST("/ws-token", authMiddleware.AuthRequired(), chatWSTokenHandler(cfg))
-			chatWS.GET("/ws", chatWSHandler(cfg))
-		}
+			chatWS := apiGroup.Group("/chat-ws")
+			{
+				chatWS.POST("/ws-token", authMiddleware.AuthRequired(), chatWSTokenHandler(cfg))
+				chatWS.GET("/ws", chatWSHandler(cfg))
+			}
 
-merryGoRounds := protected.Group("/merry-go-rounds")
-	{
-		merryGoRounds.GET("/", api.GetMerryGoRounds)
-		merryGoRounds.GET("/:id", api.GetMerryGoRound)
-		merryGoRounds.GET("/:id/payments", api.GetMerryGoRoundPayments)
-		merryGoRounds.POST("/", api.CreateMerryGoRound)
-		merryGoRounds.GET("/contribution-status/:chamaId", api.CheckUserContributionStatus)
-	}
+			merryGoRounds := protected.Group("/merry-go-rounds")
+			{
+				merryGoRounds.GET("/", api.GetMerryGoRounds)
+				merryGoRounds.GET("/:id", api.GetMerryGoRound)
+				merryGoRounds.GET("/:id/payments", api.GetMerryGoRoundPayments)
+				merryGoRounds.POST("/", api.CreateMerryGoRound)
+				merryGoRounds.GET("/contribution-status/:chamaId", api.CheckUserContributionStatus)
+			}
 
 			welfare := protected.Group("/welfare")
 			{
@@ -578,7 +578,7 @@ func proxyTo(targetBase string, _ string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Param("path")
 		query := c.Request.URL.RawQuery
-		
+
 		// Build target URL: targetBase + path (path already has leading /)
 		targetURL := targetBase + path
 		if query != "" {
