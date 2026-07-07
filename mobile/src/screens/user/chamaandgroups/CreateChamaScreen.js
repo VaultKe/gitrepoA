@@ -820,12 +820,20 @@ const CreateChamaScreen = ({ navigation }) => {
       if (chamaData.rules_file && chamaData.rules_file.uri) {
         const multipart = new FormData();
         Object.entries(jsonPayload).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
-              multipart.append(key, JSON.stringify(value));
-            } else {
-              multipart.append(key, value);
-            }
+          if (value === undefined || value === null) return;
+
+          if (Array.isArray(value)) {
+            value.forEach(item => {
+              if (typeof item === 'object') {
+                multipart.append(key, JSON.stringify(item));
+              } else {
+                multipart.append(key, String(item));
+              }
+            });
+          } else if (typeof value === 'object') {
+            multipart.append(key, JSON.stringify(value));
+          } else {
+            multipart.append(key, String(value));
           }
         });
         multipart.append('rules_file', {

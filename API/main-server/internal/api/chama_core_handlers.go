@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"vaultke-backend/internal/models"
@@ -217,13 +220,38 @@ func CreateChama(c *gin.Context) {
 		} `json:"members,omitempty"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("❌ JSON binding failed: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request data: " + err.Error(),
-		})
-		return
+	// Bind request data - support both JSON and multipart/form-data (for file uploads)
+	if c.ContentType() == "multipart/form-data" {
+		c.Request.ParseMultipartForm(10 << 20) // 10 MB max memory
+		req.Name = c.PostForm("name")
+		req.Description = c.PostForm("description")
+		req.Category = c.PostForm("category")
+		req.Type = c.PostForm("type")
+		req.County = c.PostForm("county")
+		req.Town = c.PostForm("town")
+		req.ContributionFrequency = c.PostForm("contribution_frequency")
+		req.Rules = c.PostForm("rules")
+		req.MeetingSchedule = c.PostForm("meeting_schedule")
+		req.RegistrationFeePaid = c.PostForm("registration_fee_paid") == "true"
+		req.MonthlySubscriptionFee, _ = strconv.ParseFloat(c.PostForm("monthly_subscription_fee"), 64)
+		req.ContributionAmount, _ = strconv.ParseFloat(c.PostForm("contribution_amount"), 64)
+		req.TargetAmount, _ = strconv.ParseFloat(c.PostForm("target_amount"), 64)
+		req.MaxMembers, _ = strconv.Atoi(c.PostForm("max_members"))
+		req.IsPublic = c.PostForm("is_public") == "true"
+		req.RequiresApproval = c.PostForm("requires_approval") == "true"
+		req.WalletTypes = c.PostFormArray("wallet_types")
+		if membersStr := c.PostForm("members"); membersStr != "" {
+			json.Unmarshal([]byte(membersStr), &req.Members)
+		}
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			log.Printf("❌ JSON binding failed: %v", err)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid request data: " + err.Error(),
+			})
+			return
+		}
 	}
 
 	// Debug logging
@@ -465,6 +493,50 @@ func CreateChama(c *gin.Context) {
 		if err != nil {
 			fmt.Printf("Warning: Failed to update member count for chama %s: %v\n", chama.ID, err)
 		}
+	}
+
+	// Handle rules file upload if present
+	var rulesFileURL string
+	if c.ContentType() == "multipart/form-data" {
+		file, err := c.FormFile("rules_file")
+		if err == nil && file != nil {
+			uploadDir := "./uploads/chamas/rules"
+			if err := os.MkdirAll(uploadDir, 0o755); err == nil {
+				cleanName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(file.Filename)
+				fileName := fmt.Sprintf("%s_%s", chama.ID, cleanName)
+				filePath := filepath.Join(uploadDir, fileName)
+				
+				if err := c.SaveUploadedFile(file, filePath); err == nil {
+					rulesFileURL = fmt.Sprintf("/uploads/chamas/rules/%s", fileName)
+				}
+			}
+		}
+	}
+
+	if rulesFileURL != "" {
+		permissions := map[string]interface{}{
+			"allowMerryGoRound": true,
+			"allowWelfare":      true,
+			"activeWalletTypes": req.WalletTypes,
+		}
+		if len(req.WalletTypes) == 0 {
+			switch req.Type {
+			case string(models.ChamaTypeMerryGoRound):
+				permissions["activeWalletTypes"] = []string{"merry-go-round"}
+			case string(models.ChamaTypeWelfare):
+				permissions["activeWalletTypes"] = []string{"welfare"}
+			case string(models.ChamaTypeSavings):
+				permissions["activeWalletTypes"] = []string{"savings"}
+			case string(models.ChamaTypeBusiness):
+				permissions["activeWalletTypes"] = []string{"savings", "loans"}
+			case string(models.ChamaTypeInvestment):
+				permissions["activeWalletTypes"] = []string{"savings", "shares", "dividends"}
+			}
+		}
+		permissions["rules_file_path"] = rulesFileURL
+		permissions["rules_file_name"] = c.PostForm("rules_file_name")
+		permissionsJSON, _ := json.Marshal(permissions)
+		_, _ = database.Exec("UPDATE chamas SET permissions = $1, updated_at = NOW() WHERE id = $2", permissionsJSON, chama.ID)
 	}
 
 	// Return success response
