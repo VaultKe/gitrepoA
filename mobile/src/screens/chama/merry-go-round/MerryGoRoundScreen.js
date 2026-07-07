@@ -496,8 +496,10 @@ const getRowData = () => {
 
     const getPayoutDate = (row) => {
       if (!selectedRound) return '—';
+      const participants = selectedRound.members || selectedRound.participants || [];
+      const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
+      const currentPos = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
       const frequency = selectedRound.frequency || 'monthly';
-      const currentPos = selectedRound.current_position || selectedRound.currentRound || 1;
       const cyclesAway = row.position >= currentPos ? (row.position - currentPos) : 0;
       const date = new Date();
       if (frequency === 'weekly') date.setDate(date.getDate() + cyclesAway * 7);
