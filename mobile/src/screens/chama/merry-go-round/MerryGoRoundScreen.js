@@ -521,44 +521,44 @@ const getRowData = () => {
                    </Text>
                  </View>
                 )}
-                  <View style={[styles.tableHeaderRow, { backgroundColor: colors.primary }]}>
-                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
-                    <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2.5 }]}>Member</Text>
-                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>
-                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'right' }, { flex: 1.2 }]}>Amount</Text>
-                    <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.8 }]}>Recipient</Text>
-                    <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.2 }]}>Payout Date</Text>
-                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1 }]}>Receive</Text>
-                  </View>
-               {rows.map(row => (
-                   <View key={row.id} style={styles.tableRow}>
-                     <Text style={[styles.tableCell, { color: colors.text, textAlign: 'center', flex: 0.8 }]}>{row.position}</Text>
-                     <Text style={[styles.tableCell, { color: colors.text, flex: 2.5 }]} numberOfLines={1}>{row.name}</Text>
-                     <View style={[
-                       styles.statusBadgeCell,
-                       { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20', flex: 1.8 }
-                     ]}>
-                       <Ionicons
-                         name={row.contributed ? 'checkmark-circle' : 'time'}
-                         size={10}
-                         color={row.contributed ? colors.success : colors.warning}
-                       />
-                       <Text style={{
-                         fontSize: 11,
-                         fontWeight: '600',
-                         color: row.contributed ? colors.success : colors.warning,
-                       }}>
-                         {row.contributed ? 'Paid' : 'Pending'}
-                       </Text>
-                     </View>
-                     <Text style={[styles.tableCell, { color: colors.text, textAlign: 'right', flex: 1.2 }]}>{formatCurrency(row.amount)}</Text>
-                     <Text style={[styles.tableCell, { color: colors.textSecondary, flex: 1.8 }]} numberOfLines={1}>{row.recipientDisplay || '-'}</Text>
-                     <Text style={[styles.tableCell, { color: colors.textSecondary, flex: 1.2 }]}>{getPayoutDate(row)}</Text>
-                     <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary, textAlign: 'center', flex: 1 }]}>
-                       {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
-                     </Text>
+                   <View style={[styles.tableHeaderRow, { backgroundColor: colors.surface }]}>
+                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
+                     <Text style={[styles.tableHeaderText, { color: colors.primary }, { flex: 2.5 }]}>Member</Text>
+                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>
+                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1.2 }]}>Amount</Text>
+                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 2 }]}>Recipient</Text>
+                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1.5 }]}>Payout Date</Text>
+                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1 }]}>Receive</Text>
                    </View>
-                 ))}
+                {rows.map(row => (
+                    <View key={row.id} style={styles.tableRow}>
+                      <Text style={[styles.tableCell, { color: colors.text, textAlign: 'center', flex: 0.8 }]}>{row.position}</Text>
+                      <Text style={[styles.tableCell, { color: colors.text, flex: 2.5 }]} numberOfLines={1}>{row.name}</Text>
+                      <View style={[
+                        styles.statusBadgeCell,
+                        { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20', flex: 1.8 }
+                      ]}>
+                        <Ionicons
+                          name={row.contributed ? 'checkmark-circle' : 'time'}
+                          size={10}
+                          color={row.contributed ? colors.success : colors.warning}
+                        />
+                        <Text style={{
+                          fontSize: 11,
+                          fontWeight: '600',
+                          color: row.contributed ? colors.success : colors.warning,
+                        }}>
+                          {row.contributed ? 'Paid' : 'Pending'}
+                        </Text>
+                      </View>
+                      <Text style={[styles.tableCell, { color: colors.text, textAlign: 'right', flex: 1.2 }]}>{formatCurrency(row.amount)}</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary, textAlign: 'right', flex: 2 }]} numberOfLines={1}>{row.recipientDisplay || '-'}</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary, textAlign: 'right', flex: 1.5 }]}>{getPayoutDate(row)}</Text>
+                      <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary, textAlign: 'right', flex: 1 }]}>
+                        {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
+                      </Text>
+                    </View>
+                  ))}
               {!rows.length && (
                 <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
                   <Text style={{ color: colors.textSecondary }}>No members match this filter.</Text>
