@@ -521,45 +521,44 @@ const getRowData = () => {
                    </Text>
                  </View>
                 )}
-                 <View style={styles.tableHeaderRow}>
-                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
-                   <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2.5 }]}>Member</Text>
-                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>
-                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'right' }, { flex: 1.2 }]}>Amount</Text>
-                   <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.8 }]}>Recipient</Text>
-                   <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.2 }]}>Payout Date</Text>
-                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1 }]}>Receive</Text>
-                 </View>
+                  <View style={[styles.tableHeaderRow, { backgroundColor: colors.primary }]}>
+                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
+                    <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2.5 }]}>Member</Text>
+                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>
+                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'right' }, { flex: 1.2 }]}>Amount</Text>
+                    <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.8 }]}>Recipient</Text>
+                    <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.2 }]}>Payout Date</Text>
+                    <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1 }]}>Receive</Text>
+                  </View>
                {rows.map(row => (
-                 <View key={row.id} style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
-                   <Text style={[styles.tableCell, { color: colors.text }, { flex: 1, textAlign: 'center' }]}>{row.position}</Text>
-                   <Text style={[styles.tableCell, { color: colors.text }, { flex: 3 }]} numberOfLines={1}>{row.name}</Text>
-                   <View style={[
-                     { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
-                     { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20' }
-                   ]}>
-                     <Ionicons
-                       name={row.contributed ? 'checkmark-circle' : 'time'}
-                       size={10}
-                       color={row.contributed ? colors.success : colors.warning}
-                     />
-                     <Text style={{
-                       fontSize: 12,
-                       fontWeight: 'medium',
-                       color: row.contributed ? colors.success : colors.warning,
-                       marginLeft: 2,
-                     }}>
-                       {row.contributed ? 'Paid' : 'Pending'}
+                   <View key={row.id} style={styles.tableRow}>
+                     <Text style={[styles.tableCell, { color: colors.text, textAlign: 'center', flex: 0.8 }]}>{row.position}</Text>
+                     <Text style={[styles.tableCell, { color: colors.text, flex: 2.5 }]} numberOfLines={1}>{row.name}</Text>
+                     <View style={[
+                       styles.statusBadgeCell,
+                       { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20', flex: 1.8 }
+                     ]}>
+                       <Ionicons
+                         name={row.contributed ? 'checkmark-circle' : 'time'}
+                         size={10}
+                         color={row.contributed ? colors.success : colors.warning}
+                       />
+                       <Text style={{
+                         fontSize: 11,
+                         fontWeight: '600',
+                         color: row.contributed ? colors.success : colors.warning,
+                       }}>
+                         {row.contributed ? 'Paid' : 'Pending'}
+                       </Text>
+                     </View>
+                     <Text style={[styles.tableCell, { color: colors.text, textAlign: 'right', flex: 1.2 }]}>{formatCurrency(row.amount)}</Text>
+                     <Text style={[styles.tableCell, { color: colors.textSecondary, flex: 1.8 }]} numberOfLines={1}>{row.recipientDisplay || '-'}</Text>
+                     <Text style={[styles.tableCell, { color: colors.textSecondary, flex: 1.2 }]}>{getPayoutDate(row)}</Text>
+                     <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary, textAlign: 'center', flex: 1 }]}>
+                       {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
                      </Text>
                    </View>
-                   <Text style={[styles.tableCell, { color: colors.text }, { flex: 2, textAlign: 'right' }]}>{formatCurrency(row.amount)}</Text>
-                   <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 2.5 }]} numberOfLines={1}>{row.recipientDisplay || '-'}</Text>
-                   <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 2 }]}>{getPayoutDate(row)}</Text>
-                   <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary }, { flex: 1.5, textAlign: 'center' }]}>
-                     {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
-                   </Text>
-                 </View>
-               ))}
+                 ))}
               {!rows.length && (
                 <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
                   <Text style={{ color: colors.textSecondary }}>No members match this filter.</Text>
@@ -882,7 +881,7 @@ const styles = StyleSheet.create({
   filterTab: { flex: 1, alignItems: 'center', paddingVertical: spacing.xs, borderRadius: borderRadius.sm, borderWidth: 1, marginHorizontal: 2 },
   filterTabText: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold },
   tableSection: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)', borderRadius: borderRadius.md },
-  tableHeaderRow: { flexDirection: 'row', paddingVertical: 8, paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: colors.primary, backgroundColor: colors.primary + '15', alignItems: 'center' },
+  tableHeaderRow: { flexDirection: 'row', paddingVertical: 8, paddingHorizontal: 12, borderBottomWidth: 2, alignItems: 'center' },
   tableHeaderText: { flex: 1, fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
   tableCell: { flex: 1, fontSize: 12 },
   tableRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 0, 0, 0.05)', alignItems: 'center' },
