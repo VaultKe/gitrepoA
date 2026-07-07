@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
+import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 
@@ -17,7 +18,21 @@ const AccountManagementScreen = ({ route, navigation }) => {
   const { chamaId } = route.params;
   const { width } = useWindowDimensions();
   const { theme } = useApp();
+  const { selectedChama } = useChamaContext();
   const colors = getThemeColors(theme);
+
+  const activeWalletTypes = Array.isArray(selectedChama?.permissions?.activeWalletTypes)
+    ? selectedChama.permissions.activeWalletTypes
+    : ['merry-go-round', 'welfare', 'savings', 'shares', 'dividends', 'loans'];
+
+  const moduleWalletTypeMap = {
+    'Loans': 'loans',
+    'Welfare': 'welfare',
+    'Savings': 'savings',
+    'Merry-go-round': 'merry-go-round',
+    'Shares': 'shares',
+    'Dividends': 'dividends',
+  };
 
   const modules = [
     {
@@ -25,12 +40,14 @@ const AccountManagementScreen = ({ route, navigation }) => {
       icon: 'card',
       color: colors.primary,
       onPress: () => navigation.navigate('LoanManagement', { chamaId }),
+      walletType: 'loans',
     },
     {
       title: 'Welfare',
       icon: 'heart',
       color: colors.warning,
       onPress: () => navigation.navigate('WelfareDisbursement', { chamaId }),
+      walletType: 'welfare',
     },
     {
       title: 'Subscriptions',
@@ -43,33 +60,42 @@ const AccountManagementScreen = ({ route, navigation }) => {
       icon: 'wallet',
       color: colors.secondary,
       onPress: () => navigation.navigate('SavingsWithdrawal', { chamaId }),
+      walletType: 'savings',
     },
     {
       title: 'Merry-go-round',
       icon: 'refresh-circle',
       color: colors.primary,
       onPress: () => navigation.navigate('MaryGoRoundDisbursement', { chamaId }),
+      walletType: 'merry-go-round',
     },
     {
       title: 'Shares',
       icon: 'cube',
       color: '#8B5CF6',
       onPress: () => navigation.navigate('SharesManagement', { chamaId }),
+      walletType: 'shares',
     },
     {
       title: 'Dividends',
       icon: 'cash',
       color: colors.success,
       onPress: () => navigation.navigate('DividendsManagement', { chamaId }),
+      walletType: 'dividends',
     },
   ];
+
+  const visibleModules = modules.filter(mod => {
+    if (!mod.walletType) return true;
+    return activeWalletTypes.includes(mod.walletType);
+  });
 
   const isDesktop = width >= 1024;
   const isTablet = width >= 768;
   const itemsPerRow = isDesktop ? 4 : isTablet ? 4 : 3;
 
-  const mainModules = modules.slice(0, -1);
-  const lastModule = modules[modules.length - 1];
+  const mainModules = visibleModules.slice(0, -1);
+  const lastModule = visibleModules[visibleModules.length - 1];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>

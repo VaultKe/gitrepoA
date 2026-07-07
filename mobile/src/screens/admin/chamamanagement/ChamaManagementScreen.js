@@ -379,19 +379,20 @@ export default function ChamaManagementScreen() {
 
               <View style={styles.detailSection}>
                 <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Wallet Types</Text>
-                <View style={styles.walletTypesContainer}>
-                  {(selectedChama.permissions?.activeWalletTypes && selectedChama.permissions.activeWalletTypes.length > 0
-                    ? selectedChama.permissions.activeWalletTypes
-                    : ['main']
-                  ).map((walletType, index) => (
-                    <View key={index} style={[styles.walletTypeBadge, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}>
-                      <Ionicons name="wallet" size={14} color={colors.primary} />
-                      <Text style={[styles.walletTypeText, { color: colors.primary }]}>
-                        {walletType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                {selectedChama.permissions?.activeWalletTypes && selectedChama.permissions.activeWalletTypes.length > 0 ? (
+                  <View style={styles.walletTypesContainer}>
+                    {selectedChama.permissions.activeWalletTypes.map((walletType, index) => (
+                      <View key={index} style={[styles.walletTypeBadge, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}>
+                        <Ionicons name="wallet" size={14} color={colors.primary} />
+                        <Text style={[styles.walletTypeText, { color: colors.primary }]}>
+                          {walletType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[styles.detailValue, { color: colors.textSecondary }]}>No wallet types enabled</Text>
+                )}
               </View>
             </ScrollView>
 
