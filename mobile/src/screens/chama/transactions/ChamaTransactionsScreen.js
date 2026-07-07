@@ -56,7 +56,8 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
   const [showMemberSelector, setShowMemberSelector] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const itemsPerPage = 13;
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
 
   const isPrivateTransaction = (item) => {
     return item?.privacy === 'private' ||
@@ -121,19 +122,9 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (chamaId) {
-      loadInitialData();
+      loadAllData();
     }
   }, [chamaId]);
-
-  useEffect(() => {
-    if (chamaId) {
-      loadTransactions();
-    }
-  }, [chamaId, selectedFilter, viewMode, currentPage, canViewGroup, user?.id]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedFilter, viewMode]);
 
   useEffect(() => {
     if (allRecords.length > 0) {
@@ -147,66 +138,113 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
         );
       }
 
-      setTransactions(finalData);
-    }
-  }, [viewMode, selectedFilter, canViewGroup, user?.id]);
+      // Client-side pagination from in-memory store
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const paginatedData = finalData.slice(startIndex, startIndex + itemsPerPage);
 
-  const loadInitialData = async () => {
+      setTransactions(paginatedData);
+    } else {
+      setTransactions([]);
+    }
+  }, [allRecords, selectedFilter, currentPage, user?.id]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedFilter, viewMode]);
+
+  // Clear memory when session expires / user logs out
+  useEffect(() => {
+    if (!user) {
+      setAllRecords([]);
+      setTransactions([]);
+      setCurrentPage(1);
+    }
+  }, [user]);
+
+  const loadAllData = async () => {
     try {
+      setIsLoadingAll(true);
       setLoading(true);
       await loadChamaMembers();
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTransactions = async () => {
-    try {
-      setLoading(true);
 
       let allData = [];
-      const offset = (currentPage - 1) * itemsPerPage;
+      const pageSize = 50;
 
-      const transactionResponse = await ApiService.getChamaTransactions(chamaId, itemsPerPage, offset);
-      if (transactionResponse.success) {
-        allData = [...allData, ...(transactionResponse.data || [])];
+      const fetchAllPages = async (label, fetchFn) => {
+        const results = [];
+        let page = 1;
+        let hasMore = true;
+        let lastError = null;
+
+        while (hasMore) {
+          const offset = (page - 1) * pageSize;
+          try {
+            const response = await fetchFn(pageSize, offset);
+            if (response.success && response.data && Array.isArray(response.data)) {
+              const batch = response.data;
+              results.push(...batch);
+              hasMore = batch.length === pageSize;
+              page++;
+            } else if (response.success && response.data && !Array.isArray(response.data)) {
+              console.warn(`${label}: unexpected data format on page ${page}:`, typeof response.data);
+              hasMore = false;
+            } else {
+              hasMore = false;
+            }
+          } catch (error) {
+            lastError = error;
+            console.warn(`${label}: fetch page ${page} error:`, error.message);
+            hasMore = false;
+          }
+        }
+
+        if (results.length > 0) {
+          console.log(`${label}: loaded ${results.length} records`);
+        } else if (lastError) {
+          console.warn(`${label}: failed after partial load:`, lastError.message);
+        } else {
+          console.warn(`${label}: returned empty data`);
+        }
+
+        return results;
+      };
+
+      try {
+        const txns = await fetchAllPages('ChamaTransactions', (limit, offset) => ApiService.getChamaTransactions(chamaId, limit, offset));
+        allData = [...allData, ...txns];
+      } catch (error) {
+        console.warn('Chama transactions API not available:', error);
       }
 
       try {
-        const contributionResponse = await ApiService.getContributions(chamaId, itemsPerPage, offset);
-        if (contributionResponse.success) {
-          allData = [...allData, ...(contributionResponse.data || [])];
-        }
+        const contribs = await fetchAllPages('Contributions', (limit, offset) => ApiService.getContributions(chamaId, limit, offset));
+        allData = [...allData, ...contribs];
       } catch (error) {
         console.warn('Contributions API not available:', error);
       }
 
       try {
-        const welfareResponse = await ApiService.getWelfareRequests(chamaId, itemsPerPage, offset);
-        if (welfareResponse.success) {
-          const welfareTransactions = (welfareResponse.data || []).map(item => ({
-            ...item,
-            type: 'welfare',
-            transaction_type: 'welfare',
-          }));
-          allData = [...allData, ...welfareTransactions];
-        }
+        const welfareRequests = await fetchAllPages('WelfareRequests', (limit, offset) => ApiService.getWelfareRequests(chamaId, limit, offset));
+        const welfareTransactions = welfareRequests.map(item => ({
+          ...item,
+          type: 'welfare',
+          transaction_type: 'welfare',
+        }));
+        allData = [...allData, ...welfareTransactions];
       } catch (error) {
         console.warn('Welfare API not available:', error);
       }
 
       try {
-        const allWelfareRequests = await ApiService.getWelfareRequests(chamaId, 500, 0);
-        if (allWelfareRequests.success && allWelfareRequests.data) {
-          const welfareContributionPromises = allWelfareRequests.data.map(request =>
-            ApiService.getWelfareContributions(request.id, itemsPerPage, offset)
+        const allWelfareRequests = await fetchAllPages('WelfareRequestsForContributions', (limit, offset) => ApiService.getWelfareRequests(chamaId, limit, offset));
+        if (allWelfareRequests.length > 0) {
+          const welfareContributionPromises = allWelfareRequests.map(request =>
+            ApiService.getWelfareContributions(request.id, 100, 0).catch(() => ({ success: false, data: [] }))
           );
           const welfareContributionsResponses = await Promise.all(welfareContributionPromises);
 
           welfareContributionsResponses.forEach(response => {
-            if (response.success && response.data) {
+            if (response.success && response.data && Array.isArray(response.data)) {
               const welfareContributionTransactions = response.data.map(item => ({
                 ...item,
                 type: 'welfare_contribution',
@@ -215,21 +253,24 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
               allData = [...allData, ...welfareContributionTransactions];
             }
           });
+
+          const totalWelfareContributions = welfareContributionsResponses.reduce((sum, r) => sum + (r.success && r.data ? r.data.length : 0), 0);
+          console.log(`WelfareContributions: loaded ${totalWelfareContributions} records from ${allWelfareRequests.length} welfare requests`);
+        } else {
+          console.warn('WelfareRequestsForContributions: no welfare requests found');
         }
       } catch (error) {
         console.warn('Welfare contributions API not available:', error);
       }
 
       try {
-        const loanResponse = await ApiService.getLoans(chamaId, itemsPerPage, offset);
-        if (loanResponse.success) {
-          const loanTransactions = (loanResponse.data || []).map(item => ({
-            ...item,
-            type: 'loan',
-            transaction_type: 'loan',
-          }));
-          allData = [...allData, ...loanTransactions];
-        }
+        const loans = await fetchAllPages('Loans', (limit, offset) => ApiService.getLoans(chamaId, limit, offset));
+        const loanTransactions = loans.map(item => ({
+          ...item,
+          type: 'loan',
+          transaction_type: 'loan',
+        }));
+        allData = [...allData, ...loanTransactions];
       } catch (error) {
         console.warn('Loan API not available:', error);
       }
@@ -238,11 +279,11 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
         const mgrResponse = await getMerryGoRounds(chamaId);
         if (mgrResponse.success && mgrResponse.data && Array.isArray(mgrResponse.data)) {
           const mgrPromises = mgrResponse.data.map(mgr => getMerryGoRoundPayments(mgr.id));
-          const mgrPaymentsResponses = await Promise.all(mgrPromises);
+          const mgrPaymentsResponses = await Promise.allSettled(mgrPromises);
 
-          mgrPaymentsResponses.forEach(response => {
-            if (response.success && response.data && Array.isArray(response.data)) {
-              const mgrTransactions = response.data.map(payment => ({
+          mgrPaymentsResponses.forEach(result => {
+            if (result.status === 'fulfilled' && result.value.success && result.value.data && Array.isArray(result.value.data)) {
+              const mgrTransactions = result.value.data.map(payment => ({
                 ...payment,
                 type: 'merry-go-round',
                 transaction_type: 'merry-go-round',
@@ -255,44 +296,47 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
               allData = [...allData, ...mgrTransactions];
             }
           });
+
+          const totalMgrPayments = mgrPaymentsResponses.filter(r => r.status === 'fulfilled' && r.value.success && r.value.data).reduce((sum, r) => sum + r.value.data.length, 0);
+          console.log(`MGRPayments: loaded ${totalMgrPayments} records from ${mgrResponse.data.length} MGR rounds`);
+        } else {
+          console.warn('MGR rounds: no data or request failed');
         }
       } catch (error) {
         console.warn('Merry-go-round payments API not available:', error);
       }
 
-      // Deduplicate by id to avoid showing the same record twice
+      console.log(`Total raw records before dedup: ${allData.length}`);
+
       const seenIds = new Set();
       const dedupedData = allData.filter(item => {
         const itemId = String(item.id || item.transaction_id || item.reference || '');
-        if (seenIds.has(itemId)) return false;
+        if (!itemId || seenIds.has(itemId)) return false;
         seenIds.add(itemId);
         return true;
       });
 
+      console.log(`Total records after dedup: ${dedupedData.length}`);
+      console.log('Records by type:', dedupedData.reduce((acc, item) => {
+        const type = item.type || item.transaction_type || 'unknown';
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {}));
+
       setAllRecords(dedupedData);
-
-      const filteredData = applyRoleBasedFiltering(dedupedData);
-      let finalData = filteredData;
-
-      if (selectedFilter !== 'all') {
-        finalData = filteredData.filter(item =>
-          item.type?.toLowerCase() === selectedFilter.toLowerCase() ||
-          item.transaction_type?.toLowerCase() === selectedFilter.toLowerCase()
-        );
-      }
-
-      setTransactions(finalData);
+      setCurrentPage(1);
     } catch (error) {
-      console.error('Error loading transactions:', error);
+      console.error('Error loading all transactions:', error);
       Alert.alert('Error', 'Failed to load transaction data');
     } finally {
       setLoading(false);
+      setIsLoadingAll(false);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadTransactions();
+    await loadAllData();
     setRefreshing(false);
   };
 

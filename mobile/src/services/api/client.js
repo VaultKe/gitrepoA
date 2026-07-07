@@ -1,6 +1,7 @@
 import { API_BASE_URL, REQUEST_TIMEOUT, getAuthToken, getRefreshToken, setAuthToken, setRefreshToken, getDeviceInfo, sanitizeHeaderValue } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { triggerAppLogout } from '../../utils/authLogout';
+import { maskSensitiveData } from '../../utils/formatters';
 
 let logoutInProgress = false;
 let isRefreshing = false;
@@ -62,6 +63,9 @@ const makeRequest = async (endpoint, options = {}) => {
   const token = await getAuthToken();
   const isFormData = options.body instanceof FormData;
   const deviceInfo = getDeviceInfo();
+
+  // Auth endpoints should return unmasked data so the app can use real emails/phones
+  const isAuthEndpoint = endpoint.startsWith('/auth/') || endpoint.startsWith('/auth/refresh');
 
   const config = {
     method: 'GET',
@@ -157,7 +161,7 @@ const makeRequest = async (endpoint, options = {}) => {
             throw new Error(retryData?.error || retryResponse.statusText || 'Request failed after token refresh');
           }
 
-          return retryData?.success !== undefined ? retryData : { success: true, data: retryData };
+          return maskSensitiveData(retryData?.success !== undefined ? retryData : { success: true, data: retryData });
         }
       } catch (refreshError) {
         if (!logoutInProgress) {
@@ -180,7 +184,8 @@ const makeRequest = async (endpoint, options = {}) => {
     throw new Error(data.error || `HTTP error! status: ${response.status}`);
   }
 
-  return data?.success !== undefined ? data : { success: true, data };
+  const result = data?.success !== undefined ? data : { success: true, data };
+  return isAuthEndpoint ? result : maskSensitiveData(result);
 };
 
 const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {

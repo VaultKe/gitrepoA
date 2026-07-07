@@ -215,6 +215,80 @@ export const truncateText = (text, maxLength = 50) => {
 };
 
 /**
+ * Mask sensitive data (PII) in payloads for security.
+ * Masks email addresses and phone numbers recursively in objects/arrays.
+ */
+export const maskSensitiveData = (data) => {
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  if (typeof data === 'string') {
+    return maskString(data);
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(item => maskSensitiveData(item));
+  }
+
+  if (typeof data === 'object') {
+    const masked = {};
+    const sensitiveKeys = new Set([
+      'email', 'emailAddress', 'mail',
+      'phone', 'phoneNumber', 'phone_number', 'phoneNumber', 'mobile', 'mobileNumber',
+      'fax', 'faxNumber',
+    ]);
+
+    for (const key in data) {
+      if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
+
+      const lowerKey = key.toLowerCase();
+
+      if (sensitiveKeys.has(lowerKey)) {
+        masked[key] = maskString(String(data[key]));
+      } else {
+        masked[key] = maskSensitiveData(data[key]);
+      }
+    }
+
+    return masked;
+  }
+
+  return data;
+};
+
+const maskString = (value) => {
+  if (typeof value !== 'string') return value;
+
+  let masked = value;
+
+  // Mask email addresses
+  masked = masked.replace(
+    /([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
+    (match, localPart, domain) => {
+      const maskedLocal = localPart.length <= 2
+        ? '*'.repeat(localPart.length)
+        : localPart[0] + '*'.repeat(localPart.length - 2) + localPart[localPart.length - 1];
+      return `${maskedLocal}@${domain}`;
+    }
+  );
+
+  // Mask Kenyan and international phone numbers
+  // Matches formats like: +254712345678, 0712345678, 0111234567, 254712345678
+  masked = masked.replace(
+    /(\+?\d{1,3})?[\s-]?(0?\d{2,4})[\s-]?(\d{3,4})[\s-]?(\d{3,4})/g,
+    (match, countryCode, prefix, mid, end) => {
+      const digits = (countryCode || '') + prefix + mid + end;
+      const visibleDigits = digits.slice(-4);
+      const maskedDigits = '*'.repeat(Math.max(0, digits.length - 4));
+      return `${maskedDigits}${visibleDigits}`;
+    }
+  );
+
+  return masked;
+};
+
+/**
  * Format contribution status
  * @param {string} status - The contribution status
  * @returns {object} Object with formatted status and color

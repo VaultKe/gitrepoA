@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, WS_URL } from '../config/environment';
+import { maskSensitiveData } from '../../utils/formatters';
 
 class WebSocketService {
   constructor() {
@@ -119,8 +120,8 @@ onMessage(event) {
        if (typeof event.data !== 'string') return;
        if (!event.data.trim()) return;
 
-       const message = JSON.parse(event.data);
-       console.log('[WS DEBUG] Received message:', JSON.stringify(message));
+        const message = JSON.parse(event.data);
+        console.log('[WS DEBUG] Received message:', JSON.stringify(maskSensitiveData(message)));
 
        switch (message.type) {
          case 'connected':
