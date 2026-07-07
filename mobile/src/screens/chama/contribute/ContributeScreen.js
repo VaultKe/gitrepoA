@@ -653,21 +653,20 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
         console.error('Contribution failed:', error);
         if (contributionType === 'merry-go-round') {
           const errorMessage = error.message || '';
-          if (errorMessage.includes('already contributed')) {
-            const isPayFor = paymentMethod === 'pay_for';
-            Toast.show({
-              type: 'error',
-              text1: 'Already Contributed',
-              text2: isPayFor
-                ? 'The selected member has already contributed to this merry-go-round round.'
-                : 'You have already contributed to this merry-go-round round.',
-              position: 'top',
-              visibilityTime: 4000,
-              topOffset: 60,
-            });
-            await checkContributionStatus();
-            return;
-          }
+        if (errorMessage.includes('already contributed')) {
+          Toast.show({
+            type: 'error',
+            text1: 'Already Contributed',
+            text2: paymentMethod === 'pay_for'
+              ? 'The selected member has already contributed to this merry-go-round round.'
+              : 'You have already contributed to this merry-go-round round.',
+            position: 'top',
+            visibilityTime: 4000,
+            topOffset: 60,
+          });
+          await checkContributionStatus();
+          return;
+        }
         if (errorMessage.includes('Invalid merry-go-round contribution amount')) {
           Toast.show({
             type: 'error',

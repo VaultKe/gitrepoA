@@ -286,9 +286,13 @@ func MakeContribution(c *gin.Context) {
 		}
 
 		if hasContributed {
+			message := "You have already contributed to this merry-go-round round. Each member can only contribute once per round."
+			if req.PaymentMethod == "pay_for" && req.ContributorID != "" {
+				message = "The selected member has already contributed to this merry-go-round round. Each member can only contribute once per round."
+			}
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"error":   "You have already contributed to this merry-go-round round. Each member can only contribute once per round.",
+				"error":   message,
 			})
 			return
 		}
