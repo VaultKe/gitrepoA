@@ -51,15 +51,6 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
     }
   }, [selectedRound]);
 
-  // Poll for round completion every 15s when a round is selected
-  useEffect(() => {
-    if (!selectedRound) return;
-    const interval = setInterval(() => {
-      loadRoundContributions();
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [selectedRound?.id]);
-
   useEffect(() => {
     if (newMerryGoRound && refresh) {
       const isFirstRound = merryGoRounds.length === 0;
@@ -199,7 +190,6 @@ const onRefresh = async () => {
         );
 
         if (response.success) {
-          console.log('[MGR] Round advanced successfully:', response.message);
           Toast.show({
             type: 'success',
             text1: 'Round Complete! 🎉',
@@ -395,9 +385,22 @@ const onRefresh = async () => {
     return (
       <Card style={styles.statsCard} variant="outlined">
         <View style={{ paddingHorizontal: spacing.sm, paddingVertical: spacing.md }}>
-          <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'semibold', color: colors.text, marginBottom: spacing.md }}>
-            {selectedRound.name} Overview
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+            <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'semibold', color: colors.text, flex: 1 }}>
+              {selectedRound.name} Overview
+            </Text>
+            <TouchableOpacity
+              onPress={async () => {
+                await loadMerryGoRounds();
+                if (selectedRoundRef.current) {
+                  await loadRoundContributions();
+                }
+              }}
+              style={{ padding: spacing.xs }}
+            >
+              <Ionicons name="refresh" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
           <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
             <StatTile icon="cash" label="Amount Per Period" value={formatCurrency(amountPerRound)} color={colors.primary} />
             <StatTile icon="people" label="Members" value={participants.length} color={colors.secondary} />
