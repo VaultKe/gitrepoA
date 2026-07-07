@@ -520,16 +520,16 @@ const getRowData = () => {
                      Showing members who have paid to the current recipient
                    </Text>
                  </View>
-               )}
-                 <View style={[styles.tableHeaderRow, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1 }]}>#</Text>
-                  <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 3 }]}>Member</Text>
-                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 2 }]}>Status</Text>
-                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'right' }, { flex: 2 }]}>Amount</Text>
-                  <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2.5 }]}>Recipient</Text>
-                  <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2 }]}>Payout Date</Text>
-                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1.5 }]}>Receive</Text>
-                </View>
+                )}
+                 <View style={styles.tableHeaderRow}>
+                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
+                   <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2.5 }]}>Member</Text>
+                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>
+                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'right' }, { flex: 1.2 }]}>Amount</Text>
+                   <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.8 }]}>Recipient</Text>
+                   <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 1.2 }]}>Payout Date</Text>
+                   <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1 }]}>Receive</Text>
+                 </View>
                {rows.map(row => (
                  <View key={row.id} style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
                    <Text style={[styles.tableCell, { color: colors.text }, { flex: 1, textAlign: 'center' }]}>{row.position}</Text>
@@ -882,12 +882,13 @@ const styles = StyleSheet.create({
   filterTab: { flex: 1, alignItems: 'center', paddingVertical: spacing.xs, borderRadius: borderRadius.sm, borderWidth: 1, marginHorizontal: 2 },
   filterTabText: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold },
   tableSection: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)', borderRadius: borderRadius.md },
-  tableHeaderRow: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.sm, backgroundColor: 'rgba(0,0,0,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)', alignItems: 'center' },
-  tableHeaderText: { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, textTransform: 'uppercase' },
-  tableCell: { fontSize: typography.fontSize.sm },
-  statusBadgeCell: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, flex: 1.5, alignItems: 'center' },
-  tableFooter: { paddingVertical: spacing.sm, paddingHorizontal: spacing.sm, borderTopWidth: 1 },
-  tableFooterText: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium },
+  tableHeaderRow: { flexDirection: 'row', paddingVertical: 8, paddingHorizontal: 12, borderBottomWidth: 2, borderBottomColor: colors.primary, backgroundColor: colors.primary + '15', alignItems: 'center' },
+  tableHeaderText: { flex: 1, fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+  tableCell: { flex: 1, fontSize: 12 },
+  tableRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 0, 0, 0.05)', alignItems: 'center' },
+  statusBadgeCell: { flex: 1, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
+  tableFooter: { paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: 1 },
+  tableFooterText: { fontSize: 12, fontWeight: '500' },
   statsCard: { marginHorizontal: spacing.md, marginVertical: spacing.xs, },
 });
 
