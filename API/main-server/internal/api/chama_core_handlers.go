@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -696,6 +697,7 @@ func UpdateChama(c *gin.Context) {
 		MeetingSchedule       *map[string]interface{} `json:"meeting_schedule,omitempty"`
 		Permissions           *map[string]bool        `json:"permissions,omitempty"`
 		Notifications         *map[string]bool        `json:"notifications,omitempty"`
+		WalletTypes           []string                `json:"wallet_types,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -706,8 +708,41 @@ func UpdateChama(c *gin.Context) {
 		return
 	}
 
+	// Prepare update payload for service
+	updates := &struct {
+		Name                  *string                 `json:"name,omitempty"`
+		Description           *string                 `json:"description,omitempty"`
+		IsPublic              *bool                   `json:"is_public,omitempty"`
+		RequiresApproval      *bool                   `json:"requires_approval,omitempty"`
+		MaxMembers            *int                    `json:"max_members,omitempty"`
+		ContributionAmount    *float64                `json:"contribution_amount,omitempty"`
+		ContributionFrequency *string                 `json:"contribution_frequency,omitempty"`
+		Rules                 *[]string               `json:"rules,omitempty"`
+		MeetingSchedule       *map[string]interface{} `json:"meeting_schedule,omitempty"`
+		Permissions           *map[string]bool        `json:"permissions,omitempty"`
+		Notifications         *map[string]bool        `json:"notifications,omitempty"`
+		WalletTypes           *[]string               `json:"wallet_types,omitempty"`
+	}{
+		Name:                  req.Name,
+		Description:           req.Description,
+		IsPublic:              req.IsPublic,
+		RequiresApproval:      req.RequiresApproval,
+		MaxMembers:            req.MaxMembers,
+		ContributionAmount:    req.ContributionAmount,
+		ContributionFrequency: req.ContributionFrequency,
+		Rules:                 req.Rules,
+		MeetingSchedule:       req.MeetingSchedule,
+		Permissions:           req.Permissions,
+		Notifications:         req.Notifications,
+	}
+
+	if len(req.WalletTypes) > 0 {
+		walletTypes := req.WalletTypes
+		updates.WalletTypes = &walletTypes
+	}
+
 	// Update chama settings
-	err = chamaService.UpdateChamaSettings(chamaID, &req)
+	err = chamaService.UpdateChamaSettings(chamaID, updates)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

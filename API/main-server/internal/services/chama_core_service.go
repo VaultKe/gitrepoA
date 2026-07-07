@@ -1215,6 +1215,7 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 		MeetingSchedule       *map[string]interface{} `json:"meeting_schedule,omitempty"`
 		Permissions           *map[string]bool        `json:"permissions,omitempty"`
 		Notifications         *map[string]bool        `json:"notifications,omitempty"`
+		WalletTypes           *[]string               `json:"wallet_types,omitempty"`
 	}); ok {
 
 		if updateMap.Name != nil {
@@ -1261,8 +1262,46 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 			args = append(args, string(rulesJSON))
 		}
 
-		if updateMap.Permissions != nil {
-			permissionsJSON, err := json.Marshal(*updateMap.Permissions)
+		if updateMap.MeetingSchedule != nil {
+			scheduleJSON, err := json.Marshal(*updateMap.MeetingSchedule)
+			if err != nil {
+				return fmt.Errorf("failed to marshal meeting schedule: %w", err)
+			}
+			setParts = append(setParts, "meeting_schedule = $1")
+			args = append(args, string(scheduleJSON))
+		}
+
+		if updateMap.Permissions != nil || updateMap.WalletTypes != nil {
+			// Get existing permissions
+			var existingPermissionsJSON string
+			err = tx.QueryRow("SELECT permissions FROM chamas WHERE id = $1", chamaID).Scan(&existingPermissionsJSON)
+			if err != nil && err != sql.ErrNoRows {
+				return fmt.Errorf("failed to get existing permissions: %w", err)
+			}
+
+			permissions := make(map[string]interface{})
+			if existingPermissionsJSON != "" {
+				if err := json.Unmarshal([]byte(existingPermissionsJSON), &permissions); err != nil {
+					permissions = make(map[string]interface{})
+				}
+			}
+			if permissions == nil {
+				permissions = make(map[string]interface{})
+			}
+
+			// Merge boolean permissions
+			if updateMap.Permissions != nil {
+				for k, v := range *updateMap.Permissions {
+					permissions[k] = v
+				}
+			}
+
+			// Update activeWalletTypes if provided
+			if updateMap.WalletTypes != nil {
+				permissions["activeWalletTypes"] = *updateMap.WalletTypes
+			}
+
+			permissionsJSON, err := json.Marshal(permissions)
 			if err != nil {
 				return fmt.Errorf("failed to marshal permissions: %w", err)
 			}

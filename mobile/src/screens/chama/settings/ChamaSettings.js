@@ -47,6 +47,16 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     allowWelfare: true,
   });
 
+  const [activeWalletTypes, setActiveWalletTypes] = useState([]);
+  const WALLET_TYPES = [
+    { id: 'merry-go-round', label: 'Merry-go-round Contribution', icon: 'swap-horizontal' },
+    { id: 'welfare', label: 'Welfare Contribution', icon: 'heart' },
+    { id: 'savings', label: 'Savings', icon: 'wallet' },
+    { id: 'shares', label: 'Shares', icon: 'cube' },
+    { id: 'dividends', label: 'Dividends', icon: 'cash' },
+    { id: 'loans', label: 'Loans', icon: 'cash-outline' },
+  ];
+
   const [notifications, setNotifications] = useState({
     newMemberJoined: true,
     contributionReminders: true,
@@ -80,6 +90,21 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
           contributionAmount: chama.contribution_amount || 0,
           contributionFrequency: chama.contribution_frequency || 'monthly',
         });
+
+        // Load active wallet types from permissions
+        const walletTypes = Array.isArray(chama.permissions?.activeWalletTypes)
+          ? chama.permissions.activeWalletTypes
+          : [];
+        setActiveWalletTypes(walletTypes);
+
+        // Update permissions state from chama permissions
+        if (chama.permissions) {
+          setPermissions(prev => ({
+            ...prev,
+            allowMerryGoRound: chama.permissions.allowMerryGoRound ?? prev.allowMerryGoRound,
+            allowWelfare: chama.permissions.allowWelfare ?? prev.allowWelfare,
+          }));
+        }
       }
 
       // Fetch user's role in this chama
@@ -130,6 +155,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         contribution_frequency: chamaInfo.contributionFrequency,
         permissions: permissions,
         notifications: notifications,
+        wallet_types: activeWalletTypes,
       };
 
       // Make API call to update chama settings
@@ -183,6 +209,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         updatePayload.permissions = { ...permissions, [settingKey]: value };
       } else if (settingType === 'notifications') {
         updatePayload.notifications = { ...notifications, [settingKey]: value };
+      } else if (settingType === 'walletTypes') {
+        updatePayload.wallet_types = value;
       }
 
       // Make API call for real-time update
@@ -199,6 +227,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
           setPermissions(prev => ({ ...prev, [settingKey]: value }));
         } else if (settingType === 'notifications') {
           setNotifications(prev => ({ ...prev, [settingKey]: value }));
+        } else if (settingType === 'walletTypes') {
+          setActiveWalletTypes(value);
         }
 
         Toast.show({
@@ -217,6 +247,60 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         type: 'error',
         text1: 'Update Failed',
         text2: 'Failed to update setting',
+      });
+    }
+  };
+
+  const toggleWalletType = async (walletType) => {
+    if (userRole?.toLowerCase() !== 'chairperson') {
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Only chairperson can update settings',
+      });
+      return;
+    }
+
+    const current = activeWalletTypes;
+    const updated = current.includes(walletType)
+      ? current.filter(w => w !== walletType)
+      : [...current, walletType];
+
+    // Sync legacy permission flags for backward compatibility
+    const updatedPermissions = { ...permissions };
+    if (walletType === 'merry-go-round') {
+      updatedPermissions.allowMerryGoRound = updated.includes('merry-go-round');
+    }
+    if (walletType === 'welfare') {
+      updatedPermissions.allowWelfare = updated.includes('welfare');
+    }
+
+    // Optimistically update local state
+    setActiveWalletTypes(updated);
+    setPermissions(updatedPermissions);
+
+    try {
+      // Send both wallet_types and permissions together as one atomic update
+      const response = await api.makeRequest(`/chamas/${chamaId}`, {
+        method: 'PUT',
+        body: {
+          wallet_types: updated,
+          permissions: updatedPermissions,
+        },
+      });
+
+      if (!response.success) {
+        // Revert on failure
+        setActiveWalletTypes(current);
+        setPermissions(permissions);
+        throw new Error(response.error || 'Failed to update wallet types');
+      }
+    } catch (error) {
+      console.error('Error updating wallet types:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: error.message || 'Failed to update wallet types',
       });
     }
   };
@@ -515,27 +599,35 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         ))}
 
         {/* Features */}
-        {isAdmin && renderSection('Features', (
+        {isAdmin && renderSection('Wallet Types & Features', (
           <>
-            {renderSettingItem(
-              'Merry-Go-Round',
-              'Enable rotating savings feature',
-              permissions.allowMerryGoRound,
-              (value) => updateSettingRealTime('permissions', 'allowMerryGoRound', value),
-              'switch',
-              !isChairperson
-            )}
-
-            {renderSettingItem(
-              'Welfare Support',
-              'Enable welfare and emergency support',
-              permissions.allowWelfare,
-              (value) => updateSettingRealTime('permissions', 'allowWelfare', value),
-              'switch',
-              !isChairperson
-            )}
+            <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
+              Enable wallet types and features for this chama. Changes apply immediately to both member dashboard and admin management views.
+            </Text>
+            {WALLET_TYPES.map(wallet => {
+              const isActive = activeWalletTypes.includes(wallet.id);
+              return (
+                <View key={wallet.id} style={styles.settingItem}>
+                  <View style={styles.settingInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name={wallet.icon} size={20} color={isActive ? colors.primary : colors.textSecondary} style={{ marginRight: spacing.sm }} />
+                      <Text style={[styles.settingTitle, { color: isActive ? colors.text : colors.textSecondary }]}>
+                        {wallet.label}
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={isActive}
+                    onValueChange={(value) => toggleWalletType(wallet.id)}
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                    thumbColor={colors.white}
+                    disabled={!isChairperson}
+                  />
+                </View>
+              );
+            })}
           </>
-        ))}       
+        ))}
 
         {/* Notifications */}
         {renderSection('Notifications', (
