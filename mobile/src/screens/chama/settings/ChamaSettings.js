@@ -25,7 +25,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [chamaData, setChamaData] = useState(null);
-  const [userRole, setUserRole] = useState('member');
 
   const [chamaInfo, setChamaInfo] = useState({
     name: '',
@@ -48,7 +47,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   });
 
   const [activeWalletTypes, setActiveWalletTypes] = useState([]);
-  const [isChairperson, setIsChairperson] = useState(true);
   const WALLET_TYPES = [
     { id: 'merry-go-round', label: 'Merry-go-round Contribution', icon: 'swap-horizontal' },
     { id: 'welfare', label: 'Welfare Contribution', icon: 'heart' },
@@ -107,31 +105,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
           }));
         }
       }
-
-      // Fetch user's role in this chama
-      const membersResponse = await api.makeRequest(`/chamas/${chamaId}/members`);
-      let detectedRole = null;
-      if (membersResponse.success && membersResponse.data) {
-        const currentUserId = String(user?.id);
-        const currentUserMember = membersResponse.data.find(member =>
-          String(member.user_id) === currentUserId ||
-          String(member.user?.id) === currentUserId ||
-          String(member.id) === currentUserId
-        );
-        if (currentUserMember) {
-          detectedRole = currentUserMember.role || 'member';
-        }
-      }
-
-      // Fallback: if user created the chama, they are the chairperson
-      if (!detectedRole && chamaData && String(chamaData.created_by) === String(user?.id)) {
-        detectedRole = 'chairperson';
-      }
-
-      if (detectedRole) {
-        setUserRole(detectedRole);
-      }
-
     } catch (error) {
       console.error('Error fetching chama settings:', error);
       Toast.show({
@@ -145,15 +118,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleSaveSettings = async () => {
-    if (userRole?.toLowerCase() !== 'chairperson') {
-      Toast.show({
-        type: 'error',
-        text1: 'Access Denied',
-        text2: 'Only chairperson can update chama settings',
-      });
-      return;
-    }
-
     try {
       setSaving(true);
 
@@ -204,15 +168,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
 
   // Real-time setting update function
   const updateSettingRealTime = async (settingType, settingKey, value) => {
-    if (userRole?.toLowerCase() !== 'chairperson') {
-      Toast.show({
-        type: 'error',
-        text1: 'Access Denied',
-        text2: 'Only chairperson can update settings',
-      });
-      return;
-    }
-
     try {
       let updatePayload = {};
 
@@ -265,15 +220,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   };
 
   const toggleWalletType = async (walletType) => {
-    if (userRole?.toLowerCase() !== 'chairperson') {
-      Toast.show({
-        type: 'error',
-        text1: 'Access Denied',
-        text2: 'Only chairperson can update settings',
-      });
-      return;
-    }
-
     const current = activeWalletTypes;
     const updated = current.includes(walletType)
       ? current.filter(w => w !== walletType)
@@ -319,15 +265,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleLeaveChama = () => {
-    if (userRole === 'chairperson') {
-      Alert.alert(
-        'Cannot Leave Chama',
-        'As chairperson, you cannot leave the chama. Please transfer the chairperson role to another member first, or delete the chama if you want to disband it.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
     Alert.alert(
       'Leave Chama',
       'Are you sure you want to leave this chama? You will lose access to all chama activities and data.',
@@ -375,15 +312,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleDeleteChama = () => {
-    if (userRole !== 'chairperson') {
-      Toast.show({
-        type: 'error',
-        text1: 'Access Denied',
-        text2: 'Only chairperson can delete the chama',
-      });
-      return;
-    }
-
     Alert.alert(
       'Delete Chama',
       'Are you sure you want to permanently delete this chama?\n\nThis will delete:\n• All members and their data\n• All contributions and transactions\n• All meetings and documents\n• All loans and welfare records\n\nThis action cannot be undone!',
@@ -505,9 +433,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     );
   }
 
-  const isAdmin = ['chairperson', 'treasurer'].includes(isChairperson ? 'chairperson' : 'member');
-  // Show all sections regardless of role; disable editing for non-chairpersons
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -530,7 +455,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
                 onChangeText={(text) => setChamaInfo(prev => ({ ...prev, name: text }))}
                 placeholder="Enter chama name"
                 placeholderTextColor={colors.textSecondary}
-                editable={isChairperson}
               />
             </View>
 
@@ -548,7 +472,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
                 placeholderTextColor={colors.textSecondary}
                 multiline
                 numberOfLines={3}
-                editable={isChairperson}
               />
             </View>
 
@@ -557,8 +480,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               'Allow others to discover and request to join',
               chamaInfo.isPublic,
               (value) => updateSettingRealTime('chamaInfo', 'is_public', value),
-              'switch',
-              !isChairperson
+              'switch'
             )}
 
             {renderSettingItem(
@@ -566,8 +488,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               'New members need approval to join',
               chamaInfo.requiresApproval,
               (value) => updateSettingRealTime('chamaInfo', 'requires_approval', value),
-              'switch',
-              !isChairperson
+              'switch'
             )}
           </>
         ))}
@@ -580,8 +501,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               'Allow members to invite new people',
               permissions.memberCanInvite,
               (value) => updateSettingRealTime('permissions', 'memberCanInvite', value),
-              'switch',
-              !isChairperson
+              'switch'
             )}
 
             {renderSettingItem(
@@ -589,8 +509,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               'Allow members to schedule meetings',
               permissions.memberCanCreateMeetings,
               (value) => updateSettingRealTime('permissions', 'memberCanCreateMeetings', value),
-              'switch',
-              !isChairperson
+              'switch'
             )}
 
             {renderSettingItem(
@@ -598,8 +517,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               'Members can see all chama transactions',
               permissions.memberCanViewAllTransactions,
               (value) => updateSettingRealTime('permissions', 'memberCanViewAllTransactions', value),
-              'switch',
-              !isChairperson
+              'switch'
             )}
 
             {renderSettingItem(
@@ -607,13 +525,12 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               'Members can request loans from chama funds',
               permissions.memberCanRequestLoans,
               (value) => updateSettingRealTime('permissions', 'memberCanRequestLoans', value),
-              'switch',
-              !isChairperson
+              'switch'
             )}
           </>
         ))}
 
-        {/* Features */}
+        {/* Wallet Types & Features */}
         {renderSection('Wallet Types & Features', (
           <>
             <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
@@ -621,9 +538,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
             </Text>
             {WALLET_TYPES.map(wallet => {
               const isActive = activeWalletTypes.includes(wallet.id);
-              const canToggle = isChairperson;
               return (
-                <View key={wallet.id} style={[styles.settingItem, !canToggle && styles.settingItemDisabled]}>
+                <View key={wallet.id} style={styles.settingItem}>
                   <View style={styles.settingInfo}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Ionicons name={wallet.icon} size={20} color={isActive ? colors.primary : colors.textSecondary} style={{ marginRight: spacing.sm }} />
@@ -634,10 +550,9 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
                   </View>
                   <Switch
                     value={isActive}
-                    onValueChange={(value) => canToggle && toggleWalletType(wallet.id)}
+                    onValueChange={(value) => toggleWalletType(wallet.id)}
                     trackColor={{ false: colors.border, true: colors.primary }}
                     thumbColor={colors.white}
-                    disabled={!canToggle}
                   />
                 </View>
               );
@@ -680,64 +595,53 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
 
         {/* Actions */}
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {isChairperson && (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
-              onPress={handleSaveSettings}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <Ionicons name="save" size={20} color={colors.white} />
-              )}
-              <Text style={[styles.actionButtonText, { color: colors.white }]}>
-                {saving ? 'Saving...' : 'Save All Settings'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
+            onPress={handleSaveSettings}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Ionicons name="save" size={20} color={colors.white} />
+            )}
+            <Text style={[styles.actionButtonText, { color: colors.white }]}>
+              {saving ? 'Saving...' : 'Save All Settings'}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.actionButton,
               styles.leaveButton,
               {
-                borderColor: userRole === 'chairperson' ? colors.textSecondary : colors.warning,
+                borderColor: colors.warning,
                 opacity: saving ? 0.7 : 1
               }
             ]}
             onPress={handleLeaveChama}
             disabled={saving}
           >
-            <Ionicons
-              name="exit"
-              size={20}
-              color={userRole === 'chairperson' ? colors.textSecondary : colors.warning}
-            />
-            <Text style={[
-              styles.actionButtonText,
-              { color: userRole === 'chairperson' ? colors.textSecondary : colors.warning }
-            ]}>
-              {userRole === 'chairperson' ? 'Cannot Leave (Chairperson)' : 'Leave Chama'}
+            <Ionicons name="exit" size={20} color={colors.warning} />
+            <Text style={[styles.actionButtonText, { color: colors.warning }]}>
+              Leave Chama
             </Text>
           </TouchableOpacity>
 
-          {isChairperson && (
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.deleteButton,
-                { borderColor: colors.error, opacity: saving ? 0.7 : 1 }
-              ]}
-              onPress={handleDeleteChama}
-              disabled={saving}
-            >
-              <Ionicons name="trash" size={20} color={colors.error} />
-              <Text style={[styles.actionButtonText, { color: colors.error }]}>
-                Delete Chama Forever
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              styles.deleteButton,
+              { borderColor: colors.error, opacity: saving ? 0.7 : 1 }
+            ]}
+            onPress={handleDeleteChama}
+            disabled={saving}
+          >
+            <Ionicons name="trash" size={20} color={colors.error} />
+            <Text style={[styles.actionButtonText, { color: colors.error }]}>
+              Delete Chama Forever
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
