@@ -27,7 +27,7 @@ type Config struct {
 
 	// Centralized Paybill Configuration (for all chama payments)
 	SystemPaybillBusinessNumber string // Single paybill for all chama payments
-	SystemPaybillAccountPrefix   string // Prefix for account numbers (e.g., "VAULTKE")
+	SystemPaybillAccountPrefix  string // Prefix for account numbers (e.g., "VAULTKE")
 
 	// Firebase Configuration
 	FirebaseProjectID    string
@@ -59,7 +59,6 @@ type Config struct {
 	MaxFileSize      int64
 	AllowedFileTypes []string
 	UploadPath       string
-
 
 	// Google OAuth Configuration
 	GoogleClientID     string
@@ -118,7 +117,7 @@ func Load() *Config {
 
 		// Centralized Paybill Configuration
 		SystemPaybillBusinessNumber: getEnv("SYSTEM_PAYBILL_BUSINESS_NUMBER", "247247"),
-		SystemPaybillAccountPrefix:   getEnv("SYSTEM_PAYBILL_ACCOUNT_PREFIX", "VAULT"),
+		SystemPaybillAccountPrefix:  getEnv("SYSTEM_PAYBILL_ACCOUNT_PREFIX", "VAULT"),
 
 		// Firebase Configuration
 		FirebaseProjectID:    getEnv("FIREBASE_PROJECT_ID", ""),
@@ -151,7 +150,6 @@ func Load() *Config {
 		AllowedFileTypes: []string{"image/jpeg", "image/png", "image/webp"},
 		UploadPath:       getEnv("UPLOAD_PATH", "./uploads"),
 
-
 		// Google OAuth Configuration
 		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
@@ -183,9 +181,9 @@ func Load() *Config {
 		AllowedOrigins:  getEnvAsStringSlice("ALLOWED_ORIGINS", []string{}),
 		AllowAllOrigins: getEnvAsBool("ALLOW_ALL_ORIGINS", true), // Default to true for development
 
-// Microservice URLs
-	MeetingServiceURL: getEnv("MEETING_SERVICE_URL", "http://localhost:8086"),
-	ChatServiceURL:    getEnv("CHAT_SERVICE_URL", "http://localhost:8084"),
+		// Microservice URLs
+		MeetingServiceURL: getEnv("MEETING_SERVICE_URL", "https://livemeeting-service.onrender.com"),
+		ChatServiceURL:    getEnv("CHAT_SERVICE_URL", "https://chat-services-l1a6.onrender.com"),
 	}
 }
 

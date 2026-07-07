@@ -9,6 +9,8 @@ import (
 func CORSMiddleware() gin.HandlerFunc {
 	allowedOrigins := []string{
 		"https://gitrepoa-1.onrender.com",
+		"https://livemeeting-service.onrender.com",
+		"https://chat-services-l1a6.onrender.com",
 		"http://localhost:8081",
 		"https://localhost:8084",
 		"https://127.0.0.1:8081",

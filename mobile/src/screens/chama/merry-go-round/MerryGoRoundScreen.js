@@ -16,6 +16,7 @@ import Toast from 'react-native-toast-message';
 import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
+import { useFocusEffect } from '@react-navigation/native';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import BorderedButton from '../../../components/BorderedButton';
@@ -43,37 +44,6 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
   const [contributorSearch, setContributorSearch] = useState('');
   const [roundContributions, setRoundContributions] = useState([]);
 
-  useEffect(() => { loadMerryGoRounds(); }, [chamaId]);
-
-  useEffect(() => {
-    if (selectedRound) {
-      loadRoundContributions();
-    }
-  }, [selectedRound]);
-
-  useEffect(() => {
-    if (newMerryGoRound && refresh) {
-      const isFirstRound = merryGoRounds.length === 0;
-      setMerryGoRounds(prevRounds => [newMerryGoRound, ...prevRounds]);
-      setSelectedRound(newMerryGoRound);
-
-      const toastMessage = isFirstRound
-        ? `Your first merry-go-round "${newMerryGoRound.name}" is now active!`
-        : `${newMerryGoRound.name} is now active and ready for contributions`;
-
-      Toast.show({
-        type: 'success',
-        text1: isFirstRound ? 'First Merry-Go-Round! 🎯' : 'Merry-Go-Round Created! 🎯',
-        text2: toastMessage,
-        position: 'top',
-        visibilityTime: isFirstRound ? 5000 : 4000,
-        topOffset: 60,
-      });
-
-      setTimeout(() => loadMerryGoRounds(), 1000);
-    }
-  }, [newMerryGoRound, refresh]);
-
   const loadMerryGoRounds = async () => {
     try {
       setLoading(true);
@@ -89,7 +59,7 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
         }
         setMerryGoRounds(rounds);
         if (rounds.length > 0) {
-          const current = selectedRound;
+          const current = selectedRoundRef.current;
           const updated = rounds.find(r => r.id === (current && current.id));
           setSelectedRound(updated || rounds[0]);
         }
@@ -101,35 +71,37 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
     }
   };
 
-const onRefresh = async () => {
-    setRefreshing(true);
-    await loadMerryGoRounds();
-    if (selectedRound) {
-      await loadRoundContributions();
-    }
-    setRefreshing(false);
-  };
+  useEffect(() => { loadMerryGoRounds(); }, [chamaId]);
 
-  // Load contributions for the current merry-go-round round
+  // Reload once when screen regains focus so stat card picks up backend advances without continuous polling
+  useFocusEffect(
+    React.useCallback(() => {
+      loadMerryGoRounds();
+    }, [chamaId])
+  );
+
+  useEffect(() => {
+    if (selectedRound) {
+      loadRoundContributions();
+    }
+  }, [selectedRound]);
+
   const loadRoundContributions = async () => {
     const currentRound = selectedRoundRef.current;
     if (!currentRound) return;
     try {
       let allContributions = [];
 
-      // Get contributions from contributions endpoint
       const contribResponse = await ApiService.getContributions(chamaId);
       if (contribResponse.success && contribResponse.data) {
         allContributions = [...allContributions, ...(contribResponse.data || [])];
       }
 
-      // Also check merry_go_round_payments endpoint (dedicated merry-go-round payments table)
       const paymentsResponse = await ApiService.makeRequest(`/merry-go-rounds/${currentRound.id}/payments`);
       if (paymentsResponse.success && paymentsResponse.data) {
         allContributions = [...allContributions, ...(paymentsResponse.data || [])];
       }
 
-      // Also check transactions endpoint for merry-go-round contributions
       const txResponse = await ApiService.getChamaTransactions(chamaId, 100, 0);
       if (txResponse.success && txResponse.data) {
         const merryTx = (txResponse.data || []).filter(item => {
@@ -144,67 +116,18 @@ const onRefresh = async () => {
 
       console.log('[MGR] Loaded', allContributions.length, 'contributions for round', currentRound.id);
       setRoundContributions(allContributions);
-
-      // Auto-advance round if all non-recipient members have contributed
-      await checkAndAutoAdvanceRound(allContributions, currentRound);
     } catch (error) {
       console.error('Failed to load round contributions:', error);
     }
   };
 
-  const checkAndAutoAdvanceRound = async (allContributions, currentRound) => {
-    if (!currentRound) return;
-    const participants = currentRound.members || currentRound.participants || [];
-    const currentPosition = currentRound.current_position || currentRound.currentRound || 1;
-
-    // Need at least 2 participants to advance (current recipient + at least 1 contributor)
-    if (participants.length < 2) return;
-
-    const nonRecipientCount = participants.length - 1;
-    if (nonRecipientCount <= 0) return;
-
-    // Collect contributor IDs from loaded contributions for the current round only
-    const contributorIds = new Set();
-    for (const c of allContributions) {
-      const roundMatch = c.metadata?.roundNumber === currentPosition
-        || c.roundNumber === currentPosition
-        || c.round_number === currentPosition
-        || c.metadata?.merryGoRoundId === currentRound.id
-        || c.merryGoRoundId === currentRound.id
-        || c.merry_go_round_id === currentRound.id;
-
-      if (!roundMatch) continue;
-
-      const id = c.initiated_by || c.user_id || c.contributorId || c.contributor_id
-        || c.contributorUserId || c.payerUserId || (c.participant && c.participant.user_id)
-        || (c.user && c.user.id);
-      if (id) contributorIds.add(id);
+const onRefresh = async () => {
+    setRefreshing(true);
+    await loadMerryGoRounds();
+    if (selectedRoundRef.current) {
+      await loadRoundContributions();
     }
-
-    if (contributorIds.size >= nonRecipientCount) {
-      try {
-        console.log('[MGR] All members contributed, auto-advancing round...');
-        const response = await ApiService.makeRequest(
-          `/chamas/${chamaId}/mgr-check-advance/${currentRound.id}`,
-          { method: 'POST' }
-        );
-
-        if (response.success) {
-          Toast.show({
-            type: 'success',
-            text1: 'Round Complete! 🎉',
-            text2: 'Moving to the next member...',
-            position: 'top',
-            visibilityTime: 3000,
-            topOffset: 60,
-          });
-          // Refresh merry-go-rounds to show the new current recipient
-          await loadMerryGoRounds();
-        }
-      } catch (error) {
-        console.error('Failed to auto-advance round:', error);
-      }
-    }
+    setRefreshing(false);
   };
 
   const formatCurrency = (amount) => {
@@ -377,10 +300,12 @@ const onRefresh = async () => {
   const renderCompactTop = () => {
     if (!selectedRound) return null;
     const participants = selectedRound.members || selectedRound.participants || [];
-    const currentPosition = selectedRound.current_position || selectedRound.currentRound || 1;
-    const currentMember = participants[currentPosition - 1];
     const amountPerRound = selectedRound.amount_per_round || selectedRound.amountPerRound || 0;
     const totalPayoutPerPerson = amountPerRound * participants.length;
+
+    // Find the actual current recipient from participant statuses, matching Member Order logic
+    const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
+    const currentMember = currentParticipant ? (currentParticipant.user || currentParticipant) : participants[0];
 
     return (
       <Card style={styles.statsCard} variant="outlined">
@@ -417,15 +342,21 @@ const onRefresh = async () => {
 const getRowData = () => {
     if (!selectedRound) return [];
     const participants = selectedRound.members || selectedRound.participants || [];
-    const currentPosition = selectedRound.current_position || selectedRound.currentRound || 1;
-    const roundComplete = selectedRound.roundComplete || false;
     const amountPerRound = selectedRound.amount_per_round || selectedRound.amountPerRound || 0;
+
+    // Find the actual current recipient from participant statuses, matching Member Order logic
+    const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
+    const currentPosition = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
+    const roundComplete = selectedRound.roundComplete || false;
 
     // Get the current recipient's user ID(s)
     const currentRecipientIds = participants
       .filter((p, idx) => (idx + 1) === currentPosition)
       .map(p => p.user_id || (p.user && p.user.id));
     const currentRecipientId = currentRecipientIds[0];
+    const currentRecipientName = currentRecipientIds.length > 0
+      ? getMemberName(participants.find((p, idx) => (idx + 1) === currentPosition) || currentRecipientIds[0])
+      : '';
 
     // Filter contributions to only this specific merry-go-round round
     const thisRoundContributions = roundContributions.filter(c => {
@@ -514,6 +445,10 @@ const getRowData = () => {
       // hasBeenPaidOut: disbursement completed for this member in this round
       const hasBeenPaidOut = position < currentPosition && hasReceivedDisbursement;
 
+      // Show the current recipient when this member has paid
+      const recipientName = hasContributed && getMemberName(member) !== currentRecipientName ? currentRecipientName : '';
+      const recipientDisplay = hasBeenPaidOut ? '—' : recipientName;
+
       const eligibleToContributeToAll = position <= currentPosition || roundComplete;
 
       return {
@@ -527,6 +462,8 @@ const getRowData = () => {
         paidToCurrent,
         hasReceivedDisbursement,
         hasBeenPaidOut,
+        recipientName,
+        recipientDisplay,
       };
     });
   };
@@ -582,43 +519,45 @@ const getRowData = () => {
                    </Text>
                  </View>
                )}
-               <View style={styles.tableHeaderRow}>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>#</Text>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Member</Text>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Status</Text>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Amount</Text>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Payout Date</Text>
-                <Text style={[styles.tableHeaderText, { color: colors.textSecondary }, { flex: 1.5 }]}>Receive</Text>
-              </View>
-              {rows.map(row => (
-                <View key={row.id} style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
-                  <Text style={[styles.tableCell, { color: colors.text }, { flex: 0.5 }]}>{row.position}</Text>
-                  <Text style={[styles.tableCell, { color: colors.text }, { flex: 3 }]} numberOfLines={1}>{row.name}</Text>
-                  <View style={[
-                    { flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
-                    { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20' }
-                  ]}>
-                    <Ionicons
-                      name={row.contributed ? 'checkmark-circle' : 'time'}
-                      size={10}
-                      color={row.contributed ? colors.success : colors.warning}
-                    />
-                    <Text style={{
-                      fontSize: 12,
-                      fontWeight: 'medium',
-                      color: row.contributed ? colors.success : colors.warning,
-                      marginLeft: 2,
-                    }}>
-                      {row.contributed ? 'Paid' : 'Pending'}
-                    </Text>
-                  </View>
-                  <Text style={[styles.tableCell, { color: colors.text }, { flex: 1.5 }]}>{formatCurrency(row.amount)}</Text>
-                  <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 1.5 }]}>{getPayoutDate(row)}</Text>
-                  <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary }, { flex: 1.5 }]}>
-                    {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
-                  </Text>
+                 <View style={[styles.tableHeaderRow, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1 }]}>#</Text>
+                  <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 3 }]}>Member</Text>
+                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 2 }]}>Status</Text>
+                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'right' }, { flex: 2 }]}>Amount</Text>
+                  <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2.5 }]}>Recipient</Text>
+                  <Text style={[styles.tableHeaderText, { color: colors.white }, { flex: 2 }]}>Payout Date</Text>
+                  <Text style={[styles.tableHeaderText, { color: colors.white, textAlign: 'center' }, { flex: 1.5 }]}>Receive</Text>
                 </View>
-              ))}
+               {rows.map(row => (
+                 <View key={row.id} style={{ flexDirection: 'row', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' }}>
+                   <Text style={[styles.tableCell, { color: colors.text }, { flex: 1, textAlign: 'center' }]}>{row.position}</Text>
+                   <Text style={[styles.tableCell, { color: colors.text }, { flex: 3 }]} numberOfLines={1}>{row.name}</Text>
+                   <View style={[
+                     { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
+                     { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20' }
+                   ]}>
+                     <Ionicons
+                       name={row.contributed ? 'checkmark-circle' : 'time'}
+                       size={10}
+                       color={row.contributed ? colors.success : colors.warning}
+                     />
+                     <Text style={{
+                       fontSize: 12,
+                       fontWeight: 'medium',
+                       color: row.contributed ? colors.success : colors.warning,
+                       marginLeft: 2,
+                     }}>
+                       {row.contributed ? 'Paid' : 'Pending'}
+                     </Text>
+                   </View>
+                   <Text style={[styles.tableCell, { color: colors.text }, { flex: 2, textAlign: 'right' }]}>{formatCurrency(row.amount)}</Text>
+                   <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 2.5 }]} numberOfLines={1}>{row.recipientDisplay || '-'}</Text>
+                   <Text style={[styles.tableCell, { color: colors.textSecondary }, { flex: 2 }]}>{getPayoutDate(row)}</Text>
+                   <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary }, { flex: 1.5, textAlign: 'center' }]}>
+                     {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
+                   </Text>
+                 </View>
+               ))}
               {!rows.length && (
                 <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
                   <Text style={{ color: colors.textSecondary }}>No members match this filter.</Text>
@@ -941,7 +880,7 @@ const styles = StyleSheet.create({
   filterTab: { flex: 1, alignItems: 'center', paddingVertical: spacing.xs, borderRadius: borderRadius.sm, borderWidth: 1, marginHorizontal: 2 },
   filterTabText: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold },
   tableSection: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)', borderRadius: borderRadius.md },
-  tableHeaderRow: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.sm, backgroundColor: 'rgba(0,0,0,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' },
+  tableHeaderRow: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.sm, backgroundColor: 'rgba(0,0,0,0.03)', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)', alignItems: 'center' },
   tableHeaderText: { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, textTransform: 'uppercase' },
   tableCell: { fontSize: typography.fontSize.sm },
   statusBadgeCell: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, flex: 1.5, alignItems: 'center' },
