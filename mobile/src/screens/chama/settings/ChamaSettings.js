@@ -48,6 +48,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   });
 
   const [activeWalletTypes, setActiveWalletTypes] = useState([]);
+  const [isChairperson, setIsChairperson] = useState(true);
   const WALLET_TYPES = [
     { id: 'merry-go-round', label: 'Merry-go-round Contribution', icon: 'swap-horizontal' },
     { id: 'welfare', label: 'Welfare Contribution', icon: 'heart' },
@@ -109,14 +110,26 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
 
       // Fetch user's role in this chama
       const membersResponse = await api.makeRequest(`/chamas/${chamaId}/members`);
+      let detectedRole = null;
       if (membersResponse.success && membersResponse.data) {
         const currentUserId = String(user?.id);
         const currentUserMember = membersResponse.data.find(member =>
-          String(member.user_id) === currentUserId || String(member.user?.id) === currentUserId
+          String(member.user_id) === currentUserId ||
+          String(member.user?.id) === currentUserId ||
+          String(member.id) === currentUserId
         );
         if (currentUserMember) {
-          setUserRole(currentUserMember.role || 'member');
+          detectedRole = currentUserMember.role || 'member';
         }
+      }
+
+      // Fallback: if user created the chama, they are the chairperson
+      if (!detectedRole && chamaData && String(chamaData.created_by) === String(user?.id)) {
+        detectedRole = 'chairperson';
+      }
+
+      if (detectedRole) {
+        setUserRole(detectedRole);
       }
 
     } catch (error) {
@@ -492,8 +505,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     );
   }
 
-  const isAdmin = ['chairperson', 'treasurer'].includes(userRole?.toLowerCase());
-  const isChairperson = userRole?.toLowerCase() === 'chairperson';
+  const isAdmin = ['chairperson', 'treasurer'].includes(isChairperson ? 'chairperson' : 'member');
+  // Show all sections regardless of role; disable editing for non-chairpersons
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -503,7 +516,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Basic Information */}
-        {isAdmin && renderSection('Basic Information', (
+        {renderSection('Basic Information', (
           <>
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Chama Name</Text>
@@ -517,6 +530,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
                 onChangeText={(text) => setChamaInfo(prev => ({ ...prev, name: text }))}
                 placeholder="Enter chama name"
                 placeholderTextColor={colors.textSecondary}
+                editable={isChairperson}
               />
             </View>
 
@@ -534,6 +548,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
                 placeholderTextColor={colors.textSecondary}
                 multiline
                 numberOfLines={3}
+                editable={isChairperson}
               />
             </View>
 
@@ -558,7 +573,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         ))}
 
         {/* Member Permissions */}
-        {isAdmin && renderSection('Member Permissions', (
+        {renderSection('Member Permissions', (
           <>
             {renderSettingItem(
               'Members Can Invite Others',
@@ -599,15 +614,16 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         ))}
 
         {/* Features */}
-        {isAdmin && renderSection('Wallet Types & Features', (
+        {renderSection('Wallet Types & Features', (
           <>
             <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
               Enable wallet types and features for this chama. Changes apply immediately to both member dashboard and admin management views.
             </Text>
             {WALLET_TYPES.map(wallet => {
               const isActive = activeWalletTypes.includes(wallet.id);
+              const canToggle = isChairperson;
               return (
-                <View key={wallet.id} style={styles.settingItem}>
+                <View key={wallet.id} style={[styles.settingItem, !canToggle && styles.settingItemDisabled]}>
                   <View style={styles.settingInfo}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Ionicons name={wallet.icon} size={20} color={isActive ? colors.primary : colors.textSecondary} style={{ marginRight: spacing.sm }} />
@@ -618,10 +634,10 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
                   </View>
                   <Switch
                     value={isActive}
-                    onValueChange={(value) => toggleWalletType(wallet.id)}
+                    onValueChange={(value) => canToggle && toggleWalletType(wallet.id)}
                     trackColor={{ false: colors.border, true: colors.primary }}
                     thumbColor={colors.white}
-                    disabled={!isChairperson}
+                    disabled={!canToggle}
                   />
                 </View>
               );
