@@ -20,7 +20,7 @@ import Card from '../../../components/common/Card';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
-import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment } from '../../../services/api/chamaEndpoints';
+import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment, removeMemberFromChama } from '../../../services/api/chamaEndpoints';
 import Button from '../../../components/common/Button';
 import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
@@ -212,6 +212,28 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         { text: 'Remove', style: 'destructive', onPress: confirmRemoveMember },
       ]
     );
+  };
+
+  const confirmRemoveMember = async () => {
+    try {
+      const response = await removeMemberFromChama(chamaId, memberId);
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Member Removed',
+          text2: `${memberData?.first_name} ${memberData?.last_name} has been removed from the chama`,
+        });
+        navigation.goBack();
+      } else {
+        throw new Error(response.error || 'Failed to remove member');
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Remove Failed',
+        text2: error.message || 'Failed to remove member from chama',
+      });
+    }
   };
 
   const handlePayServiceFee = async (payment) => {

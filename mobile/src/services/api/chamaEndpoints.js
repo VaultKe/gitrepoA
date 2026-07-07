@@ -221,6 +221,7 @@ export {
   exportChamaMembers,
   getChamaTransactions,
   getMerryGoRounds,
+  getMerryGoRoundPayments,
   getMerryGoRoundContributionStatus,
   createMerryGoRound,
   joinChama,

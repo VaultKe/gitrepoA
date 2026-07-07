@@ -73,24 +73,108 @@ export const getTransactionUserName = (item, chamaMembers = []) => {
     }
   }
 
-  const firstName = item.user?.firstName || item.user?.first_name || '';
-  const lastName = item.user?.lastName || item.user?.last_name || '';
-  const fullName = `${firstName} ${lastName}`.trim();
+  // Check nested user objects from backend responses
+  const nestedUserObjects = [
+    item.user,
+    item.requester,
+    item.beneficiary,
+    item.contributor,
+    item.applicant,
+    item.creator,
+    item.requester,
+    item.payee,
+    item.payer,
+  ];
 
-  if (fullName) return fullName;
+  for (const userObj of nestedUserObjects) {
+    if (userObj) {
+      const firstName = userObj.firstName || userObj.first_name || '';
+      const lastName = userObj.lastName || userObj.last_name || '';
+      const fullName = `${firstName} ${lastName}`.trim();
+      if (fullName) return fullName;
 
-  const userName = item.user?.name ||
-                   item.user?.fullName ||
-                   item.user?.displayName ||
-                   item.name ||
-                   item.fullName ||
-                   item.displayName;
-
-  if (userName && userName !== item.description) {
-    return userName;
+      const userName = userObj.name || userObj.fullName || userObj.full_name || userObj.displayName;
+      if (userName && userName.trim()) return userName.trim();
+    }
   }
 
-  return 'Unknown Member';
+  // Check top-level name fields
+  const topLevelName = item.name ||
+                       item.fullName ||
+                       item.full_name ||
+                       item.displayName ||
+                       item.contributor_name ||
+                       item.member_name ||
+                       item.applicant_name ||
+                       item.requester_name ||
+                       item.beneficiary_name;
+
+  if (topLevelName && topLevelName.trim()) {
+    return topLevelName.trim();
+  }
+
+  // Fallback: look up user in chamaMembers by various ID fields
+  if (chamaMembers.length > 0) {
+    const userIdFields = [
+      item.user_id,
+      item.userId,
+      item.initiated_by,
+      item.initiatedBy,
+      item.initiatedById,
+      item.contributed_by,
+      item.contributedById,
+      item.member_id,
+      item.memberId,
+      item.sender_id,
+      item.recipient_id,
+      item.createdBy,
+      item.created_by,
+      item.creator_id,
+      item.createdById,
+      item.requesterId,
+      item.beneficiaryId,
+      item.contributorId,
+      item.borrowerId,
+      item.borrower_id,
+      item.applicant_id,
+      item.payerUserId,
+      item.payeeUserId,
+    ];
+
+    const transactionUserId = userIdFields.find(id => id);
+
+    if (transactionUserId) {
+      const member = chamaMembers.find(m =>
+        m.user_id === transactionUserId ||
+        m.id === transactionUserId ||
+        m.user?.id === transactionUserId
+      );
+
+      if (member) {
+        const user = member.user || {};
+        const firstName = user.first_name || user.firstName ||
+                         member.firstName || member.first_name ||
+                         member.name?.split(' ')[0] || '';
+
+        const lastName = user.last_name || user.lastName ||
+                        member.lastName || member.last_name ||
+                        member.name?.split(' ').slice(1).join(' ') || '';
+
+        let fullName = member.fullName || member.full_name ||
+                      user.fullName || user.full_name ||
+                      member.name || user.name ||
+                      `${firstName} ${lastName}`.trim();
+
+        if (fullName && fullName.trim() && fullName.trim() !== 'undefined undefined') {
+          return fullName.trim();
+        }
+
+        return user.email || member.email || `Member ${(member.user_id || member.id || '').slice(-4)}`;
+      }
+    }
+  }
+
+  return `Member ${(item.id || '').slice(-4)}`;
 };
 
 export const getTransactionAmount = (item) => {

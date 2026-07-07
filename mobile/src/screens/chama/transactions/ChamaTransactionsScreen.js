@@ -15,6 +15,10 @@ import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing } from '../../../utils/theme';
 import ApiService from '../../../services/api';
+import {
+  getMerryGoRounds,
+  getMerryGoRoundPayments,
+} from '../../../services/api/chamaEndpoints';
 import { getMemberNameFromTransaction } from '../../../services/receiptService/memberName';
 import { generatePDFOptimizedReceiptHTML } from '../../../services/receiptService/html/template';
 import { COMPANY_INFO } from '../../../services/receiptService/config';
@@ -26,7 +30,7 @@ import ChamaTransactionsExportModal from './ChamaTransactionsExportModal';
 import ChamaTransactionsMemberSelectorModal from './ChamaTransactionsMemberSelectorModal';
 import ChamaTransactionsNoChama from './ChamaTransactionsNoChama';
 
-const ChamaTransactionsScreen = ({ navigation }) => {
+const ChamaTransactionsScreen = ({ navigation, route }) => {
   const { theme, user } = useApp();
   const {
     currentChamaId,
@@ -36,6 +40,9 @@ const ChamaTransactionsScreen = ({ navigation }) => {
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
   const canViewGroup = canViewGroupRecords();
+
+  const routeChamaId = route?.params?.chamaId;
+  const chamaId = routeChamaId || currentChamaId;
 
   const [transactions, setTransactions] = useState([]);
   const [allRecords, setAllRecords] = useState([]);
@@ -95,30 +102,34 @@ const ChamaTransactionsScreen = ({ navigation }) => {
   };
 
   const applyRoleBasedFiltering = (allData) => {
-    if (canViewGroup && viewMode === 'group') {
-      return allData;
-    }
+    // For chama transactions screen, show all transactions to all chama members.
+    // The backend already verifies membership before returning data.
+    // Only hide transactions explicitly marked as private if the current user
+    // is neither the initiator nor a leadership member.
+    const isLeader = canViewGroupRecords();
 
     return allData.filter(item => {
-      if (isPrivateTransaction(item) && !isUserTransaction(item)) {
-        return false;
+      if (isPrivateTransaction(item)) {
+        const initiatedBy = item.initiated_by || item.initiatedBy || item.user_id || item.userId;
+        if (initiatedBy !== user?.id && !isLeader) {
+          return false;
+        }
       }
-
-      return isUserTransaction(item);
+      return true;
     });
   };
 
   useEffect(() => {
-    if (currentChamaId) {
+    if (chamaId) {
       loadInitialData();
     }
-  }, [currentChamaId]);
+  }, [chamaId]);
 
   useEffect(() => {
-    if (currentChamaId) {
+    if (chamaId) {
       loadTransactions();
     }
-  }, [currentChamaId, selectedFilter, viewMode, currentPage, canViewGroup, user?.id]);
+  }, [chamaId, selectedFilter, viewMode, currentPage, canViewGroup, user?.id]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -158,13 +169,13 @@ const ChamaTransactionsScreen = ({ navigation }) => {
       let allData = [];
       const offset = (currentPage - 1) * itemsPerPage;
 
-      const transactionResponse = await ApiService.getChamaTransactions(currentChamaId, itemsPerPage, offset);
+      const transactionResponse = await ApiService.getChamaTransactions(chamaId, itemsPerPage, offset);
       if (transactionResponse.success) {
         allData = [...allData, ...(transactionResponse.data || [])];
       }
 
       try {
-        const contributionResponse = await ApiService.getContributions(currentChamaId, itemsPerPage, offset);
+        const contributionResponse = await ApiService.getContributions(chamaId, itemsPerPage, offset);
         if (contributionResponse.success) {
           allData = [...allData, ...(contributionResponse.data || [])];
         }
@@ -173,7 +184,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
       }
 
       try {
-        const welfareResponse = await ApiService.getWelfareRequests(currentChamaId, itemsPerPage, offset);
+        const welfareResponse = await ApiService.getWelfareRequests(chamaId, itemsPerPage, offset);
         if (welfareResponse.success) {
           const welfareTransactions = (welfareResponse.data || []).map(item => ({
             ...item,
@@ -187,7 +198,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
       }
 
       try {
-        const allWelfareRequests = await ApiService.getWelfareRequests(currentChamaId, 500, 0);
+        const allWelfareRequests = await ApiService.getWelfareRequests(chamaId, 500, 0);
         if (allWelfareRequests.success && allWelfareRequests.data) {
           const welfareContributionPromises = allWelfareRequests.data.map(request =>
             ApiService.getWelfareContributions(request.id, itemsPerPage, offset)
@@ -210,7 +221,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
       }
 
       try {
-        const loanResponse = await ApiService.getLoans(currentChamaId, itemsPerPage, offset);
+        const loanResponse = await ApiService.getLoans(chamaId, itemsPerPage, offset);
         if (loanResponse.success) {
           const loanTransactions = (loanResponse.data || []).map(item => ({
             ...item,
@@ -223,9 +234,44 @@ const ChamaTransactionsScreen = ({ navigation }) => {
         console.warn('Loan API not available:', error);
       }
 
-      setAllRecords(allData);
+      try {
+        const mgrResponse = await getMerryGoRounds(chamaId);
+        if (mgrResponse.success && mgrResponse.data && Array.isArray(mgrResponse.data)) {
+          const mgrPromises = mgrResponse.data.map(mgr => getMerryGoRoundPayments(mgr.id));
+          const mgrPaymentsResponses = await Promise.all(mgrPromises);
 
-      const filteredData = applyRoleBasedFiltering(allData);
+          mgrPaymentsResponses.forEach(response => {
+            if (response.success && response.data && Array.isArray(response.data)) {
+              const mgrTransactions = response.data.map(payment => ({
+                ...payment,
+                type: 'merry-go-round',
+                transaction_type: 'merry-go-round',
+                description: payment.description || `MGR Round ${payment.roundNumber || ''} - Position ${payment.position || ''}`.trim(),
+                amount: payment.amount,
+                createdAt: payment.createdAt,
+                updatedAt: payment.updatedAt,
+                status: payment.status || 'completed',
+              }));
+              allData = [...allData, ...mgrTransactions];
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('Merry-go-round payments API not available:', error);
+      }
+
+      // Deduplicate by id to avoid showing the same record twice
+      const seenIds = new Set();
+      const dedupedData = allData.filter(item => {
+        const itemId = String(item.id || item.transaction_id || item.reference || '');
+        if (seenIds.has(itemId)) return false;
+        seenIds.add(itemId);
+        return true;
+      });
+
+      setAllRecords(dedupedData);
+
+      const filteredData = applyRoleBasedFiltering(dedupedData);
       let finalData = filteredData;
 
       if (selectedFilter !== 'all') {
@@ -252,7 +298,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
 
   const loadChamaMembers = async () => {
     try {
-      const response = await ApiService.getChamaMembers(currentChamaId);
+      const response = await ApiService.getChamaMembers(chamaId);
       if (response.success) {
         setChamaMembers(response.data || []);
       }
@@ -791,7 +837,7 @@ const ChamaTransactionsScreen = ({ navigation }) => {
     setCurrentPage(1);
   };
 
-  if (!currentChamaId) {
+  if (!chamaId) {
     return <ChamaTransactionsNoChama navigation={navigation} theme={theme} />;
   }
 
