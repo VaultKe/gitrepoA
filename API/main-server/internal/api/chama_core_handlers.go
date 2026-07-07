@@ -709,40 +709,47 @@ func UpdateChama(c *gin.Context) {
 	}
 
 	// Prepare update payload for service
-	updates := &struct {
-		Name                  *string                 `json:"name,omitempty"`
-		Description           *string                 `json:"description,omitempty"`
-		IsPublic              *bool                   `json:"is_public,omitempty"`
-		RequiresApproval      *bool                   `json:"requires_approval,omitempty"`
-		MaxMembers            *int                    `json:"max_members,omitempty"`
-		ContributionAmount    *float64                `json:"contribution_amount,omitempty"`
-		ContributionFrequency *string                 `json:"contribution_frequency,omitempty"`
-		Rules                 *[]string               `json:"rules,omitempty"`
-		MeetingSchedule       *map[string]interface{} `json:"meeting_schedule,omitempty"`
-		Permissions           *map[string]bool        `json:"permissions,omitempty"`
-		Notifications         *map[string]bool        `json:"notifications,omitempty"`
-		WalletTypes           *[]string               `json:"wallet_types,omitempty"`
-	}{
-		Name:                  req.Name,
-		Description:           req.Description,
-		IsPublic:              req.IsPublic,
-		RequiresApproval:      req.RequiresApproval,
-		MaxMembers:            req.MaxMembers,
-		ContributionAmount:    req.ContributionAmount,
-		ContributionFrequency: req.ContributionFrequency,
-		Rules:                 req.Rules,
-		MeetingSchedule:       req.MeetingSchedule,
-		Permissions:           req.Permissions,
-		Notifications:         req.Notifications,
-	}
+	updateMap := make(map[string]interface{})
 
+	if req.Name != nil {
+		updateMap["name"] = *req.Name
+	}
+	if req.Description != nil {
+		updateMap["description"] = *req.Description
+	}
+	if req.IsPublic != nil {
+		updateMap["is_public"] = *req.IsPublic
+	}
+	if req.RequiresApproval != nil {
+		updateMap["requires_approval"] = *req.RequiresApproval
+	}
+	if req.MaxMembers != nil {
+		updateMap["max_members"] = *req.MaxMembers
+	}
+	if req.ContributionAmount != nil {
+		updateMap["contribution_amount"] = *req.ContributionAmount
+	}
+	if req.ContributionFrequency != nil {
+		updateMap["contribution_frequency"] = *req.ContributionFrequency
+	}
+	if req.Rules != nil {
+		updateMap["rules"] = *req.Rules
+	}
+	if req.MeetingSchedule != nil {
+		updateMap["meeting_schedule"] = *req.MeetingSchedule
+	}
+	if req.Permissions != nil {
+		updateMap["permissions"] = *req.Permissions
+	}
+	if req.Notifications != nil {
+		updateMap["notifications"] = *req.Notifications
+	}
 	if len(req.WalletTypes) > 0 {
-		walletTypes := req.WalletTypes
-		updates.WalletTypes = &walletTypes
+		updateMap["wallet_types"] = req.WalletTypes
 	}
 
 	// Update chama settings
-	err = chamaService.UpdateChamaSettings(chamaID, updates)
+	err = chamaService.UpdateChamaSettings(chamaID, updateMap)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

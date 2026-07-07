@@ -1202,8 +1202,11 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 	setParts := []string{}
 	args := []interface{}{}
 
-	// Use type assertion to handle the updates struct
-	if updateMap, ok := updates.(*struct {
+	// Normalize updates into a map for flexible processing
+	updateMap := make(map[string]interface{})
+	if m, ok := updates.(map[string]interface{}); ok {
+		updateMap = m
+	} else if ptr, ok := updates.(*struct {
 		Name                  *string                 `json:"name,omitempty"`
 		Description           *string                 `json:"description,omitempty"`
 		IsPublic              *bool                   `json:"is_public,omitempty"`
@@ -1217,112 +1220,161 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 		Notifications         *map[string]bool        `json:"notifications,omitempty"`
 		WalletTypes           *[]string               `json:"wallet_types,omitempty"`
 	}); ok {
-
-		if updateMap.Name != nil {
-			setParts = append(setParts, "name = $1")
-			args = append(args, *updateMap.Name)
+		if ptr.Name != nil {
+			updateMap["name"] = *ptr.Name
 		}
-
-		if updateMap.Description != nil {
-			setParts = append(setParts, "description = $1")
-			args = append(args, *updateMap.Description)
+		if ptr.Description != nil {
+			updateMap["description"] = *ptr.Description
 		}
-
-		if updateMap.IsPublic != nil {
-			setParts = append(setParts, "is_public = $1")
-			args = append(args, *updateMap.IsPublic)
+		if ptr.IsPublic != nil {
+			updateMap["is_public"] = *ptr.IsPublic
 		}
-
-		if updateMap.RequiresApproval != nil {
-			setParts = append(setParts, "requires_approval = $1")
-			args = append(args, *updateMap.RequiresApproval)
+		if ptr.RequiresApproval != nil {
+			updateMap["requires_approval"] = *ptr.RequiresApproval
 		}
-
-		if updateMap.MaxMembers != nil {
-			setParts = append(setParts, "max_members = $1")
-			args = append(args, *updateMap.MaxMembers)
+		if ptr.MaxMembers != nil {
+			updateMap["max_members"] = *ptr.MaxMembers
 		}
-
-		if updateMap.ContributionAmount != nil {
-			setParts = append(setParts, "contribution_amount = $1")
-			args = append(args, *updateMap.ContributionAmount)
+		if ptr.ContributionAmount != nil {
+			updateMap["contribution_amount"] = *ptr.ContributionAmount
 		}
-
-		if updateMap.ContributionFrequency != nil {
-			setParts = append(setParts, "contribution_frequency = $1")
-			args = append(args, *updateMap.ContributionFrequency)
+		if ptr.ContributionFrequency != nil {
+			updateMap["contribution_frequency"] = *ptr.ContributionFrequency
 		}
-
-		if updateMap.Rules != nil {
-			rulesJSON, err := json.Marshal(*updateMap.Rules)
-			if err != nil {
-				return fmt.Errorf("failed to marshal rules: %w", err)
-			}
-			setParts = append(setParts, "rules = $1")
-			args = append(args, string(rulesJSON))
+		if ptr.Rules != nil {
+			updateMap["rules"] = *ptr.Rules
 		}
-
-		if updateMap.MeetingSchedule != nil {
-			scheduleJSON, err := json.Marshal(*updateMap.MeetingSchedule)
-			if err != nil {
-				return fmt.Errorf("failed to marshal meeting schedule: %w", err)
-			}
-			setParts = append(setParts, "meeting_schedule = $1")
-			args = append(args, string(scheduleJSON))
+		if ptr.MeetingSchedule != nil {
+			updateMap["meeting_schedule"] = *ptr.MeetingSchedule
 		}
-
-		if updateMap.Permissions != nil || updateMap.WalletTypes != nil {
-			// Get existing permissions
-			var existingPermissionsJSON string
-			err = tx.QueryRow("SELECT permissions FROM chamas WHERE id = $1", chamaID).Scan(&existingPermissionsJSON)
-			if err != nil && err != sql.ErrNoRows {
-				return fmt.Errorf("failed to get existing permissions: %w", err)
-			}
-
-			permissions := make(map[string]interface{})
-			if existingPermissionsJSON != "" {
-				if err := json.Unmarshal([]byte(existingPermissionsJSON), &permissions); err != nil {
-					permissions = make(map[string]interface{})
-				}
-			}
-			if permissions == nil {
-				permissions = make(map[string]interface{})
-			}
-
-			// Merge boolean permissions
-			if updateMap.Permissions != nil {
-				for k, v := range *updateMap.Permissions {
-					permissions[k] = v
-				}
-			}
-
-			// Update activeWalletTypes if provided
-			if updateMap.WalletTypes != nil {
-				permissions["activeWalletTypes"] = *updateMap.WalletTypes
-			}
-
-			permissionsJSON, err := json.Marshal(permissions)
-			if err != nil {
-				return fmt.Errorf("failed to marshal permissions: %w", err)
-			}
-			setParts = append(setParts, "permissions = $1")
-			args = append(args, string(permissionsJSON))
+		if ptr.Permissions != nil {
+			updateMap["permissions"] = *ptr.Permissions
+		}
+		if ptr.Notifications != nil {
+			updateMap["notifications"] = *ptr.Notifications
+		}
+		if ptr.WalletTypes != nil {
+			updateMap["wallet_types"] = *ptr.WalletTypes
 		}
 	}
 
-	if len(setParts) == 0 {
+	if len(updateMap) == 0 {
 		return fmt.Errorf("no fields to update")
 	}
 
+	paramIndex := 1
+	if v, ok := updateMap["name"]; ok {
+		setParts = append(setParts, fmt.Sprintf("name = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["description"]; ok {
+		setParts = append(setParts, fmt.Sprintf("description = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["is_public"]; ok {
+		setParts = append(setParts, fmt.Sprintf("is_public = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["requires_approval"]; ok {
+		setParts = append(setParts, fmt.Sprintf("requires_approval = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["max_members"]; ok {
+		setParts = append(setParts, fmt.Sprintf("max_members = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["contribution_amount"]; ok {
+		setParts = append(setParts, fmt.Sprintf("contribution_amount = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["contribution_frequency"]; ok {
+		setParts = append(setParts, fmt.Sprintf("contribution_frequency = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["rules"]; ok {
+		rulesJSON, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("failed to marshal rules: %w", err)
+		}
+		setParts = append(setParts, fmt.Sprintf("rules = $%d", paramIndex))
+		args = append(args, string(rulesJSON))
+		paramIndex++
+	}
+	if v, ok := updateMap["meeting_schedule"]; ok {
+		scheduleJSON, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("failed to marshal meeting schedule: %w", err)
+		}
+		setParts = append(setParts, fmt.Sprintf("meeting_schedule = $%d", paramIndex))
+		args = append(args, string(scheduleJSON))
+		paramIndex++
+	}
+
+	// Handle permissions and wallet_types together
+	if _, hasPermissions := updateMap["permissions"]; hasPermissions || updateMap["wallet_types"] != nil {
+		// Get existing permissions
+		var existingPermissionsJSON string
+		err = tx.QueryRow("SELECT permissions FROM chamas WHERE id = $1", chamaID).Scan(&existingPermissionsJSON)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("failed to get existing permissions: %w", err)
+		}
+
+		permissions := make(map[string]interface{})
+		if existingPermissionsJSON != "" {
+			if err := json.Unmarshal([]byte(existingPermissionsJSON), &permissions); err != nil {
+				permissions = make(map[string]interface{})
+			}
+		}
+		if permissions == nil {
+			permissions = make(map[string]interface{})
+		}
+
+		// Merge boolean permissions
+		if perms, ok := updateMap["permissions"].(map[string]interface{}); ok {
+			for k, v := range perms {
+				permissions[k] = v
+			}
+		}
+
+		// Update activeWalletTypes if provided
+		if walletTypes, ok := updateMap["wallet_types"].([]interface{}); ok {
+			stringTypes := make([]string, 0, len(walletTypes))
+			for _, wt := range walletTypes {
+				if s, ok := wt.(string); ok {
+					stringTypes = append(stringTypes, s)
+				}
+			}
+			permissions["activeWalletTypes"] = stringTypes
+		} else if walletTypes, ok := updateMap["wallet_types"].([]string); ok {
+			permissions["activeWalletTypes"] = walletTypes
+		}
+
+		permissionsJSON, err := json.Marshal(permissions)
+		if err != nil {
+			return fmt.Errorf("failed to marshal permissions: %w", err)
+		}
+		setParts = append(setParts, fmt.Sprintf("permissions = $%d", paramIndex))
+		args = append(args, string(permissionsJSON))
+		paramIndex++
+	}
+
 	// Add updated_at timestamp
-	setParts = append(setParts, "updated_at = $1")
+	setParts = append(setParts, fmt.Sprintf("updated_at = $%d", paramIndex))
 	args = append(args, time.Now())
+	paramIndex++
 
 	// Add chama ID for WHERE clause
 	args = append(args, chamaID)
 
 	// Build and execute update query
-	query := fmt.Sprintf("UPDATE chamas SET %s WHERE id = $1", strings.Join(setParts, ", "))
+	query := fmt.Sprintf("UPDATE chamas SET %s WHERE id = $%d", strings.Join(setParts, ", "), paramIndex)
 
 	_, err = tx.Exec(query, args...)
 	if err != nil {

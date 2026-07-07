@@ -404,25 +404,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => {
-              if (onRouteChange) {
-                onRouteChange('overview', 'ChamaDashboard');
-              } else {
-                navigation.goBack();
-              }
-            }}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Chama Settings
-          </Text>
-          <View style={styles.placeholder} />
-        </View>
-
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
