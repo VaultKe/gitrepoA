@@ -44,6 +44,11 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
   const [contributorSearch, setContributorSearch] = useState('');
   const [roundContributions, setRoundContributions] = useState([]);
 
+  // When set (1-based position), the Contributors table is reused to show who has paid that recipient
+  const [selectedRecipientPosition, setSelectedRecipientPosition] = useState(null);
+  const selectedRecipientRef = useRef(selectedRecipientPosition);
+  useEffect(() => { selectedRecipientRef.current = selectedRecipientPosition; }, [selectedRecipientPosition]);
+
   const loadMerryGoRounds = async () => {
     try {
       setLoading(true);
@@ -152,6 +157,26 @@ const onRefresh = async () => {
     return firstName || lastName || `Member ${(item?.user_id || item?.id || '').slice(-4)}`;
   };
 
+  const getTargetRecipient = () => {
+    if (!selectedRound) return null;
+    const participants = selectedRound.members || selectedRound.participants || [];
+    const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
+    const currentPosition = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
+
+    // When a recipient position is tapped, use it; otherwise fall back to the current recipient
+    const position = selectedRecipientRef.current || currentPosition;
+    const targetParticipant = participants[position - 1];
+    const recipientMember = targetParticipant ? (targetParticipant.user || targetParticipant) : null;
+    const recipientId = recipientMember ? (targetParticipant.user_id || (targetParticipant.user && targetParticipant.user.id)) : null;
+
+    return {
+      position,
+      recipientId,
+      recipientName: recipientMember ? getMemberName(recipientMember) : '',
+      isRecipientView: selectedRecipientRef.current !== null,
+    };
+  };
+
   const renderMemberOrderList = () => {
     if (!selectedRound) return null;
 
@@ -176,8 +201,14 @@ const onRefresh = async () => {
 
     return (
       <Card style={styles.statsCard} variant="outlined">
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Member Order ({participants.length} participants)
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Member Order ({participants.length} participants)
+          </Text>
+          <Ionicons name="hand-left-outline" size={18} color={colors.textTertiary} />
+        </View>
+        <Text style={{ fontSize: typography.fontSize.xs, color: colors.textTertiary, marginBottom: spacing.sm }}>
+          Tap a member to see who has paid them
         </Text>
         <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ maxHeight: 260 }}>
           <View style={styles.memberOrderList}>
@@ -194,8 +225,25 @@ const onRefresh = async () => {
               const fullName = `${firstName} ${lastName}`.trim() || `Member ${position}`;
               const initials = `${firstName[0] || 'M'}${lastName[0] || position}`.toUpperCase();
 
+              const isSelectedRecipient = selectedRecipientPosition === position;
+
               return (
-                <View key={participant.id || index} style={styles.memberOrderItem}>
+                <TouchableOpacity
+                  key={participant.id || index}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setSelectedRecipientPosition(isSelectedRecipient ? null : position);
+                    setContributorFilter('all');
+                    setContributorSearch('');
+                  }}
+                  style={[
+                    styles.memberOrderItem,
+                    isSelectedRecipient && {
+                      backgroundColor: colors.primary + '12',
+                      borderColor: colors.primary,
+                    },
+                  ]}
+                >
                   <View style={styles.memberRow}>
                     <View style={styles.avatarContainer}>
                       {index > 0 && (
@@ -210,8 +258,9 @@ const onRefresh = async () => {
                         {
                           backgroundColor: isCurrent ? colors.primary :
                                          isCompleted ? colors.success : colors.backgroundSecondary,
-                          borderColor: isCurrent ? colors.primary :
-                                     isCompleted ? colors.success : colors.border,
+                          borderColor: isSelectedRecipient ? colors.primary :
+                                       isCurrent ? colors.primary :
+                                       isCompleted ? colors.success : colors.border,
                         }
                       ]}>
                         <Text style={[
@@ -257,7 +306,23 @@ const onRefresh = async () => {
                       </Text>
                     </View>
 
-                    {isCurrent && (
+                    {isSelectedRecipient ? (
+                      <View style={[styles.statusBadge, { backgroundColor: colors.primary }]}>
+                        <Ionicons name="eye" size={12} color={colors.white} />
+                        <Text style={[styles.statusBadgeText, { color: colors.white }]}>
+                          Viewing
+                        </Text>
+                      </View>
+                    ) : (
+                      <Ionicons
+                        name="chevron-forward"
+                        size={18}
+                        color={colors.textTertiary}
+                        style={{ marginLeft: spacing.sm }}
+                      />
+                    )}
+
+                    {isCurrent && !isSelectedRecipient && (
                       <View style={[styles.statusBadge, { backgroundColor: colors.primary }]}>
                         <Text style={[styles.statusBadgeText, { color: colors.white }]}>
                           Current
@@ -265,7 +330,7 @@ const onRefresh = async () => {
                       </View>
                     )}
 
-                    {isCompleted && (
+                    {isCompleted && !isSelectedRecipient && (
                       <View style={[styles.statusBadge, { backgroundColor: colors.success }]}>
                         <Text style={[styles.statusBadgeText, { color: colors.white }]}>
                           Completed
@@ -273,7 +338,7 @@ const onRefresh = async () => {
                       </View>
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -349,14 +414,18 @@ const getRowData = () => {
     const currentPosition = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
     const roundComplete = selectedRound.roundComplete || false;
 
-    // Get the current recipient's user ID(s)
-    const currentRecipientIds = participants
-      .filter((p, idx) => (idx + 1) === currentPosition)
-      .map(p => p.user_id || (p.user && p.user.id));
-    const currentRecipientId = currentRecipientIds[0];
-    const currentRecipientName = currentRecipientIds.length > 0
-      ? getMemberName(participants.find((p, idx) => (idx + 1) === currentPosition) || currentRecipientIds[0])
-      : '';
+    // When a Member Order position is tapped, the table shows payments TO that recipient.
+    // Otherwise it falls back to the current recipient (default behaviour).
+    const target = getTargetRecipient() || {
+      position: currentPosition,
+      recipientId: participants[currentPosition - 1]
+        ? (participants[currentPosition - 1].user_id || (participants[currentPosition - 1].user && participants[currentPosition - 1].user.id))
+        : null,
+      recipientName: '',
+      isRecipientView: false,
+    };
+    const currentRecipientId = target.recipientId;
+    const currentRecipientName = target.recipientName;
 
     // Filter contributions to only this specific merry-go-round round
     const thisRoundContributions = roundContributions.filter(c => {
@@ -399,13 +468,13 @@ const getRowData = () => {
         .filter(id => id)
     );
 
-    // Build a set of user IDs who contributed specifically to the current recipient in this round
-    const paidToCurrentUserIds = new Set(
+    // Build a set of user IDs who contributed specifically to the target recipient in this round
+    const paidToRecipientUserIds = new Set(
       thisRoundContributions
         .filter(c => {
-          // Only contributions for the current round that were paid to the current recipient
-          const roundMatches = c.roundNumber === currentPosition || c.round_number === currentPosition || c.metadata?.roundNumber === currentPosition;
-          const recipientMatches = c.payeeUserId === currentRecipientId || c.payee_user_id === currentRecipientId || c.metadata?.recipientId === currentRecipientId;
+          // Only contributions for the target round that were paid to the target recipient
+          const roundMatches = c.roundNumber === target.position || c.round_number === target.position || c.metadata?.roundNumber === target.position;
+          const recipientMatches = c.payeeUserId === target.recipientId || c.payee_user_id === target.recipientId || c.metadata?.recipientId === target.recipientId;
           return roundMatches && recipientMatches;
         })
         .flatMap(c => {
@@ -439,14 +508,17 @@ const getRowData = () => {
                             fulfilledUserIds.has(userId) ||
                             (!roundComplete && position < currentPosition);
 
-      // paidToCurrent: contributed specifically to the current recipient in this round
-      const paidToCurrent = paidToCurrentUserIds.has(userId);
+      // paidToCurrent: contributed specifically to the target recipient in this round
+      const paidToCurrent = paidToRecipientUserIds.has(userId);
 
       // hasBeenPaidOut: disbursement completed for this member in this round
       const hasBeenPaidOut = position < currentPosition && hasReceivedDisbursement;
 
-      // Show the current recipient when this member has paid
-      const recipientName = hasContributed && getMemberName(member) !== currentRecipientName ? currentRecipientName : '';
+      // In recipient view, the "Recipient" column shows the selected recipient for members who paid them.
+      // Otherwise show the current recipient when this member has paid.
+      const recipientName = target.isRecipientView
+        ? (paidToCurrent ? target.recipientName : '')
+        : (hasContributed && getMemberName(member) !== currentRecipientName ? currentRecipientName : '');
       const recipientDisplay = hasBeenPaidOut ? '—' : recipientName;
 
       const eligibleToContributeToAll = position <= currentPosition || roundComplete;
@@ -460,9 +532,12 @@ const getRowData = () => {
         amount: hasContributed ? amountPerRound : 0,
         eligibleToContributeToAll,
         paidToCurrent,
+        paidToRecipient: paidToCurrent,
+        isRecipientView: target.isRecipientView,
+        recipientPosition: target.position,
+        recipientName: target.recipientName,
         hasReceivedDisbursement,
         hasBeenPaidOut,
-        recipientName,
         recipientDisplay,
       };
     });
@@ -471,10 +546,14 @@ const getRowData = () => {
   const renderContributorsTable = () => {
     if (!selectedRound) return null;
 
+    const target = getTargetRecipient();
+    const isRecipientView = !!(target && target.isRecipientView);
+    const amountPerRound = selectedRound.amount_per_round || selectedRound.amountPerRound || 0;
+
     let rows = getRowData();
 
     if (contributorFilter === 'contributed') rows = rows.filter(r => r.contributed);
-    if (contributorFilter === 'paid_to_current') rows = rows.filter(r => r.paidToCurrent);
+    if (contributorFilter === 'paid_to_current') rows = rows.filter(r => r.paidToRecipient);
     if (contributorFilter === 'pending') rows = rows.filter(r => !r.contributed);
     if (contributorSearch.trim()) {
       const q = contributorSearch.toLowerCase();
@@ -483,13 +562,18 @@ const getRowData = () => {
 
     const totalContributed = rows.filter(r => r.contributed).length;
     const totalAmount = rows.filter(r => r.contributed).reduce((sum, r) => sum + r.amount, 0);
-    const totalPaidToCurrent = rows.filter(r => r.paidToCurrent).length;
-    const totalPaidToCurrentAmount = rows.filter(r => r.paidToCurrent).reduce((sum, r) => sum + r.amount, 0);
+    const totalPaidToRecipient = rows.filter(r => r.paidToRecipient).length;
+    const totalPaidToRecipientAmount = rows.filter(r => r.paidToRecipient).reduce((sum, r) => sum + (isRecipientView ? amountPerRound : r.amount), 0);
 
     const getFilterSummary = () => {
+      if (isRecipientView) {
+        if (contributorFilter === 'paid_to_current') return `${totalPaidToRecipient} paid to ${target.recipientName} • ${formatCurrency(totalPaidToRecipientAmount)}`;
+        if (contributorFilter === 'pending') return `${rows.length} yet to pay ${target.recipientName}`;
+        return `${totalPaidToRecipient} of ${rows.length} paid ${target.recipientName} • ${formatCurrency(totalPaidToRecipientAmount)}`;
+      }
       if (contributorFilter === 'all') return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
       if (contributorFilter === 'contributed') return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
-      if (contributorFilter === 'paid_to_current') return `${totalPaidToCurrent} paid to current recipient • ${formatCurrency(totalPaidToCurrentAmount)}`;
+      if (contributorFilter === 'paid_to_current') return `${totalPaidToRecipient} paid to current recipient • ${formatCurrency(totalPaidToRecipientAmount)}`;
       if (contributorFilter === 'pending') return `${rows.length} pending payments`;
       return `${totalContributed} paid • ${formatCurrency(totalAmount)} raised`;
     };
@@ -508,58 +592,71 @@ const getRowData = () => {
       return date.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
+    const showBanner = isRecipientView || contributorFilter === 'paid_to_current';
+
     return (
 
       <Card variant="outlined" style={styles.statsCard,{ borderRadius: 8, overflow: 'hidden' }}>
         <View style={styles.tableSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
              <View style={{ minWidth: width - 32 }}>
-               {contributorFilter === 'paid_to_current' && (
-                 <View style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.success + '12', borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                   <Text style={{ fontSize: typography.fontSize.sm, color: colors.success, fontWeight: 'medium' }}>
-                     Showing members who have paid to the current recipient
-                   </Text>
-                 </View>
-                )}
-                   <View style={[styles.tableHeaderRow, { backgroundColor: colors.surface }]}>
-                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
-                     <Text style={[styles.tableHeaderText, { color: colors.primary }, { flex: 2.5 }]}>Member</Text>
-                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>
-                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1.2 }]}>Amount</Text>
-                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 2 }]}>Recipient</Text>
-                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1.5 }]}>Payout Date</Text>
-                     <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1 }]}>Receive</Text>
-                   </View>
-                {rows.map(row => (
+                {showBanner && (
+                  <View style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.success + '12', borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: typography.fontSize.sm, color: colors.success, fontWeight: 'medium', flex: 1 }}>
+                      {isRecipientView
+                        ? `Showing who has paid ${target.recipientName} (Position ${target.position})`
+                        : 'Showing members who have paid to the current recipient'}
+                    </Text>
+                    {isRecipientView && (
+                      <TouchableOpacity onPress={() => { setSelectedRecipientPosition(null); setContributorFilter('all'); }}>
+                        <Ionicons name="close-circle" size={18} color={colors.success} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                 )}
+                    <View style={[styles.tableHeaderRow, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
+                      <Text style={[styles.tableHeaderText, { color: colors.primary }, { flex: 2.5 }]}>Member</Text>
+                      <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>
+                      <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1.2 }]}>Amount</Text>
+                      <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 2 }]}>Recipient</Text>
+                      <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1.5 }]}>Payout Date</Text>
+                      <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1 }]}>Receive</Text>
+                    </View>
+                 {rows.map(row => {
+                    const paidStatus = isRecipientView ? row.paidToRecipient : row.contributed;
+                    const statusAmount = isRecipientView ? (row.paidToRecipient ? amountPerRound : 0) : row.amount;
+                    return (
                     <View key={row.id} style={styles.tableRow}>
                       <Text style={[styles.tableCell, { color: colors.text, textAlign: 'center', flex: 0.8 }]}>{row.position}</Text>
                       <Text style={[styles.tableCell, { color: colors.text, flex: 2.5 }]} numberOfLines={1}>{row.name}</Text>
                       <View style={[
                         styles.statusBadgeCell,
-                        { backgroundColor: row.contributed ? colors.success + '20' : colors.warning + '20', flex: 1.8 }
+                        { backgroundColor: paidStatus ? colors.success + '20' : colors.warning + '20', flex: 1.8 }
                       ]}>
                         <Ionicons
-                          name={row.contributed ? 'checkmark-circle' : 'time'}
+                          name={paidStatus ? 'checkmark-circle' : 'time'}
                           size={10}
-                          color={row.contributed ? colors.success : colors.warning}
+                          color={paidStatus ? colors.success : colors.warning}
                         />
                         <Text style={{
                           fontSize: 11,
                           fontWeight: '600',
-                          color: row.contributed ? colors.success : colors.warning,
+                          color: paidStatus ? colors.success : colors.warning,
                         }}>
-                          {row.contributed ? 'Paid' : 'Pending'}
+                          {paidStatus ? 'Paid' : 'Pending'}
                         </Text>
                       </View>
-                      <Text style={[styles.tableCell, { color: colors.text, textAlign: 'right', flex: 1.2 }]}>{formatCurrency(row.amount)}</Text>
+                      <Text style={[styles.tableCell, { color: colors.text, textAlign: 'right', flex: 1.2 }]}>{formatCurrency(statusAmount)}</Text>
                       <Text style={[styles.tableCell, { color: colors.textSecondary, textAlign: 'right', flex: 2 }]} numberOfLines={1}>{row.recipientDisplay || '-'}</Text>
                       <Text style={[styles.tableCell, { color: colors.textSecondary, textAlign: 'right', flex: 1.5 }]}>{getPayoutDate(row)}</Text>
                       <Text style={[styles.tableCell, { color: row.hasBeenPaidOut ? colors.success : row.eligibleToContributeToAll ? colors.warning : colors.textTertiary, textAlign: 'right', flex: 1 }]}>
                         {row.hasBeenPaidOut ? 'Yes' : row.eligibleToContributeToAll ? 'Eligible' : 'Partial'}
                       </Text>
                     </View>
-                  ))}
-              {!rows.length && (
+                    );
+                  })}
+               {!rows.length && (
                 <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
                   <Text style={{ color: colors.textSecondary }}>No members match this filter.</Text>
                 </View>
@@ -595,7 +692,7 @@ const getRowData = () => {
                 borderColor: selectedRound?.id === round.id ? colors.primary : colors.border,
               },
             ]}
-            onPress={() => { setSelectedRound(round); setContributorSearch(''); setContributorFilter('all'); }}
+            onPress={() => { setSelectedRound(round); setContributorSearch(''); setContributorFilter('all'); setSelectedRecipientPosition(null); }}
           >
             <Text style={[styles.roundName, { color: selectedRound?.id === round.id ? colors.primary : colors.text }]}>
               {round.name}
@@ -755,6 +852,9 @@ const getRowData = () => {
     );
   }
 
+  const recipientTarget = getTargetRecipient();
+  const isRecipientView = !!(recipientTarget && recipientTarget.isRecipientView);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -801,7 +901,7 @@ const getRowData = () => {
                       onPress={() => { setContributorFilter(tab); }}
                     >
                       <Text style={[styles.filterTabText, { color: contributorFilter === tab ? colors.primary : colors.textSecondary }]}>
-                        {tab === 'all' ? 'All' : tab === 'contributed' ? 'Paid' : tab === 'paid_to_current' ? 'Paid to Current' : 'Pending'}
+                         {tab === 'all' ? 'All' : tab === 'contributed' ? 'Paid' : tab === 'paid_to_current' ? (isRecipientView ? 'Paid to Recipient' : 'Paid to Current') : 'Pending'}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -860,7 +960,7 @@ const styles = StyleSheet.create({
   emptyMembersList: { alignItems: 'center', paddingVertical: spacing.xl },
   emptyMembersText: { fontSize: typography.fontSize.base, marginTop: spacing.md, textAlign: 'center' },
   memberOrderList: { paddingVertical: spacing.sm },
-  memberOrderItem: { position: 'relative' },
+  memberOrderItem: { position: 'relative', borderWidth: 1, borderColor: 'transparent', borderRadius: 10, marginVertical: 2, paddingHorizontal: spacing.xs },
   memberRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.sm },
   avatarContainer: { position: 'relative', marginRight: spacing.md, alignItems: 'center', justifyContent: 'center' },
   connectorLineTop: { position: 'absolute', top: -spacing.sm, left: 23, width: 2, height: spacing.sm, zIndex: 1 },
