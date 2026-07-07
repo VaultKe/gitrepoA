@@ -190,23 +190,24 @@ func CreateChama(c *gin.Context) {
 
 	// Parse request body with enhanced validation tags
 	var req struct {
-		Name                   string  `json:"name" binding:"required" validate:"required,min=3,max=100,safe_text,no_sql_injection,no_xss"`
-		Description            string  `json:"description" binding:"required" validate:"required,min=10,max=500,safe_text,no_sql_injection,no_xss"`
-		Category               string  `json:"category" binding:"required" validate:"required,oneof=chama contribution"`
-		Type                   string  `json:"type" binding:"required" validate:"required,alphanumeric"`
-		County                 string  `json:"county" binding:"required" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
-		Town                   string  `json:"town" binding:"required" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
-		ContributionAmount     float64 `json:"contribution_amount,omitempty"`
-		ContributionFrequency  string  `json:"contribution_frequency,omitempty"`
-		TargetAmount           float64 `json:"target_amount,omitempty"`
-		TargetDeadline         string  `json:"target_deadline,omitempty"`
-		MaxMembers             int     `json:"max_members" binding:"required" validate:"required,min=2,max=1000"`
-		IsPublic               bool    `json:"is_public"`
-		RequiresApproval       bool    `json:"requires_approval"`
-		Rules                  string  `json:"rules" validate:"max=1000,safe_text,no_sql_injection,no_xss"`
-		MeetingSchedule        string  `json:"meeting_schedule" validate:"max=200,safe_text,no_sql_injection,no_xss"`
-		RegistrationFeePaid    bool    `json:"registration_fee_paid"`
-		MonthlySubscriptionFee float64 `json:"monthly_subscription_fee"`
+		Name                   string   `json:"name" binding:"required" validate:"required,min=3,max=100,safe_text,no_sql_injection,no_xss"`
+		Description            string   `json:"description" binding:"required" validate:"required,min=10,max=500,safe_text,no_sql_injection,no_xss"`
+		Category               string   `json:"category" binding:"required" validate:"required,oneof=chama contribution"`
+		Type                   string   `json:"type" binding:"required" validate:"required,alphanumeric"`
+		County                 string   `json:"county" binding:"required" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
+		Town                   string   `json:"town" binding:"required" validate:"required,min=2,max=50,alpha,no_sql_injection,no_xss"`
+		ContributionAmount     float64  `json:"contribution_amount,omitempty"`
+		ContributionFrequency  string   `json:"contribution_frequency,omitempty"`
+		TargetAmount           float64  `json:"target_amount,omitempty"`
+		TargetDeadline         string   `json:"target_deadline,omitempty"`
+		MaxMembers             int      `json:"max_members" binding:"required" validate:"required,min=2,max=1000"`
+		IsPublic               bool     `json:"is_public"`
+		RequiresApproval       bool     `json:"requires_approval"`
+		Rules                  string   `json:"rules" validate:"max=1000,safe_text,no_sql_injection,no_xss"`
+		MeetingSchedule        string   `json:"meeting_schedule" validate:"max=200,safe_text,no_sql_injection,no_xss"`
+		RegistrationFeePaid    bool     `json:"registration_fee_paid"`
+		MonthlySubscriptionFee float64  `json:"monthly_subscription_fee"`
+		WalletTypes            []string `json:"wallet_types,omitempty"`
 		Members                []struct {
 			UserID              string `json:"user_id"`
 			Role                string `json:"role"`
@@ -423,6 +424,7 @@ func CreateChama(c *gin.Context) {
 		MeetingSchedule:        meetingSchedule,
 		RegistrationFeePaid:    req.RegistrationFeePaid,
 		MonthlySubscriptionFee: req.MonthlySubscriptionFee,
+		WalletTypes:            req.WalletTypes,
 	}
 
 	// Create the chama

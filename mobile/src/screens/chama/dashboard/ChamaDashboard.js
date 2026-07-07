@@ -30,6 +30,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   const [chamaFeatures, setChamaFeatures] = useState({
     allowMerryGoRound: true,
     allowWelfare: true,
+    activeWalletTypes: ['merry-go-round', 'welfare', 'savings', 'shares', 'dividends', 'loans'],
   });
   const [chamaStats, setChamaStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -69,16 +70,31 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     // Immediately update the selected chama for instant UI response
     setSelectedChama(chama);
 
+    // Extract wallet types from chama permissions if available
+    const permissions = chama?.permissions || {};
+    const activeWalletTypes = Array.isArray(permissions.activeWalletTypes)
+      ? permissions.activeWalletTypes
+      : ['merry-go-round', 'welfare', 'savings', 'shares', 'dividends', 'loans'];
+
     // Check if we have cached data for this chama
     const cachedData = getCachedChamaData(chama.id);
     if (cachedData) {
       // Use cached data immediately for instant switching
       setRealTimeData(cachedData.realTimeData);
       setChamaStats(cachedData.chamaStats);
-      setChamaFeatures(cachedData.chamaFeatures);
+      setChamaFeatures({
+        ...cachedData.chamaFeatures,
+        activeWalletTypes,
+      });
     } else {
       // No cached data, show loading and fetch fresh data
       setStatsLoading(true);
+      // Set features immediately from chama data
+      setChamaFeatures({
+        allowMerryGoRound: permissions.allowMerryGoRound ?? true,
+        allowWelfare: permissions.allowWelfare ?? true,
+        activeWalletTypes,
+      });
     }
 
     // Always fetch fresh data in the background (but don't block UI)
@@ -130,7 +146,11 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           setCachedChamaData(chama.id, {
             realTimeData: preloadedRealTimeData,
             chamaStats: statsResponse.data,
-            chamaFeatures: { allowMerryGoRound: true, allowWelfare: true }
+            chamaFeatures: {
+              allowMerryGoRound: true,
+              allowWelfare: true,
+              activeWalletTypes: [],
+            }
           });
         }
       } catch (error) {
@@ -250,9 +270,14 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       const response = await ApiService.makeRequest(`/chamas/${chamaId}`);
       if (response.success && response.data) {
         const chama = response.data;
+        const permissions = chama.permissions || {};
+        const activeWalletTypes = Array.isArray(permissions.activeWalletTypes)
+          ? permissions.activeWalletTypes
+          : [];
         setChamaFeatures({
-          allowMerryGoRound: chama.permissions?.allowMerryGoRound ?? true,
-          allowWelfare: chama.permissions?.allowWelfare ?? true,
+          allowMerryGoRound: permissions.allowMerryGoRound ?? true,
+          allowWelfare: permissions.allowWelfare ?? true,
+          activeWalletTypes,
         });
       }
     } catch (error) {
@@ -796,7 +821,21 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         return allowedForContributionGroups.includes(action.id);
       }
 
-      // For regular chamas, apply feature toggles
+      // For regular chamas, apply wallet type filters
+      const walletTypeMap = {
+        'savings': 'savings',
+        'shares': 'shares',
+        'dividends': 'dividends',
+        'loans': 'loans',
+        'merry-go-round': 'merry-go-round',
+        'welfare': 'welfare',
+      };
+
+      if (walletTypeMap[action.id]) {
+        return chamaFeatures.activeWalletTypes.includes(walletTypeMap[action.id]);
+      }
+
+      // Legacy permission checks for backward compatibility
       switch (action.id) {
         case 'merry-go-round':
           return chamaFeatures.allowMerryGoRound;

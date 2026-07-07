@@ -52,7 +52,7 @@ func (s *ChamaService) CreateChama(creation *models.ChamaCreation, createdBy str
 	// Create chama
 	chama := &models.Chama{
 		ID:                     uuid.New().String(),
-Name:                   creation.Name,
+		Name:                   creation.Name,
 		Description:            creation.Description,
 		Category:               creation.Category,
 		Type:                   creation.Type,
@@ -79,6 +79,32 @@ Name:                   creation.Name,
 		UpdatedAt:              time.Now(),
 	}
 
+	// Build permissions with active wallet types
+	permissions := map[string]interface{}{
+		"allowMerryGoRound": true,
+		"allowWelfare":      true,
+		"activeWalletTypes": []string{},
+	}
+	if len(creation.WalletTypes) > 0 {
+		permissions["activeWalletTypes"] = creation.WalletTypes
+	} else {
+		// Default wallet types based on chama type
+		if creation.Type == models.ChamaTypeMerryGoRound {
+			permissions["activeWalletTypes"] = []string{"merry-go-round"}
+			permissions["allowMerryGoRound"] = true
+		} else if creation.Type == models.ChamaTypeWelfare {
+			permissions["activeWalletTypes"] = []string{"welfare"}
+			permissions["allowWelfare"] = true
+		} else if creation.Type == models.ChamaTypeSavings {
+			permissions["activeWalletTypes"] = []string{"savings"}
+		} else if creation.Type == models.ChamaTypeBusiness {
+			permissions["activeWalletTypes"] = []string{"savings", "loans"}
+		} else if creation.Type == models.ChamaTypeInvestment {
+			permissions["activeWalletTypes"] = []string{"savings", "shares", "dividends"}
+		}
+	}
+	permissionsJSON, _ := json.Marshal(permissions)
+
 	// Serialize JSON fields
 	rulesJSON, err := chama.GetRulesJSON()
 	if err != nil {
@@ -104,8 +130,8 @@ Name:                   creation.Name,
 			contribution_amount, contribution_frequency, target_amount, target_deadline,
 			max_members, current_members, total_funds, is_public, requires_approval, rules,
 			meeting_frequency, meeting_day_of_week, meeting_day_of_month, meeting_time,
-			registration_fee_paid, created_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+			registration_fee_paid, created_by, created_at, updated_at, permissions
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
 	`
 
 	var meetingFreq, meetingTime *string
@@ -125,6 +151,7 @@ Name:                   creation.Name,
 		chama.MaxMembers, chama.CurrentMembers, chama.TotalFunds, chama.IsPublic, chama.RequiresApproval,
 		rulesJSON, meetingFreq, meetingDayOfWeek, meetingDayOfMonth, meetingTime,
 		chama.RegistrationFeePaid, chama.CreatedBy, chama.CreatedAt, chama.UpdatedAt,
+		permissionsJSON,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chama: %w", err)
@@ -264,7 +291,12 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 		chama.Permissions = map[string]interface{}{
 			"allowMerryGoRound": true,
 			"allowWelfare":      true,
+			"activeWalletTypes": []string{},
 		}
+	}
+	// Ensure activeWalletTypes exists in permissions
+	if _, ok := chama.Permissions["activeWalletTypes"]; !ok {
+		chama.Permissions["activeWalletTypes"] = []string{}
 	}
 
 	// Reconstruct meeting schedule
@@ -286,7 +318,7 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 			   latitude, longitude, contribution_amount, contribution_frequency,
 			   max_members, current_members, total_funds, is_public, requires_approval,
 			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
-			   meeting_time, created_by, created_at, updated_at
+			   meeting_time, permissions, created_by, created_at, updated_at
 		FROM chamas
 		WHERE is_public = $1 AND status = 'active'
 		ORDER BY created_at DESC
@@ -302,7 +334,7 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 	var chamas []*models.Chama
 	for rows.Next() {
 		chama := &models.Chama{}
-		var rulesJSON string
+		var rulesJSON, permissionsJSON string
 		var meetingFreq, meetingTime *string
 		var meetingDayOfWeek, meetingDayOfMonth *int
 
@@ -312,7 +344,7 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 			&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
 			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
 			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-			&chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
@@ -321,6 +353,24 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 		// Parse JSON fields
 		if err = chama.SetRulesFromJSON(rulesJSON); err != nil {
 			return nil, fmt.Errorf("failed to parse rules: %w", err)
+		}
+
+		// Parse permissions JSON
+		if permissionsJSON != "" {
+			var permissions map[string]interface{}
+			if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err == nil {
+				chama.Permissions = permissions
+			}
+		}
+		if chama.Permissions == nil {
+			chama.Permissions = map[string]interface{}{
+				"allowMerryGoRound": true,
+				"allowWelfare":      true,
+				"activeWalletTypes": []string{},
+			}
+		}
+		if _, ok := chama.Permissions["activeWalletTypes"]; !ok {
+			chama.Permissions["activeWalletTypes"] = []string{}
 		}
 
 		// Reconstruct meeting schedule
@@ -345,7 +395,7 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 			   latitude, longitude, contribution_amount, contribution_frequency,
 			   max_members, current_members, total_funds, is_public, requires_approval,
 			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
-			   meeting_time, created_by, created_at, updated_at
+			   meeting_time, permissions, created_by, created_at, updated_at
 		FROM chamas
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -360,7 +410,7 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 	var chamas []*models.Chama
 	for rows.Next() {
 		chama := &models.Chama{}
-		var rulesJSON string
+		var rulesJSON, permissionsJSON string
 		var meetingFreq, meetingTime *string
 		var meetingDayOfWeek, meetingDayOfMonth *int
 
@@ -370,7 +420,7 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 			&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
 			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
 			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-			&chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
@@ -379,6 +429,24 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 		// Parse JSON fields
 		if err = chama.SetRulesFromJSON(rulesJSON); err != nil {
 			return nil, fmt.Errorf("failed to parse rules: %w", err)
+		}
+
+		// Parse permissions JSON
+		if permissionsJSON != "" {
+			var permissions map[string]interface{}
+			if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err == nil {
+				chama.Permissions = permissions
+			}
+		}
+		if chama.Permissions == nil {
+			chama.Permissions = map[string]interface{}{
+				"allowMerryGoRound": true,
+				"allowWelfare":      true,
+				"activeWalletTypes": []string{},
+			}
+		}
+		if _, ok := chama.Permissions["activeWalletTypes"]; !ok {
+			chama.Permissions["activeWalletTypes"] = []string{}
 		}
 
 		// Reconstruct meeting schedule
@@ -403,7 +471,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			   c.latitude, c.longitude, c.contribution_amount, c.contribution_frequency,
 			   c.max_members, c.current_members, c.total_funds, c.is_public, c.requires_approval,
 			   c.rules, c.meeting_frequency, c.meeting_day_of_week, c.meeting_day_of_month,
-			   c.meeting_time, c.created_by, c.created_at, c.updated_at,
+			   c.meeting_time, c.permissions, c.created_by, c.created_at, c.updated_at,
 			   cm.role, cm.service_fee_paid, cm.service_fee_status, cm.id as member_id
 		FROM chamas c
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
@@ -421,7 +489,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 	var chamas []*models.Chama
 	for rows.Next() {
 		chama := &models.Chama{}
-		var rulesJSON string
+		var rulesJSON, permissionsJSON string
 		var meetingFreq, meetingTime *string
 		var meetingDayOfWeek, meetingDayOfMonth *int
 		var role string
@@ -435,7 +503,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
 			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
 			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-			&chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
 			&role, &serviceFeePaid, &serviceFeeStatus, &memberID,
 		)
 		if err != nil {
@@ -445,6 +513,24 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 		// Parse JSON fields
 		if err = chama.SetRulesFromJSON(rulesJSON); err != nil {
 			return nil, fmt.Errorf("failed to parse rules: %w", err)
+		}
+
+		// Parse permissions JSON
+		if permissionsJSON != "" {
+			var permissions map[string]interface{}
+			if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err == nil {
+				chama.Permissions = permissions
+			}
+		}
+		if chama.Permissions == nil {
+			chama.Permissions = map[string]interface{}{
+				"allowMerryGoRound": true,
+				"allowWelfare":      true,
+				"activeWalletTypes": []string{},
+			}
+		}
+		if _, ok := chama.Permissions["activeWalletTypes"]; !ok {
+			chama.Permissions["activeWalletTypes"] = []string{}
 		}
 
 		// Reconstruct meeting schedule

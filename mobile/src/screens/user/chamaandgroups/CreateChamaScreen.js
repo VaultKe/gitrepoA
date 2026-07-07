@@ -56,6 +56,8 @@ const CreateChamaScreen = ({ navigation }) => {
     paybill_business_number: '',
     paybill_account_number: '',
     payment_recipient_name: '',
+    wallet_types: [],
+    rules_file: null,
   });
 
   const [onboardedMembers, setOnboardedMembers] = useState([]);
@@ -93,7 +95,11 @@ const CreateChamaScreen = ({ navigation }) => {
         const saved = await AsyncStorage.getItem(CREATE_CHAMA_DRAFT_KEY);
         if (saved) {
           const draft = JSON.parse(saved);
-          if (draft.chamaData) setChamaData(draft.chamaData);
+          if (draft.chamaData) setChamaData({
+            ...draft.chamaData,
+            wallet_types: draft.chamaData.wallet_types || [],
+            rules_file: null,
+          });
           if (draft.onboardedMembers) {
             const members = Array.isArray(draft.onboardedMembers)
               ? draft.onboardedMembers.filter(m => !m.isChairperson)
@@ -112,8 +118,9 @@ const CreateChamaScreen = ({ navigation }) => {
   useEffect(() => {
     const saveDraft = async () => {
       try {
+        const { rules_file, ...chamaDataToSave } = chamaData;
         await AsyncStorage.setItem(CREATE_CHAMA_DRAFT_KEY, JSON.stringify({
-          chamaData,
+          chamaData: chamaDataToSave,
           onboardedMembers,
           currentStep,
         }));
@@ -374,6 +381,11 @@ const CreateChamaScreen = ({ navigation }) => {
           errors.payment_recipient_name = 'Payment recipient name is required';
         }
         break;
+      case 'wallet_types':
+        if (!Array.isArray(value) || value.length === 0) {
+          errors.wallet_types = 'Please select at least one wallet type';
+        }
+        break;
     }
     return errors;
   };
@@ -458,6 +470,12 @@ const CreateChamaScreen = ({ navigation }) => {
       case 'meeting_schedule':
         sanitizedValue = sanitizeInput(value, 'text');
         break;
+      case 'wallet_types':
+        sanitizedValue = Array.isArray(value) ? value : [];
+        break;
+      case 'rules_file':
+        sanitizedValue = value;
+        break;
       default:
         sanitizedValue = value.toString().replace(/[<>\"'&]/g, '');
     }
@@ -527,6 +545,9 @@ const CreateChamaScreen = ({ navigation }) => {
           const scheduleErrors = validateField('meeting_schedule', chamaData.meeting_schedule);
           Object.assign(errors, scheduleErrors);
         }
+        if (!chamaData.wallet_types || chamaData.wallet_types.length === 0) {
+          errors.wallet_types = 'Please select at least one wallet type';
+        }
         isValid = Object.keys(errors).length === 0;
         break;
 
@@ -566,6 +587,9 @@ const CreateChamaScreen = ({ navigation }) => {
       Object.assign(allErrors, validateField('paybill_business_number', chamaData.paybill_business_number));
       Object.assign(allErrors, validateField('paybill_account_number', chamaData.paybill_account_number));
       Object.assign(allErrors, validateField('payment_recipient_name', chamaData.payment_recipient_name));
+    }
+    if (!chamaData.wallet_types || chamaData.wallet_types.length === 0) {
+      allErrors.wallet_types = 'Please select at least one wallet type';
     }
     setFormErrors(allErrors);
     setShowErrors(true);
@@ -681,6 +705,7 @@ const CreateChamaScreen = ({ navigation }) => {
 
       const sanitizedData = {
         ...baseData,
+        wallet_types: chamaData.wallet_types || [],
         ...(chamaData.group_type === 'chama' ? {
           contribution_amount: parseFloat(chamaData.contribution_amount),
           contribution_frequency: chamaData.contribution_frequency,
@@ -774,7 +799,8 @@ const CreateChamaScreen = ({ navigation }) => {
         throw new Error('Data validation failed. Please check your inputs for correctness and security.');
       }
 
-      const formData = {
+      let requestPayload;
+      const jsonPayload = {
         ...sanitizedData,
         members: [
           {
@@ -791,7 +817,28 @@ const CreateChamaScreen = ({ navigation }) => {
         ]
       };
 
-      const response = await ApiService.createChama(formData);
+      if (chamaData.rules_file && chamaData.rules_file.uri) {
+        const multipart = new FormData();
+        Object.entries(jsonPayload).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
+              multipart.append(key, JSON.stringify(value));
+            } else {
+              multipart.append(key, value);
+            }
+          }
+        });
+        multipart.append('rules_file', {
+          uri: chamaData.rules_file.uri,
+          type: chamaData.rules_file.mimeType || 'application/pdf',
+          name: chamaData.rules_file.name || 'rules.pdf',
+        });
+        requestPayload = multipart;
+      } else {
+        requestPayload = jsonPayload;
+      }
+
+      const response = await ApiService.createChama(requestPayload);
 
       if (response.success) {
         try {
@@ -840,6 +887,34 @@ const CreateChamaScreen = ({ navigation }) => {
           visibilityTime: 3000,
         });
         await clearDraft();
+        setChamaData({
+          group_type: '',
+          name: '',
+          description: '',
+          type: '',
+          county: user?.county || '',
+          town: user?.town || '',
+          contribution_amount: '',
+          contribution_frequency: 'monthly',
+          target_amount: '',
+          contribution_rules: '',
+          max_members: '',
+          is_public: false,
+          requires_approval: false,
+          rules: '',
+          meeting_schedule: '',
+          payment_method: '',
+          till_number: '',
+          paybill_business_number: '',
+          paybill_account_number: '',
+          payment_recipient_name: '',
+          wallet_types: [],
+          rules_file: null,
+        });
+        setOnboardedMembers([]);
+        setCurrentStep(1);
+        setFormErrors({});
+        setShowErrors(false);
         navigation.navigate('MyChamas', {
           newChamaId: response.data.id,
           refresh: true

@@ -126,25 +126,26 @@ type ChamaMember struct {
 
 // ChamaCreation represents data for creating a new chama
 type ChamaCreation struct {
-	Name                  string                `json:"name" validate:"required"`
-	Description           *string               `json:"description,omitempty"`
-	Category              ChamaCategory         `json:"category" validate:"required"`
-	Type                  ChamaType             `json:"type" validate:"required"`
-	County                string                `json:"county" validate:"required"`
-	Town                  string                `json:"town" validate:"required"`
-	Latitude              *float64              `json:"latitude,omitempty"`
-	Longitude             *float64              `json:"longitude,omitempty"`
-	ContributionAmount    float64               `json:"contributionAmount"`
-	ContributionFrequency ContributionFrequency `json:"contributionFrequency"`
-	TargetAmount          *float64              `json:"targetAmount,omitempty"`
-	TargetDeadline        *time.Time            `json:"targetDeadline,omitempty"`
-	MaxMembers            *int                  `json:"maxMembers,omitempty"`
-	IsPublic              bool                  `json:"isPublic"`
-	RequiresApproval      bool                  `json:"requiresApproval"`
-	Rules                 []string              `json:"rules"`
-	MeetingSchedule       *MeetingSchedule      `json:"meetingSchedule,omitempty"`
-	RegistrationFeePaid   bool                  `json:"registrationFeePaid"`
+	Name                   string                `json:"name" validate:"required"`
+	Description            *string               `json:"description,omitempty"`
+	Category               ChamaCategory         `json:"category" validate:"required"`
+	Type                   ChamaType             `json:"type" validate:"required"`
+	County                 string                `json:"county" validate:"required"`
+	Town                   string                `json:"town" validate:"required"`
+	Latitude               *float64              `json:"latitude,omitempty"`
+	Longitude              *float64              `json:"longitude,omitempty"`
+	ContributionAmount     float64               `json:"contributionAmount"`
+	ContributionFrequency  ContributionFrequency `json:"contributionFrequency"`
+	TargetAmount           *float64              `json:"targetAmount,omitempty"`
+	TargetDeadline         *time.Time            `json:"targetDeadline,omitempty"`
+	MaxMembers             *int                  `json:"maxMembers,omitempty"`
+	IsPublic               bool                  `json:"isPublic"`
+	RequiresApproval       bool                  `json:"requiresApproval"`
+	Rules                  []string              `json:"rules"`
+	MeetingSchedule        *MeetingSchedule      `json:"meetingSchedule,omitempty"`
+	RegistrationFeePaid    bool                  `json:"registrationFeePaid"`
 	MonthlySubscriptionFee float64              `json:"monthlySubscriptionFee"`
+	WalletTypes            []string              `json:"walletTypes,omitempty"`
 }
 
 // ChamaUpdate represents data for updating a chama

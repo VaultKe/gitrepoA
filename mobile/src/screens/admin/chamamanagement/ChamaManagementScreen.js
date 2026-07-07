@@ -376,6 +376,23 @@ export default function ChamaManagementScreen() {
                   {new Date(selectedChama.lastActivity).toLocaleDateString()}
                 </Text>
               </View>
+
+              <View style={styles.detailSection}>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Wallet Types</Text>
+                <View style={styles.walletTypesContainer}>
+                  {(selectedChama.permissions?.activeWalletTypes && selectedChama.permissions.activeWalletTypes.length > 0
+                    ? selectedChama.permissions.activeWalletTypes
+                    : ['main']
+                  ).map((walletType, index) => (
+                    <View key={index} style={[styles.walletTypeBadge, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}>
+                      <Ionicons name="wallet" size={14} color={colors.primary} />
+                      <Text style={[styles.walletTypeText, { color: colors.primary }]}>
+                        {walletType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
             </ScrollView>
 
             <View style={styles.modalActions}>
@@ -765,6 +782,26 @@ const styles = StyleSheet.create({
   modalActionText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  walletTypesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  walletTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  walletTypeText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
   emptyState: {
     flex: 1,

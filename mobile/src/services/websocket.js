@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, WS_URL } from '../config/environment';
-import { maskSensitiveData } from '../../utils/formatters';
+import { maskSensitiveData } from '../utils/formatters';
 
 class WebSocketService {
   constructor() {
