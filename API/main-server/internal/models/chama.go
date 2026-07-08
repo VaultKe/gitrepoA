@@ -94,6 +94,10 @@ type Chama struct {
 	UpdatedAt             time.Time              `json:"updatedAt" db:"updated_at"`
 	ChatRoomID            *string                `json:"chatRoomId,omitempty" db:"chat_room_id"`
 
+	// Rules file (uploaded PDF document containing the chama/group rules)
+	RulesFilePath *string `json:"rulesFilePath,omitempty" db:"rules_file_path"`
+	RulesFileName *string `json:"rulesFileName,omitempty" db:"rules_file_name"`
+
 	// Member-specific fields (populated when querying user's chamas)
 	MemberID              string                 `json:"memberId" db:"member_id"`
 	MemberRole            ChamaRole              `json:"memberRole" db:"role"`

@@ -538,6 +538,13 @@ func CreateChama(c *gin.Context) {
 		permissions["rules_file_name"] = c.PostForm("rules_file_name")
 		permissionsJSON, _ := json.Marshal(permissions)
 		_, _ = database.Exec("UPDATE chamas SET permissions = $1, updated_at = NOW() WHERE id = $2", permissionsJSON, chama.ID)
+
+		// Persist the rules file in dedicated columns so it can be returned by the chama endpoints
+		rulesFileName := c.PostForm("rules_file_name")
+		if rulesFileName == "" {
+			rulesFileName = filepath.Base(rulesFileURL)
+		}
+		_, _ = database.Exec("UPDATE chamas SET rules_file_path = $1, rules_file_name = $2, updated_at = NOW() WHERE id = $3", rulesFileURL, rulesFileName, chama.ID)
 	}
 
 	// Return success response
@@ -565,6 +572,8 @@ func CreateChama(c *gin.Context) {
 			"monthly_subscription_fee": chama.MonthlySubscriptionFee,
 			"created_by":               chama.CreatedBy,
 			"created_at":               chama.CreatedAt,
+			"rules_file_path":          rulesFileURL,
+			"rules_file_name":          c.PostForm("rules_file_name"),
 		},
 	})
 }

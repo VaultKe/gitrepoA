@@ -247,8 +247,9 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 		SELECT id, name, description, category, type, status, avatar, county, town,
 			   latitude, longitude, contribution_amount, contribution_frequency,
 			   max_members, current_members, total_funds, is_public, requires_approval,
-			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
-			   meeting_time, permissions, created_by, created_at, updated_at, chat_room_id
+		   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
+		   meeting_time, permissions, created_by, created_at, updated_at, chat_room_id,
+		   rules_file_path, rules_file_name
 		FROM chamas WHERE id = $1
 	`
 
@@ -265,6 +266,7 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 		&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
 		&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
 		&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt, &chatRoomID,
+		&chama.RulesFilePath, &chama.RulesFileName,
 	)
 	chama.ChatRoomID = chatRoomID
 	if err != nil {
@@ -316,9 +318,9 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 	query := `
 		SELECT id, name, description, category, type, status, avatar, county, town,
 			   latitude, longitude, contribution_amount, contribution_frequency,
-			   max_members, current_members, total_funds, is_public, requires_approval,
-			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
-			   meeting_time, permissions, created_by, created_at, updated_at
+		   max_members, current_members, total_funds, is_public, requires_approval,
+		   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
+		   meeting_time, permissions, created_by, created_at, updated_at, rules_file_path, rules_file_name
 		FROM chamas
 		WHERE is_public = $1 AND status = 'active'
 		ORDER BY created_at DESC
@@ -332,20 +334,21 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 	defer rows.Close()
 
 	var chamas []*models.Chama
-	for rows.Next() {
-		chama := &models.Chama{}
-		var rulesJSON, permissionsJSON string
-		var meetingFreq, meetingTime *string
-		var meetingDayOfWeek, meetingDayOfMonth *int
+		for rows.Next() {
+			chama := &models.Chama{}
+			var rulesJSON, permissionsJSON string
+			var meetingFreq, meetingTime *string
+			var meetingDayOfWeek, meetingDayOfMonth *int
 
-		err := rows.Scan(
-			&chama.ID, &chama.Name, &chama.Description, &chama.Category, &chama.Type, &chama.Status,
-			&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
-			&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
-			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
-			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
-		)
+			err := rows.Scan(
+				&chama.ID, &chama.Name, &chama.Description, &chama.Category, &chama.Type, &chama.Status,
+				&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
+				&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
+				&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
+				&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
+				&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+				&chama.RulesFilePath, &chama.RulesFileName,
+			)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
 		}
@@ -395,7 +398,7 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 			   latitude, longitude, contribution_amount, contribution_frequency,
 			   max_members, current_members, total_funds, is_public, requires_approval,
 			   rules, meeting_frequency, meeting_day_of_week, meeting_day_of_month,
-			   meeting_time, permissions, created_by, created_at, updated_at
+			   meeting_time, permissions, created_by, created_at, updated_at, rules_file_path, rules_file_name
 		FROM chamas
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -408,20 +411,21 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 	defer rows.Close()
 
 	var chamas []*models.Chama
-	for rows.Next() {
-		chama := &models.Chama{}
-		var rulesJSON, permissionsJSON string
-		var meetingFreq, meetingTime *string
-		var meetingDayOfWeek, meetingDayOfMonth *int
+		for rows.Next() {
+			chama := &models.Chama{}
+			var rulesJSON, permissionsJSON string
+			var meetingFreq, meetingTime *string
+			var meetingDayOfWeek, meetingDayOfMonth *int
 
-		err := rows.Scan(
-			&chama.ID, &chama.Name, &chama.Description, &chama.Type, &chama.Status,
-			&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
-			&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
-			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
-			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
-		)
+			err := rows.Scan(
+				&chama.ID, &chama.Name, &chama.Description, &chama.Type, &chama.Status,
+				&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
+				&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
+				&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
+				&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
+				&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+				&chama.RulesFilePath, &chama.RulesFileName,
+			)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
 		}
@@ -471,8 +475,9 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			   c.latitude, c.longitude, c.contribution_amount, c.contribution_frequency,
 			   c.max_members, c.current_members, c.total_funds, c.is_public, c.requires_approval,
 			   c.rules, c.meeting_frequency, c.meeting_day_of_week, c.meeting_day_of_month,
-			   c.meeting_time, c.permissions, c.created_by, c.created_at, c.updated_at,
-			   cm.role, cm.service_fee_paid, cm.service_fee_status, cm.id as member_id
+		   c.meeting_time, c.permissions, c.created_by, c.created_at, c.updated_at,
+		   c.rules_file_path, c.rules_file_name,
+		   cm.role, cm.service_fee_paid, cm.service_fee_status, cm.id as member_id
 		FROM chamas c
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
 		WHERE cm.user_id = $1 AND cm.is_active = $2
@@ -504,6 +509,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
 			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
 			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+			&chama.RulesFilePath, &chama.RulesFileName,
 			&role, &serviceFeePaid, &serviceFeeStatus, &memberID,
 		)
 		if err != nil {

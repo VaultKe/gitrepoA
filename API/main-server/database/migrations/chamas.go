@@ -41,6 +41,9 @@ func MigrateChamas(db *sql.DB) error {
 	if err := addChamaRegistrationFeeColumns(db); err != nil {
 		return err
 	}
+	if err := addChamaRulesFileColumns(db); err != nil {
+		return err
+	}
 
 	log.Println("Chamas migrations completed successfully")
 	return nil
@@ -479,5 +482,20 @@ func addChamaRegistrationFeeColumns(db *sql.DB) error {
 		}
 	}
 	log.Println("registration fee columns ready")
+	return nil
+}
+
+func addChamaRulesFileColumns(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS rules_file_path TEXT`,
+		`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS rules_file_name TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_chamas_rules_file_path ON chamas(rules_file_path)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add rules file columns: %w", err)
+		}
+	}
+	log.Println("rules file columns ready")
 	return nil
 }
