@@ -9,9 +9,12 @@ import {
   RefreshControl,
   Alert,
   Image,
+  Linking,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import Toast from 'react-native-toast-message';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
@@ -152,6 +155,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [userMembership, setUserMembership] = useState(null);
   const [chatRoomLoading, setChatRoomLoading] = useState(false);
+  const [uploadingRules, setUploadingRules] = useState(false);
 
   // Reset state and reload data when chamaId changes
   useEffect(() => {
@@ -191,27 +195,105 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
 
       // Load basic chama data and members first (critical for page display)
-      const [chamaResponse, membersResponse] = await Promise.all([
-        ApiService.getChamaById(targetChamaId),
-        ApiService.getChamaMembers(targetChamaId)
-      ]);
-      if (chamaResponse.success) {
+      // Use independent calls so a failure on one doesn't block the other
+      let chamaResponse;
+      let membersResponse;
+      try {
+        chamaResponse = await ApiService.getChamaById(targetChamaId);
+      } catch (chamaError) {
+        console.error('[ChamaDetails] getChamaById error:', chamaError);
+        chamaResponse = { success: false, data: null };
+      }
+
+      try {
+        membersResponse = await ApiService.getChamaMembers(targetChamaId);
+      } catch (membersError) {
+        console.error('[ChamaDetails] getChamaMembers error:', membersError);
+        membersResponse = { success: false, data: [] };
+      }
+
+      if (chamaResponse.success && chamaResponse.data) {
         setChama(chamaResponse.data);
         setSelectedChama(chamaResponse.data);
       }
 
+      // Determine membership through multiple fallbacks
+      let membership = null;
+
+      // Fallback 1: Try to find user in chama members list
       if (membersResponse.success) {
+        const membersData = Array.isArray(membersResponse.data) ? membersResponse.data : [];
+        console.log('[ChamaDetails] membersResponse.data type:', typeof membersResponse.data, Array.isArray(membersResponse.data) ? membersResponse.data.length : 'N/A');
         const uniqueMembers = Array.from(
-          new Map((membersResponse.data || []).map((m) => [m.id, m])).values()
+          new Map(membersData.map((m) => [m.id, m])).values()
         );
         setMembers(uniqueMembers);
         const currentUserId = String(user?.id);
-        const membership = uniqueMembers.find(member =>
-          String(member.user_id) === currentUserId ||
-          String(member.user?.id) === currentUserId
-        );
-        setUserMembership(membership);
+        console.log('[ChamaDetails] currentUserId:', currentUserId, 'uniqueMembers count:', uniqueMembers.length);
+
+        membership = uniqueMembers.find(member => {
+          const memberUserId = String(
+            member.user_id ||
+            member.userId ||
+            member.user?.id ||
+            member.user?.userId ||
+            ''
+          );
+          const matches = memberUserId === currentUserId;
+          if (!matches) {
+               }
+          return matches;
+        });
+        console.log('[ChamaDetails] membership from members list:', !!membership, membership?.role);
+      } else {
+        console.log('[ChamaDetails] getChamaMembers failed or returned no data, membersResponse:', membersResponse);
+        setMembers([]);
       }
+
+      // Fallback 2: If not found in members list, check user's chamas via /chamas/my
+      if (!membership && chamaResponse.data) {
+        const currentUserId = String(user?.id);
+        console.log('[ChamaDetails] membership not found in members list, checking /chamas/my');
+        try {
+          const myChamasResponse = await ApiService.getUserChamas(50, 0);
+          if (myChamasResponse.success && Array.isArray(myChamasResponse.data)) {
+            const myChama = myChamasResponse.data.find(c => String(c.id) === String(chamaResponse.data.id));
+            if (myChama) {
+              console.log('[ChamaDetails] chama found in user chamas list:', myChama.memberRole || myChama.role);
+              membership = {
+                id: myChama.memberId || myChama.id,
+                user_id: currentUserId,
+                role: myChama.memberRole || myChama.role || 'member',
+                joined_at: myChama.createdAt || new Date().toISOString(),
+              };
+            } else {
+              console.log('[ChamaDetails] chama NOT found in user chamas list');
+            }
+          } else {
+            console.log('[ChamaDetails] getUserChamas failed or returned no data');
+          }
+        } catch (myChamasError) {
+          console.error('[ChamaDetails] getUserChamas error:', myChamasError);
+        }
+      }
+
+      // Fallback 3: If still not found, check if user is the chama creator
+      if (!membership && chamaResponse.data) {
+        const currentUserId = String(user?.id);
+        const creatorId = String(chamaResponse.data.createdBy);
+        if (creatorId === currentUserId) {
+          console.log('[ChamaDetails] user is chama creator, assigning chairperson');
+          membership = {
+            id: 'creator',
+            user_id: currentUserId,
+            role: 'chairperson',
+            joined_at: chamaResponse.data.createdAt || new Date().toISOString(),
+          };
+        }
+      }
+
+      setUserMembership(membership);
+      console.log('[ChamaDetails] final userMembership:', !!membership, membership?.role);
 
       // Load additional data in background (non-blocking)
       Promise.all([
@@ -409,6 +491,59 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     } finally {
       console.log('[ChamaDetails] Chat room loading finished');
       setChatRoomLoading(false);
+    }
+  };
+
+  const handleUploadRulesFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const document = result.assets[0];
+      if (document.mimeType && document.mimeType !== 'application/pdf') {
+        Toast.show({ type: 'error', text1: 'Invalid file type', text2: 'Only PDF files are accepted for rules' });
+        return;
+      }
+      setUploadingRules(true);
+      const formData = new FormData();
+      formData.append('rules_file', {
+        uri: document.uri,
+        type: document.mimeType || 'application/pdf',
+        name: document.name || 'rules.pdf',
+      });
+      const response = await ApiService.updateChama(chamaId, formData);
+      if (response.success) {
+        Toast.show({ type: 'success', text1: 'Rules PDF updated' });
+        await loadChamaDetails();
+      } else {
+        Toast.show({ type: 'error', text1: 'Upload failed', text2: response.error });
+      }
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Upload failed', text2: error.message });
+    } finally {
+      setUploadingRules(false);
+    }
+  };
+
+  const handleRemoveRulesFile = async () => {
+    try {
+      setUploadingRules(true);
+      const response = await ApiService.updateChama(chamaId, {
+        rules_file_path: '',
+        rules_file_name: '',
+      });
+      if (response.success) {
+        Toast.show({ type: 'success', text1: 'Rules PDF removed' });
+        await loadChamaDetails();
+      } else {
+        Toast.show({ type: 'error', text1: 'Remove failed', text2: response.error });
+      }
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Remove failed', text2: error.message });
+    } finally {
+      setUploadingRules(false);
     }
   };
 
@@ -949,6 +1084,31 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const renderChamaRules = () => {
+    // Resolve the uploaded rules document (stored in dedicated columns, with fallback to permissions).
+    // Only considered "present" if a non-empty path exists, so the card only shows for chamas that uploaded a file.
+    const rawRulesFilePath = (chama?.rules_file_path && chama.rules_file_path.trim()) ||
+      (chama?.permissions && chama.permissions.rules_file_path);
+    const rulesFilePath = rawRulesFilePath ? rawRulesFilePath.trim() : null;
+    const rulesFileName = (chama?.rules_file_name && chama.rules_file_name.trim()) ||
+      (chama?.permissions && chama.permissions.rules_file_name) || null;
+
+    const handleOpenRulesFile = async () => {
+      if (!rulesFilePath) return;
+      const fullUrl = rulesFilePath.startsWith('http')
+        ? rulesFilePath
+        : `${ApiService.baseURL}${rulesFilePath.startsWith('/') ? '' : '/'}${rulesFilePath}`;
+      try {
+        const supported = await Linking.canOpenURL(fullUrl);
+        if (supported) {
+          await Linking.openURL(fullUrl);
+        } else {
+          Alert.alert('Unable to open', 'No application is available to open the rules document.');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Failed to open the rules document.');
+      }
+    };
+
     // Parse rules - they might be a JSON string, object, or plain string
     let rules = [];
     if (chama?.rules) {
@@ -994,6 +1154,26 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Chama Rules & Regulations
         </Text>
+
+        {/* Attached rules document (uploaded PDF) */}
+        {rulesFilePath && (
+          <TouchableOpacity
+            style={[styles.rulesFileCard, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
+            onPress={handleOpenRulesFile}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="document-text" size={24} color={colors.primary} />
+            <View style={styles.rulesFileInfo}>
+              <Text style={[styles.rulesFileTitle, { color: colors.text }]} numberOfLines={1}>
+                {rulesFileName || 'Chama Rules Document'}
+              </Text>
+              <Text style={[styles.rulesFileSubtitle, { color: colors.textSecondary }]}>
+                Tap to view the attached rules PDF
+              </Text>
+            </View>
+            <Ionicons name="open-outline" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.rulesList}>
           {/* Show custom rules first if they exist */}
@@ -1107,6 +1287,31 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             </Text>
           </View>
         </View>
+
+        {/* Chairperson controls for the attached rules document */}
+        {userMembership?.role?.toLowerCase() === 'chairperson' && (
+          <View style={[styles.rulesFileActions, { marginTop: spacing.lg }]}>
+            <Button
+              title={rulesFilePath ? 'Replace Rules PDF' : 'Upload Rules PDF'}
+              variant="outline"
+              onPress={handleUploadRulesFile}
+              loading={uploadingRules}
+              icon={<Ionicons name="document-attach-outline" size={18} color={colors.primary} />}
+              style={styles.rulesFileActionButton}
+            />
+            {rulesFilePath && !uploadingRules && (
+              <TouchableOpacity
+                onPress={handleRemoveRulesFile}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.rulesFileRemoveButton}
+              >
+                <Text style={[styles.rulesFileRemoveText, { color: colors.error }]}>
+                  Remove
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </Card>
     );
   };

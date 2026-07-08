@@ -222,7 +222,7 @@ func CreateChama(c *gin.Context) {
 	}
 
 	// Bind request data - support both JSON and multipart/form-data (for file uploads)
-	if c.ContentType() == "multipart/form-data" {
+	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
 		c.Request.ParseMultipartForm(10 << 20) // 10 MB max memory
 		req.Name = c.PostForm("name")
 		req.Description = c.PostForm("description")
@@ -498,7 +498,7 @@ func CreateChama(c *gin.Context) {
 
 	// Handle rules file upload if present
 	var rulesFileURL string
-	if c.ContentType() == "multipart/form-data" {
+	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
 		file, err := c.FormFile("rules_file")
 		if err == nil && file != nil {
 			uploadDir := "./uploads/chamas/rules"
@@ -506,11 +506,16 @@ func CreateChama(c *gin.Context) {
 				cleanName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(file.Filename)
 				fileName := fmt.Sprintf("%s_%s", chama.ID, cleanName)
 				filePath := filepath.Join(uploadDir, fileName)
-				
+
 				if err := c.SaveUploadedFile(file, filePath); err == nil {
 					rulesFileURL = fmt.Sprintf("/uploads/chamas/rules/%s", fileName)
+					log.Printf("✅ Rules file uploaded for chama %s -> %s", chama.ID, rulesFileURL)
+				} else {
+					log.Printf("❌ Failed to save rules file for chama %s: %v", chama.ID, err)
 				}
 			}
+		} else {
+			log.Printf("ℹ️ No 'rules_file' part found in multipart request for chama %s (err=%v)", chama.ID, err)
 		}
 	}
 
@@ -693,7 +698,7 @@ func UpdateChama(c *gin.Context) {
 		return
 	}
 
-	// Parse request body
+	// Parse request body (support both JSON and multipart/form-data for rules file upload)
 	var req struct {
 		Name                  *string                 `json:"name,omitempty"`
 		Description           *string                 `json:"description,omitempty"`
@@ -707,14 +712,67 @@ func UpdateChama(c *gin.Context) {
 		Permissions           *map[string]bool        `json:"permissions,omitempty"`
 		Notifications         *map[string]bool        `json:"notifications,omitempty"`
 		WalletTypes           []string                `json:"wallet_types,omitempty"`
+		RulesFilePath         *string                 `json:"rules_file_path,omitempty"`
+		RulesFileName         *string                 `json:"rules_file_name,omitempty"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request data: " + err.Error(),
-		})
-		return
+	// Handle optional rules file upload via multipart/form-data
+	var rulesFileURL string
+	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
+		c.Request.ParseMultipartForm(10 << 20)
+		if file, ferr := c.FormFile("rules_file"); ferr == nil && file != nil {
+			uploadDir := "./uploads/chamas/rules"
+			if mkErr := os.MkdirAll(uploadDir, 0o755); mkErr == nil {
+				cleanName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(file.Filename)
+				fileName := fmt.Sprintf("%s_%s", chamaID, cleanName)
+				filePath := filepath.Join(uploadDir, fileName)
+				if saveErr := c.SaveUploadedFile(file, filePath); saveErr == nil {
+					rulesFileURL = fmt.Sprintf("/uploads/chamas/rules/%s", fileName)
+					log.Printf("✅ Rules file uploaded (update) for chama %s -> %s", chamaID, rulesFileURL)
+				} else {
+					log.Printf("❌ Failed to save rules file (update) for chama %s: %v", chamaID, saveErr)
+				}
+			}
+		}
+		// Also bind any plain fields sent alongside the file
+		if v := c.PostForm("name"); v != "" {
+			req.Name = &v
+		}
+		if v := c.PostForm("description"); v != "" {
+			req.Description = &v
+		}
+		if v := c.PostForm("is_public"); v != "" {
+			b := v == "true"
+			req.IsPublic = &b
+		}
+		if v := c.PostForm("requires_approval"); v != "" {
+			b := v == "true"
+			req.RequiresApproval = &b
+		}
+		if v := c.PostForm("max_members"); v != "" {
+			if n, aerr := strconv.Atoi(v); aerr == nil {
+				req.MaxMembers = &n
+			}
+		}
+		if v := c.PostForm("contribution_amount"); v != "" {
+			if f, ferr := strconv.ParseFloat(v, 64); ferr == nil {
+				req.ContributionAmount = &f
+			}
+		}
+		if v := c.PostForm("contribution_frequency"); v != "" {
+			req.ContributionFrequency = &v
+		}
+		if v := c.PostForm("wallet_types"); v != "" {
+			_ = json.Unmarshal([]byte(v), &req.WalletTypes)
+		}
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid request data: " + err.Error(),
+			})
+			return
+		}
 	}
 
 	// Prepare update payload for service
@@ -755,6 +813,24 @@ func UpdateChama(c *gin.Context) {
 	}
 	if len(req.WalletTypes) > 0 {
 		updateMap["wallet_types"] = req.WalletTypes
+	}
+
+	// Explicit rules file path/name (e.g. removal via JSON)
+	if req.RulesFilePath != nil {
+		updateMap["rules_file_path"] = *req.RulesFilePath
+	}
+	if req.RulesFileName != nil {
+		updateMap["rules_file_name"] = *req.RulesFileName
+	}
+
+	// Rules file uploaded via multipart
+	if rulesFileURL != "" {
+		rulesFileName := c.PostForm("rules_file_name")
+		if rulesFileName == "" {
+			rulesFileName = filepath.Base(rulesFileURL)
+		}
+		updateMap["rules_file_path"] = rulesFileURL
+		updateMap["rules_file_name"] = rulesFileName
 	}
 
 	// Update chama settings

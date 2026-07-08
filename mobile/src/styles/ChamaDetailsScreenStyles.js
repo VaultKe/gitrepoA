@@ -344,6 +344,44 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
   // Chama rules styles
   rulesList: {
     gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  rulesFileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+  },
+  rulesFileInfo: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    marginRight: spacing.sm,
+  },
+  rulesFileTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  rulesFileSubtitle: {
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
+  },
+  rulesFileActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  rulesFileActionButton: {
+    flex: 1,
+  },
+  rulesFileRemoveButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  rulesFileRemoveText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   ruleItem: {
     paddingLeft: spacing.md,

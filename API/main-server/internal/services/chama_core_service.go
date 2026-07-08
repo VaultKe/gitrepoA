@@ -1323,6 +1323,17 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 		paramIndex++
 	}
 
+	if v, ok := updateMap["rules_file_path"]; ok {
+		setParts = append(setParts, fmt.Sprintf("rules_file_path = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+	if v, ok := updateMap["rules_file_name"]; ok {
+		setParts = append(setParts, fmt.Sprintf("rules_file_name = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+
 	// Handle permissions and wallet_types together
 	if _, hasPermissions := updateMap["permissions"]; hasPermissions || updateMap["wallet_types"] != nil {
 		// Get existing permissions
