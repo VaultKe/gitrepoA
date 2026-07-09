@@ -12,7 +12,6 @@ import {
   Linking,
   Dimensions,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -157,9 +156,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [userMembership, setUserMembership] = useState(null);
   const [chatRoomLoading, setChatRoomLoading] = useState(false);
   const [uploadingRules, setUploadingRules] = useState(false);
-  const [meetingsLoading, setMeetingsLoading] = useState(false);
-  const [transactionsLoading, setTransactionsLoading] = useState(false);
-  const [pollsLoading, setPollsLoading] = useState(false);
 
   // Reset state and reload data when chamaId changes
   useEffect(() => {
@@ -299,11 +295,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       console.log('[ChamaDetails] final userMembership:', !!membership, membership?.role);
 
       // Load additional data in background (non-blocking)
-      setMeetingsLoading(true);
-      setTransactionsLoading(true);
-      setPollsLoading(true);
-      setStatisticsLoading(true);
-
       Promise.all([
         // Load user transactions
         ApiService.getChamaTransactions(targetChamaId).then(response => {
@@ -320,10 +311,8 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             });
             setTransactions(userTransactions);
           }
-          setTransactionsLoading(false);
         }).catch(error => {
           setTransactions([]);
-          setTransactionsLoading(false);
         }),
 
         // Load active polls (same logic as PollsVotingScreen)
@@ -349,13 +338,11 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           allPolls.push(...pollMap.values());
 
           setPolls(allPolls);
-          setPollsLoading(false);
 
           if (allPolls.length > 0) {
           }
         }).catch(error => {
           setPolls([]);
-          setPollsLoading(false);
         }),
 
         // Load meetings (like ChamaMeetingsScreen does)
@@ -366,10 +353,8 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             if (meetingsData.length > 0) {
             }
           }
-          setMeetingsLoading(false);
         }).catch(error => {
           setMeetings([]);
-          setMeetingsLoading(false);
         }),
 
         // Load statistics
@@ -377,10 +362,8 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           if (response.success) {
             setStatistics(response.data);
           }
-          setStatisticsLoading(false);
         }).catch(error => {
           setStatistics(null);
-          setStatisticsLoading(false);
         })
       ]);
 
@@ -892,7 +875,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Recent Meetings
         </Text>
-        {meetings.length > 5 && !meetingsLoading && (
+        {meetings.length > 5 && (
           <TouchableOpacity onPress={() => navigation.navigate('ChamaMeetingsScreen', { chamaId })}>
             <Text style={[styles.viewMoreText, { color: colors.primary }]}>
               View All
@@ -901,12 +884,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      {meetingsLoading ? (
-        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={{ marginTop: 8, color: colors.textSecondary }}>Loading meetings…</Text>
-        </View>
-      ) : meetings.length === 0 ? (
+      {meetings.length === 0 ? (
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           No meetings scheduled
         </Text>
@@ -962,7 +940,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           My Transactions
         </Text>
-        {transactions.length > 5 && !transactionsLoading && (
+        {transactions.length > 5 && (
           <TouchableOpacity onPress={() => {
             if (chama) {
               setSelectedChama(chama);
@@ -976,12 +954,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      {transactionsLoading ? (
-        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={{ marginTop: 8, color: colors.textSecondary }}>Loading transactions…</Text>
-        </View>
-      ) : transactions.length === 0 ? (
+      {transactions.length === 0 ? (
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           No transactions found for your account
         </Text>
@@ -1058,12 +1031,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {pollsLoading ? (
-          <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={{ marginTop: 8, color: colors.textSecondary }}>Loading polls…</Text>
-          </View>
-        ) : polls.length === 0 ? (
+        {polls.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
             <Ionicons name="bar-chart" size={48} color={colors.primary} />
             <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
@@ -1115,17 +1083,33 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                );
              })}
 
-            {/* New polls row */}
-            {newPollsCount > 0 && (
-              <TouchableOpacity
-                style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
-                onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}
-              >
-                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.primary }} numberOfLines={1}>New Polls Available</Text>
-                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.primary, textAlign: 'center' }}>{newPollsCount}</Text>
-                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.primary, textAlign: 'center' }}>New</Text>
-              </TouchableOpacity>
-            )}
+            {/* New polls - list each one individually */}
+            {unvotedPolls.slice(0, 5).map((poll, index) => {
+              const pollStatus = poll.status || 'active';
+              const endDate = poll.endDate || poll.end_date || poll.endsAt;
+              const hasEnded = endDate && new Date(endDate) < new Date();
+              const isActive = pollStatus === 'active' && !hasEnded;
+
+              return (
+                <TouchableOpacity
+                  key={`new-poll-${poll.id || index}`}
+                  style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
+                  onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}
+                >
+                  <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.primary }} numberOfLines={1}>{poll.title || 'New Poll'}</Text>
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons
+                      name="alert-circle"
+                      size={16}
+                      color={colors.warning}
+                    />
+                  </View>
+                  <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
+                    {isActive ? 'New' : 'Closed'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </Card>
