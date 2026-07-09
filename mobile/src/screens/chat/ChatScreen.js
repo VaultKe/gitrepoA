@@ -172,17 +172,6 @@ const ChatScreen = () => {
     );
   };
 
-  if (loading && rooms.length === 0) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          Loading chats...
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Search Bar */}
@@ -227,7 +216,14 @@ const ChatScreen = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={rooms.length === 0 ? styles.emptyContainer : null}
         ListEmptyComponent={
-          !loading && (
+          loading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                Loading chats...
+              </Text>
+            </View>
+          ) : (
             <View style={styles.center}>
               <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>

@@ -74,12 +74,16 @@ class ChatService {
 
   async initialize() {
     try {
-      // Load cached rooms/messages from storage (non-blocking)
-      this._loadFromCache();
+      // Load cached rooms/messages from storage first. This is a fast local
+      // read (AsyncStorage) and lets the UI render instantly from cache.
+      await this._loadFromCache();
 
-      // Ensure WebSocket connected
+      // Connect WebSocket in the background. We deliberately do NOT await
+      // this: the UI can render instantly from the local cache and real-time
+      // updates simply start arriving once the socket is open. Blocking on
+      // connect here was the main source of the slow, blank chat screens.
       if (!websocketService.isConnected) {
-        await websocketService.connect();
+        websocketService.connect();
       }
 
       return true;
@@ -117,20 +121,15 @@ class ChatService {
 // ==================== Room Management ====================
 
   async getRooms(forceRefresh = false) {
+    // Load rooms via the backend REST API (fast, uses the backend's
+    // in-memory cache). We no longer fire a duplicate WebSocket `get_rooms`
+    // request on every list load — that doubled the work and registered a
+    // 30s-timeout handler each time, which overwhelmed the connection.
     try {
-      // Load rooms via REST API first (fast, uses in-memory server cache)
-      const rooms = await this._getRoomsViaRest(forceRefresh);
-      // Establish WebSocket in background for real-time updates
-      this._getRoomsViaWebSocket(forceRefresh).catch(() => {});
-      return rooms;
+      return await this._getRoomsViaRest(forceRefresh);
     } catch (error) {
-      console.warn('REST getRooms failed, trying WebSocket fallback:', error.message);
-      try {
-        return await this._getRoomsViaWebSocket(forceRefresh);
-      } catch (wsError) {
-        console.warn('WebSocket fallback also failed:', wsError.message);
-        return Array.from(this.rooms.values());
-      }
+      console.warn('REST getRooms failed, falling back to cache:', error.message);
+      return Array.from(this.rooms.values());
     }
   }
 
@@ -791,7 +790,7 @@ _notifyMessageSubscribers(roomId, message) {
   }
 
   _loadFromCache() {
-    this._loadFromStorage();
+    return this._loadFromStorage();
   }
 
   async _loadFromStorage() {

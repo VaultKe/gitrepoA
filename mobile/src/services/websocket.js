@@ -101,7 +101,6 @@ async _establishConnection() {
   }
 
 onOpen() {
-     console.log('[WS DEBUG] WebSocket connected');
      this.isConnected = true;
      this.reconnectAttempts = 0;
 
@@ -121,8 +120,6 @@ onMessage(event) {
        if (!event.data.trim()) return;
 
         const message = JSON.parse(event.data);
-        console.log('[WS DEBUG] Received message:', JSON.stringify(maskSensitiveData(message)));
-
        switch (message.type) {
          case 'connected':
            this.subscribeToDataUpdates();
@@ -178,13 +175,6 @@ onMessage(event) {
   }
 
   onError(error) {
-     console.error('[WS DEBUG] WebSocket error:', error.message || error);
-     if (typeof window !== 'undefined' && window.location &&
-         window.location.hostname.includes('tunnelmole.net')) {
-       if (this.reconnectAttempts >= 2) {
-         this.maxReconnectAttempts = 0;
-       }
-     }
    }
 
 send(message) {

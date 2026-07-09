@@ -68,7 +68,11 @@ const ChatRoomScreen = ({ route, navigation }) => {
     if (!roomId) return;
 
     try {
-      setLoading(true);
+      // Show cached messages instantly (cache-first), then refresh in the
+      // background so the user never stares at a fullscreen loader.
+      const cached = chatService.getRoomMessages(roomId);
+      if (cached.length) setMessages(cached);
+
       await chatService.joinRoom(roomId);
       const roomMessages = await chatService.getMessages(roomId, 100, 0);
       setMessages(roomMessages);
@@ -475,14 +479,6 @@ const ChatRoomScreen = ({ route, navigation }) => {
     }
   }, [roomId, loadingMore, messages.length]);
 
-  if (loading && messages.length === 0) {
-    return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
-
   if (error) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
@@ -522,6 +518,13 @@ const ChatRoomScreen = ({ route, navigation }) => {
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         removeClippedSubviews={false}
+        ListFooterComponent={
+          loading && messages.length === 0 ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : null
+        }
         ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 10 }} /> : null}
         showsVerticalScrollIndicator={false}
       />
