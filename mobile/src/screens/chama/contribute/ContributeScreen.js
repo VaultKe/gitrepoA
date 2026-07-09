@@ -1133,10 +1133,12 @@ const handleMpesaContribution = async (cleanChamaId) => {
     }
     return AVATAR_COLORS[hash % AVATAR_COLORS.length];
   };
-  const getAvatarInitials = (item, user) => {
-    const first = (user?.first_name || item?.first_name || '').trim()[0] || '';
-    const last = (user?.last_name || item?.last_name || '').trim()[0] || '';
-    return (first + last).toUpperCase() || '?';
+  // Map a user's gender to a local avatar icon. Falls back to a neutral person
+  // icon when gender is unknown / non-binary. No network request involved.
+  const getAvatarGenderIcon = (gender) => {
+    if (gender === 'female') return 'female';
+    if (gender === 'male') return 'male';
+    return 'person';
   };
 
   // Validate member selection for merry-go-round contributions
@@ -1267,14 +1269,12 @@ const handleMpesaContribution = async (cleanChamaId) => {
       );
     }
 
-    // No profile photo: render a local initials avatar (no network request).
+    // No profile photo: render a local gender-based avatar (no network request).
     const avatarSeed = item?.id || memberId || email;
     if (avatarSeed) {
       return (
         <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(avatarSeed) }]}>
-          <Text style={[styles.memberInitials, { color: colors.white }]}>
-            {getAvatarInitials(item, user)}
-          </Text>
+          <Ionicons name={getAvatarGenderIcon(user?.gender)} size={22} color={colors.white} />
         </View>
       );
     }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image } from 'react-native';
+import { Image, View, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../../context/AppContext';
 import { getThemeColors } from '../../../../utils/theme';
 import ApiService from '../../../../services/api';
@@ -20,10 +21,12 @@ const useMemberHelpers = () => {
     }
     return AVATAR_COLORS[hash % AVATAR_COLORS.length];
   };
-  const getAvatarInitials = (item, user) => {
-    const first = (user?.first_name || item?.first_name || '').trim()[0] || '';
-    const last = (user?.last_name || item?.last_name || '').trim()[0] || '';
-    return (first + last).toUpperCase() || '?';
+  // Map a user's gender to a local avatar icon. Falls back to a neutral person
+  // icon when gender is unknown / non-binary. No network request involved.
+  const getAvatarGenderIcon = (gender) => {
+    if (gender === 'female') return 'female';
+    if (gender === 'male') return 'male';
+    return 'person';
   };
 
   const getMemberName = (item) => {
@@ -66,14 +69,12 @@ const useMemberHelpers = () => {
       );
     }
 
-    // No profile photo: render a local initials avatar (no network request).
+    // No profile photo: render a local gender-based avatar (no network request).
     const avatarSeed = item?.id || user?.id || item?.user_id || email;
     if (avatarSeed) {
       return (
         <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(avatarSeed) }]}>
-          <Text style={[styles.memberInitials, { color: colors.white }]}>
-            {getAvatarInitials(item, user)}
-          </Text>
+          <Ionicons name={getAvatarGenderIcon(user?.gender)} size={22} color={colors.white} />
         </View>
       );
     }

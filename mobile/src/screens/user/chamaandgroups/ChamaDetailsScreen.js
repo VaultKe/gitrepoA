@@ -732,6 +732,14 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     return AVATAR_COLORS[hash % AVATAR_COLORS.length];
   };
 
+  // Map a user's gender to a local avatar icon. Falls back to a neutral person
+  // icon when gender is unknown / non-binary. No network request involved.
+  const getAvatarGenderIcon = (gender) => {
+    if (gender === 'female') return 'female';
+    if (gender === 'male') return 'male';
+    return 'person';
+  };
+
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (member) => {
     if (!member) {
@@ -744,17 +752,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
     // Access data from nested user object
     const user = member?.user || {};
-    const firstName = user?.first_name || member?.first_name || '';
-    const lastName = user?.last_name || member?.last_name || '';
     const email = user?.email || member?.email;
 
     // Try multiple avatar sources
-    const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || member?.avatar || member?.avatarUrl;
-
-    // Generate initials for fallback
-    const initials = (firstName?.[0] || '') + (lastName?.[0] || '');
-
-    // Try to use provided avatar URL first
     if (avatarUrl && avatarUrl.trim()) {
       let fullAvatarUrl;
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
@@ -776,15 +776,13 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       );
     }
 
-    // No profile photo: render a local initials avatar. This avoids any external
-    // request (no ORB/CORS failures) and keeps PII/IDs out of the network tab.
+    // No profile photo: render a local gender-based avatar (no network request).
     const avatarColor = getAvatarColor(member?.id || user?.id || member?.user_id || email);
+    const genderIcon = getAvatarGenderIcon(user?.gender);
     return (
       <TouchableOpacity onPress={() => handleAvatarPress(member)}>
         <View style={[styles.memberAvatar, { backgroundColor: avatarColor }]}>
-          <Text style={[styles.memberInitials, { color: colors.white }]}>
-            {initials || '?'}
-          </Text>
+          <Ionicons name={genderIcon} size={36} color={colors.white} />
         </View>
       </TouchableOpacity>
     );
