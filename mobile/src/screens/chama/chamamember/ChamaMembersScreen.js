@@ -15,11 +15,11 @@ import * as Sharing from 'expo-sharing';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors } from '../../../utils/theme';
 import ApiService from '../../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ChamaMembersHeaderCard from './ChamaMembersHeaderCard';
 import ChamaMembersTable from './ChamaMembersTable';
 import ChamaInvitationsList from './ChamaInvitationsList';
 import ChamaMemberRoleModal from './ChamaMemberRoleModal';
-import ChamaMembersLoading from './ChamaMembersLoading';
 import { getFilteredMembers, roles } from './chamaMembersUtils';
 
 const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
@@ -28,7 +28,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const colors = getThemeColors(theme);
 
   const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMember, setSelectedMember] = useState(null);
@@ -44,6 +44,39 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   const refreshIntervalRef = useRef(null);
 
+  // Cache-first loader (mirrors MyChamasScreen): show cached members instantly, then refresh.
+  const MEMBERS_CACHE_KEY = `cached_chama_members_${chamaId}`;
+  const MEMBERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  const loadCachedMembers = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(MEMBERS_CACHE_KEY);
+      if (cached) {
+        const { members, userRole: cachedRole, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < MEMBERS_CACHE_TTL) {
+          if (Array.isArray(members) && members.length) setMembers(members);
+          if (cachedRole) setUserRole(cachedRole);
+          return true;
+        }
+      }
+    } catch (error) {
+      // Silent fail for cache read
+    }
+    return false;
+  };
+
+  const cacheMembers = async (members, role) => {
+    try {
+      await AsyncStorage.setItem(MEMBERS_CACHE_KEY, JSON.stringify({
+        members,
+        userRole: role,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      // Silent fail for cache write
+    }
+  };
+
   const canManageMembers = () => {
     return ['chairperson', 'secretary', 'treasurer'].includes(userRole);
   };
@@ -57,10 +90,14 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   };
 
   useEffect(() => {
-    loadMembers();
-    if (canManageMembers()) {
-      loadSentInvitations();
-    }
+    const initialize = async () => {
+      const hadCache = await loadCachedMembers();
+      loadMembers(hadCache);
+      if (canManageMembers()) {
+        loadSentInvitations();
+      }
+    };
+    initialize();
 
     refreshIntervalRef.current = setInterval(() => {
       loadMembers(true);
@@ -99,6 +136,9 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
         const currentUser = membersData.find(m => m.user_id === user?.id);
         const detectedRole = currentUser?.role || 'member';
         setUserRole(detectedRole);
+
+        // Persist for instant display on next visit (cache-first loader)
+        cacheMembers(uniqueMembers, detectedRole);
       }
     } catch (error) {
       console.error('Failed to load members:', error);
@@ -325,14 +365,6 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
       });
     }
   };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <ChamaMembersLoading />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>

@@ -22,7 +22,6 @@ import { getThemeColors } from '../../../utils/theme';
 import { formatDate, formatTimeRemaining } from '../../../utils/formatters';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
 
 const PollsVotingScreen = ({ route, navigation }) => {
@@ -63,7 +62,6 @@ const PollsVotingScreen = ({ route, navigation }) => {
     return () => subscription?.remove();
   }, []);
 
-  const [dataReady, setDataReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
@@ -181,7 +179,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
         loadChamaDetails(),
       ]);
       if (!isTabSwitch) {
-        setDataReady(true);
+        setInitialDataLoaded(true);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to load data');
@@ -1475,35 +1473,6 @@ const PollsVotingScreen = ({ route, navigation }) => {
     }
   };
 
-  if (!dataReady) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '70%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '30%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '60%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '40%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '80%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '55%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '45%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '65%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '75%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '35%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
 
@@ -2373,22 +2342,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
 
-  },
-  loadingContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  skeletonCard: {
-    height: 120,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 16,
-    padding: 16,
-  },
-  skeletonLine: {
-    height: 12,
-    borderRadius: 6,
-    marginBottom: 8,
   },
   header: {
     flexDirection: 'row',

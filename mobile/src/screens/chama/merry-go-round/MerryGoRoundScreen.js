@@ -22,6 +22,7 @@ import Button from '../../../components/common/Button';
 import BorderedButton from '../../../components/BorderedButton';
 import { ButtonGrid } from '../../../components/ButtonGroup';
 import ApiService from '../../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +33,37 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
   const colors = getThemeColors(theme);
 
   const chamaId = routeChamaId || currentChamaId;
+
+  // Cache-first loader (mirrors MyChamasScreen): show cached merry-go-rounds instantly, then refresh.
+  const MGR_CACHE_KEY = `cached_merry_gorounds_${chamaId}`;
+  const MGR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  const loadCachedMerryGoRounds = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(MGR_CACHE_KEY);
+      if (cached) {
+        const { rounds, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < MGR_CACHE_TTL) {
+          if (Array.isArray(rounds) && rounds.length) setMerryGoRounds(rounds);
+          return true;
+        }
+      }
+    } catch (error) {
+      // Silent fail for cache read
+    }
+    return false;
+  };
+
+  const cacheMerryGoRounds = async (rounds) => {
+    try {
+      await AsyncStorage.setItem(MGR_CACHE_KEY, JSON.stringify({
+        rounds,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      // Silent fail for cache write
+    }
+  };
 
 const [merryGoRounds, setMerryGoRounds] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -49,9 +81,9 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
   const selectedRecipientRef = useRef(selectedRecipientPosition);
   useEffect(() => { selectedRecipientRef.current = selectedRecipientPosition; }, [selectedRecipientPosition]);
 
-  const loadMerryGoRounds = async () => {
+  const loadMerryGoRounds = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await ApiService.getMerryGoRounds(chamaId);
       if (response.success) {
         let rounds = response.data || [];
@@ -63,6 +95,8 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
           });
         }
         setMerryGoRounds(rounds);
+        // Persist for instant display on next visit (cache-first loader)
+        cacheMerryGoRounds(rounds);
         if (rounds.length > 0) {
           const current = selectedRoundRef.current;
           const updated = rounds.find(r => r.id === (current && current.id));
@@ -72,11 +106,17 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
     } catch (error) {
       console.error('Failed to load merry-go-rounds:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  useEffect(() => { loadMerryGoRounds(); }, [chamaId]);
+  useEffect(() => {
+    const initialize = async () => {
+      const hadCache = await loadCachedMerryGoRounds();
+      await loadMerryGoRounds(hadCache);
+    };
+    initialize();
+  }, [chamaId]);
 
   // Reload once when screen regains focus so stat card picks up backend advances without continuous polling
   useFocusEffect(
@@ -839,19 +879,6 @@ const getRowData = () => {
     );
   }
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '70%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   const recipientTarget = getTargetRecipient();
   const isRecipientView = !!(recipientTarget && recipientTarget.isRecipientView);
 
@@ -952,12 +979,9 @@ const styles = StyleSheet.create({
    emptyTitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.semibold, marginTop: spacing.lg, marginBottom: spacing.sm },
    emptySubtitle: { fontSize: typography.fontSize.base, textAlign: 'center', marginBottom: spacing.xl },
    createButton: { marginTop: spacing.md },
-   fab: { position: 'absolute', bottom: spacing.xl, right: spacing.xl, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
-   loadingContainer: { flex: 1, padding: 16 },
-   skeletonCard: { height: 120, borderRadius: 8, borderWidth: 1, marginBottom: 16, padding: 16 },
-   skeletonLine: { height: 12, borderRadius: 6, marginBottom: 8 },
+    fab: { position: 'absolute', bottom: spacing.xl, right: spacing.xl, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
 
-  emptyMembersList: { alignItems: 'center', paddingVertical: spacing.xl },
+   emptyMembersList: { alignItems: 'center', paddingVertical: spacing.xl },
   emptyMembersText: { fontSize: typography.fontSize.base, marginTop: spacing.md, textAlign: 'center' },
   memberOrderList: { paddingVertical: spacing.sm },
   memberOrderItem: { position: 'relative', borderWidth: 1, borderColor: 'transparent', borderRadius: 10, marginVertical: 2, paddingHorizontal: spacing.xs },

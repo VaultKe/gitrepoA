@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import Card from '../../../components/common/Card';
@@ -33,7 +34,7 @@ const ViewMember = ({ route, navigation }) => {
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [memberData, setMemberData] = useState(null);
   const [memberStats, setMemberStats] = useState(null);
   const [imageExpanded, setImageExpanded] = useState(false);
@@ -45,6 +46,39 @@ const ViewMember = ({ route, navigation }) => {
 const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [serviceFeePaid, setServiceFeePaid] = useState(false);
   const PAY_COOLDOWN_MS = 30000;
+
+  // Cache-first loader (mirrors MyChamasScreen): show cached member data instantly, then refresh.
+  const MEMBER_CACHE_KEY = `cached_member_${chamaId}_${memberId}`;
+  const MEMBER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  const loadCachedMember = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(MEMBER_CACHE_KEY);
+      if (cached) {
+        const { memberData: cachedMember, memberStats: cachedStats, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < MEMBER_CACHE_TTL) {
+          if (cachedMember) setMemberData(cachedMember);
+          if (cachedStats) setMemberStats(cachedStats);
+          return true;
+        }
+      }
+    } catch (error) {
+      // Silent fail for cache read
+    }
+    return false;
+  };
+
+  const cacheMember = async (member, stats) => {
+    try {
+      await AsyncStorage.setItem(MEMBER_CACHE_KEY, JSON.stringify({
+        memberData: member,
+        memberStats: stats,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      // Silent fail for cache write
+    }
+  };
 
 const [receiptLoading, setReceiptLoading] = useState(false);
    const [approvalHistory, setApprovalHistory] = useState([]);
@@ -117,8 +151,12 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   }, []);
 
   useEffect(() => {
-    loadMemberDetails();
-    loadServiceFeePayments();
+    const initialize = async () => {
+      const hadCache = await loadCachedMember();
+      await loadMemberDetails(hadCache);
+      loadServiceFeePayments();
+    };
+    initialize();
   }, [memberId, chamaId]);
 
   const loadServiceFeePayments = async () => {
@@ -136,15 +174,19 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   const isEligible =
     userRole === 'chairperson' || userRole === 'treasurer';
 
-  const loadMemberDetails = async () => {
+  const loadMemberDetails = async (useBackgroundLoader = false) => {
     try {
-      setLoading(true);
+      if (!useBackgroundLoader) setLoading(true);
+
+      let loadedMember = null;
+      let loadedStats = null;
 
       // Load member details
       const memberResponse = await api.makeRequest(`/chamas/${chamaId}/members`);
       if (memberResponse.success && memberResponse.data) {
         const member = memberResponse.data.find(m => m.id === memberId || m.user_id === memberId);
         if (member) {
+          loadedMember = member;
           setMemberData(member);
         } else {
           throw new Error('Member not found');
@@ -155,9 +197,15 @@ const [receiptLoading, setReceiptLoading] = useState(false);
       try {
         const statsResponse = await api.makeRequest(`/chamas/${chamaId}/members/${memberId}/stats`);
         if (statsResponse.success && statsResponse.data) {
-          setMemberStats(statsResponse.data);
+          loadedStats = statsResponse.data;
+          setMemberStats(loadedStats);
         }
       } catch (error) {
+      }
+
+      // Persist loaded data for instant display on next visit (cache-first loader)
+      if (loadedMember) {
+        cacheMember(loadedMember, loadedStats);
       }
     } catch (error) {
       console.error('Error loading member details:', error);
@@ -166,9 +214,12 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         text1: 'Error',
         text2: 'Failed to load member details',
       });
-      navigation.goBack();
+      // Only navigate back if we have nothing to display (e.g. no cached member)
+      if (!memberData) {
+        navigation.goBack();
+      }
     } finally {
-      setLoading(false);
+      if (!useBackgroundLoader) setLoading(false);
     }
   };
 
@@ -755,11 +806,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         <Text style={styles.feeCardTitle}>
           Service Fee Payments
         </Text>
-        {feePaymentsLoading ? (
-          <View style={styles.feeLoadingContainer}>
-            <ActivityIndicator size="small" color={colors.primary} />
-          </View>
-        ) : serviceFeePayments.length === 0 && !hasPaidServiceFee ? (
+        {serviceFeePayments.length === 0 && !hasPaidServiceFee ? (
           <View style={styles.feeTableWrapper}>
             <View style={styles.feeTableHeader}>
               <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
@@ -914,11 +961,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
       <Text style={styles.combinedSectionTitle}>
         Disbursement Approvals & Verifications
       </Text>
-      {approvalHistoryLoading ? (
-        <View style={styles.approvalLoadingContainer}>
-          <ActivityIndicator size="small" color={colors.primary} />
-        </View>
-      ) : approvalHistory.length === 0 ? (
+      {approvalHistory.length === 0 ? (
         <View style={styles.approvalEmptyContainer}>
           <Ionicons name="document-text" size={48} color={colors.textSecondary} />
           <Text style={[styles.approvalEmptyText, { color: colors.textSecondary }]}>
@@ -1033,56 +1076,34 @@ const [receiptLoading, setReceiptLoading] = useState(false);
     </>
   );
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, styles.containerBackground]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, styles.loadingTextSecondary]}>
-            Loading member details...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!memberData) {
-    return (
-      <SafeAreaView style={[styles.container, styles.containerBackground]}>
-        <View style={[styles.header, styles.headerSurface]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, styles.headerTitleText]}>
-            Member Details
-          </Text>
-          <View style={styles.headerRight} />
-        </View>
-
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color={colors.error} />
-          <Text style={[styles.errorTitle, styles.errorTitleText]}>
-            Member Not Found
-          </Text>
-          <Text style={[styles.errorText, styles.errorTextSecondary]}>
-            The member you're looking for could not be found.
-          </Text>
-          <TouchableOpacity
-            style={[styles.backButton, styles.goBackButton]}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
+      {!memberData ? (
+        loading ? (
+          <View style={styles.inlineLoadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.inlineLoadingText, { color: colors.textSecondary }]}>
+              Loading member details...
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={64} color={colors.error} />
+            <Text style={[styles.errorTitle, styles.errorTitleText]}>
+              Member Not Found
+            </Text>
+            <Text style={[styles.errorText, styles.errorTextSecondary]}>
+              The member you're looking for could not be found.
+            </Text>
+            <TouchableOpacity
+              style={[styles.backButton, styles.goBackButton]}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.backButtonText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        )
+      ) : (
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -1245,21 +1266,23 @@ const [receiptLoading, setReceiptLoading] = useState(false);
           </Card>
         )}
 
-        <OTPVerificationModal
-          visible={showOTPModal}
-          onClose={() => {
-            setShowOTPModal(false);
-            setSelectedApprovalItem(null);
-            setApprovalActionType(null);
-          }}
-          title={approvalActionType === 'approve' ? 'Approve Disbursement' : 'Verify Disbursement'}
-          subtitle={`Enter the OTP sent to your phone to ${approvalActionType || 'verify'} this ${selectedApprovalItem?.type || 'disbursement'}`}
-          onVerify={handleVerifyOTP}
-          onResend={handleResendOTP}
-          loading={otpLoading}
-          itemType={selectedApprovalItem?.type}
-        />
       </ScrollView>
+      )}
+
+      <OTPVerificationModal
+        visible={showOTPModal}
+        onClose={() => {
+          setShowOTPModal(false);
+          setSelectedApprovalItem(null);
+          setApprovalActionType(null);
+        }}
+        title={approvalActionType === 'approve' ? 'Approve Disbursement' : 'Verify Disbursement'}
+        subtitle={`Enter the OTP sent to your phone to ${approvalActionType || 'verify'} this ${selectedApprovalItem?.type || 'disbursement'}`}
+        onVerify={handleVerifyOTP}
+        onResend={handleResendOTP}
+        loading={otpLoading}
+        itemType={selectedApprovalItem?.type}
+      />
     </SafeAreaView>
   );
 };
@@ -1300,17 +1323,16 @@ const createStyles = (colors) => StyleSheet.create({
   contentContainer: {
     padding: 16,
   },
-  loadingContainer: {
+   inlineLoadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 40,
+    flexDirection: 'row',
+    gap: 10,
   },
-  loadingText: {
-    fontSize: 16,
-    marginTop: 12,
-  },
-  loadingTextSecondary: {
-    color: colors.textSecondary,
+  inlineLoadingText: {
+    fontSize: 14,
   },
   errorContainer: {
     flex: 1,

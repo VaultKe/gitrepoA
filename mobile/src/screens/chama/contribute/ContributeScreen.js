@@ -47,7 +47,6 @@ const ContributeScreen = ({ route, navigation }) => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
-  const [chamaLoading, setChamaLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState('wallet'); // 'wallet', 'mpesa', or 'pay_for'
   const [walletBalance, setWalletBalance] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -419,7 +418,6 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
 
   const loadChamaDetails = async () => {
     try {
-      setChamaLoading(true);
       const response = await ApiService.getChamaById(chamaId);
 
       // Handle different response structures
@@ -451,7 +449,6 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
       console.error('Failed to load chama details:', error);
       Alert.alert('Error', `Failed to load chama details: ${error.message}`);
     } finally {
-      setChamaLoading(false);
     }
   };
 
@@ -1411,18 +1408,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
     }
   };
 
-  if (chamaLoading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: colors.text }]}>
-            Loading chama details...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -1700,14 +1685,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: typography.fontSize.base,
   },
   header: {
     paddingHorizontal: spacing.lg,
