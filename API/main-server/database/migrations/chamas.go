@@ -190,61 +190,17 @@ CREATE INDEX IF NOT EXISTS idx_chama_invitations_token ON chama_invitations(invi
 `
 
 func addMissingChamaPermissionsColumn(db *sql.DB) error {
-	var columnExists bool
-	checkQuery := `
-		SELECT COUNT(*) > 0
-		FROM information_schema.columns
-		WHERE table_name = 'chamas'
-		AND column_name = 'permissions'
-	`
-
-	err := db.QueryRow(checkQuery).Scan(&columnExists)
+	_, err := db.Exec(`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT '{"allowMerryGoRound": true, "allowWelfare": true}'`)
 	if err != nil {
-		return fmt.Errorf("failed to check if permissions column exists: %w", err)
+		return fmt.Errorf("failed to add permissions column: %w", err)
 	}
-
-	if !columnExists {
-		log.Println("Adding permissions column to chamas table")
-		addColumnQuery := `
-			ALTER TABLE chamas ADD COLUMN permissions TEXT DEFAULT '{"allowMerryGoRound": true, "allowWelfare": true}'
-		`
-		_, err = db.Exec(addColumnQuery)
-		if err != nil {
-			return fmt.Errorf("failed to add permissions column: %w", err)
-		}
-		log.Println("Successfully added permissions column to chamas table")
-	} else {
-		log.Println("Column permissions already exists in chamas table")
-	}
-
 	return nil
 }
 
 func addCategoryColumnToChamasTable(db *sql.DB) error {
-	var columnExists bool
-	checkColumnQuery := `
-		SELECT COUNT(*) > 0
-		FROM information_schema.columns
-		WHERE table_name = 'chamas'
-		AND column_name = 'category'
-	`
-	err := db.QueryRow(checkColumnQuery).Scan(&columnExists)
-	if err != nil {
-		return fmt.Errorf("failed to check if category column exists: %w", err)
-	}
-
-	if !columnExists {
-		log.Println("Adding category column to chamas table")
-		addColumnQuery := `
-			ALTER TABLE chamas ADD COLUMN category TEXT NOT NULL DEFAULT 'chama'
-		`
-		_, err = db.Exec(addColumnQuery)
-		if err != nil {
-			return fmt.Errorf("failed to add category column: %w", err)
-		}
-		log.Println("Successfully added category column to chamas table")
-	} else {
-		log.Println("Column category already exists in chamas table")
+	var err error
+	if _, err = db.Exec(`ALTER TABLE chamas ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'chama'`); err != nil {
+		return fmt.Errorf("failed to add category column: %w", err)
 	}
 
 	var targetAmountExists bool
@@ -260,12 +216,7 @@ func addCategoryColumnToChamasTable(db *sql.DB) error {
 	}
 
 	if !targetAmountExists {
-		log.Println("Adding target_amount column to chamas table")
-		addTargetAmountQuery := `
-			ALTER TABLE chamas ADD COLUMN target_amount REAL
-		`
-		_, err = db.Exec(addTargetAmountQuery)
-		if err != nil {
+		if _, err = db.Exec(`ALTER TABLE chamas ADD COLUMN target_amount REAL`); err != nil {
 			return fmt.Errorf("failed to add target_amount column: %w", err)
 		}
 		log.Println("Successfully added target_amount column to chamas table")
@@ -284,12 +235,7 @@ func addCategoryColumnToChamasTable(db *sql.DB) error {
 	}
 
 	if !targetDeadlineExists {
-		log.Println("Adding target_deadline column to chamas table")
-		addTargetDeadlineQuery := `
-			ALTER TABLE chamas ADD COLUMN target_deadline TIMESTAMP
-		`
-		_, err = db.Exec(addTargetDeadlineQuery)
-		if err != nil {
+		if _, err = db.Exec(`ALTER TABLE chamas ADD COLUMN target_deadline TIMESTAMP`); err != nil {
 			return fmt.Errorf("failed to add target_deadline column: %w", err)
 		}
 		log.Println("Successfully added target_deadline column to chamas table")
@@ -320,10 +266,7 @@ func addCategoryColumnToChamasTable(db *sql.DB) error {
 		}
 
 		if !exists {
-			log.Printf("Adding %s column to chamas table", col.name)
-			addColumnQuery := fmt.Sprintf("ALTER TABLE chamas ADD COLUMN %s %s", col.name, col.dataType)
-			_, err = db.Exec(addColumnQuery)
-			if err != nil {
+			if _, err = db.Exec(fmt.Sprintf("ALTER TABLE chamas ADD COLUMN %s %s", col.name, col.dataType)); err != nil {
 				return fmt.Errorf("failed to add %s column: %w", col.name, err)
 			}
 			log.Printf("Successfully added %s column to chamas table", col.name)

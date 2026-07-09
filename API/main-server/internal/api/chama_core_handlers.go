@@ -429,8 +429,10 @@ func CreateChama(c *gin.Context) {
 			if deadline, err := time.Parse("2006-01-02", req.TargetDeadline); err == nil {
 				targetDeadline = &deadline
 			}
+		} else {
+			log.Printf("Invalid target deadline format: %s", req.TargetDeadline)
 		}
-}
+	}
 
 
 
@@ -714,12 +716,15 @@ func UpdateChama(c *gin.Context) {
 		WalletTypes           []string                `json:"wallet_types,omitempty"`
 		RulesFilePath         *string                 `json:"rules_file_path,omitempty"`
 		RulesFileName         *string                 `json:"rules_file_name,omitempty"`
+		Status                *string                 `json:"status,omitempty"`
 	}
 
 	// Handle optional rules file upload via multipart/form-data
 	var rulesFileURL string
-	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
-		c.Request.ParseMultipartForm(10 << 20)
+	if strings.Contains(strings.ToLower(c.ContentType()), "multipart/form-data") {
+		if perr := c.Request.ParseMultipartForm(10 << 20); perr != nil {
+			log.Printf("⚠️ Failed to parse multipart form for chama %s: %v", chamaID, perr)
+		}
 		if file, ferr := c.FormFile("rules_file"); ferr == nil && file != nil {
 			uploadDir := "./uploads/chamas/rules"
 			if mkErr := os.MkdirAll(uploadDir, 0o755); mkErr == nil {
@@ -823,6 +828,11 @@ func UpdateChama(c *gin.Context) {
 		updateMap["rules_file_name"] = *req.RulesFileName
 	}
 
+	// Explicit status change (e.g. admin suspend/activate)
+	if req.Status != nil {
+		updateMap["status"] = *req.Status
+	}
+
 	// Rules file uploaded via multipart
 	if rulesFileURL != "" {
 		rulesFileName := c.PostForm("rules_file_name")
@@ -831,6 +841,15 @@ func UpdateChama(c *gin.Context) {
 		}
 		updateMap["rules_file_path"] = rulesFileURL
 		updateMap["rules_file_name"] = rulesFileName
+	}
+
+	// Guard against empty updates (e.g. request body had no parsable fields)
+	if len(updateMap) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "No updatable fields provided. Ensure the request includes valid JSON fields or a multipart 'rules_file'",
+		})
+		return
 	}
 
 	// Update chama settings

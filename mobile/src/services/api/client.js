@@ -61,7 +61,20 @@ const makeRequest = async (endpoint, options = {}) => {
   }
 
   const token = await getAuthToken();
-  const isFormData = options.body instanceof FormData;
+  // Detect a FormData body. React Native's FormData polyfill is NOT matched by
+  // `instanceof FormData`, and unlike the WHATWG FormData spec it does NOT implement
+  // a `get` method — so we must not require `get`. Requiring `get` caused every RN
+  // FormData (chama rules upload, avatar, etc.) to be JSON.stringify'd to "{}" and
+  // sent as an empty JSON body. We detect it via instanceof, the essential `append`
+  // method, or RN-specific internals (`getParts` / `_parts`).
+  const isFormData = !!(options.body &&
+    typeof options.body === 'object' &&
+    !Array.isArray(options.body) &&
+    ((typeof FormData !== 'undefined' && options.body instanceof FormData) ||
+      typeof options.body.append === 'function' ||
+      typeof options.body.getParts === 'function' ||
+      (Array.isArray(options.body._parts)) ||
+      (options.body.constructor && options.body.constructor.name === 'FormData')));
   const deviceInfo = getDeviceInfo();
 
   // Auth endpoints should return unmasked data so the app can use real emails/phones

@@ -23,9 +23,9 @@ type SecurityConfig struct {
 func DefaultSecurityConfig() *SecurityConfig {
 	return &SecurityConfig{
 		MaxRequestSize:    10 * 1024 * 1024, // 10MB
-		RateLimitRequests: 10000,             // Very high for development
+		RateLimitRequests: 10000,            // Very high for development
 		RateLimitWindow:   time.Minute,
-		RequireHTTPS:      false,         // Set to true in production
+		RequireHTTPS:      false, // Set to true in production
 	}
 }
 
@@ -228,7 +228,7 @@ func FileUploadSecurityMiddleware() gin.HandlerFunc {
 			contentType := c.GetHeader("Content-Type")
 
 			if strings.Contains(contentType, "multipart/form-data") {
-				
+
 				err := c.Request.ParseMultipartForm(5 * 1024 * 1024) // 5MB limit
 				if err != nil {
 					fmt.Printf("❌ Failed to parse multipart form: %v\n", err)
@@ -239,15 +239,20 @@ func FileUploadSecurityMiddleware() gin.HandlerFunc {
 					c.Abort()
 					return
 				}
-				
+
 				// Validate uploaded files
 				if c.Request.MultipartForm != nil && c.Request.MultipartForm.File != nil {
 					// Different allowed types based on endpoint
 					var allowedTypes map[string]bool
 
 					// Check if this is a meeting document upload
-					if strings.Contains(c.Request.URL.Path, "/meetings/") && strings.Contains(c.Request.URL.Path, "/documents") {
-						// Allow more file types for meeting documents
+					isMeetingDocument := strings.Contains(c.Request.URL.Path, "/meetings/") && strings.Contains(c.Request.URL.Path, "/documents")
+
+					// Check if this is a chama rules file upload
+					_, hasRulesFile := c.Request.MultipartForm.File["rules_file"]
+
+					if isMeetingDocument || hasRulesFile {
+						// Allow more file types for meeting documents and chama rules
 						allowedTypes = map[string]bool{
 							"image/jpeg":         true,
 							"image/jpg":          true,

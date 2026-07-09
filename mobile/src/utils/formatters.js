@@ -257,8 +257,18 @@ export const maskSensitiveData = (data) => {
   return data;
 };
 
+// Matches a UUID (standalone or embedded) such as
+// 86e147f4-ed69-4988-913a-d649f4bdf105. The phone-number regex below would
+// otherwise match the digit groups inside a UUID and corrupt it (e.g. turning
+// "86e147f4-ed69-4988-913a-d649f4bdf105" into "86e147f4-ed*****8913a-..."),
+// which then breaks any subsequent API request that uses the ID as a path param.
+const UUID_REGEX = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
+
 const maskString = (value) => {
   if (typeof value !== 'string') return value;
+  // Never mask UUIDs / IDs. They are not PII we need to hide and corrupting
+  // them destroys the identifiers the app uses to build request URLs.
+  if (UUID_REGEX.test(value)) return value;
 
   let masked = value;
 

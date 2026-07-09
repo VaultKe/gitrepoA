@@ -1334,6 +1334,12 @@ func (s *ChamaService) UpdateChamaSettings(chamaID string, updates interface{}) 
 		paramIndex++
 	}
 
+	if v, ok := updateMap["status"]; ok {
+		setParts = append(setParts, fmt.Sprintf("status = $%d", paramIndex))
+		args = append(args, v)
+		paramIndex++
+	}
+
 	// Handle permissions and wallet_types together
 	if _, hasPermissions := updateMap["permissions"]; hasPermissions || updateMap["wallet_types"] != nil {
 		// Get existing permissions

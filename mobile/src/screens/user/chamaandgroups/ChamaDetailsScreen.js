@@ -508,12 +508,26 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
       setUploadingRules(true);
       const formData = new FormData();
-      formData.append('rules_file', {
-        uri: document.uri,
-        type: document.mimeType || 'application/pdf',
-        name: document.name || 'rules.pdf',
+
+      let fileToUpload;
+      if (document.uri.startsWith('data:')) {
+        const response = await fetch(document.uri);
+        const blob = await response.blob();
+        fileToUpload = new File([blob], document.name, { type: document.mimeType });
+      } else {
+        fileToUpload = {
+          uri: document.uri,
+          type: document.mimeType || 'application/pdf',
+          name: document.name || 'rules.pdf',
+        };
+      }
+
+      formData.append('rules_file', fileToUpload);
+      formData.append('rules_file_name', document.name || 'rules.pdf');
+      const response = await ApiService.makeRequest(`/chamas/${chamaId}`, {
+        method: 'PUT',
+        body: formData,
       });
-      const response = await ApiService.updateChama(chamaId, formData);
       if (response.success) {
         Toast.show({ type: 'success', text1: 'Rules PDF updated' });
         await loadChamaDetails();
@@ -1353,7 +1367,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
               />
             ) : canCreateChatRoom ? (
               <Button
-                title={`Create Chat Room for ${groupLabel}`}
+                title={`Create Chat Room`}
                 onPress={handleCreateChatRoom}
                 disabled={chatRoomLoading}
                 loading={chatRoomLoading}
