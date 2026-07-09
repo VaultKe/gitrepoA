@@ -165,9 +165,10 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
     try {
       setIsLoadingAll(true);
       setLoading(true);
-      await loadChamaMembers();
 
-      let allData = [];
+      // Kick off chama members load in parallel (does not block record display)
+      const membersPromise = loadChamaMembers();
+
       const pageSize = 50;
 
       const fetchAllPages = async (label, fetchFn) => {
@@ -209,81 +210,84 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
         return results;
       };
 
-      try {
-        const txns = await fetchAllPages('ChamaTransactions', (limit, offset) => ApiService.getChamaTransactions(chamaId, limit, offset));
-        allData = [...allData, ...txns];
-      } catch (error) {
-        console.warn('Chama transactions API not available:', error);
-      }
+      // Stream records into state as each source resolves so the table fills
+      // progressively instead of waiting for every fetch to finish.
+      const seenIds = new Set();
+      let buffer = [];
+      const pushRecords = (items) => {
+        const mapped = (items || []).filter(Boolean).filter(item => {
+          const itemId = String(item.id || item.transaction_id || item.reference || '');
+          if (!itemId || seenIds.has(itemId)) return false;
+          seenIds.add(itemId);
+          return true;
+        });
+        if (mapped.length === 0) return;
+        buffer = buffer.concat(mapped);
+        setAllRecords(buffer);
+      };
 
-      try {
-        const contribs = await fetchAllPages('Contributions', (limit, offset) => ApiService.getContributions(chamaId, limit, offset));
-        allData = [...allData, ...contribs];
-      } catch (error) {
-        console.warn('Contributions API not available:', error);
-      }
+      const txnTask = fetchAllPages('ChamaTransactions', (limit, offset) =>
+        ApiService.getChamaTransactions(chamaId, limit, offset)
+      ).then(items => pushRecords(items.map(item => ({
+        ...item,
+        type: item.type || 'transaction',
+        transaction_type: item.transaction_type || item.type || 'transaction',
+      }))));
 
-      try {
-        const welfareRequests = await fetchAllPages('WelfareRequests', (limit, offset) => ApiService.getWelfareRequests(chamaId, limit, offset));
-        const welfareTransactions = welfareRequests.map(item => ({
+      const contribTask = fetchAllPages('Contributions', (limit, offset) =>
+        ApiService.getContributions(chamaId, limit, offset)
+      ).then(items => pushRecords(items));
+
+      const loanTask = fetchAllPages('Loans', (limit, offset) =>
+        ApiService.getLoans(chamaId, limit, offset)
+      ).then(items => pushRecords(items.map(item => ({
+        ...item,
+        type: 'loan',
+        transaction_type: 'loan',
+      }))));
+
+      // Welfare + their contributions: fetch requests once, then fetch each
+      // request's contributions in parallel (no N+1 sequential awaits).
+      const welfareTask = (async () => {
+        const welfareRequests = await fetchAllPages('WelfareRequests', (limit, offset) =>
+          ApiService.getWelfareRequests(chamaId, limit, offset)
+        );
+        pushRecords(welfareRequests.map(item => ({
           ...item,
           type: 'welfare',
           transaction_type: 'welfare',
-        }));
-        allData = [...allData, ...welfareTransactions];
-      } catch (error) {
-        console.warn('Welfare API not available:', error);
-      }
+        })));
 
-      try {
-        const allWelfareRequests = await fetchAllPages('WelfareRequestsForContributions', (limit, offset) => ApiService.getWelfareRequests(chamaId, limit, offset));
-        if (allWelfareRequests.length > 0) {
-          const welfareContributionPromises = allWelfareRequests.map(request =>
-            ApiService.getWelfareContributions(request.id, 100, 0).catch(() => ({ success: false, data: [] }))
+        if (welfareRequests.length > 0) {
+          const contributionResponses = await Promise.all(
+            welfareRequests.map(request =>
+              ApiService.getWelfareContributions(request.id, 100, 0).catch(() => ({ success: false, data: [] }))
+            )
           );
-          const welfareContributionsResponses = await Promise.all(welfareContributionPromises);
-
-          welfareContributionsResponses.forEach(response => {
+          const welfareContributions = [];
+          contributionResponses.forEach(response => {
             if (response.success && response.data && Array.isArray(response.data)) {
-              const welfareContributionTransactions = response.data.map(item => ({
+              welfareContributions.push(...response.data.map(item => ({
                 ...item,
                 type: 'welfare_contribution',
                 transaction_type: 'welfare_contribution',
-              }));
-              allData = [...allData, ...welfareContributionTransactions];
+              })));
             }
           });
-
-          const totalWelfareContributions = welfareContributionsResponses.reduce((sum, r) => sum + (r.success && r.data ? r.data.length : 0), 0);
-          console.log(`WelfareContributions: loaded ${totalWelfareContributions} records from ${allWelfareRequests.length} welfare requests`);
-        } else {
-          console.warn('WelfareRequestsForContributions: no welfare requests found');
+          pushRecords(welfareContributions);
         }
-      } catch (error) {
-        console.warn('Welfare contributions API not available:', error);
-      }
+      })();
 
-      try {
-        const loans = await fetchAllPages('Loans', (limit, offset) => ApiService.getLoans(chamaId, limit, offset));
-        const loanTransactions = loans.map(item => ({
-          ...item,
-          type: 'loan',
-          transaction_type: 'loan',
-        }));
-        allData = [...allData, ...loanTransactions];
-      } catch (error) {
-        console.warn('Loan API not available:', error);
-      }
-
-      try {
+      const mgrTask = (async () => {
         const mgrResponse = await getMerryGoRounds(chamaId);
         if (mgrResponse.success && mgrResponse.data && Array.isArray(mgrResponse.data)) {
-          const mgrPromises = mgrResponse.data.map(mgr => getMerryGoRoundPayments(mgr.id));
-          const mgrPaymentsResponses = await Promise.allSettled(mgrPromises);
-
-          mgrPaymentsResponses.forEach(result => {
+          const paymentResponses = await Promise.allSettled(
+            mgrResponse.data.map(mgr => getMerryGoRoundPayments(mgr.id))
+          );
+          const mgrTransactions = [];
+          paymentResponses.forEach(result => {
             if (result.status === 'fulfilled' && result.value.success && result.value.data && Array.isArray(result.value.data)) {
-              const mgrTransactions = result.value.data.map(payment => ({
+              mgrTransactions.push(...result.value.data.map(payment => ({
                 ...payment,
                 type: 'merry-go-round',
                 transaction_type: 'merry-go-round',
@@ -292,38 +296,15 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
                 createdAt: payment.createdAt,
                 updatedAt: payment.updatedAt,
                 status: payment.status || 'completed',
-              }));
-              allData = [...allData, ...mgrTransactions];
+              })));
             }
           });
-
-          const totalMgrPayments = mgrPaymentsResponses.filter(r => r.status === 'fulfilled' && r.value.success && r.value.data).reduce((sum, r) => sum + r.value.data.length, 0);
-          console.log(`MGRPayments: loaded ${totalMgrPayments} records from ${mgrResponse.data.length} MGR rounds`);
-        } else {
-          console.warn('MGR rounds: no data or request failed');
+          pushRecords(mgrTransactions);
         }
-      } catch (error) {
-        console.warn('Merry-go-round payments API not available:', error);
-      }
+      })();
 
-      console.log(`Total raw records before dedup: ${allData.length}`);
+      await Promise.allSettled([membersPromise, txnTask, contribTask, loanTask, welfareTask, mgrTask]);
 
-      const seenIds = new Set();
-      const dedupedData = allData.filter(item => {
-        const itemId = String(item.id || item.transaction_id || item.reference || '');
-        if (!itemId || seenIds.has(itemId)) return false;
-        seenIds.add(itemId);
-        return true;
-      });
-
-      console.log(`Total records after dedup: ${dedupedData.length}`);
-      console.log('Records by type:', dedupedData.reduce((acc, item) => {
-        const type = item.type || item.transaction_type || 'unknown';
-        acc[type] = (acc[type] || 0) + 1;
-        return acc;
-      }, {}));
-
-      setAllRecords(dedupedData);
       setCurrentPage(1);
     } catch (error) {
       console.error('Error loading all transactions:', error);
