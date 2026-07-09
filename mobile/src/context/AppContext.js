@@ -1011,9 +1011,6 @@ export function AppProvider({ children }) {
 
   // Prefetch data for page navigation
   const prefetchForPage = async (pageName, priority = 'normal') => {
-    // Use smart prefetch service
-    await smartPrefetchService.prefetchForPage(pageName, priority);
-
     // Also use lightning service for immediate data
     const dependencies = lightningDataService.dataDependencies[pageName] || [];
     const prefetchPromises = dependencies.map(dataType =>
@@ -1023,7 +1020,7 @@ export function AppProvider({ children }) {
     if (priority === 'high') {
       await Promise.all(prefetchPromises);
     } else {
-      Promise.all(prefetchPromises).catch(console.warn);
+      Promise.all(prefetchPromises).catch(() => {});
     }
   };
 

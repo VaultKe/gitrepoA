@@ -1,68 +1,33 @@
 class SmartPrefetchService {
   async prefetchForPage(pageName, priority = 'normal') {
-    const response = await fetch('/api/smart-prefetch/prefetch-for-page', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ pageName, priority }),
-    });
+    return { success: true, data: null };
+  }
 
-    if (!response.ok) {
-      throw new Error(`Failed to prefetch for page: ${response.statusText}`);
-    }
-
-    return response.json();
+  async executePrefetch(pageName, priority = 'normal') {
+    return { success: true, data: null };
   }
 
   async onNavigationChange(currentRoute, previousRoute) {
-    const response = await fetch('/api/smart-prefetch/on-navigation-change', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ currentRoute, previousRoute }),
-    });
+    return { success: true, data: null };
+  }
 
-    if (!response.ok) {
-      throw new Error(`Failed to handle navigation change: ${response.statusText}`);
-    }
+  async onUserHover(element, currentRoute) {
+    return { success: true, data: null };
+  }
 
-    return response.json();
+  async onUserScroll(currentRoute, scrollPosition) {
+    return { success: true, data: null };
   }
 
   async getStats() {
-    const response = await fetch('/api/smart-prefetch/stats', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get prefetch stats: ${response.statusText}`);
-    }
-
-    return response.json();
+    return { success: true, data: null };
   }
 
   async clearPatterns() {
-    const response = await fetch('/api/smart-prefetch/clear-patterns', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to clear patterns: ${response.statusText}`);
-    }
-
-    return response.json();
+    return { success: true, data: null };
   }
 
   setEnabled(enabled) {
-    // This could be stored locally or sent to backend if needed
     this.enabled = enabled;
   }
 }

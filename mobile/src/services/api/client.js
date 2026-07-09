@@ -119,13 +119,13 @@ const makeRequest = async (endpoint, options = {}) => {
   let data;
 
   try {
+    const textResponse = await response.text();
+    if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
+      throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
+    }
     if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
+      data = JSON.parse(textResponse);
     } else {
-      const textResponse = await response.text();
-      if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
-        throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
-      }
       try {
         data = JSON.parse(textResponse);
       } catch (jsonError) {

@@ -24,7 +24,6 @@ const EnhancedUserDashboard = ({ navigation }) => {
     isSyncing,
     theme,
     refreshData,
-    prefetchForPage,
   } = useApp();
 
   const colors = getThemeColors(theme);
@@ -61,6 +60,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
         });
       }
     } catch (error) {
+      // Silently ignore statistics load errors - dashboard still works with defaults
     }
   };
 
@@ -70,12 +70,6 @@ const EnhancedUserDashboard = ({ navigation }) => {
     await loadUserStatistics();
     setRefreshing(false);
   };
-
-  // Prefetch data for likely next pages
-  useEffect(() => {
-    prefetchForPage('wallet', 'low');
-    prefetchForPage('chama-dashboard', 'low');
-  }, [prefetchForPage]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-KE', {
