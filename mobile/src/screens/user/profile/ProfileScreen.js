@@ -88,6 +88,28 @@ const ProfileScreen = ({ navigation }) => {
   const [userChamas, setUserChamas] = useState([]);
   const [chamasLoading, setChamasLoading] = useState(false);
   const [payingChamaFee, setPayingChamaFee] = useState(null);
+  const [lastPayAttempt, setLastPayAttempt] = useState(null);
+  const [cooldownActive, setCooldownActive] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const PAY_COOLDOWN_MS = 30000;
+
+  useEffect(() => {
+    let timer;
+    if (lastPayAttempt && cooldownActive) {
+      const updateCooldown = () => {
+        const remaining = Math.ceil((PAY_COOLDOWN_MS - (Date.now() - lastPayAttempt)) / 1000);
+        if (remaining <= 0) {
+          setCooldownActive(false);
+          setCooldownRemaining(0);
+        } else {
+          setCooldownRemaining(remaining);
+        }
+      };
+      updateCooldown();
+      timer = setInterval(updateCooldown, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [lastPayAttempt, cooldownActive]);
   const [chamasPage, setChamasPage] = useState(1);
   const CHAMAS_PER_PAGE = 10;
 
@@ -434,49 +456,59 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handlePayChamaFee = async (chama) => {
-    if (!chama.memberId) {
+    if (!chama?.id) {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Member ID not found for this chama',
+        text2: 'Chama information is missing',
       });
       return;
     }
 
-    Alert.alert(
-      'Pay Registration Fee',
-      `Send STK push to your phone for KES 50 registration fee for ${chama.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Pay KES 50',
-          onPress: async () => {
-            try {
-              setPayingChamaFee(chama.id);
-              const response = await payMemberServiceFee(chama.id, chama.memberId);
-              if (response.success) {
-                Toast.show({
-                  type: 'success',
-                  text1: 'Payment Initiated',
-                  text2: 'STK push sent to your phone',
-                });
-                loadUserChamas();
-              } else {
-                throw new Error(response.error || 'Failed to initiate payment');
-              }
-            } catch (error) {
-              Toast.show({
-                type: 'error',
-                text1: 'Payment Failed',
-                text2: error.message || 'Failed to initiate payment',
-              });
-            } finally {
-              setPayingChamaFee(null);
-            }
-          },
-        },
-      ]
-    );
+    const now = Date.now();
+    if (lastPayAttempt && now - lastPayAttempt < PAY_COOLDOWN_MS) {
+      const remaining = Math.ceil((PAY_COOLDOWN_MS - (Date.now() - lastPayAttempt)) / 1000);
+      Toast.show({
+        type: 'info',
+        text1: 'Please wait',
+        text2: `Cooldown active. Try again in ${remaining}s`,
+      });
+      return;
+    }
+
+    try {
+      setPayingChamaFee(chama.id);
+      setLastPayAttempt(Date.now());
+      setCooldownActive(true);
+      const response = await payMemberServiceFee(chama.id, user?.id);
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Payment Initiated',
+          text2: 'STK push sent to your phone',
+        });
+        loadUserChamas();
+      } else {
+        throw new Error(response.error || 'Failed to initiate payment');
+      }
+    } catch (error) {
+      if (error.message && error.message.includes('Service fee already paid')) {
+        Toast.show({
+          type: 'info',
+          text1: 'Already Paid',
+          text2: 'This service fee was already paid',
+        });
+        loadUserChamas();
+        return;
+      }
+      Toast.show({
+        type: 'error',
+        text1: 'Payment Failed',
+        text2: error.message || 'Failed to initiate payment',
+      });
+    } finally {
+      setPayingChamaFee(null);
+    }
   };
 
   const getActivityColor = (type, paymentMethod) => {
@@ -1235,10 +1267,14 @@ const ProfileScreen = ({ navigation }) => {
                       <TouchableOpacity
                         style={[styles.chamasPayButton, { backgroundColor: colors.primary }]}
                         onPress={() => handlePayChamaFee(chama)}
-                        disabled={isPaying}
+                        disabled={isPaying || cooldownActive}
                       >
                         {isPaying ? (
                           <ActivityIndicator size="small" color={colors.white} />
+                        ) : cooldownActive ? (
+                          <Text style={[styles.chamasPayButtonText, { color: colors.white }]}>
+                            Wait {cooldownRemaining}s
+                          </Text>
                         ) : (
                           <Text style={[styles.chamasPayButtonText, { color: colors.white }]}>
                             Pay

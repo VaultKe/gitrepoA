@@ -1036,19 +1036,6 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, styles.containerBackground]}>
-        <View style={[styles.header, styles.headerSurface]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, styles.headerTitleText]}>
-            Member Details
-          </Text>
-          <View style={styles.headerRight} />
-        </View>
-
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, styles.loadingTextSecondary]}>

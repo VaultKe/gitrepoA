@@ -1285,19 +1285,6 @@ const SettingsScreen = ({ navigation }) => {
     },
   ];
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
-            Loading settings...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -1311,6 +1298,14 @@ const SettingsScreen = ({ navigation }) => {
         scrollEventThrottle={16}
         removeClippedSubviews={false}
       >
+        {loading && (
+          <View style={styles.inlineLoadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.inlineLoadingText, { color: colors.textSecondary }]}>
+              Loading settings...
+            </Text>
+          </View>
+        )}
         {renderNotificationSettings()}
         {renderPrivacySettings()}
         {renderSecuritySettings()}
@@ -1520,16 +1515,15 @@ const styles = StyleSheet.create({
   },
 
   // Loading styles
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  inlineLoadingContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.xl,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: typography.fontSize.base,
-    textAlign: 'center',
+  inlineLoadingText: {
+    fontSize: typography.fontSize.sm,
   },
 
   // Google Drive backup styles

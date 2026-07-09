@@ -11,6 +11,7 @@ import {
   Dimensions,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -19,6 +20,7 @@ import { getThemeColors, spacing, typography, borderRadius, shadows, createTheme
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ApiService from '../../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const createTableStyles = createThemedStyles((colors, spacing, typography, shadows) => ({
   tableHeader: {
@@ -139,6 +141,9 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
   },
 }));
 
+const CHAMAS_CACHE_KEY = 'cached_user_chamas';
+const CHAMAS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 const MyChamasScreen = ({ navigation, route }) => {
   const { theme, user, switchToChamaDashboard } = useApp();
   const colors = getThemeColors(theme);
@@ -206,11 +211,39 @@ const MyChamasScreen = ({ navigation, route }) => {
     { id: 'contribution', name: 'Contribution Groups', icon: 'heart' },
   ];
 
+  const loadCachedChamas = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(CHAMAS_CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CHAMAS_CACHE_TTL) {
+          setChamas(data || []);
+          return true;
+        }
+      }
+    } catch (error) {
+      // Silent fail for cache read
+    }
+    return false;
+  };
 
-
+  const cacheChamas = async (data) => {
+    try {
+      await AsyncStorage.setItem(CHAMAS_CACHE_KEY, JSON.stringify({
+        data,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      // Silent fail for cache write
+    }
+  };
 
   useEffect(() => {
-    loadUserChamas();
+    const initialize = async () => {
+      await loadCachedChamas();
+      await loadUserChamas();
+    };
+    initialize();
   }, []);
 
   useEffect(() => {
@@ -234,7 +267,9 @@ const MyChamasScreen = ({ navigation, route }) => {
       const response = await ApiService.getUserChamas(50, 0);
 
       if (response.success) {
-        setChamas(response.data || []);
+        const data = response.data || [];
+        setChamas(data);
+        await cacheChamas(data);
       } else {
         throw new Error(response.error || 'Failed to load chamas');
       }
@@ -309,8 +344,6 @@ const MyChamasScreen = ({ navigation, route }) => {
     }
     return 'member';
   };
-
-
 
 
 
@@ -397,35 +430,6 @@ const MyChamasScreen = ({ navigation, route }) => {
       </Text>
     </View>
   );
-
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '70%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '30%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '60%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '40%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '80%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '55%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '45%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '65%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '75%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '35%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -538,6 +542,14 @@ const MyChamasScreen = ({ navigation, route }) => {
             elevation: 0,
           }}
         >
+          {loading && (
+            <View style={styles.inlineTableLoading}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.inlineTableLoadingText, { color: colors.textSecondary }]}>
+                Loading chamas...
+              </Text>
+            </View>
+          )}
           {/* Table Header */}
           <View style={themedStyles.tableHeader}>
             <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
@@ -566,7 +578,7 @@ const MyChamasScreen = ({ navigation, route }) => {
                 tintColor={colors.primary}
               />
             }
-            ListEmptyComponent={!loading && renderEmptyState()}
+            ListEmptyComponent={loading ? null : renderEmptyState()}
           />
         </Card>
       </View>
@@ -633,21 +645,15 @@ const getResponsiveStyles = (isLargeScreen, screenWidth, numColumns, screenType,
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    padding: 16,
+  inlineTableLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
-  skeletonCard: {
-    height: 120,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 16,
-    padding: 16,
-  },
-  skeletonLine: {
-    height: 12,
-    borderRadius: 6,
-    marginBottom: 8,
+  inlineTableLoadingText: {
+    fontSize: typography.fontSize.sm,
   },
   staticHeader: {
     borderBottomWidth: 1,
