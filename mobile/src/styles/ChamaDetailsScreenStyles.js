@@ -8,24 +8,9 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
   scrollView: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  loadingText: {
-    fontSize: screenType === 'desktop' ? typography.fontSize.lg : typography.fontSize.base,
-    textAlign: 'center',
-  },
   section: {
     marginHorizontal: spacing.sm,
     marginVertical: spacing.xs,
-  },
-  sectionTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.md,
   },
   // Smart responsive layout styles
   flexibleRow: {
@@ -182,25 +167,6 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
     gap: spacing.md,
   },
   membershipButton: {
-    marginBottom: spacing.sm,
-  },
-  loadingContainer: {
-    flex: 1,
-    padding: spacing.md,
-  },
-  loadingText: {
-    fontSize: typography.fontSize.base,
-  },
-  skeletonCard: {
-    height: 120,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-  },
-  skeletonLine: {
-    height: 12,
-    borderRadius: 6,
     marginBottom: spacing.sm,
   },
   // New styles for comprehensive view

@@ -12,6 +12,7 @@ import {
   Linking,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -152,11 +153,13 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [loans, setLoans] = useState([]);
   const [polls, setPolls] = useState([]);
   const [statistics, setStatistics] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userMembership, setUserMembership] = useState(null);
   const [chatRoomLoading, setChatRoomLoading] = useState(false);
   const [uploadingRules, setUploadingRules] = useState(false);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [pollsLoading, setPollsLoading] = useState(false);
 
   // Reset state and reload data when chamaId changes
   useEffect(() => {
@@ -170,7 +173,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       setPolls([]);
       setStatistics(null);
       setUserMembership(null);
-      setLoading(true);
 
       // Load new chama data
       loadChamaDetails();
@@ -297,6 +299,11 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       console.log('[ChamaDetails] final userMembership:', !!membership, membership?.role);
 
       // Load additional data in background (non-blocking)
+      setMeetingsLoading(true);
+      setTransactionsLoading(true);
+      setPollsLoading(true);
+      setStatisticsLoading(true);
+
       Promise.all([
         // Load user transactions
         ApiService.getChamaTransactions(targetChamaId).then(response => {
@@ -313,8 +320,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             });
             setTransactions(userTransactions);
           }
+          setTransactionsLoading(false);
         }).catch(error => {
           setTransactions([]);
+          setTransactionsLoading(false);
         }),
 
         // Load active polls (same logic as PollsVotingScreen)
@@ -340,11 +349,13 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           allPolls.push(...pollMap.values());
 
           setPolls(allPolls);
+          setPollsLoading(false);
 
           if (allPolls.length > 0) {
           }
         }).catch(error => {
           setPolls([]);
+          setPollsLoading(false);
         }),
 
         // Load meetings (like ChamaMeetingsScreen does)
@@ -355,8 +366,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             if (meetingsData.length > 0) {
             }
           }
+          setMeetingsLoading(false);
         }).catch(error => {
           setMeetings([]);
+          setMeetingsLoading(false);
         }),
 
         // Load statistics
@@ -364,8 +377,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           if (response.success) {
             setStatistics(response.data);
           }
+          setStatisticsLoading(false);
         }).catch(error => {
           setStatistics(null);
+          setStatisticsLoading(false);
         })
       ]);
 
@@ -373,8 +388,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       setLoans([]);
 
     } catch (error) {
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -877,9 +890,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Recent Meetings ({meetings.length})
+          Recent Meetings
         </Text>
-        {meetings.length > 5 && (
+        {meetings.length > 5 && !meetingsLoading && (
           <TouchableOpacity onPress={() => navigation.navigate('ChamaMeetingsScreen', { chamaId })}>
             <Text style={[styles.viewMoreText, { color: colors.primary }]}>
               View All
@@ -888,7 +901,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      {meetings.length === 0 ? (
+      {meetingsLoading ? (
+        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={{ marginTop: 8, color: colors.textSecondary }}>Loading meetings…</Text>
+        </View>
+      ) : meetings.length === 0 ? (
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           No meetings scheduled
         </Text>
@@ -942,9 +960,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          My Transactions ({transactions.length})
+          My Transactions
         </Text>
-        {transactions.length > 5 && (
+        {transactions.length > 5 && !transactionsLoading && (
           <TouchableOpacity onPress={() => {
             if (chama) {
               setSelectedChama(chama);
@@ -958,7 +976,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      {transactions.length === 0 ? (
+      {transactionsLoading ? (
+        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={{ marginTop: 8, color: colors.textSecondary }}>Loading transactions…</Text>
+        </View>
+      ) : transactions.length === 0 ? (
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           No transactions found for your account
         </Text>
@@ -1026,7 +1049,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       <Card style={styles.section} variant="outlined">
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Polls & Voting ({polls.length})
+            Polls & Voting
           </Text>
           <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
             <Text style={[styles.viewMoreText, { color: colors.primary }]}>
@@ -1035,17 +1058,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Notification for new polls */}
-        {newPollsCount > 0 && (
-          <View style={[styles.newPollsNotification, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
-            <Ionicons name="notifications" size={20} color={colors.warning} />
-            <Text style={[styles.newPollsText, { color: colors.warning }]}>
-              You have {newPollsCount} new poll{newPollsCount !== 1 ? 's' : ''} waiting for your vote!
-            </Text>
+        {pollsLoading ? (
+          <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={{ marginTop: 8, color: colors.textSecondary }}>Loading polls…</Text>
           </View>
-        )}
-
-        {polls.length === 0 ? (
+        ) : polls.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
             <Ionicons name="bar-chart" size={48} color={colors.primary} />
             <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
@@ -1054,6 +1072,16 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           </View>
         ) : (
           <View>
+            {/* Notification for new polls */}
+            {newPollsCount > 0 && (
+              <View style={[styles.newPollsNotification, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
+                <Ionicons name="notifications" size={20} color={colors.warning} />
+                <Text style={[styles.newPollsText, { color: colors.warning }]}>
+                  You have {newPollsCount} new poll{newPollsCount !== 1 ? 's' : ''} waiting for your vote!
+                </Text>
+              </View>
+            )}
+
             {/* Table Header */}
             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
               <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
@@ -1072,20 +1100,20 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
               return (
                  <View key={`poll-${poll.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                  <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons
-                      name={hasUserVoted ? "checkmark-circle" : "close-circle"}
-                      size={16}
-                      color={hasUserVoted ? colors.success : colors.error}
-                    />
-                  </View>
-                  <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
-                    {isActive ? 'Active' : 'Closed'}
-                  </Text>
-                </View>
-              );
-            })}
+                   <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
+                   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                     <Ionicons
+                       name={hasUserVoted ? "checkmark-circle" : "close-circle"}
+                       size={16}
+                       color={hasUserVoted ? colors.success : colors.error}
+                     />
+                   </View>
+                   <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
+                     {isActive ? 'Active' : 'Closed'}
+                   </Text>
+                 </View>
+               );
+             })}
 
             {/* New polls row */}
             {newPollsCount > 0 && (
@@ -1446,38 +1474,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       </Card>
     );
   };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '60%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '40%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '70%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '30%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '80%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '55%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '45%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '65%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '35%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '75%' }]} />
-          </View>
-          <View style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '50%' }]} />
-            <View style={[styles.skeletonLine, { backgroundColor: colors.border, width: '60%' }]} />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
