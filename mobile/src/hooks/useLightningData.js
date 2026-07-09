@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import cacheDataService from '../services/cacheDataService';
 import optimisticUpdateService from '../services/optimisticUpdateService';
-import smartPrefetchService from '../services/smartPrefetchService';
 
 /**
  * Lightning Data Hook
@@ -281,51 +280,6 @@ export const useOptimisticUpdate = () => {
 };
 
 /**
- * Smart Prefetch Hook
- * Handles intelligent prefetching based on user behavior
- */
-export const useSmartPrefetch = (currentRoute) => {
-  const [prefetchStats, setPrefetchStats] = useState(null);
-  const previousRoute = useRef(null);
-
-  useEffect(() => {
-    if (previousRoute.current !== currentRoute) {
-      // Navigation changed - trigger prefetching
-      smartPrefetchService.onNavigationChange(currentRoute, previousRoute.current);
-      previousRoute.current = currentRoute;
-    }
-  }, [currentRoute]);
-
-  useEffect(() => {
-    // Update prefetch stats periodically
-    const interval = setInterval(() => {
-      setPrefetchStats(smartPrefetchService.getStats());
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const prefetchForPage = useCallback((pageName, priority = 'normal') => {
-    return smartPrefetchService.executePrefetch(pageName, priority);
-  }, []);
-
-  const onUserHover = useCallback((element) => {
-    smartPrefetchService.onUserHover(element, currentRoute);
-  }, [currentRoute]);
-
-  const onUserScroll = useCallback((scrollPosition) => {
-    smartPrefetchService.onUserScroll(currentRoute, scrollPosition);
-  }, [currentRoute]);
-
-  return {
-    prefetchStats,
-    prefetchForPage,
-    onUserHover,
-    onUserScroll,
-  };
-};
-
-/**
  * Performance Monitoring Hook
  * Tracks data loading performance and cache efficiency
  */
@@ -335,13 +289,11 @@ export const usePerformanceMonitoring = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       const lightningMetrics = cacheDataService.getPerformanceMetrics();
-      const prefetchStats = smartPrefetchService.getStats();
-      
+
       setMetrics({
         lightning: lightningMetrics,
-        prefetch: prefetchStats,
         combined: {
-          totalCacheHitRate: (lightningMetrics.cacheHitRate + prefetchStats.hitRate) / 2,
+          totalCacheHitRate: lightningMetrics.cacheHitRate,
           averageLoadTime: lightningMetrics.averageLoadTime,
           totalOptimisticUpdates: lightningMetrics.optimisticUpdates,
         }
@@ -353,7 +305,6 @@ export const usePerformanceMonitoring = () => {
 
   const clearCaches = useCallback(() => {
     cacheDataService.clearAllCaches();
-    smartPrefetchService.clearPatterns();
   }, []);
 
   return {

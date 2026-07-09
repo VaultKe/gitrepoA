@@ -39,7 +39,7 @@ const PerformanceMonitor = ({ theme = 'dark', visible, onClose }) => {
     );
   }
 
-  const { lightning, prefetch, combined } = metrics;
+  const { lightning, combined } = metrics;
 
   const formatPercentage = (value) => `${(value || 0).toFixed(1)}%`;
   const formatTime = (value) => `${(value || 0).toFixed(0)}ms`;
@@ -135,43 +135,6 @@ const PerformanceMonitor = ({ theme = 'dark', visible, onClose }) => {
             </View>
           </View>
 
-          {/* Smart Prefetch Service */}
-          <View style={[styles.section, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              🧠 Smart Prefetch Service
-            </Text>
-            <View style={styles.metricsGrid}>
-              <MetricCard
-                title="Prefetch Hit Rate"
-                value={formatPercentage(prefetch.hitRate)}
-                icon="target"
-                color={prefetch.hitRate > 70 ? colors.success : colors.warning}
-                theme={colors}
-              />
-              <MetricCard
-                title="Success Rate"
-                value={formatPercentage(prefetch.successRate)}
-                icon="checkmark-done"
-                color={prefetch.successRate > 90 ? colors.success : colors.warning}
-                theme={colors}
-              />
-              <MetricCard
-                title="Active Prefetches"
-                value={formatNumber(prefetch.activePrefetches)}
-                icon="download"
-                color={colors.info}
-                theme={colors}
-              />
-              <MetricCard
-                title="Learned Patterns"
-                value={formatNumber(prefetch.learnedPatterns)}
-                icon="analytics"
-                color={colors.primary}
-                theme={colors}
-              />
-            </View>
-          </View>
-
           {/* Actions */}
           <View style={[styles.section, { backgroundColor: colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -210,12 +173,6 @@ const PerformanceMonitor = ({ theme = 'dark', visible, onClose }) => {
                 icon="trending-up"
                 text="Optimistic updates improve perceived performance"
                 color={colors.primary}
-                theme={colors}
-              />
-              <PerformanceTip
-                icon="analytics"
-                text="Smart prefetching learns from user behavior patterns"
-                color={colors.warning}
                 theme={colors}
               />
             </View>

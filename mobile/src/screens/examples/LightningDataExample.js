@@ -9,10 +9,10 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useApp } from '../../context/AppContext';
 import { 
   useLightningData, 
   useOptimisticUpdate, 
-  useSmartPrefetch,
   useMultiData 
 } from '../hooks/useLightningData';
 import PerformanceMonitor from '../components/PerformanceMonitor';
@@ -66,14 +66,14 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
     pendingUpdates,
   } = useOptimisticUpdate();
 
-  // Smart prefetching - predictive data loading
-  const { prefetchStats, prefetchForPage, onUserHover, onUserScroll } = useSmartPrefetch('lightning-example');
-
-  // Prefetch data for likely next pages
+  // Prefetch data for likely next pages (uses lightning service data dependencies)
+  const { prefetchForPage } = useApp();
   useEffect(() => {
     // Prefetch data for pages user might visit next
     prefetchForPage('user-dashboard', 'normal');
     prefetchForPage('marketplace', 'low');
+    prefetchForPage('wallet', 'low');
+  }, [prefetchForPage]);
     prefetchForPage('wallet', 'low');
   }, [prefetchForPage]);
 
@@ -175,14 +175,6 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
             {hasPendingUpdates ? `${pendingUpdates} pending` : 'All synced'}
           </Text>
         </View>
-        {prefetchStats && (
-          <View style={styles.statusItem}>
-            <Ionicons name="download" size={16} color={colors.info} />
-            <Text style={[styles.statusText, { color: colors.text }]}>
-              {prefetchStats.hitRate?.toFixed(1)}% hit rate
-            </Text>
-          </View>
-        )}
       </View>
 
       <ScrollView
@@ -197,11 +189,6 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
             tintColor={colors.primary}
           />
         }
-        onScroll={(event) => {
-          const scrollPosition = event.nativeEvent.contentOffset.y / 
-            (event.nativeEvent.contentSize.height - event.nativeEvent.layoutMeasurement.height);
-          onUserScroll(scrollPosition);
-        }}
         scrollEventThrottle={16}
       >
         {/* Individual Data Sections */}
@@ -289,7 +276,6 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.info }]}
               onPress={() => prefetchForPage('user-dashboard', 'high')}
-              onPressIn={() => onUserHover('dashboard-button')}
             >
               <Ionicons name="home" size={16} color="white" />
               <Text style={styles.actionButtonText}>Prefetch Dashboard</Text>
@@ -298,7 +284,6 @@ const LightningDataExample = ({ navigation, theme = 'dark' }) => {
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.info }]}
               onPress={() => prefetchForPage('marketplace', 'high')}
-              onPressIn={() => onUserHover('marketplace-button')}
             >
               <Ionicons name="storefront" size={16} color="white" />
               <Text style={styles.actionButtonText}>Prefetch Marketplace</Text>

@@ -222,7 +222,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       // Fallback 1: Try to find user in chama members list
       if (membersResponse.success) {
         const membersData = Array.isArray(membersResponse.data) ? membersResponse.data : [];
-        console.log('[ChamaDetails] membersResponse.data type:', typeof membersResponse.data, Array.isArray(membersResponse.data) ? membersResponse.data.length : 'N/A');
         const uniqueMembers = Array.from(
           new Map(membersData.map((m) => [m.id, m])).values()
         );
@@ -252,13 +251,11 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       // Fallback 2: If not found in members list, check user's chamas via /chamas/my
       if (!membership && chamaResponse.data) {
         const currentUserId = String(user?.id);
-        console.log('[ChamaDetails] membership not found in members list, checking /chamas/my');
         try {
           const myChamasResponse = await ApiService.getUserChamas(50, 0);
           if (myChamasResponse.success && Array.isArray(myChamasResponse.data)) {
             const myChama = myChamasResponse.data.find(c => String(c.id) === String(chamaResponse.data.id));
             if (myChama) {
-              console.log('[ChamaDetails] chama found in user chamas list:', myChama.memberRole || myChama.role);
               membership = {
                 id: myChama.memberId || myChama.id,
                 user_id: currentUserId,
@@ -266,10 +263,8 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                 joined_at: myChama.createdAt || new Date().toISOString(),
               };
             } else {
-              console.log('[ChamaDetails] chama NOT found in user chamas list');
             }
           } else {
-            console.log('[ChamaDetails] getUserChamas failed or returned no data');
           }
         } catch (myChamasError) {
           console.error('[ChamaDetails] getUserChamas error:', myChamasError);

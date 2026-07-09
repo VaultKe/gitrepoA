@@ -1,11 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import SyncService from '../services/syncService';
 import ApiService from '../services/api';
 import webSocketService from '../services/websocket';
-import dataPreloadService from '../services/dataPreloadService';
 import lightningDataService from '../services/cacheDataService';
-import smartPrefetchService from '../services/smartPrefetchService';
 import { setAppLogout } from '../utils/authLogout';
 
 // Initial state
@@ -179,44 +176,14 @@ function appReducer(state, action) {
 // Create context
 const AppContext = createContext();
 
-// Provider component
-export function AppProvider({ children }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
+  // Provider component
+  export function AppProvider({ children }) {
+    const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Initialize app
-  useEffect(() => {
-    initializeApp();
-
-    // Suppress harmless SVG filter warnings
-    const originalConsoleWarn = console.warn;
-    console.warn = (...args) => {
-      // const message = args.join(' ');
-      // // Suppress SVG filter operator warnings
-      // if (message.includes('<feComposite> attribute operator: Unrecognized enumerated value')) {
-      //   return; // Suppress these warnings
-      // }
-      // originalConsoleWarn.apply(console, args);
-    };
-
-    // Cleanup on unmount
-    return () => {
-      console.warn = originalConsoleWarn;
-    };
-  }, []);
-
-  // Setup sync service listeners
-  useEffect(() => {
-    const unsubscribe = SyncService.addListener((syncData) => {
-      if (syncData.isOnline !== undefined) {
-        dispatch({ type: ActionTypes.SET_ONLINE_STATUS, payload: syncData.isOnline });
-      }
-      if (syncData.isSyncing !== undefined) {
-        dispatch({ type: ActionTypes.SET_SYNC_STATUS, payload: syncData.isSyncing });
-      }
-    });
-
-    return unsubscribe;
-  }, []);
+    // Initialize app
+    useEffect(() => {
+      initializeApp();
+    }, []);
 
 
   const initializeApp = async () => {
@@ -307,7 +274,6 @@ export function AppProvider({ children }) {
           setTimeout(async () => {
             try {
               await loadLocalData();
-              SyncService.startAutoSync();
             } catch (loadError) {
               console.warn('Failed to load local data during app init:', loadError);
             }
@@ -374,10 +340,7 @@ export function AppProvider({ children }) {
   };
   // Initialize lightning data service for user
   const initializeLightningDataForUser = async (userId) => {
-    // Setup user-specific prefetch rules
-    smartPrefetchService.setUserContext({ userId, userRole: state.userRole });
-
-    // Initialize real-time handlers for lightning service
+    // Initialize real-time handlers for lightning service (single source, wired through cacheManagerService -> websocket)
     lightningDataService.registerRealtimeHandler('notifications', (update) => {
       handleLightningDataUpdate('notifications', update);
     });
@@ -457,26 +420,6 @@ export function AppProvider({ children }) {
         dispatch({ type: ActionTypes.SET_CHAMAS, payload: updatedChamas });
         break;
     }
-  };
-
-  // Setup enhanced real-time updates
-  const setupEnhancedRealtimeUpdates = () => {
-    // Register enhanced WebSocket handlers
-    webSocketService.registerDataUpdateHandler('notifications', (update) => {
-      handleLightningDataUpdate('notifications', update);
-    });
-
-    webSocketService.registerDataUpdateHandler('wallet', (update) => {
-      handleLightningDataUpdate('wallet', update);
-    });
-
-    webSocketService.registerDataUpdateHandler('transactions', (update) => {
-      handleLightningDataUpdate('transactions', update);
-    });
-
-    webSocketService.registerDataUpdateHandler('chamas', (update) => {
-      handleLightningDataUpdate('chamas', update);
-    });
   };
 
   // Auth actions
@@ -618,11 +561,7 @@ export function AppProvider({ children }) {
               await loadUserChamas();
             }
 
-            // Start auto sync
-            SyncService.startAutoSync();
-
-            // Initialize WebSocket connection with enhanced real-time updates
-            setupEnhancedRealtimeUpdates();
+            // Start WebSocket connection with real-time updates (wired via cacheManagerService -> websocket)
             webSocketService.connect().then(() => {
             }).catch((wsError) => {
               console.warn('WebSocket connection failed, using polling fallback:', wsError);
@@ -770,9 +709,6 @@ export function AppProvider({ children }) {
             // Then load remote data
             await loadUserChamas();
 
-            // Start auto sync
-            SyncService.startAutoSync();
-
             // Initialize WebSocket connection (non-critical)
             webSocketService.connect().then(() => {
             }).catch((wsError) => {
@@ -898,8 +834,6 @@ export function AppProvider({ children }) {
 
   const logout = async () => {
     try {
-      SyncService.stopAutoSync();
-
       try {
         webSocketService.disconnect();
       } catch (wsError) {
@@ -941,7 +875,7 @@ export function AppProvider({ children }) {
   // Load user chamas from API
   const loadUserChamas = async () => {
     try {
-      if (!state.isOnline || !state.user?.id) {
+      if (!state.user?.id) {
         return;
       }
 
@@ -962,26 +896,15 @@ export function AppProvider({ children }) {
   const refreshData = async (forceRefresh = false) => {
     try {
       if (state.user?.id) {
-        // Use lightning data service for instant refresh
+        // Use lightning data service for instant refresh (fetches real data via ApiService)
         const lightningResult = await lightningDataService.preloadAllData(state.user.id, forceRefresh);
 
         if (lightningResult.success && lightningResult.data) {
           updateContextWithLightningData(lightningResult.data);
         } else {
           console.warn('⚠️ Lightning refresh failed, using fallback');
-          // Fallback to traditional preload service
-          const preloadResult = await dataPreloadService.preloadAllData(state.user.id, forceRefresh);
-
-          if (preloadResult.success && preloadResult.data) {
-            updateContextWithPreloadedData(preloadResult.data);
-          } else {
-            // Final fallback to individual loading
-            if (state.isOnline && !state.isSyncing) {
-              await SyncService.triggerSync();
-              await loadLocalData();
-              await loadUserChamas();
-            }
-          }
+          await loadLocalData();
+          await loadUserChamas();
         }
       } else {
         // No user, just load local data
@@ -999,9 +922,7 @@ export function AppProvider({ children }) {
     if (lightningResult.success) {
       return lightningResult;
     }
-
-    // Fallback to original preload service
-    return await dataPreloadService.getCachedData(dataType, true);
+    return null;
   };
 
   // Get lightning data with performance metrics

@@ -27,7 +27,6 @@ class CacheManagerService {
   async initializeService() {
     await this.loadPersistentCache();
     realtimeUpdateHandler.setupRealtimeUpdates();
-    this.startBackgroundSync();
   }
 
   async loadPersistentCache() {
@@ -64,34 +63,6 @@ class CacheManagerService {
     } else {
       Promise.all(prefetchPromises).catch(() => {});
     }
-  }
-
-  startBackgroundSync() {
-    setInterval(async () => {
-      try {
-        await this.performBackgroundSync();
-        this.lastSyncTime = Date.now();
-      } catch (error) {
-      }
-    }, 30000);
-  }
-
-  async performBackgroundSync() {
-    const criticalData = ['notifications', 'wallet', 'unread-count'];
-
-    const syncPromises = criticalData.map(async (dataType) => {
-      try {
-        const result = await dataFetcher.fetchFromAPI(dataType);
-        if (result.success) {
-          const cacheKey = cacheManager.generateCacheKey(dataType);
-          cacheManager.setMemoryCache(cacheKey, result.data);
-          await cacheManager.setPersistentCache(cacheKey, result.data);
-        }
-      } catch (error) {
-      }
-    });
-
-    await Promise.allSettled(syncPromises);
   }
 
   clearCache(dataType) {

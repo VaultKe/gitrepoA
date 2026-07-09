@@ -1,6 +1,5 @@
 import cacheManagerService from './data/cacheManagerService';
 import cacheManager from './data/cacheManager';
-import dataPreloadService from './dataPreloadService';
 
 class CacheDataService {
   constructor() {
@@ -137,7 +136,30 @@ class CacheDataService {
   }
 
   async preloadAllData(userId, forceRefresh = false) {
-    return await dataPreloadService.preloadAllData(userId, forceRefresh);
+    // Fetch all core data types through the real data fetcher (ApiService-backed).
+    // This replaces the previous dataPreloadService which hit a non-existent
+    // relative `/api/data-preload/*` endpoint and always failed in React Native.
+    const dataTypes = ['wallet', 'chamas', 'transactions', 'notifications', 'chat-rooms'];
+
+    const results = await Promise.all(
+      dataTypes.map(async (dataType) => {
+        try {
+          const result = await cacheManagerService.getData(dataType, { forceRefresh });
+          return [dataType, result];
+        } catch (error) {
+          return [dataType, { success: false, error: error.message }];
+        }
+      })
+    );
+
+    const data = {};
+    let success = false;
+    results.forEach(([dataType, result]) => {
+      data[dataType] = result;
+      if (result && result.success) success = true;
+    });
+
+    return { success, data };
   }
 
   get dataDependencies() {
