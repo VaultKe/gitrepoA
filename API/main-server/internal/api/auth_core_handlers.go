@@ -243,10 +243,6 @@ func extractDeviceInfo(c *gin.Context) DeviceInfo {
 		deviceInfo.Location = fmt.Sprintf("%s • %s", deviceInfo.Location, connectionType)
 	}
 
-	if connectionType != "" {
-		deviceInfo.Location = fmt.Sprintf("%s • %s", deviceInfo.Location, connectionType)
-	}
-
 	return deviceInfo
 }
 

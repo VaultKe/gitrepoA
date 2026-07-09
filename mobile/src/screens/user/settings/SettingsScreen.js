@@ -628,7 +628,7 @@ const SettingsScreen = ({ navigation }) => {
 
 
   const renderSettingItem = (title, description, value, onValueChange, type = 'switch') => (
-    <View style={styles.settingItem}>
+    <View style={[styles.settingItem, { borderBottomColor: colors.border }]}>
       <View style={styles.settingInfo}>
         <Text style={[styles.settingTitle, { color: colors.text }]}>
           {title}
@@ -661,7 +661,7 @@ const SettingsScreen = ({ navigation }) => {
   );
 
   const renderMenuSection = (title, items) => (
-    <Card style={styles.section}>
+    <Card variant="outlined" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         {title}
       </Text>
@@ -703,7 +703,7 @@ const SettingsScreen = ({ navigation }) => {
     const selectedSound = availableSounds.find(s => s.id === settings.notifications.notification_sound_id);
 
     return (
-      <Card style={styles.section}>
+      <Card variant="outlined" style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Notifications
         </Text>
@@ -763,7 +763,7 @@ const SettingsScreen = ({ navigation }) => {
             {/* Volume Level Setting */}
             {settings.notifications.sound_enabled && (
               <TouchableOpacity
-                style={styles.settingRow}
+                style={[styles.settingRow, { borderBottomColor: colors.border }]}
                 onPress={() => showVolumeOptions()}
                 activeOpacity={0.7}
               >
@@ -786,7 +786,7 @@ const SettingsScreen = ({ navigation }) => {
             {/* Notification Tone Selection */}
             {settings.notifications.sound_enabled && (
               <TouchableOpacity
-                style={styles.settingRow}
+                style={[styles.settingRow, { borderBottomColor: colors.border }]}
                 onPress={() => navigation.navigate('NotificationTone')}
                 activeOpacity={0.7}
               >
@@ -814,7 +814,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const renderPrivacySettings = () => (
-    <Card style={styles.section}>
+    <Card variant="outlined" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         Privacy
       </Text>
@@ -844,7 +844,7 @@ const SettingsScreen = ({ navigation }) => {
   );
 
   const renderSecuritySettings = () => (
-    <Card style={styles.section}>
+    <Card variant="outlined" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         Security
       </Text>
@@ -867,7 +867,7 @@ const SettingsScreen = ({ navigation }) => {
   );
 
   const renderPreferencesSettings = () => (
-    <Card style={styles.section}>
+    <Card variant="outlined" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         Preferences
       </Text>
@@ -899,7 +899,7 @@ const SettingsScreen = ({ navigation }) => {
   );
 
   const renderGoogleDriveBackupSettings = () => (
-    <Card style={styles.section}>
+    <Card variant="outlined" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         📁 Google Drive Backup
       </Text>
@@ -927,7 +927,7 @@ const SettingsScreen = ({ navigation }) => {
 
       {/* Connect/Disconnect Button */}
       <TouchableOpacity
-        style={styles.settingRow}
+        style={[styles.settingRow, { borderBottomColor: colors.border }]}
         onPress={googleDriveConnected ? disconnectGoogleDrive : connectGoogleDrive}
         activeOpacity={0.7}
         disabled={loading}
@@ -957,7 +957,7 @@ const SettingsScreen = ({ navigation }) => {
       {/* Generate Test Tokens Button - For Development */}
       {!googleDriveConnected && (
         <TouchableOpacity
-          style={styles.settingRow}
+          style={[styles.settingRow, { borderBottomColor: colors.border }]}
           onPress={async () => {
             try {
               setLoading(true);
@@ -1019,7 +1019,7 @@ const SettingsScreen = ({ navigation }) => {
 
       {/* Force Refresh Connection Status Button - Always show */}
       <TouchableOpacity
-        style={styles.settingRow}
+        style={[styles.settingRow, { borderBottomColor: colors.border }]}
         onPress={() => checkGoogleDriveConnection(true)}
         activeOpacity={0.7}
         disabled={loading}
@@ -1049,7 +1049,7 @@ const SettingsScreen = ({ navigation }) => {
       {/* Manual Connection Override - Show when connection check attempts exceed threshold */}
       {connectionCheckAttempts >= 2 && (
         <TouchableOpacity
-          style={styles.settingRow}
+          style={[styles.settingRow, { borderBottomColor: colors.border }]}
           onPress={() => {
             Alert.alert(
               'Manual Connection Override',
@@ -1175,7 +1175,7 @@ const SettingsScreen = ({ navigation }) => {
 
           {/* Debug Information Toggle */}
           <TouchableOpacity
-            style={styles.settingRow}
+            style={[styles.settingRow, { borderBottomColor: colors.border }]}
             onPress={() => setShowDebugInfo(!showDebugInfo)}
             activeOpacity={0.7}
           >
@@ -1319,7 +1319,7 @@ const SettingsScreen = ({ navigation }) => {
         {renderMenuSection('Account', accountMenuItems)}
         {renderMenuSection('Support', supportMenuItems)}
 
-        <Card style={styles.section}>
+        <Card variant="outlined" style={styles.section}>
           <Button
             title="Save Settings"
             onPress={handleSaveSettings}
@@ -1375,7 +1375,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg, // Increased touch area
     paddingHorizontal: spacing.sm, // Added horizontal padding
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     minHeight: 60, // Minimum touch target size
   },
   settingInfo: {
@@ -1491,7 +1490,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     minHeight: 60,
   },
   settingContent: {

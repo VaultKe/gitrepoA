@@ -713,7 +713,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const renderProfileHeader = () => (
-    <Card style={[styles.section, imageExpanded && styles.framelessCard]}>
+    <Card variant="outlined" style={[styles.section, imageExpanded && styles.framelessCard]}>
       {imageExpanded ? (
         // Expanded layout: Frameless image at top, then info below
         <View style={styles.framelessProfileLayout}>
@@ -923,7 +923,7 @@ const ProfileScreen = ({ navigation }) => {
   );
 
   const renderPersonalInfo = () => (
-    <Card style={styles.section}>
+    <Card variant="outlined" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         Personal Information
       </Text>
@@ -1156,7 +1156,7 @@ const ProfileScreen = ({ navigation }) => {
   const renderUserChamasTable = () => {
     if (chamasLoading) {
       return (
-        <Card style={styles.section}>
+        <Card variant="outlined" style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             My Chamas & Groups
           </Text>
@@ -1167,7 +1167,7 @@ const ProfileScreen = ({ navigation }) => {
 
     if (userChamas.length === 0) {
       return (
-        <Card style={styles.section}>
+        <Card variant="outlined" style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             My Chamas & Groups
           </Text>
@@ -1183,7 +1183,7 @@ const ProfileScreen = ({ navigation }) => {
     const paginatedChamas = userChamas.slice(startIndex, startIndex + CHAMAS_PER_PAGE);
 
     return (
-      <Card style={styles.section}>
+      <Card variant="outlined" style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           My Chamas & Groups
         </Text>

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
@@ -22,6 +23,7 @@ const LoginHistoryScreen = ({ navigation }) => {
   const [loginHistory, setLoginHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loggingOutId, setLoggingOutId] = useState(null);
 
   useEffect(() => {
     loadLoginHistory();
@@ -56,9 +58,22 @@ const LoginHistoryScreen = ({ navigation }) => {
   };
 
   const handleLogoutAllDevices = () => {
+    const activeOthers = loginHistory.filter(
+      (item) => item.status === 'active' && !item.isCurrent
+    );
+
+    if (activeOthers.length === 0) {
+      Toast.show({
+        type: 'info',
+        text1: 'No other devices',
+        text2: 'There are no other active devices to log out',
+      });
+      return;
+    }
+
     Alert.alert(
-      'Logout All Devices',
-      'This will log you out from all devices except this one. You will need to log in again on other devices. Continue?',
+      'Logout All Other Devices',
+      `This will log you out from ${activeOthers.length} other device${activeOthers.length > 1 ? 's' : ''}. You will need to log in again on those devices. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -75,12 +90,15 @@ const LoginHistoryScreen = ({ navigation }) => {
       const response = await ApiService.logoutAllDevices();
 
       if (response.success) {
+        const count = loginHistory.filter(
+          (item) => item.status === 'active' && !item.isCurrent
+        ).length;
         Toast.show({
           type: 'success',
           text1: 'Success',
-          text2: 'Logged out from all other devices',
+          text2: `Logged out from ${count} other device${count !== 1 ? 's' : ''}`,
         });
-        loadLoginHistory(); // Refresh the list
+        await loadLoginHistory();
       } else {
         throw new Error(response.error || 'Failed to logout from all devices');
       }
@@ -90,49 +108,42 @@ const LoginHistoryScreen = ({ navigation }) => {
     }
   };
 
-  // Logout from specific device
   const logoutSpecificDevice = async (sessionId, deviceName) => {
-    Alert.alert(
-      'Logout Device',
-      `Are you sure you want to logout from "${deviceName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await ApiService.logoutSpecificDevice(sessionId);
+    setLoggingOutId(sessionId);
+    try {
+      const response = await ApiService.logoutSpecificDevice(sessionId);
 
-              if (response.success) {
-                Toast.show({
-                  type: 'success',
-                  text1: 'Success',
-                  text2: `Logged out from ${deviceName}`,
-                });
-                loadLoginHistory(); // Refresh the list
-              } else {
-                throw new Error(response.error || 'Failed to logout from device');
-              }
-            } catch (error) {
-              console.error('Failed to logout device:', error);
-              Alert.alert('Error', error.message || 'Failed to logout from device');
-            }
-          }
-        }
-      ]
-    );
+      if (response.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Success',
+          text2: `Logged out from ${deviceName}`,
+        });
+        await loadLoginHistory();
+      } else {
+        throw new Error(response.error || 'Failed to logout from device');
+      }
+    } catch (error) {
+      console.error('Failed to logout device:', error);
+      Alert.alert('Error', error.message || 'Failed to logout from device');
+    } finally {
+      setLoggingOutId(null);
+    }
   };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return 'Unknown date';
+    }
+
     const now = new Date();
-    const diffInMinutes = (now - date) / (1000 * 60);
+    const diffInMs = now - date;
+    const diffInMinutes = diffInMs / (1000 * 60);
     const diffInHours = diffInMinutes / 60;
 
-    // Always show actual time for login history for better tracking
     if (diffInMinutes < 1) {
-      return `${Math.floor(diffInMinutes * 60)} seconds ago`;
+      return `${Math.max(1, Math.floor(diffInMinutes * 60))} seconds ago`;
     } else if (diffInMinutes < 60) {
       return `${Math.floor(diffInMinutes)} minutes ago`;
     } else if (diffInHours < 24) {
@@ -151,6 +162,37 @@ const LoginHistoryScreen = ({ navigation }) => {
         minute: '2-digit',
       });
     }
+  };
+
+  const parseLocation = (locationStr) => {
+    if (!locationStr) return null;
+
+    const trimmed = locationStr.trim();
+    const parts = trimmed.split(' • ').filter(Boolean);
+
+    return {
+      base: parts[0] || trimmed,
+      timezone: null,
+      connection: parts.length > 1 ? parts[parts.length - 1] : null,
+    };
+  };
+
+  const getDisplayLocation = (locationStr) => {
+    const parsed = parseLocation(locationStr);
+    if (!parsed) return 'Unknown location';
+
+    const { base, timezone, connection } = parsed;
+
+    const meaningfulConnection =
+      connection && connection.toLowerCase() !== 'unknown'
+        ? connection
+        : null;
+
+    const parts = [base];
+    if (timezone) parts.push(timezone);
+    if (meaningfulConnection) parts.push(meaningfulConnection);
+
+    return parts.join(' • ');
   };
 
   const getDeviceIcon = (deviceType) => {
@@ -183,120 +225,277 @@ const LoginHistoryScreen = ({ navigation }) => {
     }
   };
 
-  const renderLoginItem = (item) => (
-    <View
-      key={item.id}
-      style={[
-        styles.loginItem,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderLeftColor: getStatusColor(item.status),
-        },
-      ]}
-    >
-      <View style={styles.loginHeader}>
-        <View style={styles.deviceInfo}>
-          <Ionicons
-            name={getDeviceIcon(item.deviceType)}
-            size={24}
-            color={colors.primary}
-          />
-          <View style={styles.deviceDetails}>
-            <Text style={[styles.deviceName, { color: colors.text }]}>
-              {item.deviceName || `${item.deviceType || 'Unknown'} Device`}
-            </Text>
-            <Text style={[styles.deviceOS, { color: colors.textSecondary }]}>
-              {[item.operatingSystem, item.osVersion, item.browser]
-                .filter(Boolean)
-                .join(' ')}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.statusContainer}>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(item.status) + '20' },
-            ]}
-          >
-            <Text
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'active':
+        return 'ACTIVE';
+      case 'expired':
+        return 'EXPIRED';
+      case 'revoked':
+        return 'REVOKED';
+      default:
+        return status?.toUpperCase() || 'UNKNOWN';
+    }
+  };
+
+  const getDeviceDisplayName = (item) => {
+    if (item.deviceName && item.deviceName.trim() !== '') {
+      return item.deviceName;
+    }
+
+    const parts = [
+      item.manufacturer,
+      item.model,
+      item.deviceType,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    if (parts.trim()) {
+      return parts.trim();
+    }
+
+    return `${item.deviceType || 'Unknown'} Device`;
+  };
+
+  const getOSDisplay = (item) => {
+    const parts = [item.operatingSystem, item.osVersion].filter(Boolean);
+    if (parts.length > 0) return parts.join(' ');
+
+    if (item.platform) {
+      return item.platform;
+    }
+
+    return null;
+  };
+
+  const getConnectionTypeLabel = (item) => {
+    if (item.connectionType && item.connectionType.toLowerCase() !== 'unknown') {
+      return item.connectionType;
+    }
+
+    const parsed = parseLocation(item.location);
+    if (parsed && parsed.connection && parsed.connection.toLowerCase() !== 'unknown') {
+      return parsed.connection;
+    }
+
+    return null;
+  };
+
+  const isLocalhostIP = (ip) => {
+    if (!ip) return false;
+    return ip === '127.0.0.1' || ip === '::1' || ip === '0.0.0.0';
+  };
+
+  const getIPDisplay = (ipAddress) => {
+    if (!ipAddress) return 'Unknown IP';
+
+    if (isLocalhostIP(ipAddress)) {
+      return 'Localhost';
+    }
+
+    return ipAddress;
+  };
+
+  const renderLoginItem = (item) => {
+    const isActive = item.status === 'active';
+    const isCurrent = item.isCurrent;
+    const isRevoked = item.status === 'revoked';
+    const isLoggingOut = loggingOutId === item.id;
+
+    const deviceName = getDeviceDisplayName(item);
+    const osDisplay = getOSDisplay(item);
+    const browserDisplay = item.browser || null;
+    const appVersionDisplay = item.appVersion || null;
+
+    const secondaryInfo = [osDisplay, browserDisplay, appVersionDisplay]
+      .filter(Boolean)
+      .join(' • ');
+
+    const statusColor = getStatusColor(item.status);
+    const statusLabel = getStatusLabel(item.status);
+
+    const parsedLocation = parseLocation(item.location);
+    const displayLocation = getDisplayLocation(item.location);
+    const connectionType = getConnectionTypeLabel(item);
+    const ipDisplay = getIPDisplay(item.ipAddress);
+
+    const loginTimeValid = item.loginTime && !isNaN(new Date(item.loginTime).getTime());
+    const lastActivityValid = item.lastActivity && !isNaN(new Date(item.lastActivity).getTime());
+
+    const isLastActivitySameAsLogin =
+      loginTimeValid &&
+      lastActivityValid &&
+      new Date(item.lastActivity).getTime() === new Date(item.loginTime).getTime();
+
+    let activityLabel = 'Logged in';
+    let activityTime = item.loginTime;
+
+    if (isRevoked && lastActivityValid) {
+      activityLabel = 'Logged out';
+      activityTime = item.lastActivity;
+    } else if (!isActive && lastActivityValid) {
+      activityLabel = 'Last seen';
+      activityTime = item.lastActivity;
+    } else if (isActive && !isLastActivitySameAsLogin && lastActivityValid) {
+      activityLabel = 'Last activity';
+      activityTime = item.lastActivity;
+    }
+
+    return (
+      <View
+        key={item.id}
+        style={[
+          styles.loginItem,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            opacity: isRevoked ? 0.7 : 1,
+          },
+        ]}
+      >
+        <View style={styles.loginHeader}>
+          <View style={styles.deviceInfo}>
+            <View
               style={[
-                styles.statusText,
-                { color: getStatusColor(item.status) },
+                styles.deviceIconContainer,
+                { backgroundColor: colors.primary + '15' },
               ]}
             >
-              {item.status?.toUpperCase() || 'UNKNOWN'}
+              <Ionicons
+                name={getDeviceIcon(item.deviceType)}
+                size={22}
+                color={colors.primary}
+              />
+            </View>
+            <View style={styles.deviceDetails}>
+              <Text style={[styles.deviceName, { color: colors.text }]} numberOfLines={1}>
+                {deviceName}
+              </Text>
+              {secondaryInfo ? (
+                <Text style={[styles.deviceOS, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {secondaryInfo}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.statusContainer}>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: statusColor + '20' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: statusColor },
+                ]}
+              >
+                {statusLabel}
+              </Text>
+            </View>
+            {isCurrent && (
+              <View style={[styles.currentDeviceBadge, { backgroundColor: colors.primary + '15' }]}>
+                <Ionicons name="phone-portrait" size={10} color={colors.primary} />
+                <Text style={[styles.currentDevice, { color: colors.primary }]}>
+                  This device
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.loginDetails}>
+          <View style={styles.detailRow}>
+            <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
+            <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+              {activityLabel}: {formatDate(activityTime)}
             </Text>
           </View>
-          {item.isCurrent && (
-            <Text style={[styles.currentDevice, { color: colors.primary }]}>
-              Current Device
+
+          {displayLocation && displayLocation !== 'Unknown location' ? (
+            <View style={styles.detailRow}>
+              <Ionicons name="location-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {displayLocation}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.detailRow}>
+            <Ionicons name="globe-outline" size={15} color={colors.textSecondary} />
+            <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+              {ipDisplay}
             </Text>
-          )}
+          </View>
+
+          {connectionType && !isLocalhostIP(item.ipAddress) ? (
+            <View style={styles.detailRow}>
+              <Ionicons name="wifi-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+                {connectionType}
+              </Text>
+            </View>
+          ) : null}
         </View>
+
+        {isRevoked && (
+          <View style={[styles.revokedBadge, { backgroundColor: colors.error + '15', borderColor: colors.error + '30' }]}>
+            <Ionicons name="shield-checkmark-outline" size={14} color={colors.error} />
+            <Text style={[styles.revokedText, { color: colors.error }]}>
+              Session terminated
+            </Text>
+          </View>
+        )}
+
+        {isActive && !isCurrent && (
+          <TouchableOpacity
+            style={[
+              styles.logoutDeviceButton,
+              {
+                backgroundColor: colors.error + '10',
+                borderColor: colors.error + '30',
+                opacity: isLoggingOut ? 0.6 : 1,
+              },
+            ]}
+            onPress={() => logoutSpecificDevice(item.id, deviceName)}
+            disabled={isLoggingOut}
+          >
+            {isLoggingOut ? (
+              <ActivityIndicator size="small" color={colors.error} />
+            ) : (
+              <Ionicons name="log-out-outline" size={16} color={colors.error} />
+            )}
+            <Text
+              style={[
+                styles.logoutDeviceText,
+                { color: colors.error },
+              ]}
+            >
+              {isLoggingOut ? 'Logging out...' : 'Logout from this device'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
-
-      <View style={styles.loginDetails}>
-        <View style={styles.detailRow}>
-          <Ionicons name="time" size={16} color={colors.textSecondary} />
-          <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-            {formatDate(item.loginTime)}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Ionicons name="location" size={16} color={colors.textSecondary} />
-          <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-            {item.location || 'Unknown location'}
-          </Text>
-        </View>
-        
-        <View style={styles.detailRow}>
-          <Ionicons name="globe" size={16} color={colors.textSecondary} />
-          <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-            {item.ipAddress || 'Unknown IP'}
-          </Text>
-        </View>
-      </View>
-
-      {item.lastActivity && (
-        <Text style={[styles.lastActivity, { color: colors.textSecondary }]}>
-          Last activity: {formatDate(item.lastActivity)}
-        </Text>
-      )}
-
-      {/* Individual Device Logout Button - Only show for non-current devices */}
-      {!item.isCurrent && item.status === 'active' && (
-        <TouchableOpacity
-          style={[styles.logoutDeviceButton, { backgroundColor: colors.error + '10', borderColor: colors.error + '30' }]}
-          onPress={() => logoutSpecificDevice(item.id, item.deviceName || `${item.deviceType} Device`)}
-        >
-          <Ionicons name="log-out-outline" size={16} color={colors.error} />
-          <Text style={[styles.logoutDeviceText, { color: colors.error }]}>
-            Logout from this device
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>Login History</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Monitor your account access and security
+          Monitor your account access and active sessions
         </Text>
       </View>
 
-      {/* Security Actions */}
       <View style={[styles.securityActions, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: colors.error + '20' }]}
           onPress={handleLogoutAllDevices}
         >
-          <Ionicons name="log-out" size={20} color={colors.error} />
+          <Ionicons name="log-out-outline" size={20} color={colors.error} />
           <Text style={[styles.actionButtonText, { color: colors.error }]}>
             Logout All Other Devices
           </Text>
@@ -305,11 +504,14 @@ const LoginHistoryScreen = ({ navigation }) => {
 
       <ScrollView
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: spacing.md }]}>
               Loading login history...
             </Text>
           </View>
@@ -320,7 +522,7 @@ const LoginHistoryScreen = ({ navigation }) => {
               No login history found
             </Text>
             <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              Your login activities will appear here
+              Your login activities will appear here after you sign in
             </Text>
           </View>
         ) : (
@@ -381,7 +583,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: 12,
     borderWidth: 1,
-    borderLeftWidth: 4,
     marginBottom: spacing.md,
   },
   loginHeader: {
@@ -396,6 +597,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.md,
   },
+  deviceIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   deviceDetails: {
     flex: 1,
   },
@@ -409,16 +617,25 @@ const styles = StyleSheet.create({
   },
   statusContainer: {
     alignItems: 'flex-end',
+    gap: spacing.xs,
   },
   statusBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: 12,
-    marginBottom: spacing.xs,
   },
   statusText: {
     fontSize: typography.fontSize.xs,
     fontWeight: 'bold',
+    letterSpacing: 0.3,
+  },
+  currentDeviceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 8,
   },
   currentDevice: {
     fontSize: typography.fontSize.xs,
@@ -435,10 +652,24 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: typography.fontSize.sm,
+    flex: 1,
   },
   lastActivity: {
     fontSize: typography.fontSize.xs,
     fontStyle: 'italic',
+  },
+  revokedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+  },
+  revokedText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   logoutDeviceButton: {
     flexDirection: 'row',
@@ -458,6 +689,7 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: spacing.xl,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingText: {
     fontSize: typography.fontSize.base,

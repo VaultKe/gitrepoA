@@ -106,7 +106,7 @@ const SecuritySettingsScreen = ({ navigation }) => {
         </View>
 
         {/* Authentication Settings */}
-        <Card style={styles.section}>
+        <Card variant="outlined" style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Authentication
           </Text>
@@ -124,7 +124,7 @@ const SecuritySettingsScreen = ({ navigation }) => {
         </Card>
 
         {/* Security Monitoring */}
-        <Card style={styles.section}>
+        <Card variant="outlined" style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Security Monitoring
           </Text>
@@ -146,7 +146,7 @@ const SecuritySettingsScreen = ({ navigation }) => {
         </Card>
 
         {/* Security Actions */}
-        <Card style={styles.section}>
+        <Card variant="outlined" style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Security Actions
           </Text>
