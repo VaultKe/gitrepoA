@@ -11,6 +11,7 @@ import {
   Image,
   Linking,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -509,10 +510,20 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       setUploadingRules(true);
       const formData = new FormData();
 
+      // On web, FormData.append requires a Blob/File. A plain { uri, type, name }
+      // object is serialized to "[object Object]" and the server receives no file
+      // (→ 400 "No updatable fields provided"). Fetch the picked file into a Blob
+      // and wrap it as a File when running on web so the part is sent correctly.
       let fileToUpload;
-      if (document.uri.startsWith('data:')) {
-        const response = await fetch(document.uri);
-        const blob = await response.blob();
+      if (Platform.OS === 'web') {
+        const fileResponse = await fetch(document.uri);
+        const blob = await fileResponse.blob();
+        fileToUpload = new File([blob], document.name || 'rules.pdf', {
+          type: document.mimeType || 'application/pdf',
+        });
+      } else if (document.uri.startsWith('data:')) {
+        const fileResponse = await fetch(document.uri);
+        const blob = await fileResponse.blob();
         fileToUpload = new File([blob], document.name, { type: document.mimeType });
       } else {
         fileToUpload = {
@@ -754,7 +765,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     const user = member?.user || {};
     const email = user?.email || member?.email;
 
-    // Try multiple avatar sources
+    // Try multiple avatar sources from user object
+    const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || member?.avatar || member?.avatarUrl;
+
+    // Try to use provided avatar URL first
     if (avatarUrl && avatarUrl.trim()) {
       let fullAvatarUrl;
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
