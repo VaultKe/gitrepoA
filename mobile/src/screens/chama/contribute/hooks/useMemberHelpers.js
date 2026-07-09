@@ -55,7 +55,7 @@ const useMemberHelpers = () => {
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
         fullAvatarUrl = avatarUrl;
       } else {
-        fullAvatarUrl = `${ApiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+        fullAvatarUrl = `${ApiService.uploadBaseUrl}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
       }
 
       return (

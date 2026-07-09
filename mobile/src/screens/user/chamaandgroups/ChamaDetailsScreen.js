@@ -774,7 +774,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
         fullAvatarUrl = avatarUrl;
       } else {
-        fullAvatarUrl = `${ApiService.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+        fullAvatarUrl = `${ApiService.uploadBaseUrl}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
       }
 
       return (
@@ -1112,7 +1112,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       if (!rulesFilePath) return;
       const fullUrl = rulesFilePath.startsWith('http')
         ? rulesFilePath
-        : `${ApiService.baseURL}${rulesFilePath.startsWith('/') ? '' : '/'}${rulesFilePath}`;
+        : `${ApiService.uploadBaseUrl}${rulesFilePath.startsWith('/') ? '' : '/'}${rulesFilePath}`;
       try {
         const supported = await Linking.canOpenURL(fullUrl);
         if (supported) {
