@@ -1122,17 +1122,21 @@ const handleMpesaContribution = async (cleanChamaId) => {
     }).format(amount);
   };
 
-  // Helper function to generate a consistent avatar URL from email
-  const getAvatarFromEmail = (email, size = 50) => {
-    if (!email) return null;
-
-    // Use a more reliable avatar service that doesn't have CORS issues
-    // Extract initials from email for better avatar generation
-    const emailParts = email.split('@')[0];
-    const initials = emailParts.substring(0, 2).toUpperCase();
-
-    // Use ui-avatars.com which is more reliable and doesn't have CORS issues
-    return `https://ui-avatars.com/api/?name=${initials}&size=${size}&background=00D4AA&color=fff&format=png&rounded=true&bold=true`;
+  // Local, network-free avatar helpers. Avoid external avatar services entirely
+  // so nothing leaks into the browser network tab and there are no ORB/CORS failures.
+  const AVATAR_COLORS = ['#00D4AA', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#EC4899', '#6366F1'];
+  const getAvatarColor = (seed) => {
+    const str = String(seed || '');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    }
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  };
+  const getAvatarInitials = (item, user) => {
+    const first = (user?.first_name || item?.first_name || '').trim()[0] || '';
+    const last = (user?.last_name || item?.last_name || '').trim()[0] || '';
+    return (first + last).toUpperCase() || '?';
   };
 
   // Validate member selection for merry-go-round contributions
@@ -1263,18 +1267,15 @@ const handleMpesaContribution = async (cleanChamaId) => {
       );
     }
 
-    // Try generated avatar as fallback if email is available and not failed before
-    if (email && !failedAvatars.has(email)) {
-      const generatedAvatarUrl = getAvatarFromEmail(email, 40);
+    // No profile photo: render a local initials avatar (no network request).
+    const avatarSeed = item?.id || memberId || email;
+    if (avatarSeed) {
       return (
-        <Image
-          source={{ uri: generatedAvatarUrl }}
-          style={styles.memberAvatar}
-          onError={(error) => {
-            // Mark this email as failed to avoid repeated attempts
-            setFailedAvatars(prev => new Set([...prev, email]));
-          }}
-        />
+        <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(avatarSeed) }]}>
+          <Text style={[styles.memberInitials, { color: colors.white }]}>
+            {getAvatarInitials(item, user)}
+          </Text>
+        </View>
       );
     }
 

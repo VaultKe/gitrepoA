@@ -19,10 +19,12 @@ const useContributionHelpers = () => {
     }).format(amount);
   };
 
-  const getAvatarFromEmail = (email, size = 50) => {
-    if (!email) return null;
-    const emailParts = email.split('@')[0];
-    const initials = emailParts.substring(0, 2).toUpperCase();
+  // Generate a consistent avatar URL from a stable, non-PII identifier (user/member id).
+  // Avoids relying on the (now masked) email so avatars stay meaningful and no PII leaks.
+  const getAvatarSeed = (seed, size = 50) => {
+    if (!seed) return null;
+    const id = String(seed);
+    const initials = id.slice(0, 2).toUpperCase();
     return `https://ui-avatars.com/api/?name=${initials}&size=${size}&background=00D4AA&color=fff&format=png&rounded=true&bold=true`;
   };
 
@@ -151,7 +153,7 @@ const useContributionHelpers = () => {
 
   return {
     formatCurrency,
-    getAvatarFromEmail,
+    getAvatarSeed,
     getContributionTitle,
     getContributionSubtitle,
     getContributionIcon,

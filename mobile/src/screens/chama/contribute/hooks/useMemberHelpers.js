@@ -9,11 +9,21 @@ const useMemberHelpers = () => {
   const colors = getThemeColors(theme);
   const [failedAvatars, setFailedAvatars] = useState(new Set());
 
-  const getAvatarFromEmail = (email, size = 50) => {
-    if (!email) return null;
-    const emailParts = email.split('@')[0];
-    const initials = emailParts.substring(0, 2).toUpperCase();
-    return `https://ui-avatars.com/api/?name=${initials}&size=${size}&background=00D4AA&color=fff&format=png&rounded=true&bold=true`;
+  // Local, network-free avatar helpers. Avoid external avatar services entirely
+  // so nothing leaks into the browser network tab and there are no ORB/CORS failures.
+  const AVATAR_COLORS = ['#00D4AA', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#EC4899', '#6366F1'];
+  const getAvatarColor = (seed) => {
+    const str = String(seed || '');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    }
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  };
+  const getAvatarInitials = (item, user) => {
+    const first = (user?.first_name || item?.first_name || '').trim()[0] || '';
+    const last = (user?.last_name || item?.last_name || '').trim()[0] || '';
+    return (first + last).toUpperCase() || '?';
   };
 
   const getMemberName = (item) => {
@@ -56,16 +66,15 @@ const useMemberHelpers = () => {
       );
     }
 
-    if (email && !failedAvatars.has(email)) {
-      const generatedAvatarUrl = getAvatarFromEmail(email, 40);
+    // No profile photo: render a local initials avatar (no network request).
+    const avatarSeed = item?.id || user?.id || item?.user_id || email;
+    if (avatarSeed) {
       return (
-        <Image
-          source={{ uri: generatedAvatarUrl }}
-          style={styles.memberAvatar}
-          onError={(error) => {
-            setFailedAvatars(prev => new Set([...prev, email]));
-          }}
-        />
+        <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(avatarSeed) }]}>
+          <Text style={[styles.memberInitials, { color: colors.white }]}>
+            {getAvatarInitials(item, user)}
+          </Text>
+        </View>
       );
     }
 
@@ -81,7 +90,6 @@ const useMemberHelpers = () => {
   return {
     failedAvatars,
     setFailedAvatars,
-    getAvatarFromEmail,
     getMemberName,
     renderMemberAvatar,
   };

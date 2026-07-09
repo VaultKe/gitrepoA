@@ -719,12 +719,17 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     });
   };
 
-  // Helper function to generate a consistent avatar URL from email
-  const getAvatarFromEmail = (email, size = 60) => {
-    if (!email) return null;
-    // Use DiceBear API for consistent avatars based on email
-    const seed = encodeURIComponent(email.toLowerCase().trim());
-    return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&size=${size}&backgroundColor=random`;
+  // Pick a stable background color for a local initials avatar from a seed.
+  // Purely local (no network request) so nothing leaks into the browser
+  // network tab and there are no ORB/CORS failures.
+  const AVATAR_COLORS = ['#00D4AA', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#EC4899', '#6366F1'];
+  const getAvatarColor = (seed) => {
+    const str = String(seed || '');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    }
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
   };
 
   // Helper function to render member avatar with real profile photo
@@ -764,34 +769,19 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             source={{ uri: fullAvatarUrl }}
             style={styles.memberAvatar}
             onError={(error) => {
-              // Will fallback to initials or generated avatar
+              // Will fallback to local initials avatar
             }}
           />
         </TouchableOpacity>
       );
     }
 
-    
-    // Try generated avatar as fallback if email is available
-    if (email && email.trim()) {
-      const generatedAvatarUrl = getAvatarFromEmail(email, 60);
-      return (
-        <TouchableOpacity onPress={() => handleAvatarPress(member)}>
-          <Image
-            source={{ uri: generatedAvatarUrl }}
-            style={styles.memberAvatar}
-            onError={(error) => {
-              // Will fallback to initials
-            }}
-          />
-        </TouchableOpacity>
-      );
-    }
-
-    // Final fallback to initials
+    // No profile photo: render a local initials avatar. This avoids any external
+    // request (no ORB/CORS failures) and keeps PII/IDs out of the network tab.
+    const avatarColor = getAvatarColor(member?.id || user?.id || member?.user_id || email);
     return (
       <TouchableOpacity onPress={() => handleAvatarPress(member)}>
-        <View style={[styles.memberAvatar, { backgroundColor: colors.primary }]}>
+        <View style={[styles.memberAvatar, { backgroundColor: avatarColor }]}>
           <Text style={[styles.memberInitials, { color: colors.white }]}>
             {initials || '?'}
           </Text>
