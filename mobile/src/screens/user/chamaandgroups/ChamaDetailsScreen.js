@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -157,6 +157,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [chatRoomLoading, setChatRoomLoading] = useState(false);
   const [uploadingRules, setUploadingRules] = useState(false);
 
+  // Guard against concurrent / repeated loads (focus + param changes can fire rapidly)
+  const loadingRef = useRef(false);
+  const lastLoadedAtRef = useRef(0);
+
   // Reset state and reload data when chamaId changes
   useEffect(() => {
     if (chamaId) {
@@ -178,6 +182,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   // Also reload when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      // Skip if a load just happened (avoids duplicate reloads on rapid focus events)
+      if (Date.now() - lastLoadedAtRef.current < 2000) {
+        return;
+      }
       if (chamaId) {
         loadChamaDetails();
       }
@@ -187,6 +195,8 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   }, [navigation, chamaId]);
 
   const loadChamaDetails = async (targetChamaId = chamaId) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
       // Ensure we have a valid chamaId
       if (!targetChamaId) {
@@ -200,14 +210,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       try {
         chamaResponse = await ApiService.getChamaById(targetChamaId);
       } catch (chamaError) {
-        console.error('[ChamaDetails] getChamaById error:', chamaError);
         chamaResponse = { success: false, data: null };
       }
 
       try {
         membersResponse = await ApiService.getChamaMembers(targetChamaId);
       } catch (membersError) {
-        console.error('[ChamaDetails] getChamaMembers error:', membersError);
         membersResponse = { success: false, data: [] };
       }
 
@@ -227,7 +235,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         );
         setMembers(uniqueMembers);
         const currentUserId = String(user?.id);
-        console.log('[ChamaDetails] currentUserId:', currentUserId, 'uniqueMembers count:', uniqueMembers.length);
 
         membership = uniqueMembers.find(member => {
           const memberUserId = String(
@@ -242,9 +249,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                }
           return matches;
         });
-        console.log('[ChamaDetails] membership from members list:', !!membership, membership?.role);
       } else {
-        console.log('[ChamaDetails] getChamaMembers failed or returned no data, membersResponse:', membersResponse);
         setMembers([]);
       }
 
@@ -267,7 +272,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           } else {
           }
         } catch (myChamasError) {
-          console.error('[ChamaDetails] getUserChamas error:', myChamasError);
         }
       }
 
@@ -276,7 +280,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         const currentUserId = String(user?.id);
         const creatorId = String(chamaResponse.data.createdBy);
         if (creatorId === currentUserId) {
-          console.log('[ChamaDetails] user is chama creator, assigning chairperson');
           membership = {
             id: 'creator',
             user_id: currentUserId,
@@ -287,8 +290,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
 
       setUserMembership(membership);
-      console.log('[ChamaDetails] final userMembership:', !!membership, membership?.role);
-
       // Load additional data in background (non-blocking)
       Promise.all([
         // Load user transactions
@@ -366,6 +367,9 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       setLoans([]);
 
     } catch (error) {
+    } finally {
+      loadingRef.current = false;
+      lastLoadedAtRef.current = Date.now();
     }
   };
 
@@ -481,7 +485,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       console.error('[ChamaDetails] Error creating chat room:', error);
       Alert.alert('Error', error.message || 'Failed to create chat room');
     } finally {
-      console.log('[ChamaDetails] Chat room loading finished');
       setChatRoomLoading(false);
     }
   };

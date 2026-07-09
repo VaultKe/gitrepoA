@@ -221,17 +221,18 @@ function UserTabNavigator() {
       />
       <Tab.Screen
         name="ChamaTransactionsScreen"
-        component={(props) => (
-          <ChamaProvider chamaId={props.route.params?.chamaId} chama={props.route.params?.chama}>
-            <ChamaTransactionsScreen {...props} />
-          </ChamaProvider>
-        )}
         options={{
           title: 'Transactions',
           tabBarButton: () => null,
         }}
         initialParams={{ fromUserDashboard: true }}
-      />
+      >
+        {(props) => (
+          <ChamaProvider chamaId={props.route.params?.chamaId} chama={props.route.params?.chama}>
+            <ChamaTransactionsScreen {...props} />
+          </ChamaProvider>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="ChamaMembersScreen"
         component={ChamaMembersScreen}

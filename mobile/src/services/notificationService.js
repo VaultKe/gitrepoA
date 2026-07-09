@@ -11,10 +11,11 @@ class NotificationService {
   }
 
   async initialize() {
-    if (this.isInitialized) return;
+    if (this.isInitialized) return true;
     this.setupNotificationHandler();
     this.setupAppStateListener();
     this.isInitialized = true;
+    return true;
   }
 
   setupAppStateListener() {
