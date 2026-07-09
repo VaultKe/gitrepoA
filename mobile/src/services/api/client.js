@@ -75,7 +75,7 @@ const makeRequest = async (endpoint, options = {}) => {
       typeof options.body.getParts === 'function' ||
       (Array.isArray(options.body._parts)) ||
       (options.body.constructor && options.body.constructor.name === 'FormData')));
-  const deviceInfo = getDeviceInfo();
+  const deviceInfo = await getDeviceInfo();
 
   // Auth endpoints should return unmasked data so the app can use real emails/phones
   const isAuthEndpoint = endpoint.startsWith('/auth/') || endpoint.startsWith('/auth/refresh');
@@ -87,10 +87,16 @@ const makeRequest = async (endpoint, options = {}) => {
       ...(token && { Authorization: `Bearer ${token}` }),
       'X-Timezone': sanitizeHeaderValue(deviceInfo.timezone),
       'X-Language': sanitizeHeaderValue(deviceInfo.language),
+      'X-Locale': sanitizeHeaderValue(deviceInfo.locale),
+      'X-Device-Id': sanitizeHeaderValue(deviceInfo.deviceId),
       'X-Device-Type': sanitizeHeaderValue(deviceInfo.deviceType),
       'X-Device-Name': sanitizeHeaderValue(deviceInfo.deviceName),
       'X-Browser-Name': sanitizeHeaderValue(deviceInfo.browserName),
       'X-OS-Name': sanitizeHeaderValue(deviceInfo.osName),
+      'X-OS-Version': sanitizeHeaderValue(deviceInfo.osVersion),
+      'X-App-Version': sanitizeHeaderValue(deviceInfo.appVersion),
+      'X-Manufacturer': sanitizeHeaderValue(deviceInfo.manufacturer),
+      'X-Model': sanitizeHeaderValue(deviceInfo.model),
       ...(deviceInfo.screenResolution && { 'X-Screen-Resolution': sanitizeHeaderValue(deviceInfo.screenResolution) }),
       ...(deviceInfo.connectionType && { 'X-Connection-Type': sanitizeHeaderValue(deviceInfo.connectionType) }),
       ...options.headers,

@@ -15,11 +15,17 @@ import (
 
 // DeviceInfo represents device information extracted from request
 type DeviceInfo struct {
-	DeviceType string
-	DeviceName string
-	OS         string
-	Browser    string
-	Location   string
+	DeviceUID   string
+	DeviceType  string
+	DeviceName  string
+	OS          string
+	OSVersion   string
+	AppVersion  string
+	Manufacturer string
+	Model       string
+	Locale      string
+	Browser     string
+	Location    string
 }
 
 // extractDeviceInfo extracts device information from request headers
@@ -143,14 +149,23 @@ func extractDeviceInfo(c *gin.Context) DeviceInfo {
 		}
 	}
 
+	frontendDeviceUID := c.GetHeader("X-Device-Id")
 	frontendDeviceType := c.GetHeader("X-Device-Type")
 	frontendDeviceName := c.GetHeader("X-Device-Name")
 	frontendBrowserName := c.GetHeader("X-Browser-Name")
 	frontendOSName := c.GetHeader("X-OS-Name")
+	frontendOSVersion := c.GetHeader("X-OS-Version")
+	frontendAppVersion := c.GetHeader("X-App-Version")
+	frontendManufacturer := c.GetHeader("X-Manufacturer")
+	frontendModel := c.GetHeader("X-Model")
+	frontendLocale := c.GetHeader("X-Locale")
 
-	fmt.Printf("Received device headers - Type: '%s', Name: '%s', Browser: '%s', OS: '%s'\n",
-		frontendDeviceType, frontendDeviceName, frontendBrowserName, frontendOSName)
+	fmt.Printf("Received device headers - UID: '%s', Type: '%s', Name: '%s', Browser: '%s', OS: '%s', OSVer: '%s', AppVer: '%s', Mfr: '%s', Model: '%s', Locale: '%s'\n",
+		frontendDeviceUID, frontendDeviceType, frontendDeviceName, frontendBrowserName, frontendOSName, frontendOSVersion, frontendAppVersion, frontendManufacturer, frontendModel, frontendLocale)
 
+	if frontendDeviceUID != "" {
+		deviceInfo.DeviceUID = frontendDeviceUID
+	}
 	if frontendDeviceType != "" {
 		deviceInfo.DeviceType = frontendDeviceType
 	}
@@ -162,6 +177,21 @@ func extractDeviceInfo(c *gin.Context) DeviceInfo {
 	}
 	if frontendOSName != "" {
 		deviceInfo.OS = frontendOSName
+	}
+	if frontendOSVersion != "" {
+		deviceInfo.OSVersion = frontendOSVersion
+	}
+	if frontendAppVersion != "" {
+		deviceInfo.AppVersion = frontendAppVersion
+	}
+	if frontendManufacturer != "" {
+		deviceInfo.Manufacturer = frontendManufacturer
+	}
+	if frontendModel != "" {
+		deviceInfo.Model = frontendModel
+	}
+	if frontendLocale != "" {
+		deviceInfo.Locale = frontendLocale
 	}
 
 	ip := c.ClientIP()
@@ -392,6 +422,7 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		err := RecordLoginSession(
 			db.(*sql.DB),
 			user.ID,
+			deviceInfo.DeviceUID,
 			deviceInfo.DeviceType,
 			deviceInfo.DeviceName,
 			deviceInfo.OS,
@@ -403,6 +434,29 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 			fmt.Printf("Failed to record login session: %v\n", err)
 		} else {
 			fmt.Printf("Successfully called RecordLoginSession for user %s with IP %s\n", user.ID, clientIP)
+		}
+
+		// Keep the registered-devices registry accurate on every login. This
+		// powers login history and surfaces unrecognised devices that could
+		// indicate account takeover.
+		isNewDevice, devErr := UpsertUserDevice(
+			db.(*sql.DB),
+			user.ID,
+			deviceInfo.DeviceUID,
+			deviceInfo.DeviceName,
+			deviceInfo.DeviceType,
+			clientIP,
+			deviceInfo.OSVersion,
+			deviceInfo.AppVersion,
+			deviceInfo.Manufacturer,
+			deviceInfo.Model,
+			deviceInfo.Locale,
+			c.GetHeader("X-Timezone"),
+		)
+		if devErr != nil {
+			fmt.Printf("Failed to upsert user device for user %s: %v\n", user.ID, devErr)
+		} else if isNewDevice {
+			fmt.Printf("New device registered for user %s: %s (%s)\n", user.ID, deviceInfo.DeviceName, clientIP)
 		}
 	} else {
 		fmt.Printf("Database not available in context for recording login session\n")

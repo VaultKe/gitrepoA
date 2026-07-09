@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 )
 
 func MigrateCore(db *sql.DB) error {
@@ -34,8 +35,69 @@ func MigrateCore(db *sql.DB) error {
 	if err := createRefreshTokensTable(db); err != nil {
 		return err
 	}
+	if err := enrichDevicesTable(db); err != nil {
+		return err
+	}
+	if err := enrichLoginSessionsTable(db); err != nil {
+		return err
+	}
 
 	log.Println("Core migrations completed successfully")
+	return nil
+}
+
+// enrichDevicesTable adds the device-detail columns introduced for accurate
+// device capture / account-takeover detection to databases that were created
+// before these columns existed. CREATE TABLE IF NOT EXISTS above will not
+// modify an already-existing table, so we ALTER it here.
+func enrichDevicesTable(db *sql.DB) error {
+	alterColumns := []string{
+		"ip_address TEXT",
+		"os_version TEXT",
+		"app_version TEXT",
+		"manufacturer TEXT",
+		"model TEXT",
+		"locale TEXT",
+		"timezone TEXT",
+		"last_login_at TIMESTAMP",
+	}
+	for _, col := range alterColumns {
+		name := strings.Fields(col)[0]
+		_, err := db.Exec(fmt.Sprintf("ALTER TABLE devices ADD COLUMN IF NOT EXISTS %s", col))
+		if err != nil {
+			return fmt.Errorf("failed to add column %s to devices: %w", name, err)
+		}
+	}
+
+	// Ensure every device row carries a stable device_uid in its primary key.
+	// Historically the `id` column was a random uuid; the app now sends a stable
+	// per-device id which we store as `id`. Rows without one keep their existing id.
+	_, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_user_device_uid ON devices (user_id, id)`)
+	if err != nil {
+		return fmt.Errorf("failed to create devices uid index: %w", err)
+	}
+	return nil
+}
+
+// enrichLoginSessionsTable adds the device_uid column used to correlate a
+// login session with a registered device. The login_sessions table is created
+// lazily on first login, so we only alter it if it already exists.
+func enrichLoginSessionsTable(db *sql.DB) error {
+	var exists int
+	if err := db.QueryRow(
+		"SELECT 1 FROM information_schema.tables WHERE table_name = 'login_sessions'",
+	).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("failed to check login_sessions existence: %w", err)
+	}
+	if exists == 0 {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS device_uid TEXT`); err != nil {
+		return fmt.Errorf("failed to add device_uid to login_sessions: %w", err)
+	}
 	return nil
 }
 
@@ -75,10 +137,18 @@ CREATE TABLE IF NOT EXISTS devices (
     user_id TEXT NOT NULL,
     device_id INTEGER NOT NULL,
     device_name TEXT,
-    device_type TEXT, -- 'mobile', 'desktop', 'web'
+    device_type TEXT, -- 'mobile', 'tablet', 'desktop', 'web'
+    ip_address TEXT,
+    os_version TEXT,
+    app_version TEXT,
+    manufacturer TEXT,
+    model TEXT,
+    locale TEXT,
+    timezone TEXT,
     registration_id INTEGER,
     signed_pre_key_id INTEGER,
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

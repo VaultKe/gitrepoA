@@ -207,7 +207,9 @@ const LoginHistoryScreen = ({ navigation }) => {
               {item.deviceName || `${item.deviceType || 'Unknown'} Device`}
             </Text>
             <Text style={[styles.deviceOS, { color: colors.textSecondary }]}>
-              {item.operatingSystem} • {item.browser}
+              {[item.operatingSystem, item.osVersion, item.browser]
+                .filter(Boolean)
+                .join(' ')}
             </Text>
           </View>
         </View>
@@ -253,7 +255,7 @@ const LoginHistoryScreen = ({ navigation }) => {
         <View style={styles.detailRow}>
           <Ionicons name="globe" size={16} color={colors.textSecondary} />
           <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-            {item.ipAddress}
+            {item.ipAddress || 'Unknown IP'}
           </Text>
         </View>
       </View>

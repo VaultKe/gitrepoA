@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const corsAllowHeaders = "Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-CSRF-Token, X-File-Name, X-File-Size, X-Timezone, X-Language, X-Screen-Resolution, X-Device-Type, X-Device-Name, X-Browser-Name, X-OS-Name, X-Connection-Type"
+const corsAllowHeaders = "Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-CSRF-Token, X-File-Name, X-File-Size, X-Timezone, X-Language, X-Locale, X-Screen-Resolution, X-Device-Id, X-Device-Type, X-Device-Name, X-Browser-Name, X-OS-Name, X-OS-Version, X-App-Version, X-Manufacturer, X-Model, X-Connection-Type"
 
 const corsExposeHeaders = "Content-Length, Authorization, Content-Disposition"
 

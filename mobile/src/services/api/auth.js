@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, REQUEST_TIMEOUT } from '../../config/environment';
+import { getDeviceInfo as collectDeviceInfo } from '../deviceInfo';
 
 const getAuthToken = async () => {
   try {
@@ -52,94 +53,33 @@ const sanitizeHeaderValue = (value) => {
     .substring(0, 200);
 };
 
-const getDeviceInfo = () => {
-  if (typeof navigator === 'undefined') {
+// Delegates to the richer device-info collector that captures real hardware
+// details (model, manufacturer, OS version, a stable per-device id, etc.)
+// using Expo device APIs. Returns a promise.
+const getDeviceInfo = async () => {
+  try {
+    return await collectDeviceInfo();
+  } catch (e) {
     return {
+      deviceId: 'unknown',
       userAgent: 'VaultKe-Mobile-App/1.0',
       platform: 'mobile',
       language: 'en',
+      locale: 'en',
       timezone: 'UTC',
       deviceType: 'mobile',
       deviceName: 'Mobile Device - VaultKe App',
       browserName: 'VaultKe App',
       osName: 'Mobile OS',
+      osVersion: '',
+      manufacturer: '',
+      brand: '',
+      model: '',
+      appVersion: '',
+      screenResolution: '',
+      connectionType: 'unknown',
     };
   }
-
-  const userAgent = navigator.userAgent || 'VaultKe-App/1.0';
-  let deviceInfo = {
-    userAgent: userAgent,
-    language: navigator.language || 'en',
-    timezone: 'UTC',
-    deviceType: 'unknown',
-    deviceName: 'Unknown Device',
-    browserName: 'Unknown Browser',
-    osName: 'Unknown OS',
-  };
-
-  const ua = userAgent.toLowerCase();
-  if (/mobile|android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua)) {
-    deviceInfo.deviceType = 'mobile';
-    if (/iphone/i.test(ua)) {
-      deviceInfo.deviceName = 'iPhone';
-      deviceInfo.osName = 'iOS';
-    } else if (/ipad/i.test(ua)) {
-      deviceInfo.deviceName = 'iPad';
-      deviceInfo.osName = 'iPadOS';
-    } else if (/android/i.test(ua)) {
-      deviceInfo.deviceName = 'Android Device';
-      deviceInfo.osName = 'Android';
-    }
-  } else {
-    deviceInfo.deviceType = 'desktop';
-    if (/windows/i.test(ua)) {
-      deviceInfo.deviceName = 'Windows PC';
-      deviceInfo.osName = 'Windows';
-    } else if (/macintosh|mac os x/i.test(ua)) {
-      deviceInfo.deviceName = 'Mac';
-      deviceInfo.osName = 'macOS';
-    } else if (/linux/i.test(ua)) {
-      deviceInfo.deviceName = 'Linux PC';
-      deviceInfo.osName = 'Linux';
-    }
-  }
-
-  if (/edg\//i.test(ua)) {
-    deviceInfo.browserName = 'Microsoft Edge';
-  } else if (/chrome/i.test(ua) && !/edg/i.test(ua)) {
-    deviceInfo.browserName = 'Google Chrome';
-  } else if (/firefox/i.test(ua)) {
-    deviceInfo.browserName = 'Mozilla Firefox';
-  } else if (/safari/i.test(ua) && !/chrome/i.test(ua)) {
-    deviceInfo.browserName = 'Safari';
-  } else if (/opera/i.test(ua)) {
-    deviceInfo.browserName = 'Opera';
-  }
-
-  deviceInfo.deviceName = `${deviceInfo.deviceName} - ${deviceInfo.browserName}`;
-
-  try {
-    deviceInfo.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  } catch (e) {
-    deviceInfo.timezone = 'UTC';
-  }
-
-  try {
-    if (typeof screen !== 'undefined') {
-      deviceInfo.screenResolution = `${screen.width}x${screen.height}`;
-      deviceInfo.deviceName = `${deviceInfo.deviceName} - ${deviceInfo.screenResolution}`;
-    }
-  } catch (e) {
-  }
-
-  try {
-    if (navigator.connection) {
-      deviceInfo.connectionType = navigator.connection.effectiveType || 'unknown';
-    }
-  } catch (e) {
-  }
-
-  return deviceInfo;
 };
 
 const clearLargeUserData = async () => {
