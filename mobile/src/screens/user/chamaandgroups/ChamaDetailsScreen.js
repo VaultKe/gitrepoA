@@ -503,7 +503,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       });
       if (result.canceled || !result.assets || result.assets.length === 0) return;
       const document = result.assets[0];
-      if (document.mimeType && document.mimeType !== 'application/pdf') {
+      // Accept only real PDFs. Some platforms misreport mimeType, so also
+      // validate by extension — a .docx renamed to .pdf can't be rendered
+      // in-app and would just download.
+      const docName = document.name || '';
+      const isPdf = document.mimeType === 'application/pdf' || docName.toLowerCase().endsWith('.pdf');
+      if (!isPdf) {
         Toast.show({ type: 'error', text1: 'Invalid file type', text2: 'Only PDF files are accepted for rules' });
         return;
       }

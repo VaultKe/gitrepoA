@@ -235,7 +235,7 @@ const VideoPlayerScreen = ({ navigation, route }) => {
         console.error('API_BASE_URL is not configured');
         return { uri: videoUrl };
       }
-      const fullUrl = `${API_BASE_URL}${videoUrl}`;
+      const fullUrl = `${API_BASE_URL.replace(/\/api\/v1\/?$/, '')}${videoUrl}`;
       console.log('✅ Local video detected, using full URL:', fullUrl);
       return { uri: fullUrl };
     }
