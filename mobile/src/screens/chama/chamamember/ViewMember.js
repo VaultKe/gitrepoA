@@ -214,7 +214,6 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         text1: 'Error',
         text2: 'Failed to load member details',
       });
-      // Only navigate back if we have nothing to display (e.g. no cached member)
       if (!memberData) {
         navigation.goBack();
       }
@@ -1078,8 +1077,12 @@ const [receiptLoading, setReceiptLoading] = useState(false);
 
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
-      {!memberData ? (
-        loading ? (
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {!memberData ? (
           <View style={styles.inlineLoadingContainer}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={[styles.inlineLoadingText, { color: colors.textSecondary }]}>
@@ -1087,187 +1090,166 @@ const [receiptLoading, setReceiptLoading] = useState(false);
             </Text>
           </View>
         ) : (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={64} color={colors.error} />
-            <Text style={[styles.errorTitle, styles.errorTitleText]}>
-              Member Not Found
-            </Text>
-            <Text style={[styles.errorText, styles.errorTextSecondary]}>
-              The member you're looking for could not be found.
-            </Text>
-            <TouchableOpacity
-              style={[styles.backButton, styles.goBackButton]}
-              onPress={() => navigation.goBack()}
+          <>
+            {/* Member Profile Card */}
+            <Card
+              variant="outlined"
+              padding="none"
+              style={[styles.profileCard, imageExpanded && styles.framelessCard]}
             >
-              <Text style={styles.backButtonText}>Go Back</Text>
-            </TouchableOpacity>
-          </View>
-        )
-      ) : (
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Member Profile Card */}
-        <Card
-          variant="outlined"
-          padding="none"
-          style={[styles.profileCard, imageExpanded && styles.framelessCard]}
-        >
-          {imageExpanded ? (
-            // Expanded layout: Frameless image at top, then info below
-            <View style={styles.framelessProfileLayout}>
-              {/* Minimize button positioned absolutely */}
-              <TouchableOpacity onPress={handleImagePress} style={styles.minimizeButton}>
-                <Ionicons name="close" size={24} color={colors.white} />
-              </TouchableOpacity>
+              {imageExpanded ? (
+                // Expanded layout: Frameless image at top, then info below
+                <View style={styles.framelessProfileLayout}>
+                  {/* Minimize button positioned absolutely */}
+                  <TouchableOpacity onPress={handleImagePress} style={styles.minimizeButton}>
+                    <Ionicons name="close" size={24} color={colors.white} />
+                  </TouchableOpacity>
 
-              {/* Frameless Image Section - touches top, left, and right edges */}
-              <View style={styles.framelessImageContainer}>
-                {renderMemberAvatar(true)}
-              </View>
+                  {/* Frameless Image Section - touches top, left, and right edges */}
+                  <View style={styles.framelessImageContainer}>
+                    {renderMemberAvatar(true)}
+                  </View>
 
-              {/* Profile Info Section - Below the image */}
-              <View style={styles.framelessProfileInfo}>
-                
-                <Text style={[styles.minimizeHint, styles.minimizeHintSecondary]}>
-                  Tap the × to minimize
-                </Text>
-              </View>
-            </View>
-          ) : (
-            // Normal layout: Side-by-side
-            <View style={styles.profileHeader}>
-              <TouchableOpacity
-                style={styles.avatarContainer}
-                onPress={handleImagePress}
-              >
-                {renderMemberAvatar()}
-
-                {/* Expand icon overlay */}
-                <View style={styles.expandImageOverlay}>
-                  <Ionicons name="expand" size={16} color={colors.white} />
-                </View>
-              </TouchableOpacity>
-
-              <View style={styles.profileInfo}>
-                <Text style={[styles.memberName, styles.memberNameText]}>
-                  {memberData.user?.first_name || memberData.first_name} {memberData.user?.last_name || memberData.last_name}
-                </Text>
-                <Text style={[styles.memberEmail, styles.memberEmailSecondary]}>
-                  {memberData.user?.email || memberData.email}
-                </Text>
-              </View>
-            </View>
-          )}
-        </Card>
-        {memberStats && (
-          <Card variant="outlined" padding="none" style={styles.statsCard}>
-            <View style={styles.statsContent}>
-              <Text style={styles.statsTitle}>
-                Member Statistics
-              </Text>
-
-              <View style={styles.statsGrid}>
-                <View style={styles.statItem}>
-                  <View style={styles.statCard}>
-                    <View style={styles.statIconRow}>
-                      <View style={styles.statIconBoxPrimary}>
-                        <Ionicons name="wallet" size={20} color={colors.primary} />
-                      </View>
-                      <Text style={styles.statLabel}>Total Contributions</Text>
-                    </View>
-                    <Text style={styles.statValue}>{formatCurrency(memberStats.total_contributions)}</Text>
+                  {/* Profile Info Section - Below the image */}
+                  <View style={styles.framelessProfileInfo}>
+                    
+                    <Text style={[styles.minimizeHint, styles.minimizeHintSecondary]}>
+                      Tap the × to minimize
+                    </Text>
                   </View>
                 </View>
-                <View style={styles.statItem}>
-                  <View style={styles.statCard}>
-                    <View style={styles.statIconRow}>
-                      <View style={styles.statIconBoxSuccess}>
-                        <Ionicons name="card" size={20} color={colors.success} />
-                      </View>
-                      <Text style={styles.statLabel}>Loans Taken</Text>
+              ) : (
+                // Normal layout: Side-by-side
+                <View style={styles.profileHeader}>
+                  <TouchableOpacity
+                    style={styles.avatarContainer}
+                    onPress={handleImagePress}
+                  >
+                    {renderMemberAvatar()}
+
+                    {/* Expand icon overlay */}
+                    <View style={styles.expandImageOverlay}>
+                      <Ionicons name="expand" size={16} color={colors.white} />
                     </View>
-                    <Text style={styles.statValue}>{memberStats.loans_count || 0}</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.profileInfo}>
+                    <Text style={[styles.memberName, styles.memberNameText]}>
+                      {memberData.user?.first_name || memberData.first_name} {memberData.user?.last_name || memberData.last_name}
+                    </Text>
+                    <Text style={[styles.memberEmail, styles.memberEmailSecondary]}>
+                      {memberData.user?.email || memberData.email}
+                    </Text>
                   </View>
                 </View>
-                <View style={styles.statItem}>
-                  <View style={styles.statCard}>
-                    <View style={styles.statIconRow}>
-                      <View style={styles.statIconBoxWarning}>
-                        <Ionicons name="calendar" size={20} color={colors.warning} />
+              )}
+            </Card>
+            {memberStats && (
+              <Card variant="outlined" padding="none" style={styles.statsCard}>
+                <View style={styles.statsContent}>
+                  <Text style={styles.statsTitle}>
+                    Member Statistics
+                  </Text>
+
+                  <View style={styles.statsGrid}>
+                    <View style={styles.statItem}>
+                      <View style={styles.statCard}>
+                        <View style={styles.statIconRow}>
+                          <View style={styles.statIconBoxPrimary}>
+                            <Ionicons name="wallet" size={20} color={colors.primary} />
+                          </View>
+                          <Text style={styles.statLabel}>Total Contributions</Text>
+                        </View>
+                        <Text style={styles.statValue}>{formatCurrency(memberStats.total_contributions)}</Text>
                       </View>
-                      <Text style={styles.statLabel}>Meetings Attended</Text>
                     </View>
-                    <Text style={styles.statValue}>{memberStats.meetings_attended || 0}</Text>
+                    <View style={styles.statItem}>
+                      <View style={styles.statCard}>
+                        <View style={styles.statIconRow}>
+                          <View style={styles.statIconBoxSuccess}>
+                            <Ionicons name="card" size={20} color={colors.success} />
+                          </View>
+                          <Text style={styles.statLabel}>Loans Taken</Text>
+                        </View>
+                        <Text style={styles.statValue}>{memberStats.loans_count || 0}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.statItem}>
+                      <View style={styles.statCard}>
+                        <View style={styles.statIconRow}>
+                          <View style={styles.statIconBoxWarning}>
+                            <Ionicons name="calendar" size={20} color={colors.warning} />
+                          </View>
+                          <Text style={styles.statLabel}>Meetings Attended</Text>
+                        </View>
+                        <Text style={styles.statValue}>{memberStats.meetings_attended || 0}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.statItem}>
+                      <View style={styles.statCard}>
+                        <View style={styles.statIconRow}>
+                          <View style={styles.statIconBoxInfo}>
+                            <Ionicons name="star" size={20} color={colors.info} />
+                          </View>
+                          <Text style={styles.statLabel}>Member Rating</Text>
+                        </View>
+                        <Text style={styles.statValue}>{memberStats.rating || 0}/5</Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
-                <View style={styles.statItem}>
-                  <View style={styles.statCard}>
-                    <View style={styles.statIconRow}>
-                      <View style={styles.statIconBoxInfo}>
-                        <Ionicons name="star" size={20} color={colors.info} />
-                      </View>
-                      <Text style={styles.statLabel}>Member Rating</Text>
-                    </View>
-                    <Text style={styles.statValue}>{memberStats.rating || 0}/5</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </Card>
-        )}
+              </Card>
+            )}
 
 {/* Combined Member Details & Disbursement Approvals Card */}
-        {(userRole === 'chairperson' || userRole === 'secretary' || userRole === 'treasurer' || 
-          approvalHistory.some(item => item.randomVerifierId === user?.id || item.verifierId === user?.id)) && (
-          <Card variant="outlined" padding="none" style={styles.statsCard}>
-            <View style={isDesktop ? styles.combinedCardRow : styles.combinedCardColumn}>
-              {/* Member Details Section */}
-              <View style={isDesktop ? styles.combinedCardLeft : styles.combinedCardFull}>
-                {renderMemberDetailsSection(true)}
-              </View>
+            {(userRole === 'chairperson' || userRole === 'secretary' || userRole === 'treasurer' || 
+              approvalHistory.some(item => item.randomVerifierId === user?.id || item.verifierId === user?.id)) && (
+              <Card variant="outlined" padding="none" style={styles.statsCard}>
+                <View style={isDesktop ? styles.combinedCardRow : styles.combinedCardColumn}>
+                  {/* Member Details Section */}
+                  <View style={isDesktop ? styles.combinedCardLeft : styles.combinedCardFull}>
+                    {renderMemberDetailsSection(true)}
+                  </View>
 
-              {/* Divider for desktop */}
-              {isDesktop && (
-                <View style={styles.combinedDivider} />
-              )}
+                  {/* Divider for desktop */}
+                  {isDesktop && (
+                    <View style={styles.combinedDivider} />
+                  )}
 
-              {/* Disbursement Approvals Section */}
-              <View style={isDesktop ? styles.combinedCardRight : styles.combinedCardFull}>
-                {renderDisbursementApprovalsSection(true)}
-              </View>
-            </View>
-          </Card>
+                  {/* Disbursement Approvals Section */}
+                  <View style={isDesktop ? styles.combinedCardRight : styles.combinedCardFull}>
+                    {renderDisbursementApprovalsSection(true)}
+                  </View>
+                </View>
+              </Card>
+            )}
+
+            {/* Service Fee Payments */}
+            {renderServiceFeeSection()}
+
+            {/* Actions */}
+            {userRole === 'chairperson' && memberData.user_id !== user.id && (
+              <Card variant="outlined" padding="none" style={styles.actionsCard}>
+                <View style={styles.actionsCardContent}>
+                  <Text style={[styles.sectionTitle, styles.sectionTitleText]}>
+                    Actions
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.removeButton, styles.removeButtonOutline]}
+                    onPress={handleRemoveMember}
+                  >
+                    <Ionicons name="person-remove" size={20} color={colors.error} />
+                    <Text style={[styles.actionButtonText, styles.actionButtonTextError]}>
+                      Remove from Chama
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            )}
+          </>
         )}
-
-        {/* Service Fee Payments */}
-        {renderServiceFeeSection()}
-
-        {/* Actions */}
-        {userRole === 'chairperson' && memberData.user_id !== user.id && (
-          <Card variant="outlined" padding="none" style={styles.actionsCard}>
-            <View style={styles.actionsCardContent}>
-              <Text style={[styles.sectionTitle, styles.sectionTitleText]}>
-                Actions
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.actionButton, styles.removeButton, styles.removeButtonOutline]}
-                onPress={handleRemoveMember}
-              >
-                <Ionicons name="person-remove" size={20} color={colors.error} />
-                <Text style={[styles.actionButtonText, styles.actionButtonTextError]}>
-                  Remove from Chama
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
-        )}
-
       </ScrollView>
-      )}
 
       <OTPVerificationModal
         visible={showOTPModal}
@@ -1333,42 +1315,6 @@ const createStyles = (colors) => StyleSheet.create({
   },
   inlineLoadingText: {
     fontSize: 14,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginTop: 20,
-    marginBottom: 12,
-  },
-  errorTitleText: {
-    color: colors.text,
-  },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 30,
-  },
-  errorTextSecondary: {
-    color: colors.textSecondary,
-  },
-  backButton: {
-    padding: 8,
-    marginRight: 8,
-  },
-  goBackButton: {
-    backgroundColor: colors.primary,
-  },
-  backButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
   },
   profileCard: {
     padding: 20,
