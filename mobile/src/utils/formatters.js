@@ -264,11 +264,17 @@ export const maskSensitiveData = (data) => {
 // which then breaks any subsequent API request that uses the ID as a path param.
 const UUID_REGEX = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
+// Matches prefixed API resource identifiers like mgr541202..., chm_abc123...
+// The phone-number regex below would otherwise mangle the digit suffix of such
+// IDs, breaking subsequent API requests that use them as path params.
+const PREFIXED_API_ID_REGEX = /^[a-z]{2,}[a-z0-9_-]*\d[a-z0-9_-]*$/i;
+
 const maskString = (value) => {
   if (typeof value !== 'string') return value;
-  // Never mask UUIDs / IDs. They are not PII we need to hide and corrupting
-  // them destroys the identifiers the app uses to build request URLs.
+  // Never mask UUIDs / API identifiers. Corrupting them destroys the
+  // identifiers the app uses to build request URLs.
   if (UUID_REGEX.test(value)) return value;
+  if (PREFIXED_API_ID_REGEX.test(value)) return value;
 
   let masked = value;
 

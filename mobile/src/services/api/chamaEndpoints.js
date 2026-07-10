@@ -18,7 +18,7 @@ const getChamaById = async (chamaId) => {
 };
 
 const getChamaStatistics = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}/statistics`);
+  return await makeRequestWithRetry(`/chamas/${chamaId}/statistics`);
 };
 
 const getChamaMembers = async (chamaId) => {

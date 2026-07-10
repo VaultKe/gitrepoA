@@ -142,9 +142,19 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
         allContributions = [...allContributions, ...(contribResponse.data || [])];
       }
 
-      const paymentsResponse = await ApiService.makeRequest(`/merry-go-rounds/${currentRound.id}/payments`);
-      if (paymentsResponse.success && paymentsResponse.data) {
-        allContributions = [...allContributions, ...(paymentsResponse.data || [])];
+      // Optional payments endpoint: silently ignore 404s and other non-critical failures.
+      // The screen already derives the contributors table from getContributions + getChamaTransactions.
+      try {
+        const paymentsResponse = await ApiService.makeRequest(`/merry-go-rounds/${currentRound.id}/payments`);
+        if (paymentsResponse.success && paymentsResponse.data) {
+          allContributions = [...allContributions, ...(paymentsResponse.data || [])];
+        }
+      } catch (paymentsError) {
+        const msg = (paymentsError.message || '').toLowerCase();
+        const is404 = msg.includes('404') || msg.includes('not found');
+        if (!is404) {
+          console.error('Unexpected error loading merry-go-round payments:', paymentsError);
+        }
       }
 
       const txResponse = await ApiService.getChamaTransactions(chamaId, 100, 0);
