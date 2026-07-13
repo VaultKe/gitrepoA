@@ -38,6 +38,9 @@ func MigrateWallets(db *sql.DB) error {
 	if err := addSubwalletTypeToTransactions(db); err != nil {
 		return err
 	}
+	if err := addTransactionPerformanceIndexes(db); err != nil {
+		return err
+	}
 
 	log.Println("Wallets migrations completed successfully")
 	return nil
@@ -249,5 +252,22 @@ func addSubwalletTypeToTransactions(db *sql.DB) error {
 		}
 	}
 	log.Println("subwallet_type column added to transactions table")
+	return nil
+}
+
+func addTransactionPerformanceIndexes(db *sql.DB) error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_transactions_from_wallet_id ON transactions(from_wallet_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_transactions_to_wallet_id ON transactions(to_wallet_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_transactions_initiated_by ON transactions(initiated_by)`,
+		`CREATE INDEX IF NOT EXISTS idx_transactions_wallets_created_at ON transactions(from_wallet_id, to_wallet_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_transactions_user_created_at ON transactions(initiated_by, created_at DESC)`,
+	}
+	for _, index := range indexes {
+		if _, err := db.Exec(index); err != nil {
+			log.Printf("Warning: Failed to create transaction performance index: %v", err)
+		}
+	}
+	log.Println("Transaction performance indexes created")
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"log"
 
 	"vaultke-backend/internal/services"
 	"vaultke-backend/internal/utils"
@@ -34,60 +35,25 @@ func GetChamaMembers(c *gin.Context) {
 	}
 	db := dbInterface.(*sql.DB)
 
-	// Get real chama members from database with comprehensive information
+	// Simple, robust query for chama members
 	query := `
-				SELECT
-					cm.id, cm.chama_id, cm.user_id, cm.role, cm.joined_at, cm.is_active,
-					cm.total_contributions, cm.last_contribution, cm.rating, cm.total_ratings,
-					u.first_name, u.last_name, u.email, u.phone, u.avatar, u.status,
-					u.is_email_verified, u.is_phone_verified, u.business_type, u.county, u.town,
-					u.bio, u.occupation, u.id_number, u.created_at as user_created_at,
-					COALESCE(w.balance, 0) as savings_balance,
-					COALESCE(loan_balance.balance, 0) as loan_balance,
-					COALESCE(contrib_stats.monthly_average, 0) as monthly_average,
-					COALESCE(contrib_stats.consistency_rate, 0) as consistency_rate,
-					COALESCE(meeting_stats.meetings_attended, 0) as meetings_attended,
-					COALESCE(meeting_stats.total_meetings, 0) as total_meetings,
-					COALESCE(contrib_stats.contributions_made, 0) as contributions_made,
-					(SELECT COUNT(*) FROM loans WHERE borrower_id = u.id AND chama_id = $1) as loans_taken,
-					(SELECT COUNT(*) FROM guarantors g INNER JOIN loans l ON g.loan_id = l.id WHERE g.user_id = u.id AND l.chama_id = $1) as guarantor_requests
-				FROM chama_members cm
-				INNER JOIN users u ON cm.user_id = u.id
-				LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
-				LEFT JOIN (
-					SELECT
-						borrower_id,
-						SUM(CASE WHEN status IN ('approved', 'disbursed', 'active') THEN remaining_amount ELSE 0 END) as balance
-					FROM loans
-					WHERE chama_id = $1
-					GROUP BY borrower_id
-				) loan_balance ON u.id = loan_balance.borrower_id
-				LEFT JOIN (
-					SELECT
-						t.initiated_by,
-						AVG(t.amount) as monthly_average,
-						(COUNT(*) * 100.0 / 12) as consistency_rate,
-						COUNT(*) as contributions_made
-					FROM transactions t
-					WHERE t.type = 'contribution'
-					AND t.created_at >= NOW() - INTERVAL '12 months'
-					GROUP BY t.initiated_by
-				) contrib_stats ON u.id = contrib_stats.initiated_by
-				LEFT JOIN (
-					SELECT
-						cm.user_id,
-						COUNT(*) as meetings_attended,
-						(SELECT COUNT(*) FROM meetings WHERE chama_id = $2) as total_meetings
-					FROM chama_members cm
-					WHERE cm.chama_id = $3
-					GROUP BY cm.user_id
-				) meeting_stats ON u.id = meeting_stats.user_id
-				WHERE cm.chama_id = $4 AND cm.is_active = true
-				ORDER BY cm.joined_at ASC
-			`
+		SELECT
+			cm.id, cm.chama_id, cm.user_id, cm.role, cm.joined_at, cm.is_active,
+			cm.total_contributions, cm.last_contribution, cm.rating, cm.total_ratings,
+			u.first_name, u.last_name, u.email, u.phone, u.avatar, u.status,
+			u.is_email_verified, u.is_phone_verified, u.business_type, u.county, u.town,
+			u.bio, u.occupation, u.id_number, u.created_at as user_created_at,
+			COALESCE(w.balance, 0) as savings_balance
+		FROM chama_members cm
+		INNER JOIN users u ON cm.user_id = u.id
+		LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
+		WHERE cm.chama_id = $1 AND cm.is_active = true
+		ORDER BY cm.joined_at ASC
+	`
 
-	rows, err := db.Query(query, chamaID, chamaID, chamaID, chamaID)
+	rows, err := db.Query(query, chamaID)
 	if err != nil {
+		log.Printf("ERROR fetching chama members for chama %s: %v", chamaID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to fetch chama members: " + err.Error(),
@@ -105,9 +71,9 @@ func GetChamaMembers(c *gin.Context) {
 			id, chamaID, userID, role, firstName, lastName, email, phone, userStatus                        string
 			joinedAt, userCreatedAt                                                                         string
 			isActive, isEmailVerified, isPhoneVerified                                                      bool
-			totalContributions, rating, savingsBalance, loanBalance, monthlyAverage, consistencyRate        float64
-			totalRatings, meetingsAttended, totalMeetings, contributionsMade, loansTaken, guarantorRequests int
-			avatar, lastContribution, businessType, county, town, bio, occupation, idNumber                          *string
+			totalContributions, rating, savingsBalance                                                      float64
+			totalRatings                                                                                    int
+			avatar, lastContribution, businessType, county, town, bio, occupation, idNumber                  *string
 		)
 
 		err := rows.Scan(
@@ -116,80 +82,46 @@ func GetChamaMembers(c *gin.Context) {
 			&firstName, &lastName, &email, &phone, &avatar, &userStatus,
 			&isEmailVerified, &isPhoneVerified, &businessType, &county, &town,
 			&bio, &occupation, &idNumber, &userCreatedAt,
-			&savingsBalance, &loanBalance, &monthlyAverage, &consistencyRate,
-			&meetingsAttended, &totalMeetings, &contributionsMade, &loansTaken, &guarantorRequests,
+			&savingsBalance,
 		)
 		if err != nil {
-			continue // Skip invalid rows
+			log.Printf("WARNING: failed to scan member row: %v", err)
+			continue
 		}
 
-		// Calculate attendance rate
-		attendanceRate := 0.0
-		if totalMeetings > 0 {
-			attendanceRate = (float64(meetingsAttended) / float64(totalMeetings)) * 100
-		}
-
-		// Determine online status (mock for now - would need real-time tracking)
-		isOnline := userStatus == "active" && (id == "user-1" || id == "user-3" || id == "user-4")
-
-		// Calculate last contribution amount (mock for now)
-		lastContributionAmount := 5000.0
-		if totalContributions > 0 {
-			lastContributionAmount = monthlyAverage
-		}
-
-		// Build member object with real data
 		member := map[string]interface{}{
-			"id":                       id,
-			"user_id":                  userID,
-			"chama_id":                 chamaID,
-			"role":                     role,
-			"joined_at":                joinedAt,
-			"status":                   userStatus,
-			"total_contributions":      totalContributions,
-			"last_contribution_date":   lastContribution,
-			"last_contribution_amount": lastContributionAmount,
-			"attendance_rate":          attendanceRate,
-			"loan_balance":             loanBalance,
-			"savings_balance":          savingsBalance,
-			"reputation_score":         rating,
-			"business_type":            businessType,
-			"location":                 fmt.Sprintf("%s, %s", getStringValue(town), getStringValue(county)),
-			"phone_verified":           isPhoneVerified,
-			"email_verified":           isEmailVerified,
-		"user": map[string]interface{}{
-			"id":         userID,
-			"first_name": firstName,
-			"last_name":  lastName,
-			"email":      utils.MaskEmail(email),
-			"phone":      utils.MaskPhone(phone),
-			"id_number":  utils.MaskID(utils.DerefString(idNumber)),
-			"avatar_url": avatar,
-			"bio":        bio,
-			"occupation": occupation,
-			"created_at": userCreatedAt,
-			"last_seen":  joinedAt, // Mock - would need real tracking
-			"is_online":  isOnline,
-		},
-			"contributions_summary": map[string]interface{}{
-				"total_amount":     totalContributions,
-				"monthly_average":  monthlyAverage,
-				"consistency_rate": consistencyRate,
-				"last_12_months":   generateMockMonthlyData(monthlyAverage), // Mock historical data
-			},
-			"activity_summary": map[string]interface{}{
-				"meetings_attended":  meetingsAttended,
-				"total_meetings":     totalMeetings,
-				"last_activity":      joinedAt,
-				"contributions_made": contributionsMade,
-				"loans_taken":        loansTaken,
-				"guarantor_requests": guarantorRequests,
+			"id":                      id,
+			"user_id":                 userID,
+			"chama_id":                chamaID,
+			"role":                    role,
+			"joined_at":               joinedAt,
+			"status":                  userStatus,
+			"total_contributions":     totalContributions,
+			"last_contribution_date":  lastContribution,
+			"savings_balance":         savingsBalance,
+			"reputation_score":        rating,
+			"business_type":           businessType,
+			"location":                fmt.Sprintf("%s, %s", getStringValue(town), getStringValue(county)),
+			"phone_verified":          isPhoneVerified,
+			"email_verified":          isEmailVerified,
+			"user": map[string]interface{}{
+				"id":         userID,
+				"first_name": firstName,
+				"last_name":  lastName,
+				"email":      utils.MaskEmail(email),
+				"phone":      utils.MaskPhone(phone),
+				"id_number":  utils.MaskID(utils.DerefString(idNumber)),
+				"avatar_url": avatar,
+				"bio":        bio,
+				"occupation": occupation,
+				"created_at": userCreatedAt,
+				"last_seen":  joinedAt,
+				"is_online":  userStatus == "active",
 			},
 		}
 
 		members = append(members, member)
 
-		// Count member statuses
 		if userStatus == "active" {
 			activeMembers++
 		} else {

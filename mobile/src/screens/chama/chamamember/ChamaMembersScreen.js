@@ -92,9 +92,9 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   useEffect(() => {
     const initialize = async () => {
       const hadCache = await loadCachedMembers();
-      loadMembers(hadCache);
+      await loadMembers(hadCache);
       if (canManageMembers()) {
-        loadSentInvitations();
+        await loadSentInvitations();
       }
     };
     initialize();

@@ -44,6 +44,9 @@ func MigrateChamas(db *sql.DB) error {
 	if err := addChamaRulesFileColumns(db); err != nil {
 		return err
 	}
+	if err := addChamaMemberIndexes(db); err != nil {
+		return err
+	}
 
 	log.Println("Chamas migrations completed successfully")
 	return nil
@@ -440,5 +443,20 @@ func addChamaRulesFileColumns(db *sql.DB) error {
 		}
 	}
 	log.Println("rules file columns ready")
+	return nil
+}
+
+func addChamaMemberIndexes(db *sql.DB) error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_chama_members_chama_id_active ON chama_members(chama_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_chama_members_user_id ON chama_members(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_chama_members_chama_user ON chama_members(chama_id, user_id, is_active)`,
+	}
+	for _, index := range indexes {
+		if _, err := db.Exec(index); err != nil {
+			log.Printf("Warning: Failed to create chama member index: %v", err)
+		}
+	}
+	log.Println("Chama member indexes created")
 	return nil
 }

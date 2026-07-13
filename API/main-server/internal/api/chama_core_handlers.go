@@ -166,6 +166,7 @@ func GetUserChamas(c *gin.Context) {
 	// Get user's chamas
 	chamas, err := chamaService.GetChamasByUser(userID.(string), limit, offset)
 	if err != nil {
+		log.Printf("ERROR fetching chamas for user %s: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to get user chamas: " + err.Error(),
