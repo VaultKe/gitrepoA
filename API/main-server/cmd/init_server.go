@@ -12,7 +12,7 @@ import (
 	"vaultke-backend/models"
 	"vaultke-backend/services"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -64,14 +64,18 @@ func main() {
 	log.Println("   • Reminders and notifications are fully functional")
 }
 
-// getDBPath returns the database file path
+// getDBPath returns the database connection string
 func getDBPath() string {
-	if dbPath := os.Getenv("DB_PATH"); dbPath != "" {
-		return dbPath
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		return dbURL
 	}
 
-	// Default to vaultke.db in the backend directory
-	return filepath.Join(".", "vaultke.db")
+	if dbURL := os.Getenv("DB_PATH"); dbURL != "" {
+		return dbURL
+	}
+
+	// Default PostgreSQL connection string
+	return "postgresql://localhost/vaultke?sslmode=disable"
 }
 
 // initializeDatabase creates and configures the database connection
@@ -83,7 +87,7 @@ func initializeDatabase(dbPath string) (*sql.DB, error) {
 	}
 
 	// Open database connection
-	db, err := sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
+	db, err := sql.Open("postgres", getDBPath())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

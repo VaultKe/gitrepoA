@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -139,12 +140,34 @@ func (rm *RoomManager) GetRoom(roomID string) (*models.ChatRoom, error) {
 func (rm *RoomManager) GetUserRooms(userID string) ([]*models.ChatRoom, error) {
 	rm.mu.RLock()
 	var cached []*models.ChatRoom
+	seen := make(map[string]bool)
 	for _, room := range rm.rooms {
-		if cachedMembers, ok := rm.members[room.ID]; ok {
-			if _, exists := cachedMembers[userID]; exists {
-				cached = append(cached, room)
-			}
+		cachedMembers, ok := rm.members[room.ID]
+		if !ok {
+			continue
 		}
+		if _, exists := cachedMembers[userID]; !exists {
+			continue
+		}
+
+		// Collapse duplicate conversations: a 1:1 private chat is uniquely
+		// identified by its participant pair, a chama chat by its chamaId.
+		// Rooms created before de-duplication was enforced can otherwise
+		// appear twice in the chat list ("sent" vs "received").
+		var key string
+		if room.Type == models.RoomTypePrivate {
+			key = privatePairKey(cachedMembers)
+		} else if room.Type == models.RoomTypeChama && room.ChamaID.Valid {
+			key = "chama:" + room.ChamaID.String
+		}
+		if key != "" {
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+		}
+
+		cached = append(cached, room)
 	}
 	rm.mu.RUnlock()
 
@@ -339,6 +362,17 @@ func (rm *RoomManager) FindPrivateRoom(userA, userB string) (*models.ChatRoom, e
 	rm.rooms[roomID] = &room
 	rm.mu.Unlock()
 	return &room, nil
+}
+
+// privatePairKey returns a stable string for the set of members in a private
+// room so duplicate 1:1 conversations (same two users) can be collapsed.
+func privatePairKey(members map[string]*models.ChatRoomMember) string {
+	ids := make([]string, 0, len(members))
+	for uid := range members {
+		ids = append(ids, uid)
+	}
+	sort.Strings(ids)
+	return strings.Join(ids, ":")
 }
 
 func (rm *RoomManager) UpdateLastMessage(roomID, content string) error {

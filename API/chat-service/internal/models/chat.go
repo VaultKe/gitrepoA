@@ -1,7 +1,10 @@
 package models
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +40,34 @@ func NewChatRoom(chamaID, name string, roomType ChatRoomType, createdBy string) 
 		Name:      name,
 		Type:      roomType,
 		IsPrivate: roomType == RoomTypePrivate,
+		CreatedBy: createdBy,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+// DeterministicPrivateRoomID returns a stable room ID for a 1:1 private chat
+// between two users so the same pair always resolves to the same conversation.
+// Without this, opening the same private chat from either side (or twice) would
+// create two separate rooms that both show up in the chat list.
+func DeterministicPrivateRoomID(userA, userB string) string {
+	ids := []string{userA, userB}
+	sort.Strings(ids)
+	combined := ids[0] + ":" + ids[1]
+	hash := sha256.Sum256([]byte(combined))
+	return hex.EncodeToString(hash[:])[:16]
+}
+
+// NewPrivateRoom builds a 1:1 private room whose ID is derived from both
+// participants, guaranteeing a single conversation per pair.
+func NewPrivateRoom(userA, userB, name, createdBy string) *ChatRoom {
+	now := time.Now().UTC()
+	return &ChatRoom{
+		ID:        DeterministicPrivateRoomID(userA, userB),
+		Name:      name,
+		Type:      RoomTypePrivate,
+		IsPrivate: true,
 		CreatedBy: createdBy,
 		IsActive:  true,
 		CreatedAt: now,

@@ -1411,15 +1411,6 @@ const handleMpesaContribution = async (cleanChamaId) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={[styles.header, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            {getContributionTitle()}
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            {getContributionSubtitle()}
-          </Text>
-        </View>
-
         <Card style={styles.chamaInfoCard} variant="outlined">
            <View style={styles.chamaInfo}>
              <View style={[styles.chamaIcon, { backgroundColor: getContributionColor() }]}>

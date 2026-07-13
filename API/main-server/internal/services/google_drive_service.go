@@ -100,7 +100,7 @@ func (gds *GoogleDriveService) StoreUserTokens(userID, accessToken, refreshToken
 	// Calculate expiry time
 	expiresAt := time.Now().Add(time.Duration(expiresIn) * time.Second)
 
-	// Store tokens using SQLite UPSERT syntax
+	// Store tokens using PostgreSQL UPSERT syntax
 	query := `
 		INSERT INTO google_drive_tokens (user_id, access_token, refresh_token, expires_at, updated_at)
 		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
@@ -836,18 +836,18 @@ func (gds *GoogleDriveService) GetUserBackupInfo(userID string) (*BackupInfo, er
 	return info, nil
 }
 
-// parseTimeString is a helper function to parse time strings from SQLite
+// parseTimeString is a helper function to parse time strings
 func parseTimeString(timeStr string) (time.Time, error) {
 	if timeStr == "" {
 		return time.Time{}, nil
 	}
 
-	// Try multiple formats that SQLite might use
+	// Try multiple formats
 	formats := []string{
 		time.RFC3339Nano,                      // 2025-07-25T05:57:13.742311077+03:00
 		time.RFC3339,                          // 2025-07-25T05:57:13+03:00
-		"2006-01-02 15:04:05.999999999-07:00", // SQLite with timezone
-		"2006-01-02 15:04:05.999999999",       // SQLite with nanoseconds
+		"2006-01-02 15:04:05.999999999-07:00", // with timezone
+		"2006-01-02 15:04:05.999999999",       // with nanoseconds
 		"2006-01-02 15:04:05",                 // Standard format
 		"2006-01-02",                          // Date only
 	}

@@ -193,7 +193,10 @@ class ChatService {
     }
 
     this._updateRooms(rooms);
-    return rooms;
+    // Return the de-duplicated rooms from the internal Map (keyed by room id)
+    // rather than the raw backend array, so the chat list can never render a
+    // room twice even if the backend returns duplicate entries.
+    return Array.from(this.rooms.values());
   }
 
   async sendImage(roomId, imageUri, caption = '') {
@@ -500,6 +503,16 @@ _handleNewMessage(message) {
         }
         this._updateMessage(roomId, pendingTempId, data);
         this.pendingMessages.delete(pendingTempId);
+
+        // Notify subscribers with the *merged* message (which still carries the
+        // optimistic tempId). The raw server payload has no tempId, so notifying
+        // with it would make the UI append a second "received" bubble instead of
+        // replacing the existing "sent" (optimistic) bubble for the same message.
+        const merged = (this.messages.get(roomId) || []).find(
+          m => m.tempId === pendingTempId || m.id === pendingTempId
+        );
+        this._notifyMessageSubscribers(roomId, merged || data);
+        return;
       } else if (!this.processedMessageIds.has(data.id)) {
         // Deduplication: check if already processed
         this.processedMessageIds.add(data.id);

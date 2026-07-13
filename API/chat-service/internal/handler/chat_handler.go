@@ -42,10 +42,11 @@ func NewChatHandler(db *sql.DB, hub *ws.Hub, roomMgr *room.RoomManager) *ChatHan
 func (h *ChatHandler) CreateRoom(c *gin.Context) {
 	userID := c.GetString("userID")
 	var req struct {
-		Name      string              `json:"name" binding:"required"`
-		Type      models.ChatRoomType `json:"type" binding:"required"`
-		ChamaID   string              `json:"chamaId,omitempty"`
-		MemberIDs []string            `json:"memberIds,omitempty"`
+		Name        string              `json:"name"`
+		Type        models.ChatRoomType `json:"type" binding:"required"`
+		ChamaID     string              `json:"chamaId,omitempty"`
+		MemberIDs   []string            `json:"memberIds,omitempty"`
+		RecipientID string              `json:"recipientId,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -53,19 +54,73 @@ func (h *ChatHandler) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	room := models.NewChatRoom(req.ChamaID, req.Name, req.Type, userID)
+	// Normalize the other participant(s) for a private 1:1 chat. The mobile
+	// client sends `recipientId`; make sure it is treated as a member.
+	if req.Type == models.RoomTypePrivate {
+		if req.RecipientID != "" && !contains(req.MemberIDs, req.RecipientID) {
+			req.MemberIDs = append(req.MemberIDs, req.RecipientID)
+		}
+		if len(req.MemberIDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a recipient is required for private chats"})
+			return
+		}
+		if len(req.MemberIDs) > 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "private chats are limited to two participants"})
+			return
+		}
+	}
+
+	// Reuse an existing conversation instead of creating a duplicate room that
+	// would show up twice in the chat list ("sent" vs "received"):
+	//   - chama rooms are keyed by their chamaId
+	//   - private 1:1 rooms use a deterministic ID derived from both users
+	var room *models.ChatRoom
+
+	if req.Type == models.RoomTypeChama && req.ChamaID != "" {
+		var rid string
+		if err := h.db.QueryRow(
+			`SELECT id FROM chat_rooms WHERE chama_id = $1 AND is_active = TRUE LIMIT 1`,
+			req.ChamaID,
+		).Scan(&rid); err == nil && rid != "" {
+			if existing, e := h.roomMgr.GetRoom(rid); e == nil {
+				room = existing
+			}
+		}
+	} else if req.Type == models.RoomTypePrivate && len(req.MemberIDs) == 1 {
+		if existing, err := h.roomMgr.FindPrivateRoom(userID, req.MemberIDs[0]); err == nil && existing != nil {
+			room = existing
+		}
+	}
+
+	if room == nil {
+		if req.Type == models.RoomTypePrivate && len(req.MemberIDs) == 1 {
+			room = models.NewPrivateRoom(userID, req.MemberIDs[0], req.Name, userID)
+		} else {
+			room = models.NewChatRoom(req.ChamaID, req.Name, req.Type, userID)
+		}
+	}
+
 	tx, err := h.db.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
 	}
 
-	_, err = tx.Exec(`INSERT INTO chat_rooms (id, chama_id, name, type, created_by, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		room.ID, room.ChamaID, room.Name, room.Type, room.CreatedBy, room.IsActive, room.CreatedAt, room.UpdatedAt)
-	if err != nil {
+	// Only create the room row when it does not already exist.
+	var exists bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM chat_rooms WHERE id = $1)`, room.ID).Scan(&exists); err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
+	}
+	if !exists {
+		_, err = tx.Exec(`INSERT INTO chat_rooms (id, chama_id, name, type, created_by, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			room.ID, room.ChamaID, room.Name, room.Type, room.CreatedBy, room.IsActive, room.CreatedAt, room.UpdatedAt)
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
+			return
+		}
 	}
 
 	members := []*models.ChatRoomMember{{
@@ -78,13 +133,18 @@ func (h *ChatHandler) CreateRoom(c *gin.Context) {
 	}}
 
 	for _, uid := range req.MemberIDs {
-		if uid != userID {
+		if uid != userID && !containsMember(members, uid) {
 			members = append(members, models.NewChatRoomMember(room.ID, uid, models.RoleMember))
 		}
 	}
 
+	// Upsert memberships so re-opening an existing room (or being added to it)
+	// does not fail on the unique (room_id, user_id) constraint.
 	for _, m := range members {
-		_, err = tx.Exec(`INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active) VALUES ($1, $2, $3, $4, $5, $6)`,
+		_, err = tx.Exec(`
+			INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (room_id, user_id) DO UPDATE SET is_active = TRUE`,
 			m.ID, m.RoomID, m.UserID, m.Role, m.JoinedAt, m.IsActive)
 		if err != nil {
 			tx.Rollback()
@@ -93,9 +153,31 @@ func (h *ChatHandler) CreateRoom(c *gin.Context) {
 		}
 	}
 
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit chat room creation"})
+		return
+	}
+
 	h.roomMgr.CreateRoom(room, members)
-	c.JSON(http.StatusCreated, gin.H{"success": true, "data": room})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": room})
+}
+
+func contains(list []string, value string) bool {
+	for _, v := range list {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+func containsMember(members []*models.ChatRoomMember, userID string) bool {
+	for _, m := range members {
+		if m.UserID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *ChatHandler) GetRooms(c *gin.Context) {

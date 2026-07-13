@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 // Migration to fix existing E2EE messages
@@ -62,8 +62,8 @@ func migrateE2EEMessages(db *sql.DB) error {
 
 		updateQuery := `
 			UPDATE chat_messages
-			SET metadata = ?
-			WHERE id = ?
+			SET metadata = $1
+			WHERE id = $2
 		`
 
 		_, err = db.Exec(updateQuery, string(updatedMetadata), id)
@@ -86,7 +86,7 @@ func main() {
 	// This is a standalone migration script
 	// In production, this would be integrated into your migration system
 
-	db, err := sql.Open("sqlite3", "./vaultke.db")
+	db, err := sql.Open("postgres", "postgresql://localhost/vaultke?sslmode=disable")
 	if err != nil {
 		log.Fatal("Failed to open database:", err)
 	}

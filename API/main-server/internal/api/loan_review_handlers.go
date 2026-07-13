@@ -1,0 +1,599 @@
+package api
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"vaultke-backend/internal/services"
+)
+
+// RespondToGuarantorRequest allows a guarantor to accept or decline a request
+func RespondToGuarantorRequest(c *gin.Context) {
+	// Get loan ID from URL parameter
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	var req struct {
+		GuarantorID string `json:"guarantorId" binding:"required"`
+		Action      string `json:"action" binding:"required"` // "accept" or "decline"
+		Reason      string `json:"reason"`                    // Optional reason for decline
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	guarantorID := req.GuarantorID
+
+	// Validate action
+	if req.Action != "accept" && req.Action != "decline" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Action must be 'accept' or 'decline'",
+		})
+		return
+	}
+
+	// Get database connection
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	// DEBUG: Check if guarantor record exists at all
+	var count int
+	err := db.(*sql.DB).QueryRow("SELECT COUNT(*) FROM guarantors WHERE id = $1", guarantorID).Scan(&count)
+	if err != nil {
+		fmt.Printf("❌ Error checking guarantor existence: %v\n", err)
+	} else {
+	}
+
+	// DEBUG: Check guarantor record details
+	var dbGuarantorID, dbUserID, dbLoanID, dbStatus string
+	err = db.(*sql.DB).QueryRow("SELECT id, user_id, loan_id, status FROM guarantors WHERE id = $1", guarantorID).Scan(&dbGuarantorID, &dbUserID, &dbLoanID, &dbStatus)
+	if err != nil {
+		fmt.Printf("❌ Error getting guarantor details: %v\n", err)
+	} else {
+	}
+
+	// Find the guarantor record by ID and ensure the current user is the guarantor
+	var requesterID string
+	var currentStatus string
+	var actualLoanID string
+	err = db.(*sql.DB).QueryRow(`
+		SELECT l.borrower_id as requester_id, g.status, g.loan_id
+		FROM guarantors g
+		JOIN loans l ON g.loan_id = l.id
+		WHERE g.id = $1 AND g.user_id = $2
+	`, guarantorID, userID).Scan(&requesterID, &currentStatus, &actualLoanID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Printf("Guarantor request not found: guarantorID=%s, userID=%s\n", guarantorID, userID)
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Guarantor request not found or not authorized",
+			})
+			return
+		}
+		fmt.Printf("Database error fetching guarantor request: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch guarantor request: " + err.Error(),
+		})
+		return
+	}
+
+	fmt.Printf("Found guarantor request: requesterID=%s, currentStatus=%s, actualLoanID=%s\n", requesterID, currentStatus, actualLoanID)
+
+	// If loan ID was provided in URL and doesn't match, return error
+	if loanID != "" && actualLoanID != loanID {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Guarantor request does not belong to the specified loan",
+		})
+		return
+	}
+
+	// Use the actual loan ID for further processing
+	loanID = actualLoanID
+
+	// Check if already responded
+	if currentStatus != "pending" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "You have already responded to this guarantor request",
+		})
+		return
+	}
+
+	// Update guarantor status
+	newStatus := "declined"
+	if req.Action == "accept" {
+		newStatus = "accepted"
+	}
+
+	_, err = db.(*sql.DB).Exec(`
+		UPDATE guarantors
+		SET status = $1, message = $2, responded_at = CURRENT_TIMESTAMP
+		WHERE id = $3
+	`, newStatus, req.Reason, guarantorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update guarantor response: " + err.Error(),
+		})
+		return
+	}
+
+	// Create notification for loan requester
+	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+	message := fmt.Sprintf("Your guarantor request has been %s", newStatus)
+	if req.Reason != "" {
+		message += fmt.Sprintf(". Reason: %s", req.Reason)
+	}
+
+	err = createNotification(db.(*sql.DB), notificationID, requesterID, "guarantor_response",
+		"Guarantor Response",
+		message,
+		fmt.Sprintf(`{"loan_id": "%s", "guarantor_id": "%s", "action": "%s"}`,
+			loanID, guarantorID, req.Action),
+		"loan", nil)
+	if err != nil {
+		// Log error but don't fail the response
+		fmt.Printf("Failed to create notification for loan requester %s: %v\n", requesterID, err)
+	}
+
+	// Check if all guarantors have responded and update loan status if needed
+	// Use a timeout context to prevent goroutine leaks
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Recovered from panic in checkAndUpdateLoanStatus: %v", r)
+			}
+		}()
+
+		select {
+		case <-ctx.Done():
+			log.Printf("Loan status check cancelled for loan %s: %v", loanID, ctx.Err())
+			return
+		default:
+			checkAndUpdateLoanStatus(db.(*sql.DB), loanID)
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("Guarantor request %s successfully", newStatus),
+		"data": map[string]interface{}{
+			"guarantor_id": guarantorID,
+			"status":       newStatus,
+			"action":       req.Action,
+		},
+	})
+}
+
+// checkAndUpdateLoanStatus checks if all guarantors have responded and updates loan status
+func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
+	// Get guarantor response counts
+	var totalGuarantors, acceptedGuarantors, declinedGuarantors int
+	err := db.QueryRow(`
+		SELECT
+			COUNT(*) as total,
+			SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted,
+			SUM(CASE WHEN status = 'declined' THEN 1 ELSE 0 END) as declined
+		FROM guarantors
+		WHERE loan_id = $1
+	`, loanID).Scan(&totalGuarantors, &acceptedGuarantors, &declinedGuarantors)
+	if err != nil {
+		fmt.Printf("Error checking guarantor status for loan %s: %v\n", loanID, err)
+		return
+	}
+
+	// Check if all guarantors have responded
+	respondedGuarantors := acceptedGuarantors + declinedGuarantors
+	if respondedGuarantors < totalGuarantors {
+		// Not all guarantors have responded yet
+		return
+	}
+
+	// Determine new loan status
+	var newStatus string
+	if acceptedGuarantors == totalGuarantors {
+		// All guarantors accepted - move to pending approval
+		newStatus = "guarantors_approved"
+	} else if declinedGuarantors > 0 {
+		// At least one guarantor declined - reject loan
+		newStatus = "guarantors_declined"
+	}
+
+	// Update loan status
+	_, err = db.Exec(`
+		UPDATE loans
+		SET status = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`, newStatus, loanID)
+	if err != nil {
+		fmt.Printf("Error updating loan status for loan %s: %v\n", loanID, err)
+		return
+	}
+
+	// Get loan requester for notification
+	var requesterID string
+	err = db.QueryRow(`SELECT borrower_id FROM loans WHERE id = $1`, loanID).Scan(&requesterID)
+	if err != nil {
+		fmt.Printf("Error getting loan requester for loan %s: %v\n", loanID, err)
+		return
+	}
+
+	// Create notification for loan requester
+	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+	var message string
+	if newStatus == "guarantors_approved" {
+		message = "All guarantors have accepted your loan request. Your application is now pending approval from chama officials."
+	} else {
+		message = "Some guarantors have declined your loan request. Your application has been rejected."
+	}
+
+	err = createNotification(db, notificationID, requesterID, "loan_status_update",
+		"Loan Status Update",
+		message,
+		fmt.Sprintf(`{"loan_id": "%s", "status": "%s"}`, loanID, newStatus),
+		"loan", nil)
+	if err != nil {
+		fmt.Printf("Failed to create loan status notification for user %s: %v\n", requesterID, err)
+	}
+}
+
+func ApproveLoan(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	// Get database connection
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	// Check if loan exists and get current status
+	var currentStatus, chamaID string
+	err := db.(*sql.DB).QueryRow(`
+		SELECT status, chama_id FROM loans WHERE id = $1
+	`, loanID).Scan(&currentStatus, &chamaID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Loan not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch loan: " + err.Error(),
+		})
+		return
+	}
+
+	// Check if user is authorized (chama chairperson or treasurer)
+	var userRole string
+	err = db.(*sql.DB).QueryRow(`
+		SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2
+	`, chamaID, userID).Scan(&userRole)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "You are not authorized to approve loans for this chama",
+		})
+		return
+	}
+
+	if userRole != "chairperson" && userRole != "treasurer" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Only chairperson or treasurer can approve loans",
+		})
+		return
+	}
+
+	// Check if loan can be approved
+	if currentStatus != "guarantors_approved" && currentStatus != "pending" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Cannot approve loan with status: %s", currentStatus),
+		})
+		return
+	}
+
+	// Update loan status to approved
+	_, err = db.(*sql.DB).Exec(`
+		UPDATE loans
+		SET status = 'approved', approved_by = $1, approved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`, userID, loanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to approve loan: " + err.Error(),
+		})
+		return
+	}
+
+	// Get loan details for notification
+	var borrowerID string
+	var amount float64
+	err = db.(*sql.DB).QueryRow(`
+		SELECT borrower_id, amount FROM loans WHERE id = $1
+	`, loanID).Scan(&borrowerID, &amount)
+	if err != nil {
+		fmt.Printf("Failed to get loan details for notification: %v\n", err)
+	} else {
+		// Create notification for borrower
+		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+		err = createNotification(db.(*sql.DB), notificationID, borrowerID, "loan_status_update",
+			"Loan Approved",
+			fmt.Sprintf("Your loan application for KES %.2f has been approved and is ready for disbursement.", amount),
+			fmt.Sprintf(`{"loan_id": "%s", "status": "approved", "amount": %.2f}`, loanID, amount),
+			"loan", nil)
+		if err != nil {
+			fmt.Printf("Failed to create loan approval notification: %v\n", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Loan approved successfully",
+		"data": map[string]interface{}{
+			"loan_id": loanID,
+			"status":  "approved",
+		},
+	})
+}
+
+func RejectLoan(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	// Get database connection
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	// Check if loan exists and get current status
+	var currentStatus, chamaID string
+	err := db.(*sql.DB).QueryRow(`
+		SELECT status, chama_id FROM loans WHERE id = $1
+	`, loanID).Scan(&currentStatus, &chamaID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Loan not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch loan: " + err.Error(),
+		})
+		return
+	}
+
+	// Check if user is authorized (chama chairperson or treasurer)
+	var userRole string
+	err = db.(*sql.DB).QueryRow(`
+		SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2
+	`, chamaID, userID).Scan(&userRole)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "You are not authorized to reject loans for this chama",
+		})
+		return
+	}
+
+	if userRole != "chairperson" && userRole != "treasurer" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Only chairperson or treasurer can reject loans",
+		})
+		return
+	}
+
+	// Check if loan can be rejected
+	if currentStatus == "approved" || currentStatus == "disbursed" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Cannot reject an approved or disbursed loan",
+		})
+		return
+	}
+
+	// Update loan status to rejected
+	_, err = db.(*sql.DB).Exec(`
+		UPDATE loans
+		SET status = 'rejected', rejected_by = $1, rejected_reason = $2, rejected_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $3
+	`, userID, req.Reason, loanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to reject loan: " + err.Error(),
+		})
+		return
+	}
+
+	// Get loan details for notification
+	var borrowerID string
+	var amount float64
+	err = db.(*sql.DB).QueryRow(`
+		SELECT borrower_id, amount FROM loans WHERE id = $1
+	`, loanID).Scan(&borrowerID, &amount)
+	if err != nil {
+		fmt.Printf("Failed to get loan details for notification: %v\n", err)
+	} else {
+		// Create notification for borrower
+		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+		message := fmt.Sprintf("Your loan application for KES %.2f has been rejected.", amount)
+		if req.Reason != "" {
+			message += fmt.Sprintf(" Reason: %s", req.Reason)
+		}
+
+		err = createNotification(db.(*sql.DB), notificationID, borrowerID, "loan_status_update",
+			"Loan Rejected",
+			message,
+			fmt.Sprintf(`{"loan_id": "%s", "status": "rejected", "reason": "%s", "amount": %.2f}`, loanID, req.Reason, amount),
+			"loan", nil)
+		if err != nil {
+			fmt.Printf("Failed to create loan rejection notification: %v\n", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Loan rejected successfully",
+		"data": map[string]interface{}{
+			"loan_id": loanID,
+			"status":  "rejected",
+			"reason":  req.Reason,
+		},
+	})
+}
+
+func DisburseLoan(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	disbursementServiceVal, exists := c.Get("disbursementService")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Disbursement service not available",
+		})
+		return
+	}
+
+	disbursementService, ok := disbursementServiceVal.(*services.DisbursementService)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Invalid disbursement service",
+		})
+		return
+	}
+
+	err := disbursementService.DisburseLoan(loanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to disburse loan: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Loan disbursed successfully",
+	})
+}

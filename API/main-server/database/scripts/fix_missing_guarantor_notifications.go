@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 // createNotification inserts a notification with all required fields
@@ -17,9 +17,9 @@ func createNotification(db *sql.DB, notificationID, userID, notificationType, ti
 			user_id, type, title, message, data, is_read, created_at, updated_at,
 			priority, category, reference_type, status, scheduled_for,
 			is_push, is_email, is_sms
-		) VALUES (?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-			?, ?, ?, 'pending', CURRENT_TIMESTAMP,
-			?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+			$6, $7, $8, 'pending', CURRENT_TIMESTAMP,
+			$9, $10, $11)
 	`, userID, notificationType, title, message, data,
 		getNotificationPriority(notificationType),
 		getNotificationCategory(notificationType),
@@ -83,7 +83,7 @@ func getNotificationSMSEnabled(notificationType string) int {
 
 func mainw() {
 	// Open database connection
-	db, err := sql.Open("sqlite3", "./vaultke.db")
+	db, err := sql.Open("postgres", "postgresql://localhost/vaultke?sslmode=disable")
 	if err != nil {
 		log.Fatal("Failed to open database:", err)
 	}
