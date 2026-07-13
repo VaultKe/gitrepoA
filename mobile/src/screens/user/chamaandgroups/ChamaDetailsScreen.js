@@ -160,6 +160,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   // Guard against concurrent / repeated loads (focus + param changes can fire rapidly)
   const loadingRef = useRef(false);
   const lastLoadedAtRef = useRef(0);
+  const creatingChatRoomRef = useRef(false);
 
   // Reset state and reload data when chamaId changes
   useEffect(() => {
@@ -440,6 +441,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const handleCreateChatRoom = () => {
+    if (creatingChatRoomRef.current) {
+      return;
+    }
+
     const existingChatRoomId = getExistingChatRoomId();
     if (existingChatRoomId) {
       navigateToChatRoom(existingChatRoomId);
@@ -459,7 +464,12 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const confirmCreateChatRoom = async () => {
+    if (creatingChatRoomRef.current) {
+      return;
+    }
+
     try {
+      creatingChatRoomRef.current = true;
       setChatRoomLoading(true);
 
       const response = await ApiService.createChamaChatRoom(chamaId);
@@ -475,6 +485,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       setChama(prev => prev ? { ...prev, chat_room_id: roomId } : prev);
       setSelectedChama(prev => prev && prev.id === chamaId ? { ...prev, chat_room_id: roomId } : prev);
 
+      // Reload chama details from the server so the chat_room_id and any
+      // other backend changes are fully synced before we navigate away.
+      await loadChamaDetails();
+
       Alert.alert(
         'Chat Room Created',
         'Chat room has been created for this group.'
@@ -485,6 +499,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       console.error('[ChamaDetails] Error creating chat room:', error);
       Alert.alert('Error', error.message || 'Failed to create chat room');
     } finally {
+      creatingChatRoomRef.current = false;
       setChatRoomLoading(false);
     }
   };

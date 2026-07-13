@@ -27,6 +27,7 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
   const [activeRoute, setActiveRoute] = useState(initialRoute);
   const [currentComponent, setCurrentComponent] = useState('overview');
   const [additionalParams, setAdditionalParams] = useState({});
+  const creatingChatRoomRef = useRef(false);
 
   // Set the selected chama when entering the chama dashboard
   useEffect(() => {
@@ -63,7 +64,12 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
     chat: (params = {}) => {
       // Get or create chama chat room
       const getChamaChatRoom = async () => {
+        if (creatingChatRoomRef.current) {
+          return;
+        }
+
         try {
+          creatingChatRoomRef.current = true;
           const roomId = params.roomId || chamaId || chama?.id;
           const roomTitle = params.roomName || chamaName || chama?.name || 'Group Chat';
 
@@ -96,6 +102,8 @@ const ChamaLayoutProvider = ({ route, navigation }) => {
         } catch (error) {
           console.error('Failed to get chama chat room:', error);
           Alert.alert('Error', 'Failed to access chat room. Please try again.');
+        } finally {
+          creatingChatRoomRef.current = false;
         }
       };
 
