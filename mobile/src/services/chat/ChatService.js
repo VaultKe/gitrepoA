@@ -117,7 +117,7 @@ class ChatService {
     const response = await websocketService.sendRequest({
       type: 'get_rooms',
       forceRefresh,
-    });
+    }, 8000);
     this._updateRooms(response.data || []);
     return response.data || [];
   }
@@ -425,7 +425,7 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
     }
   }
 
-  async getMessages(roomId, limit = 50, offset = 0) {
+  async getMessages(roomId, limit = 50, offset = 0, beforeMessageId) {
     try {
       // WebSocket-first: ask the chat service for history over the same
       // socket we use for live updates (no extra HTTP/auth round-trip).
@@ -435,6 +435,7 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
           roomId,
           limit,
           offset,
+          before: beforeMessageId || undefined,
         });
         this._updateMessages(roomId, response.data || []);
         return this.getRoomMessages(roomId);
@@ -444,7 +445,11 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
       // Fallback to REST (and then cache) only when the socket is down.
       try {
         const ApiService = (await import('../api')).default;
-        const response = await ApiService.makeRequest(`/chat/rooms/${roomId}/messages?limit=${limit}&offset=${offset}`);
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (beforeMessageId) {
+          params.set('before', beforeMessageId);
+        }
+        const response = await ApiService.makeRequest(`/chat/rooms/${roomId}/messages?${params.toString()}`);
         if (response.success) {
           this._updateMessages(roomId, response.data || []);
           return this.getRoomMessages(roomId);

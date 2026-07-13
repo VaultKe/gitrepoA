@@ -67,9 +67,9 @@ export const joinChatRoom = async (roomId) => {
 /**
  * Get messages for a room
  */
-export const getChatMessages = async (roomId, limit = 50, offset = 0) => {
+export const getChatMessages = async (roomId, limit = 50, offset = 0, beforeMessageId) => {
   try {
-    const messages = await chatService.getMessages(roomId, limit, offset);
+    const messages = await chatService.getMessages(roomId, limit, offset, beforeMessageId);
     return { success: true, data: messages };
   } catch (error) {
     console.error('getChatMessages error:', error);

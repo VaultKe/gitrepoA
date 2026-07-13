@@ -33,6 +33,9 @@ func MigrateAll(db *sql.DB) error {
 	if err := MigrateChat(db); err != nil {
 		return fmt.Errorf("chat: %w", err)
 	}
+	if err := MigrateChatPerformanceIndexes(db); err != nil {
+		return fmt.Errorf("chat_perf: %w", err)
+	}
 	if err := MigrateMeetings(db); err != nil {
 		return fmt.Errorf("meetings: %w", err)
 	}

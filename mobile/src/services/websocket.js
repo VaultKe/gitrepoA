@@ -10,7 +10,7 @@ class WebSocketService {
     this.maxReconnectAttempts = 10;
     this.reconnectInterval = 3000;
     this.messageHandlers = new Map();
-    this.roomSubscriptions = new Map();
+    this.roomSubscriptions = new Set();
     this.pingInterval = null;
     this.dataUpdateHandlers = new Map();
     this.isRealtimeEnabled = true;
@@ -197,22 +197,6 @@ onOpen() {
     // Reconnect on any non-clean close so real-time chat recovers from
     // dropped connections. Exponential backoff (capped) avoids hammering
     // the server; after attempts are exhausted we fall back to polling.
-    if (event.code !== 1000) {
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.reconnectAttempts++;
-        const delay = Math.min(this.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1), 30000);
-        setTimeout(() => {
-          this.connect();
-        }, delay);
-      } else {
-        this.startPollingFallback();
-      }
-    }
-  }
-
-    // Reconnect on any non-clean close so real-time chat recovers from dropped
-    // connections. Uses exponential backoff (capped) to avoid hammering the
-    // server, and falls back to polling once attempts are exhausted.
     if (event.code !== 1000) {
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;

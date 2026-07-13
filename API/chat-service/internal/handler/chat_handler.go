@@ -252,21 +252,25 @@ func (h *ChatHandler) resolveRoom(req struct {
 	return models.NewChatRoom(req.ChamaID, req.Name, req.Type, userID)
 }
 
-// fetchMessages returns a room's messages (oldest first) from the DB,
-// supporting pagination by limit/offset and "before" (load older) by id.
+// fetchMessages returns a room's messages newest-first from the DB, then
+// reverses to chronological order for the UI. Initial loads return the latest
+// N messages; subsequent loads use the `before` message id as a cursor to
+// fetch older batches without linear OFFSET scans.
 func (h *ChatHandler) fetchMessages(roomID, before string, limit, offset int) ([]*models.ChatMessage, error) {
+	baseQuery := `SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata, image_url as "imageUrl",
+		reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
+		FROM chat_messages WHERE room_id = $1 AND is_deleted = false`
+
 	var rows *sql.Rows
 	var err error
 
 	if before != "" {
-		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata, image_url as "imageUrl",
-			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
-			FROM chat_messages WHERE room_id = $1 AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2)
-			AND is_deleted = false ORDER BY created_at DESC LIMIT $3 OFFSET $4`, roomID, before, limit, offset)
+		// Cursor-based pagination: get `limit` messages older than the reference.
+		rows, err = h.db.Query(baseQuery+` AND created_at < (SELECT created_at FROM chat_messages WHERE id = $2)
+			ORDER BY created_at DESC LIMIT $3`, roomID, before, limit)
 	} else {
-		rows, err = h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, metadata, image_url as "imageUrl",
-			reply_to_id as "replyToId", created_at as "createdAt", updated_at as "editedAt"
-			FROM chat_messages WHERE room_id = $1 AND is_deleted = false ORDER BY created_at ASC LIMIT $2 OFFSET $3`, roomID, limit, offset)
+		// Initial load: newest `limit` messages so the chat opens on recent history.
+		rows, err = h.db.Query(baseQuery+` ORDER BY created_at DESC LIMIT $2`, roomID, limit)
 	}
 	if err != nil {
 		return nil, err
@@ -287,6 +291,11 @@ func (h *ChatHandler) fetchMessages(roomID, before string, limit, offset int) ([
 			m.ImageUrl = imageUrl.String
 		}
 		messages = append(messages, &m)
+	}
+
+	// Reverse so callers always receive oldest-first regardless of branch.
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
 	return messages, nil
 }

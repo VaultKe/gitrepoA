@@ -463,12 +463,12 @@ const ChatRoomScreen = ({ route, navigation }) => {
   }, [messages.length]);
 
   const handleLoadMore = useCallback(async () => {
-    if (loadingMore || !roomId || messages.length < 50) return;
+    if (loadingMore || !roomId || messages.length === 0) return;
 
     try {
       setLoadingMore(true);
-      const offset = messages.length;
-      const olderMessages = await chatService.getMessages(roomId, 50, offset);
+      const oldestMessage = messages[messages.length - 1];
+      const olderMessages = await chatService.getMessages(roomId, 50, 0, oldestMessage?.id);
       if (olderMessages.length > 0) {
         setMessages(prev => [...prev, ...olderMessages]);
       }
@@ -477,7 +477,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
     } finally {
       setLoadingMore(false);
     }
-  }, [roomId, loadingMore, messages.length]);
+  }, [roomId, loadingMore, messages]);
 
   if (error) {
     return (
