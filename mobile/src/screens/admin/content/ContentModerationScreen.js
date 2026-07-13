@@ -295,7 +295,6 @@ const ContentModerationScreen = ({ navigation }) => {
             icon="analytics"
             variant="secondary"
             size="small"
-            onPress={() => console.log('Moderation Stats')}
             theme={theme}
             style={styles.quickActionButtonBordered}
           />
@@ -304,7 +303,6 @@ const ContentModerationScreen = ({ navigation }) => {
             icon="shield"
             variant="info"
             size="small"
-            onPress={() => console.log('Auto-Moderation')}
             theme={theme}
             style={styles.quickActionButtonBordered}
           />
@@ -313,7 +311,6 @@ const ContentModerationScreen = ({ navigation }) => {
             icon="document-text"
             variant="success"
             size="small"
-            onPress={() => console.log('Reports History')}
             theme={theme}
             style={styles.quickActionButtonBordered}
           />

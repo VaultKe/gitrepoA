@@ -54,8 +54,6 @@ class MilitaryGradeEncryptedChat {
    */
   async initialize(userId) {
     try {
-      console.log('🔐 Initializing Military-Grade Encrypted Chat Service...');
-
       // Validate security environment
       await this.validateSecurityEnvironment();
 
@@ -63,9 +61,6 @@ class MilitaryGradeEncryptedChat {
 
       // Initialize military-grade Signal E2EE
       const e2eeResult = await militaryGradeSignalE2EE.initialize(userId);
-      console.log('✅ E2EE Security Level:', e2eeResult.securityLevel);
-      console.log('✅ E2EE Features:', e2eeResult.features);
-
       // Set up secure WebSocket handlers
       this.setupSecureWebSocketHandlers();
 
@@ -81,22 +76,12 @@ class MilitaryGradeEncryptedChat {
       // Calculate service integrity hash (with fallback)
       try {
         this.serviceIntegrityHash = await this.calculateServiceIntegrityHash();
-        console.log('✅ Service integrity hash calculated');
       } catch (hashError) {
-        console.log('⚠️ Failed to calculate service integrity hash, continuing without it:', hashError.message);
         this.serviceIntegrityHash = null; // Allow service to work without integrity hash
       }
 
       this.isInitialized = true;
 
-      console.log('✅ Military-Grade Encrypted Chat Service initialized successfully');
-      console.log('🛡️ Security Features Active:', [
-        'PERFECT_FORWARD_SECRECY',
-        'POST_COMPROMISE_SECURITY',
-        'METADATA_PROTECTION',
-        'ANTI_TAMPERING',
-        'SECURE_MESSAGE_QUEUING'
-      ]);
 
       return {
         success: true,
@@ -124,12 +109,8 @@ class MilitaryGradeEncryptedChat {
       try {
         await this.verifyServiceIntegrity();
       } catch (integrityError) {
-        console.log('⚠️ Service integrity check failed, but continuing with message sending:', integrityError.message);
         // Don't block message sending due to integrity check failures
       }
-
-      console.log('📤 Sending military-grade encrypted message to:', recipientId);
-
       // Generate cryptographically secure message ID
       const messageId = await this.generateSecureMessageId();
 
@@ -152,14 +133,8 @@ class MilitaryGradeEncryptedChat {
             isGroupMessage
           }
         );
-        console.log('✅ Military-grade encryption successful for', isGroupMessage ? 'group' : 'private', 'message');
-
-        // Ensure proper serialization for backend compatibility
         encryptedData = this.normalizeEncryptedData(encryptedData);
-        console.log('✅ Encrypted data normalized for backend compatibility');
-
       } catch (encryptionError) {
-        console.log('⚠️ Military encryption failed, using fallback encryption:', encryptionError.message);
         // Fallback to basic encryption to ensure messages can still be sent
         encryptedData = {
           ciphertext: btoa(message), // Basic base64 encoding as fallback
@@ -179,7 +154,6 @@ class MilitaryGradeEncryptedChat {
           securityLevel: 'BASIC_FALLBACK'
         };
         usedFallback = true;
-        console.log('✅ Fallback encryption applied');
       }
 
       // Calculate message integrity hash
@@ -213,7 +187,6 @@ class MilitaryGradeEncryptedChat {
       try {
         messagePayload.securitySignature = await this.generateSecuritySignature(messagePayload);
       } catch (signatureError) {
-        console.log('⚠️ Failed to generate security signature, continuing without it:', signatureError.message);
         messagePayload.securitySignature = 'fallback_signature';
       }
 
@@ -226,7 +199,6 @@ class MilitaryGradeEncryptedChat {
       if (!success) {
         // Queue for secure retry if failed
         await this.queueSecureMessage(messagePayload);
-        console.log('📦 Message securely queued for retry:', messageId);
       }
 
       // Log security event
@@ -256,9 +228,7 @@ class MilitaryGradeEncryptedChat {
    * Send encrypted image with optimized performance
    */
   async sendImage(roomId, recipientId, imageUri, metadata = {}) {
-    try {
-      console.log('🖼️ Sending encrypted image to:', recipientId);
-      
+    try {     
       const messageId = this.generateMessageId();
       
       // Read image data
@@ -313,20 +283,13 @@ class MilitaryGradeEncryptedChat {
    */
   async receiveMessage(encryptedMessage) {
     try {
-      console.log('📥 Receiving encrypted message from:', encryptedMessage.senderId);
-      console.log('🔍 Message content type:', typeof encryptedMessage.content);
-      console.log('🔍 Message content preview:', typeof encryptedMessage.content === 'string' ? encryptedMessage.content.substring(0, 100) : JSON.stringify(encryptedMessage.content).substring(0, 100));
-
-      // Handle different content formats including military-grade encryption
+     // Handle different content formats including military-grade encryption
       let encryptedData;
 
       if (typeof encryptedMessage.content === 'string') {
         try {
           encryptedData = JSON.parse(encryptedMessage.content);
-          console.log('🔍 Parsed JSON content, checking encryption format...');
         } catch (jsonError) {
-          // If not JSON, treat as plain text (might be unencrypted)
-          console.log('📝 Content is not JSON, treating as plain text');
           return {
             success: true,
             content: encryptedMessage.content,
@@ -336,9 +299,7 @@ class MilitaryGradeEncryptedChat {
         }
       } else if (typeof encryptedMessage.content === 'object') {
         encryptedData = encryptedMessage.content;
-        console.log('🔍 Content is already an object, checking encryption format...');
       } else {
-        console.log('⚠️ Unknown content format, treating as plain text');
         return {
           success: true,
           content: String(encryptedMessage.content || '[No content]'),
@@ -349,7 +310,6 @@ class MilitaryGradeEncryptedChat {
 
       // Check for plain text group messages
       if (encryptedData.type === 'plain_text' || encryptedData.securityLevel === 'PLAIN_TEXT') {
-        console.log('📢 Detected plain text group message');
         return {
           success: true,
           content: encryptedData.content || message,
@@ -362,7 +322,6 @@ class MilitaryGradeEncryptedChat {
 
       // Check for military-grade encryption format
       if (encryptedData.ciphertext && encryptedData.iv && encryptedData.metadata?.securityLevel === 'MILITARY_GRADE') {
-        console.log('🔒 Detected military-grade encryption, using enhanced decryption...');
         return await this.decryptMilitaryGradeMessage(encryptedData, encryptedMessage);
       }
       
@@ -405,8 +364,6 @@ class MilitaryGradeEncryptedChat {
    */
   async decryptImage(encryptedImageRef) {
     try {
-      console.log('🖼️ Decrypting image...');
-      
       // Download encrypted image
       const encryptedImageData = await this.downloadEncryptedImage(encryptedImageRef.imageUrl);
       
@@ -443,7 +400,6 @@ class MilitaryGradeEncryptedChat {
         });
         
         if (sent) {
-          console.log('✅ Message sent via WebSocket');
           return true;
         }
       }
@@ -455,7 +411,6 @@ class MilitaryGradeEncryptedChat {
       });
       
       if (response.success) {
-        console.log('✅ Message sent via HTTP API');
         return true;
       }
       
@@ -481,7 +436,6 @@ class MilitaryGradeEncryptedChat {
       const queueKey = `message_queue_${messagePayload.id}`;
       await AsyncStorage.setItem(queueKey, JSON.stringify(messagePayload));
       this.messageQueue.set(messagePayload.id, messagePayload);
-      console.log('📦 Message queued:', messagePayload.id);
     } catch (error) {
       console.error('❌ Failed to queue message:', error);
     }
@@ -492,14 +446,12 @@ class MilitaryGradeEncryptedChat {
    */
   async processQueuedMessages() {
     try {
-      console.log('🔄 Processing queued messages...');
-      
+     
       // Get all queued messages from storage
       const keys = await AsyncStorage.getAllKeys();
       const queueKeys = keys.filter(key => key.startsWith('message_queue_'));
       
       if (queueKeys.length === 0) {
-        console.log('📭 No queued messages to process');
         return;
       }
       
@@ -514,7 +466,6 @@ class MilitaryGradeEncryptedChat {
             // Remove from queue
             await AsyncStorage.removeItem(key);
             this.messageQueue.delete(messagePayload.id);
-            console.log('✅ Queued message sent:', messagePayload.id);
           }
         }
       }
@@ -559,7 +510,6 @@ class MilitaryGradeEncryptedChat {
     
     websocketService.addMessageHandler('delivery_receipt', (data) => {
       this.deliveryReceipts.set(data.messageId, data.timestamp);
-      console.log('✅ Delivery receipt received for:', data.messageId);
     });
     
     websocketService.addMessageHandler('connected', () => {
@@ -572,9 +522,7 @@ class MilitaryGradeEncryptedChat {
    * Emit decrypted message to UI components
    */
   emitDecryptedMessage(message) {
-    // This would integrate with your state management (Redux, Context, etc.)
-    console.log('📨 Decrypted message ready for UI:', message.id);
-    
+  
     // Example: Emit to event listeners
     if (this.messageListeners) {
       this.messageListeners.forEach(listener => listener(message));
@@ -643,8 +591,6 @@ class MilitaryGradeEncryptedChat {
     this.messageQueue.clear();
     this.deliveryReceipts.clear();
     this.isInitialized = false;
-    
-    console.log('🧹 Cleared all encrypted chat data');
   }
 
   /**
@@ -659,7 +605,6 @@ class MilitaryGradeEncryptedChat {
 
     // Check for root/jailbreak (basic check)
     // In production, you'd use a proper root detection library
-    console.log('🔍 Validating security environment...');
   }
 
   async verifyServiceIntegrity() {

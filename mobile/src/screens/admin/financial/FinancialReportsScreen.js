@@ -178,7 +178,6 @@ const FinancialReportsScreen = ({ navigation }) => {
             icon="document-text"
             variant="primary"
             size="small"
-            onPress={() => console.log('Generate Monthly Report')}
             theme={theme}
             style={styles.reportButton}
           />
@@ -187,7 +186,6 @@ const FinancialReportsScreen = ({ navigation }) => {
             icon="bar-chart"
             variant="secondary"
             size="small"
-            onPress={() => console.log('Generate Analytics Report')}
             theme={theme}
             style={styles.reportButton}
           />
@@ -196,7 +194,6 @@ const FinancialReportsScreen = ({ navigation }) => {
             icon="pie-chart"
             variant="info"
             size="small"
-            onPress={() => console.log('Generate Revenue Breakdown')}
             theme={theme}
             style={styles.reportButton}
           />
@@ -205,7 +202,6 @@ const FinancialReportsScreen = ({ navigation }) => {
             icon="download"
             variant="success"
             size="small"
-            onPress={() => console.log('Export Data')}
             theme={theme}
             style={styles.reportButton}
           />

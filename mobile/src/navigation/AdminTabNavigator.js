@@ -10,16 +10,11 @@ import { getThemeColors, spacing, typography, borderRadius } from '../utils/them
 import AdminHomepage from '../screens/admin/dashboard/AdminHomepage';
 import UserManagementScreen from '../screens/admin/usermanagement/UserManagementScreen';
 import ChamaManagementScreen from '../screens/admin/chamamanagement/ChamaManagementScreen';
-import LearningManagementScreen from '../screens/admin/learning/LearningManagementScreen';
 import SystemAnalyticsScreen from '../screens/admin/analytics/SystemAnalyticsScreen';
 import SecurityCenterScreen from '../screens/admin/security/SecurityCenterScreen';
 import PaymentSystemScreen from '../screens/admin/payments/PaymentSystemScreen';
 import BackupMaintenanceScreen from '../screens/admin/maintenance/BackupMaintenanceScreen';
 import AdminSettingsScreen from '../screens/admin/settings/AdminSettingsScreen';
-import CreateLearningCourseScreen from '../screens/admin/learning/CreateLearningCourseScreen';
-import CreateLearningCategoryScreen from '../screens/admin/learning/CreateLearningCategoryScreen';
-import EditLearningCourseScreen from '../screens/admin/learning/EditLearningCourseScreen';
-import EditLearningCategoryScreen from '../screens/admin/learning/EditLearningCategoryScreen';
 import FinancialReportsScreen from '../screens/admin/financial/FinancialReportsScreen';
 import SystemHealthScreen from '../screens/admin/system/SystemHealthScreen';
 import APIManagementScreen from '../screens/admin/system/APIManagementScreen';
@@ -65,7 +60,6 @@ function AdminTabBar({ state, descriptors, navigation }) {
     { name: 'Dashboard', label: 'Dashboard', icon: 'home', onPress: () => navigation.navigate('AdminHomepage') },
     { name: 'Users', label: 'Users', icon: 'people', onPress: () => navigation.navigate('UserManagementScreen') },
     { name: 'Chamas', label: 'Chamas', icon: 'business', onPress: () => navigation.navigate('ChamaManagementScreen') },
-    { name: 'Learning', label: 'Learning', icon: 'school', onPress: () => navigation.navigate('LearningManagementScreen') },
     { name: 'Analytics', label: 'Analytics', icon: 'analytics', onPress: () => navigation.navigate('SystemAnalyticsScreen') },
     { name: 'User', label: 'User', icon: 'person', onPress: () => switchToUserDashboard() },
   ];
@@ -79,7 +73,6 @@ function AdminTabBar({ state, descriptors, navigation }) {
       (shortcut.name === 'Dashboard' && currentRoute.name === 'AdminHomepage') ||
       (shortcut.name === 'Users' && currentRoute.name === 'UserManagementScreen') ||
       (shortcut.name === 'Chamas' && currentRoute.name === 'ChamaManagementScreen') ||
-      (shortcut.name === 'Learning' && currentRoute.name === 'LearningManagementScreen') ||
       (shortcut.name === 'Analytics' && currentRoute.name === 'SystemAnalyticsScreen')
     );
     return shortcutIndex >= 0 ? shortcutIndex : 0;
@@ -146,8 +139,7 @@ function AdminTabNavigator({ route }) {
           // Determine if back button should be shown based on navigation state
           const canGoBack = navigation.canGoBack();
           const isMainAdminScreen = [
-            'AdminHomepage', 'UserManagementScreen', 'ChamaManagementScreen',
-            'LearningManagementScreen', 'SystemAnalyticsScreen'
+            'AdminHomepage', 'UserManagementScreen', 'ChamaManagementScreen','SystemAnalyticsScreen'
           ].includes(route.name);
 
           // Get navigation state for more intelligent back button logic
@@ -202,15 +194,6 @@ function AdminTabNavigator({ route }) {
         initialParams={routeParams}
       />
       <Tab.Screen
-        name="LearningManagementScreen"
-        component={LearningManagementScreen}
-        options={{
-          title: 'Learning Management',
-          tabBarLabel: 'Learning',
-        }}
-        initialParams={routeParams}
-      />
-      <Tab.Screen
         name="SystemAnalyticsScreen"
         component={SystemAnalyticsScreen}
         options={{
@@ -257,26 +240,7 @@ function AdminTabNavigator({ route }) {
         }}
         initialParams={routeParams}
       />
-      <Tab.Screen
-        name="CreateLearningCourseScreen"
-        component={CreateLearningCourseScreen}
-        options={{
-          title: 'Create Course',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-        initialParams={routeParams}
-      />
-      <Tab.Screen
-        name="CreateLearningCategoryScreen"
-        component={CreateLearningCategoryScreen}
-        options={{
-          title: 'Create Category',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-        initialParams={routeParams}
-      />
-
-      {/* New Admin Screens */}
+       {/* New Admin Screens */}
       <Tab.Screen
         name="FinancialReportsScreen"
         component={FinancialReportsScreen}
@@ -330,27 +294,6 @@ function AdminTabNavigator({ route }) {
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={routeParams}
-      />
-
-      {/* Edit Learning Screens */}
-      <Tab.Screen
-        name="EditLearningCourse"
-        component={EditLearningCourseScreen}
-        options={{
-          title: 'Edit Course',
-          tabBarButton: () => null, // Hide from tab bar
-          headerShown: true,
-        }}
-      />
-
-      <Tab.Screen
-        name="EditLearningCategory"
-        component={EditLearningCategoryScreen}
-        options={{
-          title: 'Edit Category',
-          tabBarButton: () => null, // Hide from tab bar
-          headerShown: true,
-        }}
       />
 
       {/* Notifications Screen */}

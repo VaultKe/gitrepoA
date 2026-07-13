@@ -82,14 +82,12 @@ export const getChatMessages = async (roomId, limit = 50, offset = 0) => {
  */
 export const sendMessage = async (roomId, messageData) => {
    try {
-     console.log('[WS DEBUG] sendMessage API called with roomId:', roomId, 'data:', messageData);
      const message = await chatService.sendMessage(
        roomId,
        messageData.content,
        messageData.type || 'text',
        messageData.metadata || {}
      );
-     console.log('[WS DEBUG] sendMessage API resolved with:', JSON.stringify(message));
      return { success: true, data: message };
    } catch (error) {
      console.error('[WS DEBUG] sendMessage API error:', error);

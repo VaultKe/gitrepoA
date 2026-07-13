@@ -878,7 +878,6 @@ const CreateChamaScreen = ({ navigation }) => {
             }
           }
         } catch (memberFetchError) {
-          console.log('Could not sync chairperson from backend:', memberFetchError);
         }
 
         if (typeof loadUserChamas === 'function') {

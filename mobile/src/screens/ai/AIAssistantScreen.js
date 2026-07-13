@@ -386,7 +386,6 @@ const AIAssistantScreen = ({ navigation }) => {
               questionId={item.questionId}
               responseId={item.id}
               onFeedbackSubmitted={(feedback) => {
-                console.log('Feedback received:', feedback);
               }}
             />
           )}

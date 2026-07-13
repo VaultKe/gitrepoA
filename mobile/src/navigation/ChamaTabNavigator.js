@@ -44,7 +44,6 @@ import WelfareDetails from '../screens/chama/welfare/WelfareDetails';
 import LoanDetails from '../screens/chama/loans/LoanDetails';
 import ViewMember from '../screens/chama/chamamember/ViewMember';
 import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
-import JitsiMeetScreen from '../screens/chama/meeting/JitsiMeetScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
 import WelfareContributionsScreen from '../screens/chama/welfare/WelfareContributionsScreen';
 import NotificationsScreen from '../screens/user/notification/NotificationsScreen';
@@ -522,15 +521,6 @@ function ChamaTabNavigator({ route }) {
         component={PhysicalMeetingScreen}
         options={{
           title: 'Physical Meeting',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-        initialParams={{ chamaId, chamaName, chama }}
-      />
-      <Tab.Screen
-        name="OnlineMeeting"
-        component={JitsiMeetScreen}
-        options={{
-          title: 'Online Meeting',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={{ chamaId, chamaName, chama }}

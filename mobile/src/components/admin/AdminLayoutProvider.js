@@ -5,14 +5,11 @@ import AdminLayout from './AdminLayout';
 import AdminHomepage from '../../screens/admin/dashboard/AdminHomepage';
 import UserManagementScreen from '../../screens/admin/usermanagement/UserManagementScreen';
 import ChamaManagementScreen from '../../screens/admin/chamamanagement/ChamaManagementScreen';
-import LearningManagementScreen from '../../screens/admin/learning/LearningManagementScreen';
 import SystemAnalyticsScreen from '../../screens/admin/analytics/SystemAnalyticsScreen';
 import SecurityCenterScreen from '../../screens/admin/security/SecurityCenterScreen';
 import PaymentSystemScreen from '../../screens/admin/payments/PaymentSystemScreen';
 import BackupMaintenanceScreen from '../../screens/admin/maintenance/BackupMaintenanceScreen';
 import AdminSettingsScreen from '../../screens/admin/settings/AdminSettingsScreen';
-import CreateLearningCourseScreen from '../../screens/admin/learning/CreateLearningCourseScreen';
-import CreateLearningCategoryScreen from '../../screens/admin/learning/CreateLearningCategoryScreen';
 import FinancialReportsScreen from '../../screens/admin/financial/FinancialReportsScreen';
 import SystemHealthScreen from '../../screens/admin/system/SystemHealthScreen';
 import APIManagementScreen from '../../screens/admin/system/APIManagementScreen';
@@ -32,7 +29,6 @@ const AdminLayoutProvider = ({ route, navigation }) => {
     dashboard: AdminHomepage,
     UserManagementScreen: UserManagementScreen,
     ChamaManagementScreen: ChamaManagementScreen,
-    LearningManagementScreen: LearningManagementScreen,
     SystemAnalyticsScreen: SystemAnalyticsScreen,
     SecurityCenterScreen: SecurityCenterScreen,
     PaymentSystemScreen: PaymentSystemScreen,
@@ -45,8 +41,6 @@ const AdminLayoutProvider = ({ route, navigation }) => {
     NotificationManagementScreen: NotificationManagementScreen,
     AuditLogsScreen: AuditLogsScreen,
     AdminSupportScreen: AdminSupportScreen,
-    'create-course': CreateLearningCourseScreen,
-    'create-category': CreateLearningCategoryScreen,
   };
 
   const handleRouteChange = (routeId, routeName, params = {}) => {

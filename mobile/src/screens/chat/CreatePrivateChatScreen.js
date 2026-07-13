@@ -83,9 +83,7 @@ export default function CreatePrivateChatScreen({ navigation }) {
         usersWithHistory.sort((a, b) => new Date(b.lastChatAt) - new Date(a.lastChatAt));
 
         setUsers(usersWithHistory);
-        console.log('Loaded users with conversation history:', usersWithHistory.length);
       } else {
-        console.log('No chat rooms found or API failed');
         setUsers([]);
       }
     } catch (error) {

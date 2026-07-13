@@ -172,7 +172,6 @@ const CreateMerryGoRound = ({ route, navigation }) => {
           refresh: true
         });
       } else {
-        console.log('❌ Merry-go-round creation failed:', response.error);
         Alert.alert('Error', response.error || 'Failed to create merry-go-round');
       }
     } catch (error) {

@@ -6,16 +6,9 @@ import { View, Text, StyleSheet } from 'react-native';
 
 // User Dashboard Screens
 import EnhancedUserDashboard from '../screens/user/userdashboard/EnhancedUserDashboard';
-import LearningHubScreen from '../screens/user/learning/LearningHubScreen';
-import CourseDetailScreen from '../screens/user/learning/CourseDetailScreen';
-import QuizTakingScreen from '../screens/user/learning/QuizTakingScreen';
-import VideoPlayerScreen from '../screens/user/learning/VideoPlayerScreen';
-import ArticleReaderScreen from '../screens/user/learning/ArticleReaderScreen';
-import CourseNavigationScreen from '../screens/user/learning/CourseNavigationScreen';
 import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
 import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
-import JitsiMeetScreen from '../screens/chama/meeting/JitsiMeetScreen';
 
 // Other User Screens
 import ProfileScreen from '../screens/user/profile/ProfileScreen';
@@ -123,14 +116,6 @@ function UserTabNavigator() {
         }}
       />
 
-      <Tab.Screen
-        name="Learn"
-        component={LearningHubScreen}
-        options={{
-          title: 'Learning Hub',
-          tabBarLabel: 'Learn',
-        }}
-      />
       <Tab.Screen
         name="Meetings"
         component={ChamaMeetingsScreen}
@@ -400,17 +385,7 @@ function UserTabNavigator() {
         }}
       />
 
-      {/* Learning Screens */}
-      <Tab.Screen
-        name="CourseDetail"
-        component={CourseDetailScreen}
-        options={{
-          title: 'Course Details',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-
-      {/* Chama Screens */}
+           {/* Chama Screens */}
       <Tab.Screen
         name="Invitations"
         component={InvitationsScreen}
@@ -430,52 +405,11 @@ function UserTabNavigator() {
         }}
       />
 
-      {/* Learning Content Screens - Hidden from tab bar */}
-      <Tab.Screen
-        name="QuizTaking"
-        component={QuizTakingScreen}
-        options={{
-          title: 'Take Quiz',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-      <Tab.Screen
-        name="VideoPlayer"
-        component={VideoPlayerScreen}
-        options={{
-          title: 'Video Lesson',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-      <Tab.Screen
-        name="ArticleReader"
-        component={ArticleReaderScreen}
-        options={{
-          title: 'Article',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-      <Tab.Screen
-        name="CourseNavigation"
-        component={CourseNavigationScreen}
-        options={{
-          title: 'Course Navigation',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
       <Tab.Screen
         name="PhysicalMeeting"
         component={PhysicalMeetingScreen}
         options={{
           title: 'Physical Meeting',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-      <Tab.Screen
-        name="OnlineMeeting"
-        component={JitsiMeetScreen}
-        options={{
-          title: 'Online Meeting',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />

@@ -226,7 +226,6 @@ const SystemHealthScreen = ({ navigation }) => {
             icon="refresh"
             variant="primary"
             size="small"
-            onPress={() => console.log('Restart Services')}
             theme={theme}
             style={styles.actionButtonBordered}
           />
@@ -235,7 +234,6 @@ const SystemHealthScreen = ({ navigation }) => {
             icon="settings"
             variant="secondary"
             size="small"
-            onPress={() => console.log('System Config')}
             theme={theme}
             style={styles.actionButtonBordered}
           />
@@ -244,7 +242,6 @@ const SystemHealthScreen = ({ navigation }) => {
             icon="download"
             variant="info"
             size="small"
-            onPress={() => console.log('Download Logs')}
             theme={theme}
             style={styles.actionButtonBordered}
           />

@@ -200,7 +200,6 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
         }
 
         if (results.length > 0) {
-          console.log(`${label}: loaded ${results.length} records`);
         } else if (lastError) {
           console.warn(`${label}: failed after partial load:`, lastError.message);
         } else {

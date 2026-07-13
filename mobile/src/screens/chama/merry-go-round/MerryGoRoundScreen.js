@@ -169,7 +169,6 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
         allContributions = [...allContributions, ...merryTx];
       }
 
-      console.log('[MGR] Loaded', allContributions.length, 'contributions for round', currentRound.id);
       setRoundContributions(allContributions);
     } catch (error) {
       console.error('Failed to load round contributions:', error);

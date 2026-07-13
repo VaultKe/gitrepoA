@@ -89,15 +89,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         connectionData = response.data;
       }
 
-      console.log('🎬 Connection data:', {
-        hasToken: !!connectionData.token,
-        roomName: connectionData.roomName,
-        userRole: connectionData.userRole || userRole,
-        isPreview: connectionData.isPreview || false,
-      });
-
-      // Meeting connection logic removed - LiveKit no longer used
-
       // Mark attendance (skip for preview mode)
       if (!isPreview) {
         await markAttendance();
