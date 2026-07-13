@@ -1453,10 +1453,16 @@ func (s *ChamaService) DeleteChama(chamaID string) error {
 		return fmt.Errorf("failed to delete meetings: %w", err)
 	}
 
-	// Delete welfare contributions
-	_, err = tx.Exec("DELETE FROM welfare_contributions WHERE chama_id = $1", chamaID)
+	// Delete welfare contributions (linked to chama via welfare_funds)
+	_, err = tx.Exec("DELETE FROM welfare_contributions WHERE welfare_fund_id IN (SELECT id FROM welfare_funds WHERE chama_id = $1)", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete welfare contributions: %w", err)
+	}
+
+	// Delete welfare funds
+	_, err = tx.Exec("DELETE FROM welfare_funds WHERE chama_id = $1", chamaID)
+	if err != nil {
+		return fmt.Errorf("failed to delete welfare funds: %w", err)
 	}
 
 	// Delete welfare requests
@@ -1465,8 +1471,14 @@ func (s *ChamaService) DeleteChama(chamaID string) error {
 		return fmt.Errorf("failed to delete welfare requests: %w", err)
 	}
 
-	// Delete loan guarantors
-	_, err = tx.Exec("DELETE FROM loan_guarantors WHERE loan_id IN (SELECT id FROM loans WHERE chama_id = $1)", chamaID)
+	// Delete loan payments (linked to loans)
+	_, err = tx.Exec("DELETE FROM loan_payments WHERE loan_id IN (SELECT id FROM loans WHERE chama_id = $1)", chamaID)
+	if err != nil {
+		return fmt.Errorf("failed to delete loan payments: %w", err)
+	}
+
+	// Delete loan guarantors (linked to loans)
+	_, err = tx.Exec("DELETE FROM guarantors WHERE loan_id IN (SELECT id FROM loans WHERE chama_id = $1)", chamaID)
 	if err != nil {
 		return fmt.Errorf("failed to delete loan guarantors: %w", err)
 	}

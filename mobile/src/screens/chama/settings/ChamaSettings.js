@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Switch,
-  Alert,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
@@ -16,6 +15,7 @@ import Toast from 'react-native-toast-message';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import api from '../../../services/api';
+import DestructiveConfirmModal from '../../../components/common/DestructiveConfirmModal';
 
 const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   const { chamaId } = route.params;
@@ -47,6 +47,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
   });
 
   const [activeWalletTypes, setActiveWalletTypes] = useState([]);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const WALLET_TYPES = [
     { id: 'merry-go-round', label: 'Merry-go-round Contribution', icon: 'swap-horizontal' },
     { id: 'welfare', label: 'Welfare Contribution', icon: 'heart' },
@@ -264,16 +266,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-  const handleLeaveChama = () => {
-    Alert.alert(
-      'Leave Chama',
-      'Are you sure you want to leave this chama? You will lose access to all chama activities and data.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Leave', style: 'destructive', onPress: confirmLeaveChama },
-      ]
-    );
-  };
+  const openLeaveModal = () => setShowLeaveModal(true);
+  const openDeleteModal = () => setShowDeleteModal(true);
 
   const confirmLeaveChama = async () => {
     try {
@@ -309,17 +303,6 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleDeleteChama = () => {
-    Alert.alert(
-      'Delete Chama',
-      'Are you sure you want to permanently delete this chama?\n\nThis will delete:\n• All members and their data\n• All contributions and transactions\n• All meetings and documents\n• All loans and welfare records\n\nThis action cannot be undone!',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete Forever', style: 'destructive', onPress: confirmDeleteChama },
-      ]
-    );
   };
 
   const confirmDeleteChama = async () => {
@@ -600,7 +583,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
                 opacity: saving ? 0.7 : 1
               }
             ]}
-            onPress={handleLeaveChama}
+            onPress={openLeaveModal}
             disabled={saving}
           >
             <Ionicons name="exit" size={20} color={colors.warning} />
@@ -615,7 +598,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
               styles.deleteButton,
               { borderColor: colors.error, opacity: saving ? 0.7 : 1 }
             ]}
-            onPress={handleDeleteChama}
+            onPress={openDeleteModal}
             disabled={saving}
           >
             <Ionicons name="trash" size={20} color={colors.error} />
@@ -625,6 +608,24 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <DestructiveConfirmModal
+        visible={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        onConfirm={confirmLeaveChama}
+        chamaName={chamaData?.name || chamaInfo.name}
+        action="leave"
+        loading={saving}
+      />
+
+      <DestructiveConfirmModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={confirmDeleteChama}
+        chamaName={chamaData?.name || chamaInfo.name}
+        action="delete"
+        loading={saving}
+      />
     </SafeAreaView>
   );
 };

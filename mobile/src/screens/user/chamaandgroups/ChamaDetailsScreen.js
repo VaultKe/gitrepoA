@@ -21,6 +21,7 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ApiService from '../../../services/api';
+import DestructiveConfirmModal from '../../../components/common/DestructiveConfirmModal';
 import getResponsiveStyles from '../../../styles/ChamaDetailsScreenStyles';
 
 const ChamaDetailsScreen = ({ route, navigation }) => {
@@ -156,6 +157,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [userMembership, setUserMembership] = useState(null);
   const [chatRoomLoading, setChatRoomLoading] = useState(false);
   const [uploadingRules, setUploadingRules] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   // Guard against concurrent / repeated loads (focus + param changes can fire rapidly)
   const loadingRef = useRef(false);
@@ -400,26 +402,22 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleLeaveChama = () => {
-    Alert.alert(
-      'Leave Chama',
-      'Are you sure you want to leave this chama?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Leave', style: 'destructive', onPress: confirmLeaveChama },
-      ]
-    );
-  };
+  const handleLeaveChama = () => setShowLeaveModal(true);
 
   const confirmLeaveChama = async () => {
     try {
       const response = await ApiService.leaveChama(chamaId);
       if (response.success) {
+        setShowLeaveModal(false);
         Alert.alert('Success', 'You have left the chama');
         navigation.goBack();
+      } else {
+        setShowLeaveModal(false);
+        Alert.alert('Unable to Leave', response.error || 'Failed to leave chama');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to leave chama');
+      setShowLeaveModal(false);
+      Alert.alert('Error', error?.message || 'Failed to leave chama');
     }
   };
 
@@ -1459,7 +1457,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             }}
             style={styles.membershipButton}
           />
-          
+
           <Button
             title="Leave Chama"
             variant="outline"
@@ -1517,6 +1515,14 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           </>
         )}
       </ScrollView>
+
+      <DestructiveConfirmModal
+        visible={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        onConfirm={confirmLeaveChama}
+        chamaName={chama?.name}
+        action="leave"
+      />
 
     </SafeAreaView>
   );
