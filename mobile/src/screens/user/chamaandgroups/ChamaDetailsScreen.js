@@ -902,10 +902,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       ) : (
         <View>
           {/* Table Header */}
-          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
-            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date & Time</Text>
-            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Title</Text>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Date & Time</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
           </View>
 
           {/* Table Rows */}
@@ -972,10 +972,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       ) : (
         <View>
           {/* Table Header */}
-          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Description</Text>
-            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
-            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
+          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Description</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
           </View>
 
           {/* Table Rows */}
@@ -1019,15 +1019,8 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
   const renderActivePolls = () => {
 
-    const votedPolls = polls.filter(poll => poll.userVoted || poll.user_has_voted);
-    const unvotedPolls = polls.filter(poll => !(poll.userVoted || poll.user_has_voted));
-
-
-    // Get last 5 voted polls (most recent first)
-    const recentVotedPolls = votedPolls.slice(-5).reverse();
-
     // Count of new polls user hasn't acted on
-    const newPollsCount = unvotedPolls.length;
+    const newPollsCount = polls.filter(poll => !(poll.userVoted || poll.user_has_voted)).length;
 
     return (
       <Card style={styles.section} variant="outlined">
@@ -1062,65 +1055,51 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
             )}
 
             {/* Table Header */}
-            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-              <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase' }}>Title</Text>
-              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
-              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.text, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+              <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Title</Text>
+              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
+              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
             </View>
 
-            {/* Table Rows */}
-            {recentVotedPolls.map((poll, index) => {
-              const hasUserVoted = poll.userVoted || poll.user_has_voted;
-              const pollStatus = poll.status || 'active';
+            {/* Table Rows - show all polls, active first */}
+            {(() => {
+              const getPollStatus = (poll) => {
+                const pollStatus = poll.status || 'active';
+                const endDate = poll.endDate || poll.end_date || poll.endsAt;
+                const hasEnded = endDate && new Date(endDate) < new Date();
+                const isActive = pollStatus === 'active' && !hasEnded;
+                return { isActive, hasEnded, pollStatus };
+              };
 
-              const endDate = poll.endDate || poll.end_date || poll.endsAt;
-              const hasEnded = endDate && new Date(endDate) < new Date();
-              const isActive = pollStatus === 'active' && !hasEnded;
+              const sortedPolls = [...polls].sort((a, b) => {
+                const aStatus = getPollStatus(a);
+                const bStatus = getPollStatus(b);
+                if (aStatus.isActive && !bStatus.isActive) return -1;
+                if (!aStatus.isActive && bStatus.isActive) return 1;
+                return 0;
+              });
 
-              return (
-                 <View key={`poll-${poll.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                   <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
-                   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                     <Ionicons
-                       name={hasUserVoted ? "checkmark-circle" : "close-circle"}
-                       size={16}
-                       color={hasUserVoted ? colors.success : colors.error}
-                     />
+              return sortedPolls.map((poll, index) => {
+                const hasUserVoted = poll.userVoted || poll.user_has_voted;
+                const { isActive, hasEnded } = getPollStatus(poll);
+
+                return (
+                   <View key={`poll-${poll.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+                     <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
+                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                       <Ionicons
+                         name={hasUserVoted ? "checkmark-circle" : "close-circle"}
+                         size={16}
+                         color={hasUserVoted ? colors.success : colors.error}
+                       />
+                     </View>
+                     <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
+                       {isActive ? 'Active' : 'Closed'}
+                     </Text>
                    </View>
-                   <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
-                     {isActive ? 'Active' : 'Closed'}
-                   </Text>
-                 </View>
-               );
-             })}
-
-            {/* New polls - list each one individually */}
-            {unvotedPolls.slice(0, 5).map((poll, index) => {
-              const pollStatus = poll.status || 'active';
-              const endDate = poll.endDate || poll.end_date || poll.endsAt;
-              const hasEnded = endDate && new Date(endDate) < new Date();
-              const isActive = pollStatus === 'active' && !hasEnded;
-
-              return (
-                <TouchableOpacity
-                  key={`new-poll-${poll.id || index}`}
-                  style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
-                  onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}
-                >
-                  <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.primary }} numberOfLines={1}>{poll.title || 'New Poll'}</Text>
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons
-                      name="alert-circle"
-                      size={16}
-                      color={colors.warning}
-                    />
-                  </View>
-                  <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
-                    {isActive ? 'New' : 'Closed'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+                 );
+              });
+            })()}
           </View>
         )}
       </Card>

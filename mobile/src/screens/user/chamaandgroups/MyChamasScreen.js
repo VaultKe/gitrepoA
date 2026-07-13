@@ -27,7 +27,7 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     flexDirection: 'row',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary + '10',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
   },
@@ -56,7 +56,7 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
-    color: colors.text,
+    color: colors.primary,
     fontSize: 13,
     textAlign: 'center',
   },
