@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  SafeAreaView,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -230,17 +231,17 @@ export default function CreatePrivateChatScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
           Loading users...
         </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Search Bar */}
       <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Ionicons name="search" size={20} color={colors.textSecondary} />
@@ -281,7 +282,7 @@ export default function CreatePrivateChatScreen({ navigation }) {
           </Text>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
