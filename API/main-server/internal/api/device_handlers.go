@@ -40,14 +40,6 @@ func ensureDevicesTable(db *sql.DB) {
 	}
 }
 
-// UpsertUserDevice records or refreshes a registered device for a user each
-// time they log in. The stable per-device identifier (sent by the app as
-// X-Device-Id) is stored in the primary key `id` so the same physical device
-// is always recognised. This powers accurate login history and helps surface
-// unrecognised devices that could indicate account takeover.
-//
-// It returns whether this is the first time the device has been seen (i.e. a
-// potentially new device) and any error encountered.
 func UpsertUserDevice(
 	db *sql.DB,
 	userID, deviceUID, deviceName, deviceType, ipAddress,
