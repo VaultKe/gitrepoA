@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius, getShadowStyle, breakpoints } from '../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, breakpoints } from '../../utils/theme';
 import ApiService from '../../services/api';
 import FormField from '../../components/FormField';
 import LoadingButton from '../../components/LoadingButton';
@@ -268,12 +268,11 @@ export default function EmailVerificationScreen({ route, navigation }) {
 
             {/* Email Verification Card */}
             <Card
-              variant="elevated"
+              variant="outlined"
               padding={isDesktop ? "xl" : "lg"}
               style={[
                 styles.verificationCard,
-                { backgroundColor: colors.surface },
-                getShadowStyle(isDesktop ? 'lg' : 'md'),
+                { backgroundColor: colors.surface, borderColor: colors.border },
                 !isDesktop && !isTablet && styles.mobileVerificationCard
               ]}
             >

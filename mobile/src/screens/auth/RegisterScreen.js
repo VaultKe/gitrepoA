@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius, getShadowStyle, breakpoints } from '../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, breakpoints } from '../../utils/theme';
 import apiService from '../../services/api';
 import MessageBanner from '../../components/MessageBanner';
 import FormField from '../../components/FormField';
@@ -265,12 +265,11 @@ export default function RegisterScreen({ navigation }) {
 
             {/* Registration Card - Consistent across all screen sizes */}
             <Card
-              variant="elevated"
+              variant="outlined"
               padding={isDesktop ? "xl" : "lg"}
               style={[
                 styles.registerCard,
-                { backgroundColor: colors.surface },
-                getShadowStyle(isDesktop ? 'lg' : 'md'),
+                { backgroundColor: colors.surface, borderColor: colors.border },
                 !isDesktop && !isTablet && styles.mobileRegisterCard
               ]}
             >
@@ -388,7 +387,6 @@ export default function RegisterScreen({ navigation }) {
                 { value: 'male', label: 'Male', icon: 'male' },
                 { value: 'female', label: 'Female', icon: 'female' },
                 { value: 'other', label: 'Other', icon: 'transgender' },
-                { value: 'prefer_not_to_say', label: 'Prefer not to say', icon: 'help-circle-outline' }
               ].map((option) => (
                 <Card
                   key={option.value}

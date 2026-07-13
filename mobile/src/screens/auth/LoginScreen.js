@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius, getShadowStyle, breakpoints } from '../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, breakpoints } from '../../utils/theme';
 import apiService from '../../services/api';
 import MessageBanner from '../../components/MessageBanner';
 import FormField from '../../components/FormField';
@@ -258,12 +258,11 @@ export default function LoginScreen({ navigation }) {
 
             {/* Login Card - Consistent across all screen sizes */}
             <Card
-              variant="elevated"
+              variant="outlined"
               padding={isDesktop ? "xl" : "lg"}
               style={[
                 styles.loginCard,
-                { backgroundColor: colors.surface },
-                getShadowStyle(isDesktop ? 'lg' : 'md'),
+                { backgroundColor: colors.surface, borderColor: colors.border },
                 !isDesktop && !isTablet && styles.mobileLoginCard
               ]}
             >

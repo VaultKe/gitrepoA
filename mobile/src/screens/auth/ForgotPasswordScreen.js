@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getThemeColors, spacing, typography, borderRadius, getShadowStyle, breakpoints } from '../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, breakpoints } from '../../utils/theme';
 import { useApp } from '../../context/AppContext';
 import ApiService from '../../services/api';
 import FormField from '../../components/FormField';
@@ -139,12 +139,11 @@ export default function ForgotPasswordScreen({ navigation }) {
 
       {/* Forgot Password Card */}
       <Card
-        variant="elevated"
+        variant="outlined"
         padding={isDesktop ? "xl" : "lg"}
         style={[
           styles.forgotPasswordCard,
-          { backgroundColor: colors.surface },
-          getShadowStyle(isDesktop ? 'lg' : 'md'),
+          { backgroundColor: colors.surface, borderColor: colors.border },
           !isDesktop && !isTablet && styles.mobileForgotPasswordCard
         ]}
       >
@@ -249,12 +248,11 @@ export default function ForgotPasswordScreen({ navigation }) {
 
       {/* Success Card */}
       <Card
-        variant="elevated"
+        variant="outlined"
         padding={isDesktop ? "xl" : "lg"}
         style={[
           styles.successCard,
-          { backgroundColor: colors.surface },
-          getShadowStyle(isDesktop ? 'lg' : 'md'),
+          { backgroundColor: colors.surface, borderColor: colors.border },
           !isDesktop && !isTablet && styles.mobileSuccessCard
         ]}
       >
@@ -398,14 +396,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
     borderWidth: 1.5,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   titleText: {
     fontSize: typography.fontSize.xl,
