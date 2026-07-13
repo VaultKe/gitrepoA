@@ -71,6 +71,7 @@ class ChatService {
     // Room membership updates (if backend sends)
     websocketService.registerMessageHandler('room_updated', this._handleRoomUpdate.bind(this));
     websocketService.registerMessageHandler('room_members', this._handleRoomMembers.bind(this));
+    websocketService.registerMessageHandler('message_deleted', this._handleDeleted.bind(this));
     // Error handling
     websocketService.registerMessageHandler('error', this._handleError.bind(this));
   }
@@ -91,48 +92,34 @@ class ChatService {
 // ==================== Room Management ====================
 
   async getRooms(forceRefresh = false) {
-    // Load rooms via the backend REST API (fast, uses the backend's
-    // in-memory cache). We no longer fire a duplicate WebSocket `get_rooms`
-    // request on every list load — that doubled the work and registered a
-    // 30s-timeout handler each time, which overwhelmed the connection.
+    // WebSocket-first: ask the chat service over the same socket we use
+    // for live messages (no extra HTTP/auth round-trip). Fall back to
+    // REST (then cache) only when the socket is down.
     try {
+      if (websocketService.isConnected) {
+        return await this._getRoomsViaWebSocket(forceRefresh);
+      }
       return await this._getRoomsViaRest(forceRefresh);
     } catch (error) {
-      console.warn('REST getRooms failed, falling back to cache:', error.message);
-      return Array.from(this.rooms.values());
+      try {
+        return await this._getRoomsViaRest(forceRefresh);
+      } catch (e) {
+        console.warn('REST getRooms failed, falling back to cache:', e.message);
+        return Array.from(this.rooms.values());
+      }
     }
   }
 
   async _getRoomsViaWebSocket(forceRefresh = false) {
-    return new Promise((resolve, reject) => {
-      const requestId = this._generateRequestId();
-      const timeout = setTimeout(() => {
-        reject(new Error('Request timeout'));
-      }, 30000);
-
-      const handler = (response) => {
-        if (response.requestId === requestId) {
-          clearTimeout(timeout);
-          websocketService.unregisterMessageHandler('rooms_list');
-          if (response.success) {
-            this._updateRooms(response.data);
-            resolve(response.data);
-          } else {
-            reject(new Error(response.error || 'Failed to load rooms'));
-          }
-        }
-      };
-
-      // Register response handler BEFORE sending request
-      websocketService.registerMessageHandler('rooms_list', handler);
-
-      // Send request
-      websocketService.send({
-        type: 'get_rooms',
-        requestId,
-        forceRefresh,
-      });
+    if (!websocketService.isConnected) {
+      throw new Error('WebSocket not connected');
+    }
+    const response = await websocketService.sendRequest({
+      type: 'get_rooms',
+      forceRefresh,
     });
+    this._updateRooms(response.data || []);
+    return response.data || [];
   }
 
   async _getRoomsViaRest(forceRefresh = false) {
@@ -196,11 +183,12 @@ class ChatService {
 
   async markMessageAsRead(roomId, messageId) {
     try {
-      await websocketService.send({
-        type: WS_EVENTS.MARK_READ,
-        roomId,
-        messageId,
-      });
+      const payload = { type: WS_EVENTS.MARK_READ, roomId, messageId };
+      if (websocketService.isConnected) {
+        await websocketService.sendRequest(payload, 5000).catch(() => {});
+      } else {
+        await websocketService.send(payload);
+      }
 
       // Update local read state
       this._markAsRead(roomId, messageId);
@@ -250,13 +238,15 @@ leaveRoom(roomId) {
 
     async deleteMessage(roomId, messageId) {
       try {
-        await websocketService.send({
+        // Fire-and-forget over WS; the server broadcasts message_deleted
+        // back to every device (including this one) so removal is authoritative.
+        websocketService.send({
           type: 'delete_message',
           roomId,
           messageId,
         });
 
-        // Remove from local state optimistically
+        // Optimistic local removal for instant feedback.
         this._removeMessage(roomId, messageId);
       } catch (error) {
         console.error('deleteMessage error:', error);
@@ -289,59 +279,47 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
         this._notifyMessageSubscribers(roomId, optimisticMessage);
 
         try {
-          return new Promise((resolve, reject) => {
-            const requestId = this._generateRequestId();
-            const timeout = setTimeout(() => {
-              reject(new Error('Request timeout'));
-            }, 15000);
+          const message = {
+            type: WS_EVENTS.SEND_MESSAGE,
+            roomId,
+            content,
+            messageType: type,
+            metadata: { ...metadata, replyToId },
+            clientMessageId: tempId,
+          };
 
-            const handler = (response) => {
-              if (response.requestId === requestId) {
-                clearTimeout(timeout);
-                websocketService.unregisterMessageHandler('message_sent');
-                if (response.success) {
-                  // Reconcile the optimistic bubble with the saved server
-                  // message directly from the ack. This is more reliable than
-                  // waiting for the broadcast, and marks the server id as
-                  // processed so the incoming new_message broadcast becomes a
-                  // no-op instead of adding a duplicate.
-                  this._reconcileSentMessage(roomId, tempId, response.data);
-                  resolve(response.data);
-                } else {
-                  this.pendingMessages.delete(tempId);
-                  this._updateMessageStatus(roomId, tempId, 'failed', response.error);
-                  reject(new Error(response.error || 'Failed to send message'));
-                }
+          if (websocketService.isConnected) {
+            try {
+              const response = await websocketService.sendRequest(message, 15000);
+              // Reconcile the optimistic bubble with the confirmed server
+              // message so the incoming new_message broadcast becomes a no-op.
+              this._reconcileSentMessage(roomId, tempId, response.data);
+              return response.data;
+            } catch (wsErr) {
+              // WS send failed but the frame may have actually been
+              // delivered; only treat as failure if not already acknowledged.
+              if (this.pendingMessages.has(tempId)) {
+                throw wsErr;
               }
-            };
-
-            websocketService.registerMessageHandler('message_sent', handler);
-
-            const message = {
-              type: WS_EVENTS.SEND_MESSAGE,
-              requestId,
-              roomId,
-              content,
-              messageType: type,
-              metadata: { ...metadata, replyToId },
-              clientMessageId: tempId,
-            };
-            if (!websocketService.send(message)) {
-              clearTimeout(timeout);
-              websocketService.unregisterMessageHandler('message_sent');
-              this.pendingMessages.delete(tempId);
-              this._removeMessage(roomId, tempId);
-              reject(new Error('WebSocket not connected'));
-            } else {
-              // The frame has left the device — show the "sent" (single tick)
-              // state immediately instead of waiting for the server round-trip.
-              // The ack/broadcast later upgrades it to "delivered" (double tick).
-              this._updateMessageStatus(roomId, tempId, 'sent');
+              return;
             }
+          }
+
+          // Fallback to REST when the socket is unavailable.
+          const ApiService = (await import('../api')).default;
+          const restResp = await ApiService.makeRequest(`/chat/rooms/${roomId}/messages`, {
+            method: 'POST',
+            body: { content, type, replyToId, metadata: { ...metadata, replyToId } },
           });
+          if (restResp.success) {
+            this._reconcileSentMessage(roomId, tempId, restResp.data);
+            return restResp.data;
+          }
+          throw new Error(restResp.error || 'Failed to send message');
         } catch (error) {
           console.error('sendMessage error:', error);
           this.pendingMessages.delete(tempId);
+          this._updateMessageStatus(roomId, tempId, 'failed', error.message);
           this._removeMessage(roomId, tempId);
           throw error;
         }
@@ -384,6 +362,27 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
    }
   async createRoom(roomData) {
     try {
+      // WebSocket-first room creation (reuses an existing chama/private
+      // room server-side, so duplicates are avoided at the source).
+      if (websocketService.isConnected) {
+        try {
+          const response = await websocketService.sendRequest({
+            type: 'create_room',
+            name: roomData.name,
+            chamaId: roomData.chamaId,
+            memberIds: roomData.memberIds,
+            recipientId: roomData.recipientId,
+            type: roomData.type,
+          });
+          if (response.success && response.data) {
+            this._updateRoom(response.data);
+            return response.data;
+          }
+        } catch (wsErr) {
+          // fall through to REST
+        }
+      }
+
       const ApiService = (await import('../api')).default;
       const response = await ApiService.makeRequest('/chat/rooms', {
         method: 'POST',
@@ -428,17 +427,32 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
 
   async getMessages(roomId, limit = 50, offset = 0) {
     try {
-      const ApiService = (await import('../api')).default;
-      const response = await ApiService.makeRequest(`/chat/rooms/${roomId}/messages?limit=${limit}&offset=${offset}`);
-
-      if (response.success) {
+      // WebSocket-first: ask the chat service for history over the same
+      // socket we use for live updates (no extra HTTP/auth round-trip).
+      if (websocketService.isConnected) {
+        const response = await websocketService.sendRequest({
+          type: 'get_messages',
+          roomId,
+          limit,
+          offset,
+        });
         this._updateMessages(roomId, response.data || []);
         return this.getRoomMessages(roomId);
       }
-      throw new Error(response.error || 'Failed to load messages');
+      throw new Error('WebSocket not connected');
     } catch (error) {
+      // Fallback to REST (and then cache) only when the socket is down.
+      try {
+        const ApiService = (await import('../api')).default;
+        const response = await ApiService.makeRequest(`/chat/rooms/${roomId}/messages?limit=${limit}&offset=${offset}`);
+        if (response.success) {
+          this._updateMessages(roomId, response.data || []);
+          return this.getRoomMessages(roomId);
+        }
+      } catch (restErr) {
+        console.error('getMessages REST error:', restErr);
+      }
       console.error('getMessages error:', error);
-      // Return cached messages as fallback
       return this.getRoomMessages(roomId).slice(-limit);
     }
   }
@@ -470,6 +484,7 @@ _handleNewMessage(message) {
       if (!roomId || !data) return;
 
       data.createdAt = this._toEpochMs(data.createdAt);
+      data.metadata = this._normalizeMetadata(data.metadata);
 
       const pendingTempId = data.clientMessageId || data.id;
       const pending = this.pendingMessages.get(pendingTempId);
@@ -527,6 +542,7 @@ _handleNewMessage(message) {
 
     const data = { ...serverData };
     data.createdAt = this._toEpochMs(data.createdAt);
+    data.metadata = this._normalizeMetadata(data.metadata);
     data.status = 'delivered';
 
     // Normalize a top-level imageUrl into metadata for rendering, preserving
@@ -610,6 +626,17 @@ _handleNewMessage(message) {
     }
   }
 
+  // Server-authoritative deletion: remove the message everywhere so every
+  // device (sender and receivers) updates live over WebSocket.
+  _handleDeleted(message) {
+    const { roomId, data } = message;
+    if (!roomId || !data) return;
+    const messageId = data.messageId || data.id;
+    if (!messageId) return;
+    this._removeMessage(roomId, messageId);
+    this.processedMessageIds.delete(messageId);
+  }
+
   _updateRooms(rooms) {
     rooms.forEach(room => this._updateRoom(room));
   }
@@ -631,10 +658,11 @@ _handleNewMessage(message) {
     // duplicate detection stay consistent with optimistic messages.
     const normalizedMessages = messages.map(m => {
       const createdAt = this._toEpochMs(m.createdAt);
-      if (m.imageUrl && !m.metadata?.imageUri && !m.metadata?.imageUrl) {
-        return { ...m, createdAt, metadata: { ...m.metadata, imageUrl: m.imageUrl }, imageUrl: undefined };
+      const metadata = this._normalizeMetadata(m.metadata);
+      if (m.imageUrl && !metadata.imageUri && !metadata.imageUrl) {
+        return { ...m, createdAt, metadata: { ...metadata, imageUrl: m.imageUrl }, imageUrl: undefined };
       }
-      return { ...m, createdAt };
+      return { ...m, createdAt, metadata };
     });
 
     // Build keys from server messages so we can match and remove stale optimistic duplicates.
@@ -798,6 +826,26 @@ _notifyMessageSubscribers(roomId, message) {
     if (typeof value === 'number') return value;
     const parsed = new Date(value).getTime();
     return Number.isNaN(parsed) ? Date.now() : parsed;
+  }
+
+  // The Postgres jsonb column round-trips as a JS object under REST but
+  // can arrive base64-encoded (bytea) or as a JSON string over the
+  // WebSocket frame. Coerce any of those into a plain object so the
+  // rest of the UI can rely on metadata being an object.
+  _normalizeMetadata(value) {
+    if (value === null || value === undefined) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      const s = value.trim();
+      if (!s) return {};
+      try {
+        const parsed = JSON.parse(s);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
   }
 
   _generateTempId() {

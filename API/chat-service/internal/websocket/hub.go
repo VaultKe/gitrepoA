@@ -1,225 +1,260 @@
 package websocket
 
 import (
-	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-type Message struct {
-	Type      string `json:"type"`
-	Content   string `json:"content,omitempty"`
-	RoomID    string `json:"roomId,omitempty"`
-	SenderID  string `json:"senderId,omitempty"`
-	Timestamp int64  `json:"timestamp"`
-}
-
-type RoomMessage struct {
-	RoomID   string
-	Content  []byte
-	SenderID string
-}
-
-type Client struct {
-	conn   connWrapper
-	send   chan []byte
-	userID string
-	roomID string
-	hub    *Hub
-}
-
-type connWrapper struct {
-	*websocket.Conn
-}
-
+// Hub is a scalable, in-memory pub/sub registry for chat WebSocket
+// connections. Design goals for thousands of concurrent users:
+//   - O(1) delivery to a single user across all their devices.
+//   - Room broadcasts only iterate the (typically small) set of members
+//     currently connected to that room.
+//   - No global scans on the hot path; per-connection read/write pumps
+//     keep socket I/O off the Hub lock.
+//   - Dead connections are reclaimed by per-connection read/write
+//     deadlines + control-frame ping/pong (no single ticker scanning
+//     every client).
+//   - Dead connections are reclaimed by per-connection read/write
+//     deadlines + control-frame ping/pong.
 type Hub struct {
-	clients       map[*Client]bool
-	rooms         map[string]map[*Client]bool
-	broadcast     chan *Message
-	register      chan *Client
-	unregister    chan *Client
-	roomMessages  chan *RoomMessage
-	roomSubscribe chan *RoomSubscription
-	mu            sync.RWMutex
-}
+	// userClients maps a userID to all of their live connections
+	// (a user may have the app open on a phone and a tablet).
+	userClients map[string]map[*Client]struct{}
 
-type RoomSubscription struct {
-	Client *Client
-	RoomID string
+	// roomClients maps a roomID to the set of currently connected clients.
+	roomClients map[string]map[*Client]struct{}
+
+	mu sync.RWMutex
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:       make(map[*Client]bool),
-		rooms:         make(map[string]map[*Client]bool),
-		broadcast:     make(chan *Message, 256),
-		register:      make(chan *Client, 256),
-		unregister:    make(chan *Client, 256),
-		roomMessages:  make(chan *RoomMessage, 256),
-		roomSubscribe: make(chan *RoomSubscription, 256),
+		userClients: make(map[string]map[*Client]struct{}),
+		roomClients: make(map[string]map[*Client]struct{}),
 	}
 }
 
-func (h *Hub) Run() {
-	for {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("WS HUB PANIC RECOVERED: %v\n", r)
-			}
-		}()
-		select {
-		case client := <-h.register:
-			h.mu.Lock()
-			h.clients[client] = true
-			if h.rooms[client.roomID] == nil {
-				h.rooms[client.roomID] = make(map[*Client]bool)
-			}
-			h.rooms[client.roomID][client] = true
-			h.mu.Unlock()
+// Register adds a freshly upgraded connection to the Hub. The connection is
+// not attached to any chat room until the client sends `join_room`; this
+// avoids the old behaviour of dumping every connecting client into a single
+// shared "main" room (which would have broadcast to everyone at scale).
+func (h *Hub) Register(c *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
-		case client := <-h.unregister:
-			h.mu.Lock()
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				if h.rooms[client.roomID] != nil {
-					delete(h.rooms[client.roomID], client)
-					if len(h.rooms[client.roomID]) == 0 {
-						delete(h.rooms, client.roomID)
-					}
-				}
-				close(client.send)
-			}
-			h.mu.Unlock()
+	if h.userClients[c.UserID] == nil {
+		h.userClients[c.UserID] = make(map[*Client]struct{})
+	}
+	h.userClients[c.UserID][c] = struct{}{}
+}
 
-		case sub := <-h.roomSubscribe:
-			h.mu.Lock()
-			if h.rooms[sub.RoomID] == nil {
-				h.rooms[sub.RoomID] = make(map[*Client]bool)
-			}
-			h.rooms[sub.RoomID][sub.Client] = true
-			h.mu.Unlock()
+func (h *Hub) Unregister(c *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
-		case msg := <-h.broadcast:
-			h.mu.RLock()
-			data := encodeMessage(msg)
-			for client := range h.clients {
-				select {
-				case client.send <- data:
-				default:
-					// Client buffer full; skip and let ping/pong clean up dead connections
-				}
+	if users, ok := h.userClients[c.UserID]; ok {
+		if _, exists := users[c]; exists {
+			delete(users, c)
+			if len(users) == 0 {
+				delete(h.userClients, c.UserID)
 			}
-			h.mu.RUnlock()
+		}
+	}
+	h.leaveAllRoomsLocked(c)
+}
 
-		case rm := <-h.roomMessages:
-			h.mu.RLock()
-			data := rm.Content
-			for client := range h.rooms[rm.RoomID] {
-				select {
-				case client.send <- data:
-				default:
-					// Client buffer full; skip
-				}
+// JoinRoom attaches a client to a room so it starts receiving that room's
+// broadcasts.
+func (h *Hub) JoinRoom(c *Client, roomID string) {
+	if roomID == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c.addRoom(roomID)
+
+	if h.roomClients[roomID] == nil {
+		h.roomClients[roomID] = make(map[*Client]struct{})
+	}
+	h.roomClients[roomID][c] = struct{}{}
+}
+
+// LeaveRoom detaches a client from a single room.
+func (h *Hub) LeaveRoom(c *Client, roomID string) {
+	if roomID == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c.removeRoom(roomID)
+
+	if room, ok := h.roomClients[roomID]; ok {
+		if _, exists := room[c]; exists {
+			delete(room, c)
+			if len(room) == 0 {
+				delete(h.roomClients, roomID)
 			}
-			h.mu.RUnlock()
 		}
 	}
 }
 
-func (h *Hub) Register(conn *websocket.Conn, userID, roomID string) *Client {
-	client := &Client{
-		conn:   connWrapper{Conn: conn},
-		send:   make(chan []byte, 256),
-		userID: userID,
-		roomID: roomID,
-		hub:    h,
+func (h *Hub) leaveAllRoomsLocked(c *Client) {
+	for roomID := range c.rooms {
+		if room, ok := h.roomClients[roomID]; ok {
+			if _, exists := room[c]; exists {
+				delete(room, c)
+				if len(room) == 0 {
+					delete(h.roomClients, roomID)
+				}
+			}
+		}
 	}
-	h.register <- client
-	return client
+	c.rooms = make(map[string]struct{})
 }
 
-func (h *Hub) RegisterToRoom(userID, roomID string, client *Client) {
-	h.roomSubscribe <- &RoomSubscription{
-		Client: client,
-		RoomID: roomID,
+// SendToUser delivers to every live connection for a user (all their
+// devices). It is O(devices) for that user, not O(total clients).
+func (h *Hub) SendToUser(userID string, payload []byte) {
+	h.mu.RLock()
+	clients := h.userClients[userID]
+	// Copy the set so we can release the lock before writing to sockets.
+	targets := make([]*Client, 0, len(clients))
+	for c := range clients {
+		targets = append(targets, c)
+	}
+	h.mu.RUnlock()
+
+	for _, c := range targets {
+		c.Write(payload)
 	}
 }
 
-func (h *Hub) Unregister(client *Client) {
-	h.unregister <- client
-}
+// BroadcastToRoom delivers to every currently-connected client in a room,
+// excluding the supplied sender (so a user never receives their own message
+// echo). Room broadcasts are O(room members online), which stays small.
+func (h *Hub) BroadcastToRoom(roomID string, payload []byte, excludeUserID string) {
+	h.mu.RLock()
+	clients := h.roomClients[roomID]
+	targets := make([]*Client, 0, len(clients))
+	for c := range clients {
+		if excludeUserID != "" && c.UserID == excludeUserID {
+			continue
+		}
+		targets = append(targets, c)
+	}
+	h.mu.RUnlock()
 
-func (h *Hub) BroadcastToRoom(roomID string, message []byte) {
-	h.roomMessages <- &RoomMessage{
-		RoomID:  roomID,
-		Content: message,
+	for _, c := range targets {
+		c.Write(payload)
 	}
 }
 
-func (h *Hub) SendToUser(userID string, message []byte) {
+// ConnectedUserCount returns the number of distinct users currently online.
+func (h *Hub) ConnectedUserCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+	return len(h.userClients)
+}
 
-	for client := range h.clients {
-		if client.userID == userID {
-			select {
-			case client.send <- message:
-			default:
-				// Buffer full; skip
-			}
-		}
+// Client is a single WebSocket connection. Each client owns its own
+// read and write goroutines so socket I/O never contends on the Hub lock.
+type Client struct {
+	Conn    *websocket.Conn
+	Send    chan []byte
+	UserID  string
+	Hub     *Hub
+	rooms   map[string]struct{}
+	roomsMu sync.RWMutex
+}
+
+func (c *Client) addRoom(roomID string) {
+	c.roomsMu.Lock()
+	c.rooms[roomID] = struct{}{}
+	c.roomsMu.Unlock()
+}
+
+func (c *Client) removeRoom(roomID string) {
+	c.roomsMu.Lock()
+	delete(c.rooms, roomID)
+	c.roomsMu.Unlock()
+}
+
+// Write enqueues an outbound frame. It is non-blocking: if the client's
+// buffer is full (a stuck/slow consumer) the message is dropped rather than
+// blocking the broadcaster, keeping the system responsive under load.
+func (c *Client) Write(payload []byte) {
+	select {
+	case c.Send <- payload:
+	default:
+		// Drop on a full buffer; per-connection read/write deadlines will
+		// eventually reap unresponsive connections.
 	}
 }
 
-func (h *Hub) HandlePingPong() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		h.mu.RLock()
-		for client := range h.clients {
-			if err := client.conn.WriteControl(websocket.PingMessage, []byte{}, time.Time{}); err != nil {
-				h.mu.RUnlock()
-				h.Unregister(client)
-				h.mu.RLock()
-			}
-		}
-		h.mu.RUnlock()
-	}
-}
+const (
+	// writeWait bounds how long a single socket write may take before the
+	// connection is considered dead.
+	writeWait = 10 * time.Second
+	// pongWait is the maximum idle time before expecting a pong.
+	pongWait = 60 * time.Second
+	// pingPeriod must be < pongWait so control pings arrive in time.
+	pingPeriod = (pongWait * 9) / 10
+	// maxMessageSize caps an inbound application frame (bytes) to protect
+	// against abusive payloads.
+	maxMessageSize int64 = 1 << 20 // 1 MB
+)
 
+// WritePump is the per-connection outbound goroutine.
 func (c *Client) WritePump() {
+	pingTicker := time.NewTicker(pingPeriod)
+	defer func() {
+		pingTicker.Stop()
+		c.Conn.Close()
+	}()
+
 	for {
 		select {
-		case message, ok := <-c.send:
+		case msg, ok := <-c.Send:
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			if err := c.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		case <-pingTicker.C:
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		}
 	}
 }
 
+// ReadPump is the per-connection inbound goroutine. It owns connection
+// liveness via read deadlines and control-frame pongs, then hands decoded
+// application messages to handleMessage.
 func (c *Client) ReadPump(handleMessage func(*Client, []byte)) {
-	defer c.hub.Unregister(c)
+	defer c.Hub.Unregister(c)
+
+	c.Conn.SetReadLimit(maxMessageSize)
+	_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.Conn.SetPongHandler(func(string) error {
+		return c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				return
+				// Connection closed; cleanup handled by defer.
 			}
 			return
 		}
 		handleMessage(c, message)
 	}
-}
-
-func encodeMessage(msg *Message) []byte {
-	b, _ := json.Marshal(msg)
-	return b
 }

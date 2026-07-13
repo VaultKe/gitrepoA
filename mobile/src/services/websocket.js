@@ -10,12 +10,15 @@ class WebSocketService {
     this.maxReconnectAttempts = 10;
     this.reconnectInterval = 3000;
     this.messageHandlers = new Map();
-    this.roomSubscriptions = new Set();
+    this.roomSubscriptions = new Map();
     this.pingInterval = null;
     this.dataUpdateHandlers = new Map();
     this.isRealtimeEnabled = true;
     this.lastDataSync = new Map();
     this.pollingInterval = null;
+    // Correlated request/response for REST-style WS calls (get_rooms,
+    // get_messages, create_room, mark_read, ...). Keyed by requestId.
+    this.pendingRequests = new Map();
   }
 
 async connect() {
@@ -113,51 +116,68 @@ onOpen() {
      });
    }
 
-onMessage(event) {
-     try {
-       if (!event || event.data === undefined || event.data === null) return;
-       if (typeof event.data !== 'string') return;
-       if (!event.data.trim()) return;
+  onMessage(event) {
+      try {
+        if (!event || event.data === undefined || event.data === null) return;
+        if (typeof event.data !== 'string') return;
+        if (!event.data.trim()) return;
 
         const message = JSON.parse(event.data);
-       switch (message.type) {
-         case 'connected':
-           this.subscribeToDataUpdates();
-           break;
-         case 'pong':
-           break;
-         case 'new_message':
-           // Dispatched below via the generic messageHandlers loop. Handling it
-           // here as well would deliver every message twice.
-           break;
-         case 'message_read':
-           break;
-         case 'user_typing':
-           break;
-         case 'data_update':
-           this.handleDataUpdate(message);
-           break;
-         case 'notification_update':
-           this.handleNotificationUpdate(message);
-           break;
-         case 'wallet_update':
-           this.handleWalletUpdate(message);
-           break;
-         case 'chama_update':
-           this.handleChamaUpdate(message);
-           break;
-         case 'transaction_update':
-           this.handleTransactionUpdate(message);
-           break;
-       }
-
-      this.messageHandlers.forEach((handler, type) => {
-        if (message.type === type) {
-          handler(message);
+        switch (message.type) {
+          case 'connected':
+            this.subscribeToDataUpdates();
+            break;
+          case 'pong':
+            break;
+          case 'new_message':
+            this._dispatch(message);
+            break;
+          case 'user_typing':
+            this._dispatch(message);
+            break;
+          case 'message_deleted':
+            this._dispatch(message);
+            break;
+          case 'data_update':
+            this.handleDataUpdate(message);
+            break;
+          case 'notification_update':
+            this.handleNotificationUpdate(message);
+            break;
+          case 'wallet_update':
+            this.handleWalletUpdate(message);
+            break;
+          case 'chama_update':
+            this.handleChamaUpdate(message);
+            break;
+          case 'transaction_update':
+            this.handleTransactionUpdate(message);
+            break;
         }
-      });
-    } catch (error) {}
-  }
+
+        // Correlated request/responses (rooms_list, messages_list,
+        // room_created, message_sent, message_read, ...) resolve the
+        // promise registered by sendRequest().
+        if (message.requestId && this.pendingRequests.has(message.requestId)) {
+          const pending = this.pendingRequests.get(message.requestId);
+          clearTimeout(pending.timeout);
+          this.pendingRequests.delete(message.requestId);
+          if (message.success) {
+            pending.resolve(message);
+          } else {
+            pending.reject(new Error(message.error || 'request failed'));
+          }
+          return;
+        }
+
+        // Generic event handlers (new_message, user_typing, etc.)
+        this.messageHandlers.forEach((handler, type) => {
+          if (message.type === type) {
+            handler(message);
+          }
+        });
+      } catch (error) {}
+    }
 
   onClose(event) {
     this.isConnected = false;
@@ -166,6 +186,29 @@ onMessage(event) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
     }
+
+    // Reject any in-flight correlated requests so callers fall back cleanly.
+    this.pendingRequests.forEach(pending => {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error('WebSocket closed'));
+    });
+    this.pendingRequests.clear();
+
+    // Reconnect on any non-clean close so real-time chat recovers from
+    // dropped connections. Exponential backoff (capped) avoids hammering
+    // the server; after attempts are exhausted we fall back to polling.
+    if (event.code !== 1000) {
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        const delay = Math.min(this.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1), 30000);
+        setTimeout(() => {
+          this.connect();
+        }, delay);
+      } else {
+        this.startPollingFallback();
+      }
+    }
+  }
 
     // Reconnect on any non-clean close so real-time chat recovers from dropped
     // connections. Uses exponential backoff (capped) to avoid hammering the
@@ -186,7 +229,35 @@ onMessage(event) {
   onError(error) {
    }
 
-send(message) {
+  // Send a request and resolve with the correlated server response
+  // (matched by requestId). This lets the chat layer run all operations
+  // over a single WebSocket the same way it used to over REST, without
+  // the per-call HTTP/auth overhead.
+  sendRequest(message, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || !this.isConnected) {
+        reject(new Error('WebSocket not connected'));
+        return;
+      }
+      const requestId = message.requestId || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      message.requestId = requestId;
+
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(requestId);
+        reject(new Error('Request timeout'));
+      }, timeoutMs);
+
+      this.pendingRequests.set(requestId, { resolve, reject, timeout });
+
+      if (!this.send(message)) {
+        clearTimeout(timeout);
+        this.pendingRequests.delete(requestId);
+        reject(new Error('WebSocket not connected'));
+      }
+    });
+  }
+
+  send(message) {
      if (this.ws && this.isConnected) {
        try {
          this.ws.send(JSON.stringify(message));

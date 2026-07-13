@@ -44,9 +44,6 @@ func main() {
 	roomMgr := room.NewRoomManager(db)
 	hub := websocket.NewHub()
 
-	go hub.Run()
-	go hub.HandlePingPong()
-
 	if err := roomMgr.LoadFromDB(); err != nil {
 		log.Printf("Warning: failed to load rooms from DB: %v", err)
 	}
