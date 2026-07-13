@@ -188,10 +188,10 @@ export default function LoginScreen({ navigation }) {
       let errorMessage = 'Unable to login. Please try again.';
 
       if (error.message.includes('Invalid credentials') || error.message.includes('invalid credentials')) {
-        errorMessage = 'Invalid email/phone or password. Please check your credentials.';
+        errorMessage = 'invalid credentials';
         setErrors({
-          identifier: 'Please check your email or phone number',
-          password: 'Please check your password'
+          identifier: 'invalid credentials',
+          password: 'invalid credentials'
         });
       } else if (error.message.includes('Network') || error.message.includes('connection')) {
         errorMessage = 'Network error. Please check your internet connection.';
