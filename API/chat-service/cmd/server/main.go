@@ -28,24 +28,37 @@ func main() {
 	if err != nil {
 		log.Fatal("database connection failed:", err)
 	}
+	// The chat service is fully dependent on the database: it must be
+	// reachable before we start serving, otherwise message persistence and
+	// room/member lookups would fail. Fail fast and let the process
+	// manager/orchestrator restart or alert.
+	if err := db.Ping(); err != nil {
+		log.Fatal("database unreachable, refusing to start:", err)
+	}
 	defer db.Close()
 
+	// Redis is a required dependency. If it cannot be reached the
+	// server must not start (and must not run degraded), so we treat a
+	// failed Redis ping as fatal.
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
+		Addr:         cfg.RedisAddr,
+		Password:     cfg.RedisPassword,
+		DB:           cfg.RedisDB,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
 	})
+	defer redisClient.Close()
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		log.Println("redis connection failed, continuing without redis:", err)
-	} else {
-		log.Println("redis connected")
+		log.Fatal("redis connection failed (required dependency):", err)
 	}
+	log.Println("redis connected")
 
 	roomMgr := room.NewRoomManager(db)
 	hub := websocket.NewHub()
 
 	if err := roomMgr.LoadFromDB(); err != nil {
-		log.Printf("Warning: failed to load rooms from DB: %v", err)
+		log.Fatal("failed to load rooms from DB, refusing to start:", err)
 	}
 
 	h := handler.NewChatHandler(db, hub, roomMgr)
