@@ -482,9 +482,9 @@ func (h *ChatHandler) WebSocketEndpoint(c *gin.Context) {
 				return
 			}
 			fmt.Printf("WS MESSAGE SAVED id=%s room=%s user=%s content=%s type=%s\n", chatMsg.ID, roomIDToUse, userID, chatMsg.Content, chatMsg.Type)
-			h.roomMgr.UpdateLastMessage(roomIDToUse, chatMsg.Content)
 
-			// Send acknowledgment back to sender with clientMessageId
+			// Send acknowledgment back to sender with clientMessageId FIRST so the
+			// sender's message ticks "delivered" with minimal latency.
 			ackResp := gin.H{
 				"type":      "message_sent",
 				"requestId": wsMsg.RequestID,
@@ -504,7 +504,7 @@ func (h *ChatHandler) WebSocketEndpoint(c *gin.Context) {
 			ackData, _ := json.Marshal(ackResp)
 			h.hub.SendToUser(userID, ackData)
 
-			// Broadcast to other room members
+			// Broadcast to other room members immediately.
 			broadcastResp := gin.H{
 				"type":   "new_message",
 				"roomId": roomIDToUse,
@@ -522,6 +522,11 @@ func (h *ChatHandler) WebSocketEndpoint(c *gin.Context) {
 			}
 			broadcastData, _ := json.Marshal(broadcastResp)
 			h.hub.BroadcastToRoom(roomIDToUse, broadcastData)
+
+			// Update the room's "last message" preview asynchronously so the extra
+			// DB write never sits on the critical path of message delivery.
+			go h.roomMgr.UpdateLastMessage(roomIDToUse, chatMsg.Content)
+
 			fmt.Printf("WS ACK sent to userId=%s for msgId=%s\n", userID, chatMsg.ID)
 		}
 	})

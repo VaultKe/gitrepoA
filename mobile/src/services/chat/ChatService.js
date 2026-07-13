@@ -1,21 +1,6 @@
-/**
- * ChatService - Unified WebSocket-based Chat Service
- *
- * Architecture:
- * - WebSocket-only real-time communication (no polling)
- * - All business logic handled by backend
- * - Frontend: UI rendering + event handling only
- * - Automatic reconnection with exponential backoff
- * - Optimistic updates with rollback on error
- * - Message deduplication and ordering
- *
- * Production Ready: ✅ Fast, Reliable, Secure (via backend)
- */
-
 import websocketService from '../websocket';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// WebSocket event types (backend protocol)
 const WS_EVENTS = {
   // Client → Server
   JOIN_ROOM: 'join_room',
@@ -37,7 +22,6 @@ const WS_EVENTS = {
 
 class ChatService {
   constructor() {
-    // State
     this.rooms = new Map(); // roomId → Room
     this.messages = new Map(); // roomId → Message[]
     this.pendingMessages = new Map(); // tempId → Message (optimistic)
@@ -47,41 +31,27 @@ class ChatService {
     this._persistTimer = null;
     this._isOnline = true;
 
-    // Subscriptions (roomId → Set<callback>)
     this.roomSubscribers = new Map();
     this.messageSubscribers = new Map();
 
-    // Reconnection state
     this.reconnectTimer = null;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
 
-    // Performance: Debounce typing indicators
     this.typingTimeout = null;
     this.typingDebounceMs = 500;
 
-    // Bind WebSocket handlers
     this._setupWebSocketHandlers();
 
-    // Setup online/offline detection
     this._setupNetworkMonitoring();
 
-    // Cleanup on app termination
     this._setupCleanup();
   }
 
-  // ==================== Initialization ====================
-
   async initialize() {
     try {
-      // Load cached rooms/messages from storage first. This is a fast local
-      // read (AsyncStorage) and lets the UI render instantly from cache.
       await this._loadFromCache();
 
-      // Connect WebSocket in the background. We deliberately do NOT await
-      // this: the UI can render instantly from the local cache and real-time
-      // updates simply start arriving once the socket is open. Blocking on
-      // connect here was the main source of the slow, blank chat screens.
       if (!websocketService.isConnected) {
         websocketService.connect();
       }
@@ -265,6 +235,12 @@ class ChatService {
   }
 
 joinRoom(roomId) {
+     // Ensure the shared socket is (re)connecting. joinRoom registers the room
+     // in roomSubscriptions first, and onOpen re-joins all subscriptions, so the
+     // room is joined as soon as the connection is ready even if it isn't yet.
+     if (!websocketService.isConnected) {
+       websocketService.connect();
+     }
      websocketService.joinRoom(roomId);
    }
 
@@ -324,7 +300,12 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
                 clearTimeout(timeout);
                 websocketService.unregisterMessageHandler('message_sent');
                 if (response.success) {
-                  this.pendingMessages.delete(tempId);
+                  // Reconcile the optimistic bubble with the saved server
+                  // message directly from the ack. This is more reliable than
+                  // waiting for the broadcast, and marks the server id as
+                  // processed so the incoming new_message broadcast becomes a
+                  // no-op instead of adding a duplicate.
+                  this._reconcileSentMessage(roomId, tempId, response.data);
                   resolve(response.data);
                 } else {
                   this.pendingMessages.delete(tempId);
@@ -351,6 +332,11 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
               this.pendingMessages.delete(tempId);
               this._removeMessage(roomId, tempId);
               reject(new Error('WebSocket not connected'));
+            } else {
+              // The frame has left the device — show the "sent" (single tick)
+              // state immediately instead of waiting for the server round-trip.
+              // The ack/broadcast later upgrades it to "delivered" (double tick).
+              this._updateMessageStatus(roomId, tempId, 'sent');
             }
           });
         } catch (error) {
@@ -396,12 +382,6 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
        }
      };
    }
-
-   // ==================== Room Management ====================
-
-   /**
-    * Create a new chat room
-    */
   async createRoom(roomData) {
     try {
       const ApiService = (await import('../api')).default;
@@ -485,17 +465,17 @@ async sendMessage(roomId, content, type = 'text', metadata = {}) {
     return this.typingUsers.get(roomId) || new Set();
   }
 
-  // ==================== Private Handlers ====================
-
 _handleNewMessage(message) {
       const { roomId, data } = message;
+      if (!roomId || !data) return;
 
-      // Handle pending message resolution (optimistic update)
-      // The server sends clientMessageId to match optimistic messages
+      data.createdAt = this._toEpochMs(data.createdAt);
+
       const pendingTempId = data.clientMessageId || data.id;
       const pending = this.pendingMessages.get(pendingTempId);
 
       if (pending) {
+    if (data.id) this.processedMessageIds.add(data.id);
         // Replace optimistic with real message, preserve imageUri/imageUrl for display
         data.status = 'delivered';
         // Preserve imageUri or imageUrl from optimistic message if server doesn't provide one
@@ -513,11 +493,6 @@ _handleNewMessage(message) {
         }
         this._updateMessage(roomId, pendingTempId, data);
         this.pendingMessages.delete(pendingTempId);
-
-        // Notify subscribers with the *merged* message (which still carries the
-        // optimistic tempId). The raw server payload has no tempId, so notifying
-        // with it would make the UI append a second "received" bubble instead of
-        // replacing the existing "sent" (optimistic) bubble for the same message.
         const merged = (this.messages.get(roomId) || []).find(
           m => m.tempId === pendingTempId || m.id === pendingTempId
         );
@@ -546,6 +521,40 @@ _handleNewMessage(message) {
       // Notify subscribers
       this._notifyMessageSubscribers(roomId, data);
     }
+
+  _reconcileSentMessage(roomId, tempId, serverData) {
+    if (!roomId || !serverData) return;
+
+    const data = { ...serverData };
+    data.createdAt = this._toEpochMs(data.createdAt);
+    data.status = 'delivered';
+
+    // Normalize a top-level imageUrl into metadata for rendering, preserving
+    // the optimistic local imageUri if the server didn't echo an image.
+    const pending = this.pendingMessages.get(tempId);
+    const hasImageInData = data.metadata?.imageUri || data.metadata?.imageUrl || data.imageUrl;
+    if (!hasImageInData && pending) {
+      const pendingImageUrl = pending.metadata?.imageUrl || pending.metadata?.imageUri;
+      if (pendingImageUrl) {
+        data.metadata = { ...data.metadata, imageUrl: pendingImageUrl };
+      }
+    }
+    if (data.imageUrl && !data.metadata?.imageUri && !data.metadata?.imageUrl) {
+      data.metadata = { ...data.metadata, imageUrl: data.imageUrl };
+      delete data.imageUrl;
+    }
+
+    // Mark the real id as processed so the incoming broadcast is ignored.
+    if (data.id) this.processedMessageIds.add(data.id);
+
+    this._updateMessage(roomId, tempId, data);
+    this.pendingMessages.delete(tempId);
+
+    const merged = (this.messages.get(roomId) || []).find(
+      m => m.tempId === tempId || m.id === data.id
+    );
+    this._notifyMessageSubscribers(roomId, merged || data);
+  }
 
   _handleDelivered(message) {
     const { roomId, data } = message;
@@ -617,12 +626,15 @@ _handleNewMessage(message) {
     const existing = this.messages.get(roomId) || [];
     const existingIds = new Set(existing.map(m => m.id));
 
-    // Normalize imageUrl to metadata if provided at top level
+    // Normalize imageUrl to metadata if provided at top level, and coerce the
+    // server timestamp (ISO string) into a numeric epoch (ms) so ordering and
+    // duplicate detection stay consistent with optimistic messages.
     const normalizedMessages = messages.map(m => {
+      const createdAt = this._toEpochMs(m.createdAt);
       if (m.imageUrl && !m.metadata?.imageUri && !m.metadata?.imageUrl) {
-        return { ...m, metadata: { ...m.metadata, imageUrl: m.imageUrl }, imageUrl: undefined };
+        return { ...m, createdAt, metadata: { ...m.metadata, imageUrl: m.imageUrl }, imageUrl: undefined };
       }
-      return m;
+      return { ...m, createdAt };
     });
 
     // Build keys from server messages so we can match and remove stale optimistic duplicates.
@@ -656,6 +668,9 @@ _handleNewMessage(message) {
 _addMessage(roomId, message) {
      const roomMessages = this.messages.get(roomId) || [];
      roomMessages.push(message);
+     // Keep messages in chronological order so real-time inserts always land
+     // in the right place regardless of arrival order.
+     roomMessages.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
      this.messages.set(roomId, roomMessages);
      this._schedulePersist();
    }
@@ -774,6 +789,16 @@ _notifyMessageSubscribers(roomId, message) {
   }
 
   // ==================== Utilities ====================
+
+  // Coerce any timestamp representation (ISO string, Date, or epoch number)
+  // into a numeric epoch in milliseconds. Falls back to "now" for missing or
+  // unparseable values so a bad timestamp never corrupts message ordering.
+  _toEpochMs(value) {
+    if (value === null || value === undefined) return Date.now();
+    if (typeof value === 'number') return value;
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? Date.now() : parsed;
+  }
 
   _generateTempId() {
     return `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

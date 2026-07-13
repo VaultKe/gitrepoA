@@ -7,7 +7,7 @@ class WebSocketService {
     this.ws = null;
     this.isConnected = false;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 2;
+    this.maxReconnectAttempts = 10;
     this.reconnectInterval = 3000;
     this.messageHandlers = new Map();
     this.roomSubscriptions = new Set();
@@ -127,7 +127,8 @@ onMessage(event) {
          case 'pong':
            break;
          case 'new_message':
-           this.handleNewMessage(message);
+           // Dispatched below via the generic messageHandlers loop. Handling it
+           // here as well would deliver every message twice.
            break;
          case 'message_read':
            break;
@@ -166,11 +167,19 @@ onMessage(event) {
       this.pingInterval = null;
     }
 
-    if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      setTimeout(() => {
-        this.connect();
-      }, this.reconnectInterval);
+    // Reconnect on any non-clean close so real-time chat recovers from dropped
+    // connections. Uses exponential backoff (capped) to avoid hammering the
+    // server, and falls back to polling once attempts are exhausted.
+    if (event.code !== 1000) {
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        const delay = Math.min(this.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1), 30000);
+        setTimeout(() => {
+          this.connect();
+        }, delay);
+      } else {
+        this.startPollingFallback();
+      }
     }
   }
 
