@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,26 @@ import (
 
 // Global email service instance to avoid recreating it
 var globalEmailService *EmailService
+
+// getChamaStatistics is expensive (many aggregate queries against a remote DB),
+// and the dashboard polls it frequently. Cache the result for a short window so
+// repeated polling does not re-run all the queries on every request. This is a
+// best-effort, process-local cache with a short TTL; slightly stale dashboard
+// numbers are acceptable.
+type chamaStatsCacheEntry struct {
+	stats    map[string]interface{}
+	cachedAt time.Time
+}
+
+var (
+	chamaStatsCacheMu sync.Mutex
+	chamaStatsCache   = make(map[string]chamaStatsCacheEntry)
+	chamaStatsTTL     = 20 * time.Second
+)
+
+func chamaStatsCacheKey(chamaID, userID string) string {
+	return chamaID + "|" + userID
+}
 
 // ChamaService handles chama-related business logic
 type ChamaService struct {
@@ -689,6 +710,19 @@ func (s *ChamaService) LeaveChama(chamaID, userID string) error {
 }
 
 func (s *ChamaService) GetChamaStatistics(chamaID, userID string) (map[string]interface{}, error) {
+	// Serve from short-TTL cache when available to absorb dashboard polling.
+	cacheKey := chamaStatsCacheKey(chamaID, userID)
+	chamaStatsCacheMu.Lock()
+	if entry, ok := chamaStatsCache[cacheKey]; ok && time.Since(entry.cachedAt) < chamaStatsTTL {
+		statsCopy := make(map[string]interface{}, len(entry.stats))
+		for k, v := range entry.stats {
+			statsCopy[k] = v
+		}
+		chamaStatsCacheMu.Unlock()
+		return statsCopy, nil
+	}
+	chamaStatsCacheMu.Unlock()
+
 	stats := make(map[string]interface{})
 
 	// Get basic chama info
@@ -746,15 +780,22 @@ func (s *ChamaService) GetChamaStatistics(chamaID, userID string) (map[string]in
 	stats["financial_stats"] = financialStats
 	stats["activity_stats"] = activityStats
 
+	chamaStatsCacheMu.Lock()
+	chamaStatsCache[cacheKey] = chamaStatsCacheEntry{stats: stats, cachedAt: time.Now()}
+	chamaStatsCacheMu.Unlock()
+
 	return stats, nil
 }
 
 func (s *ChamaService) getMemberStatistics(chamaID string) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	// Count members by role (include all members, not just active ones)
+	// Count members by role and active status in a single query
+	// (include all members, not just active ones)
 	roleQuery := `
-		SELECT role, COUNT(*) as count
+		SELECT role,
+		       COUNT(*) as count,
+		       SUM(CASE WHEN (is_active = true OR is_active IS NULL) THEN 1 ELSE 0 END) as active_count
 		FROM chama_members
 		WHERE chama_id = $1
 		GROUP BY role
@@ -767,26 +808,16 @@ func (s *ChamaService) getMemberStatistics(chamaID string) (map[string]interface
 
 	roleStats := make(map[string]int)
 	totalMembers := 0
+	activeMembers := 0
 	for rows.Next() {
 		var role string
-		var count int
-		if err := rows.Scan(&role, &count); err != nil {
+		var count, activeCount int
+		if err := rows.Scan(&role, &count, &activeCount); err != nil {
 			continue
 		}
 		roleStats[role] = count
 		totalMembers += count
-	}
-
-	// Get active members count separately
-	activeMembersQuery := `
-		SELECT COUNT(*) as active_count
-		FROM chama_members
-		WHERE chama_id = $1 AND (is_active = true OR is_active IS NULL)
-	`
-	var activeMembers int
-	err = s.db.QueryRow(activeMembersQuery, chamaID).Scan(&activeMembers)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+		activeMembers += activeCount
 	}
 
 	stats["total_members"] = totalMembers
@@ -889,36 +920,7 @@ func (s *ChamaService) getFinancialStatistics(chamaID string) (map[string]interf
 func (s *ChamaService) getActivityStatistics(chamaID string) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	// Get meeting statistics (only upcoming and ongoing meetings)
-
-	// First, let's check if there are any meetings at all for this chama
-	var debugCount int
-	debugQuery := "SELECT COUNT(*) FROM meetings WHERE chama_id = $1"
-	debugErr := s.db.QueryRow(debugQuery, chamaID).Scan(&debugCount)
-	if debugErr != nil {
-		// ignore debug errors
-	}
-
-	// Let's see what the actual meeting data looks like
-	if debugCount > 0 {
-		detailQuery := `SELECT id, title, status, scheduled_at,
-			NOW() as current_utc,
-			NOW() + INTERVAL '3 hours' as current_eat,
-			CASE WHEN scheduled_at > NOW() + INTERVAL '3 hours' THEN 'UPCOMING' ELSE 'PAST' END as time_status
-			FROM meetings WHERE chama_id = $1 LIMIT 3`
-		rows, detailErr := s.db.Query(detailQuery, chamaID)
-		if detailErr == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var id, title, status, scheduledAt, currentUTC, currentEAT, timeStatus string
-				if scanErr := rows.Scan(&id, &title, &status, &scheduledAt, &currentUTC, &currentEAT, &timeStatus); scanErr == nil {
-					// ignore debug rows
-				}
-			}
-		}
-	}
-
-	// Fixed query - use EAT timezone and correct status values
+	// Meeting statistics (upcoming / ongoing / completed)
 	meetingQuery := `
 		SELECT
 			COUNT(*) as total_meetings,
