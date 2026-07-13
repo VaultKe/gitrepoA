@@ -167,12 +167,20 @@ class ChatService {
 
   async _getRoomsViaRest(forceRefresh = false) {
     const ApiService = (await import('../api')).default;
-    const response = await ApiService.makeRequest('/chat/rooms');
-
     let rooms = [];
-    if (response.success) {
-      rooms = response.data || [];
-    } else {
+    let fromServer = false;
+
+    try {
+      const response = await ApiService.makeRequest('/chat/rooms');
+      if (response.success) {
+        rooms = response.data || [];
+        fromServer = true;
+      }
+    } catch (e) {
+      console.warn('REST getRooms failed:', e.message);
+    }
+
+    if (!fromServer && rooms.length === 0) {
       // Fallback: fetch user's chamas and create virtual chat rooms
       try {
         const chamasResponse = await ApiService.getUserChamas();
@@ -192,11 +200,13 @@ class ChatService {
       }
     }
 
-    this._updateRooms(rooms);
-    // Return the de-duplicated rooms from the internal Map (keyed by room id)
-    // rather than the raw backend array, so the chat list can never render a
-    // room twice even if the backend returns duplicate entries.
-    return Array.from(this.rooms.values());
+    if (fromServer) {
+      // Replace stale cache with fresh server data so deleted or duplicate
+      // rooms cannot linger in the local list across refreshes.
+      this.rooms.clear();
+      this._updateRooms(rooms);
+    }
+    return rooms;
   }
 
   async sendImage(roomId, imageUri, caption = '') {

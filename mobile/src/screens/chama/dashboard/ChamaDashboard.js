@@ -761,12 +761,9 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
               onRouteChange('chat', 'ChatRoom');
             } else {
               try {
-                // Create or get existing chama chat room
-                const response = await ApiService.createChatRoom({
-                  type: 'chama',
-                  chamaId: selectedChama.id,
-                  name: `${selectedChama.name} Group Chat`
-                });
+                // Use the chama-specific endpoint so the backend enforces a
+                // single chat room per chama and avoids duplicate rooms.
+                const response = await ApiService.createChamaChatRoom(selectedChama.id);
 
                 if (response.success) {
                   const room = response.data;
@@ -777,10 +774,9 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
                     chamaId: selectedChama.id
                   });
                 } else {
-                  Alert.alert('Error', 'Failed to access group chat');
+                  Alert.alert('Error', response.error || 'Failed to access group chat');
                 }
               } catch (error) {
-
                 Alert.alert('Error', 'Failed to access group chat');
               }
             }

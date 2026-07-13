@@ -117,9 +117,44 @@ func (h *ChatHandler) CreateRoom(c *gin.Context) {
 		_, err = tx.Exec(`INSERT INTO chat_rooms (id, chama_id, name, type, created_by, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 			room.ID, room.ChamaID, room.Name, room.Type, room.CreatedBy, room.IsActive, room.CreatedAt, room.UpdatedAt)
 		if err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
-			return
+			// A concurrent request may have already created this chama room.
+			// The database now enforces a unique constraint on chama_id for
+			// active chama rooms, so fetch the existing room instead of failing.
+			if req.Type == models.RoomTypeChama && req.ChamaID != "" {
+				var existingID string
+				if qErr := tx.QueryRow(`SELECT id FROM chat_rooms WHERE chama_id = $1 AND type = 'chama' AND is_active = TRUE LIMIT 1`, req.ChamaID).Scan(&existingID); qErr == nil && existingID != "" {
+					room.ID = existingID
+					if existing, e := h.roomMgr.GetRoom(existingID); e == nil {
+						room = existing
+					} else {
+						// Fallback: reload room metadata from DB so the response
+						// carries the canonical room data.
+						var r models.ChatRoom
+						var chamaID sql.NullString
+						var name sql.NullString
+						var lastMessage sql.NullString
+						var lastMessageAt, createdAt, updatedAt sql.NullTime
+						if scanErr := tx.QueryRow(`SELECT id, chama_id, name, type, created_by, is_active, last_message, last_message_at, created_at, updated_at FROM chat_rooms WHERE id = $1`, existingID).Scan(
+							&r.ID, &chamaID, &name, &r.Type, &r.CreatedBy, &r.IsActive, &lastMessage, &lastMessageAt, &createdAt, &updatedAt); scanErr == nil {
+							r.ChamaID = chamaID
+							r.Name = name.String
+							r.LastMessage = lastMessage.String
+							r.LastMessageAt = lastMessageAt.Time
+							r.CreatedAt = createdAt.Time
+							r.UpdatedAt = updatedAt.Time
+							room = &r
+						}
+					}
+				} else {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve chat room conflict"})
+					return
+				}
+			} else {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
+				return
+			}
 		}
 	}
 

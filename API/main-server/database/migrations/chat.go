@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 )
 
 func MigrateChat(db *sql.DB) error {
@@ -32,6 +33,12 @@ func MigrateChat(db *sql.DB) error {
 		return err
 	}
 	if err := addChatIndexes(db); err != nil {
+		return err
+	}
+	if err := deduplicateChamaChatRooms(db); err != nil {
+		return err
+	}
+	if err := addChamaChatRoomUniqueIndex(db); err != nil {
 		return err
 	}
 
@@ -278,5 +285,107 @@ func refactorChatMessageContent(db *sql.DB) error {
 	}
 
 	log.Printf("Refactored chat message content to store only ciphertext")
+	return nil
+}
+
+func addChatIndexes(db *sql.DB) error {
+	queries := []string{
+		`CREATE INDEX IF NOT EXISTS idx_chat_rooms_type_chama ON chat_rooms(type, chama_id) WHERE type = 'chama' AND is_active = TRUE`,
+		`CREATE INDEX IF NOT EXISTS idx_chat_rooms_members_user ON chat_room_members(user_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created ON chat_messages(room_id, created_at DESC)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to create chat index: %w", err)
+		}
+	}
+	log.Println("Chat indexes created")
+	return nil
+}
+
+func deduplicateChamaChatRooms(db *sql.DB) error {
+	rows, err := db.Query(`
+		SELECT cr.chama_id, cr.id, cr.created_at, c.chat_room_id
+		FROM chat_rooms cr
+		LEFT JOIN chamas c ON c.id = cr.chama_id
+		WHERE cr.type = 'chama' AND cr.is_active = TRUE
+		ORDER BY cr.chama_id, cr.created_at ASC
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query chama rooms for dedup: %w", err)
+	}
+	defer rows.Close()
+
+	type chamaRoom struct {
+		chamaID    string
+		roomID     string
+		createdAt  time.Time
+		chatRoomID sql.NullString
+	}
+
+	var rooms []chamaRoom
+	for rows.Next() {
+		var r chamaRoom
+		var chamaID sql.NullString
+		var createdAt sql.NullTime
+		var chatRoomID sql.NullString
+		if err := rows.Scan(&chamaID, &r.roomID, &createdAt, &chatRoomID); err != nil {
+			return fmt.Errorf("failed to scan chama room: %w", err)
+		}
+		if !chamaID.Valid {
+			continue
+		}
+		r.chamaID = chamaID.String
+		r.createdAt = createdAt.Time
+		r.chatRoomID = chatRoomID
+		rooms = append(rooms, r)
+	}
+
+	chamaGroups := make(map[string][]chamaRoom)
+	for _, r := range rooms {
+		chamaGroups[r.chamaID] = append(chamaGroups[r.chamaID], r)
+	}
+
+	for chamaID, roomList := range chamaGroups {
+		if len(roomList) <= 1 {
+			continue
+		}
+
+		primaryID := ""
+		for _, r := range roomList {
+			if r.chatRoomID.Valid && r.chatRoomID.String == r.roomID {
+				primaryID = r.roomID
+				break
+			}
+		}
+		if primaryID == "" {
+			primaryID = roomList[0].roomID
+		}
+
+		for _, r := range roomList {
+			if r.roomID == primaryID {
+				continue
+			}
+			_, err := db.Exec(`UPDATE chat_rooms SET is_active = FALSE WHERE id = $1`, r.roomID)
+			if err != nil {
+				return fmt.Errorf("failed to deactivate duplicate room %s for chama %s: %w", r.roomID, chamaID, err)
+			}
+			log.Printf("Deactivated duplicate chat room %s for chama %s", r.roomID, chamaID)
+		}
+	}
+
+	return nil
+}
+
+func addChamaChatRoomUniqueIndex(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_rooms_chama_id_unique 
+		ON chat_rooms(chama_id) 
+		WHERE type = 'chama' AND is_active = TRUE
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create chama chat room unique index: %w", err)
+	}
+	log.Println("Chama chat room unique index created")
 	return nil
 }

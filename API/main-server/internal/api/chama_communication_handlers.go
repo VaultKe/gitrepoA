@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -538,7 +539,7 @@ func ResendInvitation(c *gin.Context) {
 				} else {
 				}
 			} else {
-				fmt.Printf("❌ Email service not available for resend\n")
+				fmt.Printf("Email service not available for resend\n")
 			}
 		}()
 	}
@@ -643,6 +644,28 @@ func CreateChamaChatRoom(c *gin.Context) {
 	_, err = tx.Exec(`INSERT INTO chat_rooms (id, chama_id, name, type, created_by, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())`,
 		roomID, chamaID, roomName, "chama", userID.(string))
 	if err != nil {
+		tx.Rollback()
+
+		var existingRoomID string
+		if qErr := db.(*sql.DB).QueryRow(`SELECT id FROM chat_rooms WHERE chama_id = $1 AND type = 'chama' AND is_active = TRUE LIMIT 1`, chamaID).Scan(&existingRoomID); qErr == nil && existingRoomID != "" {
+			_, memberErr := db.(*sql.DB).Exec(`INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active) VALUES ($1, $2, $3, $4, NOW(), TRUE) ON CONFLICT (room_id, user_id) DO UPDATE SET is_active = TRUE`,
+				uuid.New().String(), existingRoomID, userID.(string), "admin")
+			if memberErr != nil {
+				log.Printf("Warning: failed to add member to existing chama room %s: %v", existingRoomID, memberErr)
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"data": gin.H{
+					"id":      existingRoomID,
+					"name":    roomName,
+					"type":    "chama",
+					"chamaId": chamaID,
+				},
+			})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to create chat room",
@@ -650,9 +673,9 @@ func CreateChamaChatRoom(c *gin.Context) {
 		return
 	}
 
-	// Add creator as room member
 	memberID := uuid.New().String()
-	_, err = tx.Exec(`INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active) VALUES ($1, $2, $3, $4, NOW(), TRUE)`,
+	// Add creator as room member
+	_, err = tx.Exec(`INSERT INTO chat_room_members (id, room_id, user_id, role, joined_at, is_active) VALUES ($1, $2, $3, $4, NOW(), TRUE) ON CONFLICT (room_id, user_id) DO UPDATE SET is_active = TRUE`,
 		memberID, roomID, userID.(string), "admin")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
