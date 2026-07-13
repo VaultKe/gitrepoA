@@ -31,6 +31,9 @@ func MigrateChat(db *sql.DB) error {
 	if err := refactorChatMessageContent(db); err != nil {
 		return err
 	}
+	if err := addChatIndexes(db); err != nil {
+		return err
+	}
 
 	log.Println("Chat migrations completed successfully")
 	return nil
