@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, typography } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import { getUserFirstName } from '../../../utils/userUtils';
 import WalletCard from '../../../components/wallet/WalletCard';
 import Card from '../../../components/common/Card';
@@ -138,7 +138,17 @@ const EnhancedUserDashboard = ({ navigation }) => {
   ];
 
   const renderGreetingSection = () => (
-    <Card style={{ marginHorizontal: spacing.md, marginVertical: spacing.xs }} variant="outlined">
+    <Card
+      style={{
+        marginHorizontal: spacing.md,
+        marginTop: spacing.lg,
+        marginBottom: spacing.xs,
+        borderRadius: 0,
+        borderBottomLeftRadius: borderRadius.lg,
+        borderBottomRightRadius: borderRadius.lg,
+      }}
+      variant="outlined"
+    >
       <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.lg }}>
         <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs }}>
           {getGreeting()}
