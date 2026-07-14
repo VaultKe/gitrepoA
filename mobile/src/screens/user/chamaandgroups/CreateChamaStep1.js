@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Text, StyleSheet } from 'react-native';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Input from '../../../components/common/Input';
+import Dropdown from '../../../components/common/Dropdown';
 
 const creationOptions = [
   {
@@ -43,12 +43,29 @@ const CreateChamaStep1 = ({
   formErrors,
   colors,
 }) => {
-  const handleGroupTypeChange = (optionId) => {
+  const groupTypeOptions = creationOptions.map((option) => ({
+    value: option.id,
+    label: option.name,
+    icon: option.icon,
+    description: option.description,
+  }));
+
+  const typeOptions = (chamaData.group_type === 'contribution' ? contributionTypes : chamaTypes).map((type) => ({
+    value: type.id,
+    label: type.name,
+    icon: type.icon,
+    description: type.description,
+  }));
+
+  const handleGroupTypeSelect = (optionId) => {
     handleInputChange('group_type', optionId === chamaData.group_type ? '' : optionId);
+    if (optionId !== chamaData.group_type) {
+      handleInputChange('type', '');
+    }
   };
 
   return (
-    <Card style={styles.section}>
+    <Card style={styles.section} variant="outlined">
       <Text style={[styles.stepTitle, { color: colors.text }]}>
         What do you want to create?
       </Text>
@@ -56,53 +73,16 @@ const CreateChamaStep1 = ({
         Choose the type of group you want to create
       </Text>
 
-      <View style={[
-        styles.typeContainer,
-        showErrors && formErrors.group_type && { borderColor: colors.error, borderWidth: 1, borderRadius: 8 }
-      ]}>
-        {creationOptions.map((option) => (
-          <TouchableOpacity
-            key={option.id}
-            style={[
-              styles.typeCard,
-              {
-                backgroundColor: chamaData.group_type === option.id ? option.color + '20' : colors.backgroundSecondary,
-                borderColor: chamaData.group_type === option.id ? option.color : colors.border,
-                borderWidth: 2,
-              }
-            ]}
-            onPress={() => handleGroupTypeChange(option.id)}
-          >
-            {chamaData.group_type === option.id && (
-              <View style={[styles.checkBadge, { backgroundColor: option.color }]}>
-                <Ionicons name="checkmark" size={10} color={colors.white} />
-              </View>
-            )}
-            <Ionicons
-              name={option.icon}
-              size={22}
-              color={chamaData.group_type === option.id ? option.color : colors.textSecondary}
-            />
-            <Text style={[
-              styles.typeName,
-              {
-                color: chamaData.group_type === option.id ? option.color : colors.text,
-                fontWeight: chamaData.group_type === option.id ? 'bold' : 'normal',
-              }
-            ]} numberOfLines={1}>
-              {option.name}
-            </Text>
-            <Text style={[styles.typeDescription, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={2}>
-              {option.description}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {showErrors && formErrors.group_type && (
-        <Text style={[styles.errorText, { color: colors.error }]}>
-          {formErrors.group_type}
-        </Text>
-      )}
+      <Dropdown
+        label="Group Type *"
+        value={chamaData.group_type}
+        placeholder="Select what you want to create"
+        options={groupTypeOptions}
+        onSelect={handleGroupTypeSelect}
+        error={showErrors && !!formErrors.group_type}
+        errorText={formErrors.group_type}
+        colors={colors}
+      />
 
       {chamaData.group_type && (
         <>
@@ -125,52 +105,16 @@ const CreateChamaStep1 = ({
             error={showErrors && formErrors.description}
           />
 
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-            {chamaData.group_type === 'contribution' ? 'Contribution Type *' : 'Chama Type *'}
-          </Text>
-          <View style={[
-            styles.typeContainer,
-            showErrors && formErrors.type && { borderColor: colors.error, borderWidth: 1, borderRadius: 8 }
-          ]}>
-            {(chamaData.group_type === 'contribution' ? contributionTypes : chamaTypes).map((type) => (
-              <TouchableOpacity
-                key={type.id}
-                style={[
-                  styles.typeCard,
-                  {
-                    backgroundColor: chamaData.type === type.id ? colors.primary + '20' : colors.backgroundSecondary,
-                    borderColor: chamaData.type === type.id ? colors.primary : colors.border,
-                  }
-                ]}
-                onPress={() => handleInputChange('type', type.id)}
-              >
-                {chamaData.type === type.id && (
-                  <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
-                    <Ionicons name="checkmark" size={10} color={colors.white} />
-                  </View>
-                )}
-                <Ionicons
-                  name={type.icon}
-                  size={18}
-                  color={chamaData.type === type.id ? colors.primary : colors.textSecondary}
-                />
-                <Text style={[
-                  styles.typeName,
-                  { color: chamaData.type === type.id ? colors.primary : colors.text }
-                ]} numberOfLines={1}>
-                  {type.name}
-                </Text>
-                <Text style={[styles.typeDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {type.description}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {showErrors && formErrors.type && (
-            <Text style={[styles.errorText, { color: colors.error }]}>
-              {formErrors.type}
-            </Text>
-          )}
+          <Dropdown
+            label={chamaData.group_type === 'contribution' ? 'Contribution Type *' : 'Chama Type *'}
+            value={chamaData.type}
+            placeholder={`Select ${chamaData.group_type === 'contribution' ? 'contribution' : 'chama'} type`}
+            options={typeOptions}
+            onSelect={(typeId) => handleInputChange('type', typeId)}
+            error={showErrors && !!formErrors.type}
+            errorText={formErrors.type}
+            colors={colors}
+          />
         </>
       )}
     </Card>
@@ -200,55 +144,6 @@ const styles = StyleSheet.create({
     width: '100%',
     flexShrink: 1,
     flexGrow: 1,
-  },
-  inputLabel: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.sm,
-  },
-  errorText: {
-    fontSize: typography.fontSize.sm,
-    marginTop: spacing.xs,
-    marginLeft: spacing.sm,
-  },
-  typeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  typeCard: {
-    width: '48%',
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 90,
-    marginBottom: spacing.sm,
-    position: 'relative',
-  },
-  checkBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeName: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.xs,
-    marginBottom: 2,
-    textAlign: 'center',
-  },
-  typeDescription: {
-    fontSize: 10,
-    textAlign: 'center',
-    lineHeight: 13,
   },
 });
 

@@ -10,6 +10,7 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
+import Dropdown from '../../../components/common/Dropdown';
 
 const ONBOARDING_DRAFT_KEY = 'createChama_onboarding_draft';
 
@@ -36,7 +37,6 @@ const CreateChamaStep3 = ({
     gender: '',
   });
 
-  const [showGenderDropdown, setShowGenderDropdown] = useState(false);
   const [emailChecking, setEmailChecking] = useState(false);
   const [emailExists, setEmailExists] = useState(false);
 
@@ -429,7 +429,7 @@ useEffect(() => {
   };
 
   const renderSearchSection = () => (
-    <Card style={styles.section}>
+    <Card style={styles.section} variant="outlined">
       <Text style={[styles.stepTitle, { color: colors.text }]}>
         Onboard New Members
       </Text>
@@ -466,7 +466,7 @@ useEffect(() => {
   );
 
   const renderConfirmExistingUser = () => (
-    <Card style={styles.section}>
+    <Card style={styles.section} variant="outlined">
       <View style={styles.headerRow}>
         <Text style={[styles.stepTitle, { color: colors.text, alignItems: 'center' }]}>
           Confirm User Details
@@ -501,7 +501,7 @@ useEffect(() => {
   );
 
   const renderNewUserForm = () => (
-    <Card style={styles.section}>
+    <Card style={styles.section} variant="outlined">
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => setOnboardingPhase('search')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={20} color={colors.primary} />
@@ -568,62 +568,16 @@ useEffect(() => {
         />
       </View>
 
-      <View>
-        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Gender</Text>
-        <TouchableOpacity
-          style={[styles.dropdownTrigger, { borderColor: formErrors.gender ? colors.error : colors.border }]}
-          onPress={() => setShowGenderDropdown(true)}
-        >
-          <Text style={[styles.dropdownText, { color: userForm.gender ? colors.text : colors.textSecondary }]}>
-            {genderOptions.find(g => g.value === userForm.gender)?.label || 'Select gender'}
-          </Text>
-          <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
-        {showErrors && formErrors.gender && (
-          <Text style={[styles.errorText, { color: colors.error }]}>{formErrors.gender}</Text>
-        )}
-      </View>
-
-      <Modal
-        visible={showGenderDropdown}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowGenderDropdown(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowGenderDropdown(false)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Select Gender</Text>
-            {genderOptions.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.modalOption,
-                  { borderBottomColor: colors.border },
-                  userForm.gender === option.value && { backgroundColor: colors.primary + '20' }
-                ]}
-                onPress={() => {
-                  handleUserFormChange('gender', option.value);
-                  setShowGenderDropdown(false);
-                }}
-              >
-                <Text style={[
-                  styles.modalOptionText,
-                  { color: userForm.gender === option.value ? colors.primary : colors.text }
-                ]}>
-                  {option.label}
-                </Text>
-                {userForm.gender === option.value && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      <Dropdown
+        label="Gender"
+        value={userForm.gender}
+        placeholder="Select gender"
+        options={genderOptions}
+        onSelect={(value) => handleUserFormChange('gender', value)}
+        error={showErrors && !!formErrors.gender}
+        errorText={formErrors.gender}
+        colors={colors}
+      />
 
       <Button
         title="Continue to Verification"
@@ -638,7 +592,7 @@ useEffect(() => {
   );
 
   const renderTOTPStep = () => (
-    <Card style={styles.section}>
+    <Card style={styles.section} variant="outlined">
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => setOnboardingPhase(foundUser ? 'confirm' : 'new_user')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={20} color={colors.primary} />
@@ -701,7 +655,7 @@ useEffect(() => {
      const allRows = [chairperson, ...onboardedMembers.filter(m => !m.isChairperson)];
 
     return (
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.stepTitle, { color: colors.text }]}>
           Onboarded Members ({allRows.length})
         </Text>
@@ -1240,20 +1194,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   tableActionButton: {
-    flex: 1,
-  },
-  dropdownTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    minHeight: 48,
-  },
-  dropdownText: {
-    fontSize: typography.fontSize.base,
     flex: 1,
   },
   modalOverlay: {

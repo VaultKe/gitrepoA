@@ -150,7 +150,7 @@ const CreateChamaStep4 = ({
 
   return (
     <View>
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.stepTitle, { color: colors.text }]}>
           Wallet Types
         </Text>
@@ -206,7 +206,7 @@ const CreateChamaStep4 = ({
         </View>
       </Card>
 
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.stepTitle, { color: colors.text }]}>
           Settings & Rules
         </Text>
@@ -331,7 +331,7 @@ const CreateChamaStep4 = ({
         )}
       </Card>
 
-      <Card style={styles.section}>
+      <Card style={styles.section} variant="outlined">
         <Text style={[styles.stepTitle, { color: colors.text }]}>
           {feeLabel}
         </Text>
