@@ -250,16 +250,18 @@ const DividendsManagementScreen = ({ route, navigation }) => {
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.rowLeft}>
+      <View style={styles.declarationCell}>
         <Text style={[styles.rowTitle, { color: colors.text }]}>{item.description || item.type || 'Dividend Declaration'}</Text>
         <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
           {formatDate(item.timestamp || item.createdAt || item.created_at)}
         </Text>
       </View>
-      <View style={styles.rowRight}>
+      <View style={styles.amountCell}>
         <Text style={[styles.rowAmount, { color: colors.success }]}>
           {formatCurrency(item.totalAmount || item.amount)}
         </Text>
+      </View>
+      <View style={styles.actionsCell}>
         <View style={[styles.statusBadge, { backgroundColor: (colors[item.status] || colors.textSecondary) + '20' }]}>
           <Text style={[styles.statusText, { color: colors[item.status] || colors.textSecondary }]}>
             {(item.status || 'pending').toUpperCase()}
@@ -298,8 +300,9 @@ const DividendsManagementScreen = ({ route, navigation }) => {
           </View>
 
           <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Declaration</Text>
+            <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Declaration</Text>
             <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Amount</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Actions</Text>
           </View>
 
           <FlatList
@@ -377,12 +380,13 @@ const DividendsManagementScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1 },
-  rowLeft: { flex: 1 },
+  declarationCell: { flex: 1.5, justifyContent: 'center' },
+  amountCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  actionsCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontSize: typography.fontSize.sm, fontWeight: '600' },
   rowSub: { fontSize: typography.fontSize.xs, marginTop: 2 },
-  rowRight: { alignItems: 'flex-end' },
   rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },
-  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2 },
+  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2, alignItems: 'center' },
   statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   approveButton: {
     flexDirection: 'row',
