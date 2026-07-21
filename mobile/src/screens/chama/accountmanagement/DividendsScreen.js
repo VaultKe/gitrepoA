@@ -269,10 +269,12 @@ const DividendsScreen = ({ navigation, route }) => {
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.declarationCell}>
+      <View style={styles.descriptionCell}>
         <Text style={[styles.rowTitle, { color: colors.text }]}>
           {item.description || 'Dividend Payment'}
         </Text>
+      </View>
+      <View style={styles.dateCell}>
         <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
           {formatDate(item.date)}
         </Text>
@@ -281,8 +283,6 @@ const DividendsScreen = ({ navigation, route }) => {
         <Text style={[styles.rowAmount, { color: colors.success }]}>
           +{formatCurrency(item.amount)}
         </Text>
-      </View>
-      <View style={styles.actionsCell}>
         <View
           style={[
             styles.statusBadge,
@@ -491,9 +491,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm, paddingHorizontal: spacing.md },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1 },
-  declarationCell: { flex: 1.5, justifyContent: 'center' },
+  descriptionCell: { flex: 1.5, justifyContent: 'center' },
+  dateCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   amountCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
-  actionsCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontSize: typography.fontSize.sm, fontWeight: '600' },
   rowSub: { fontSize: typography.fontSize.xs, marginTop: 2 },
   rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },

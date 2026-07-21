@@ -255,20 +255,20 @@ const SharesScreen = ({ navigation, route }) => {
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.nameCell}>
+      <View style={styles.descriptionCell}>
         <Text style={[styles.rowTitle, { color: colors.text }]}>
           {item.description || 'Share Purchase'}
         </Text>
+      </View>
+      <View style={styles.dateCell}>
         <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
           {formatDate(item.date)}
         </Text>
       </View>
-      <View style={styles.sharesCell}>
+      <View style={styles.amountCell}>
         <Text style={[styles.rowAmount, { color: colors.primary }]}>
           {formatCurrency(item.amount)}
         </Text>
-      </View>
-      <View style={styles.priceCell}>
         <View
           style={[
             styles.statusBadge,
@@ -478,13 +478,13 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm, paddingHorizontal: spacing.md },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1 },
-  nameCell: { flex: 1.5, justifyContent: 'center' },
-  sharesCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  priceCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  descriptionCell: { flex: 1.5, justifyContent: 'center' },
+  dateCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  amountCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
   rowTitle: { fontSize: typography.fontSize.sm, fontWeight: '600' },
   rowSub: { fontSize: typography.fontSize.xs, marginTop: 2 },
   rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },
-  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2 },
+  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2, alignItems: 'center' },
   statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl },
   emptyTitle: { fontSize: typography.fontSize.lg, fontWeight: '600', marginTop: spacing.lg, marginBottom: spacing.xs },
