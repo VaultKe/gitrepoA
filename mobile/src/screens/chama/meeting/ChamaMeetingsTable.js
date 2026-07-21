@@ -89,19 +89,19 @@ const ChamaMeetingsTable = ({
           <View style={styles.tableContent}>
             <View style={styles.tableHeader}>
               <View style={[styles.tableCell, styles.titleCell]}>
-                <Text style={[styles.tableHeaderText, styles.tableHeaderTextDefault, styles.tableHeaderTextTitle]}>Title</Text>
+                <Text style={[styles.tableHeaderText, styles.tableHeaderTextTitle]}>Title</Text>
               </View>
               <View style={[styles.tableCell, styles.dateCell]}>
-                <Text style={[styles.tableHeaderText, styles.tableHeaderTextDefault]}>Date</Text>
+                <Text style={styles.tableHeaderText}>Date</Text>
               </View>
               <View style={[styles.tableCell, styles.locationCell]}>
-                <Text style={[styles.tableHeaderText, styles.tableHeaderTextDefault]}>Location</Text>
+                <Text style={styles.tableHeaderText}>Location</Text>
               </View>
               <View style={[styles.tableCell, styles.statusCell]}>
-                <Text style={[styles.tableHeaderText, styles.tableHeaderTextDefault]}>Status</Text>
+                <Text style={styles.tableHeaderText}>Status</Text>
               </View>
               <View style={[styles.tableCell, styles.actionsCell]}>
-                <Text style={[styles.tableHeaderText, styles.tableHeaderTextDefault]}>Actions</Text>
+                <Text style={styles.tableHeaderText}>Actions</Text>
               </View>
             </View>
 
@@ -217,16 +217,15 @@ const createStyles = (colors) => StyleSheet.create({
     width: '100%',
   },
   tableContent: {
-    minWidth: 680,
     width: '100%',
   },
   tableHeader: {
     flexDirection: 'row',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary + '10',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
-    backgroundColor: colors.surface,
   },
   tableCell: {
     flex: 1,
@@ -253,12 +252,10 @@ const createStyles = (colors) => StyleSheet.create({
     gap: 4,
   },
   tableHeaderText: {
-    fontSize: 12,
     fontWeight: typography.fontWeight.bold,
-    textTransform: 'uppercase',
-  },
-  tableHeaderTextDefault: {
-    color: colors.text,
+    color: colors.primary,
+    fontSize: 13,
+    textAlign: 'center',
   },
   tableHeaderTextTitle: {
     textAlign: 'left',

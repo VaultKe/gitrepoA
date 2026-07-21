@@ -34,7 +34,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const itemsPerPage = 10;
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   const filterOptions = [
