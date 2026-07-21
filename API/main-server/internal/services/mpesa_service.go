@@ -74,11 +74,14 @@ type MpesaSTKPushRequest struct {
 
 // MpesaSTKPushResponse represents STK push response
 type MpesaSTKPushResponse struct {
-	MerchantRequestID   string `json:"MerchantRequestID"`
-	CheckoutRequestID   string `json:"CheckoutRequestID"`
-	ResponseCode        string `json:"ResponseCode"`
-	ResponseDescription string `json:"ResponseDescription"`
-	CustomerMessage     string `json:"CustomerMessage"`
+	MerchantRequestID    string `json:"MerchantRequestID"`
+	CheckoutRequestID    string `json:"CheckoutRequestID"`
+	ResponseCode         string `json:"ResponseCode"`
+	ResponseDescription  string `json:"ResponseDescription"`
+	CustomerMessage      string `json:"CustomerMessage"`
+	RequestID            string `json:"requestId"`
+	ErrorCode            string `json:"errorCode"`
+	ErrorMessage         string `json:"errorMessage"`
 }
 
 // B2CRequest represents M-Pesa B2C (Business to Customer) request
@@ -127,14 +130,23 @@ func (s *MpesaService) GetAccessToken() (string, error) {
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read token response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("M-Pesa token endpoint returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	// Parse response
 	var tokenResp MpesaTokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
 		return "", fmt.Errorf("failed to decode token response: %w", err)
 	}
 
 	if tokenResp.AccessToken == "" {
-		return "", fmt.Errorf("empty access token received")
+		return "", fmt.Errorf("empty access token received from M-Pesa: %s", string(body))
 	}
 
 	return tokenResp.AccessToken, nil
@@ -213,6 +225,11 @@ func (s *MpesaService) InitiateSTKPush(transaction *models.MpesaTransaction) (*M
 	var stkResp MpesaSTKPushResponse
 	if err := json.Unmarshal(body, &stkResp); err != nil {
 		return nil, fmt.Errorf("failed to decode STK response: %w", err)
+	}
+
+	// M-Pesa returns error responses with errorCode/errorMessage instead of ResponseCode
+	if stkResp.ErrorCode != "" {
+		return nil, fmt.Errorf("STK push failed [errorCode=%s]: %s", stkResp.ErrorCode, stkResp.ErrorMessage)
 	}
 
 	// Check if request was successful
