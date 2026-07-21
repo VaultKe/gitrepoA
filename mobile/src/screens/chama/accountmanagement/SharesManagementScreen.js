@@ -107,17 +107,21 @@ const SharesManagementScreen = ({ route, navigation }) => {
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.rowLeft}>
-        <Text style={[styles.rowTitle, { color: colors.text }]}>{item.name || 'Share Offering'}</Text>
+      <View style={styles.nameCell}>
+        <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
+          {item.name || 'Share Offering'}
+        </Text>
         <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
           Total: {item.totalShares ?? '-'} | Available: {item.availableShares ?? item.totalShares ?? '-'}
         </Text>
-        <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
-          {item.status ? item.status.toUpperCase() : 'OPEN'}
+      </View>
+      <View style={styles.sharesCell}>
+        <Text style={[styles.rowAmount, { color: colors.primary }]}>
+          {item.totalShares ?? '-'}
         </Text>
       </View>
-      <View style={styles.rowRight}>
-        <Text style={[styles.rowAmount, { color: colors.primary }]}>
+      <View style={styles.priceCell}>
+        <Text style={[styles.rowAmount, { color: colors.success }]}>
           KES {(item.pricePerShare ?? 0).toLocaleString()}
         </Text>
       </View>
@@ -144,7 +148,8 @@ const SharesManagementScreen = ({ route, navigation }) => {
           </View>
 
           <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Offering</Text>
+            <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Offering</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Shares</Text>
             <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Price Per Share</Text>
           </View>
 
@@ -209,10 +214,11 @@ const SharesManagementScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1 },
-  rowLeft: { flex: 1 },
+  nameCell: { flex: 1.5, justifyContent: 'center' },
+  sharesCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  priceCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
   rowTitle: { fontSize: typography.fontSize.sm, fontWeight: '600' },
   rowSub: { fontSize: typography.fontSize.xs, marginTop: 2 },
-  rowRight: { alignItems: 'flex-end' },
   rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl },
   emptyTitle: { fontSize: typography.fontSize.lg, fontWeight: '600', marginTop: spacing.lg, marginBottom: spacing.xs },
