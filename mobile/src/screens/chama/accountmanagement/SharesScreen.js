@@ -219,7 +219,7 @@ const SharesScreen = ({ navigation, route }) => {
 
   const renderOfferingRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.rowLeft}>
+      <View style={styles.nameCell}>
         <Text style={[styles.rowTitle, { color: colors.text }]}>
           {item.name || 'Share Offering'}
         </Text>
@@ -230,18 +230,23 @@ const SharesScreen = ({ navigation, route }) => {
           {item.status ? item.status.toUpperCase() : 'OPEN'}
         </Text>
       </View>
-      <View style={styles.rowRight}>
+      <View style={styles.sharesCell}>
         <Text style={[styles.rowAmount, { color: colors.primary }]}>
+          {item.totalShares ?? '-'}
+        </Text>
+      </View>
+      <View style={styles.priceCell}>
+        <Text style={[styles.rowAmount, { color: colors.success }]}>
           {formatSharePrice(item.pricePerShare)}/share
         </Text>
         <Button
           title="Buy"
           size="small"
-onPress={() => {
-             setBuyForm({ amount: String(item.pricePerShare ?? '') });
-             setPaymentMethod('mpesa');
-             setShowBuyModal(true);
-           }}
+          onPress={() => {
+            setBuyForm({ amount: String(item.pricePerShare ?? '') });
+            setPaymentMethod('mpesa');
+            setShowBuyModal(true);
+          }}
           style={{ marginTop: spacing.xs }}
         />
       </View>
@@ -250,7 +255,7 @@ onPress={() => {
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.rowLeft}>
+      <View style={styles.nameCell}>
         <Text style={[styles.rowTitle, { color: colors.text }]}>
           {item.description || 'Share Purchase'}
         </Text>
@@ -258,10 +263,12 @@ onPress={() => {
           {formatDate(item.date)}
         </Text>
       </View>
-      <View style={styles.rowRight}>
+      <View style={styles.sharesCell}>
         <Text style={[styles.rowAmount, { color: colors.primary }]}>
           {formatCurrency(item.amount)}
         </Text>
+      </View>
+      <View style={styles.priceCell}>
         <View
           style={[
             styles.statusBadge,
@@ -301,6 +308,12 @@ onPress={() => {
             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm }}>
               Available Shares
             </Text>
+            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Offering</Text>
+              <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Shares</Text>
+              <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Price Per Share</Text>
+            </View>
+
             <FlatList
               data={offerings}
               renderItem={renderOfferingRow}
@@ -325,6 +338,12 @@ onPress={() => {
                 </Text>
               )}
             </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+            <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Description</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Date</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Amount</Text>
           </View>
 
           <FlatList
@@ -459,10 +478,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm, paddingHorizontal: spacing.md },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1 },
-  rowLeft: { flex: 1 },
+  nameCell: { flex: 1.5, justifyContent: 'center' },
+  sharesCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  priceCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
   rowTitle: { fontSize: typography.fontSize.sm, fontWeight: '600' },
   rowSub: { fontSize: typography.fontSize.xs, marginTop: 2 },
-  rowRight: { alignItems: 'flex-end' },
   rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },
   statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2 },
   statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },

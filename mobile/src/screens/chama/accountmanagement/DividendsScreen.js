@@ -234,7 +234,7 @@ const DividendsScreen = ({ navigation, route }) => {
 
   const renderDeclarationRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.rowLeft}>
+      <View style={styles.declarationCell}>
         <Text style={[styles.rowTitle, { color: colors.text }]}>
           {item.description || 'Dividend Declaration'}
         </Text>
@@ -242,10 +242,12 @@ const DividendsScreen = ({ navigation, route }) => {
           {formatDate(item.timestamp || item.createdAt || item.created_at)}
         </Text>
       </View>
-      <View style={styles.rowRight}>
+      <View style={styles.amountCell}>
         <Text style={[styles.rowAmount, { color: colors.success }]}>
           {formatCurrency(item.totalAmount || item.amount)}
         </Text>
+      </View>
+      <View style={styles.actionsCell}>
         <View style={[styles.statusBadge, { backgroundColor: (colors[item.status] || colors.textSecondary) + '20' }]}>
           <Text style={[styles.statusText, { color: colors[item.status] || colors.textSecondary }]}>
             {(item.status || 'pending').toUpperCase()}
@@ -254,11 +256,11 @@ const DividendsScreen = ({ navigation, route }) => {
         <Button
           title="Buy"
           size="small"
-onPress={() => {
-             setBuyForm({ amount: String(item?.totalAmount || item?.amount || '') });
-             setPaymentMethod('mpesa');
-             setShowBuyModal(true);
-           }}
+          onPress={() => {
+            setBuyForm({ amount: String(item?.totalAmount || item?.amount || '') });
+            setPaymentMethod('mpesa');
+            setShowBuyModal(true);
+          }}
           style={{ marginTop: spacing.xs }}
         />
       </View>
@@ -267,7 +269,7 @@ onPress={() => {
 
   const renderRow = ({ item }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.rowLeft}>
+      <View style={styles.declarationCell}>
         <Text style={[styles.rowTitle, { color: colors.text }]}>
           {item.description || 'Dividend Payment'}
         </Text>
@@ -275,10 +277,12 @@ onPress={() => {
           {formatDate(item.date)}
         </Text>
       </View>
-      <View style={styles.rowRight}>
+      <View style={styles.amountCell}>
         <Text style={[styles.rowAmount, { color: colors.success }]}>
           +{formatCurrency(item.amount)}
         </Text>
+      </View>
+      <View style={styles.actionsCell}>
         <View
           style={[
             styles.statusBadge,
@@ -318,6 +322,12 @@ onPress={() => {
             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm }}>
               Dividend Declarations
             </Text>
+            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Declaration</Text>
+              <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Amount</Text>
+              <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Status</Text>
+            </View>
+
             <FlatList
               data={declarations}
               renderItem={renderDeclarationRow}
@@ -342,6 +352,12 @@ onPress={() => {
                 </Text>
               )}
             </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+            <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Description</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Date</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Amount</Text>
           </View>
 
           <FlatList
@@ -475,12 +491,13 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm, paddingHorizontal: spacing.md },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1 },
-  rowLeft: { flex: 1 },
+  declarationCell: { flex: 1.5, justifyContent: 'center' },
+  amountCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  actionsCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontSize: typography.fontSize.sm, fontWeight: '600' },
   rowSub: { fontSize: typography.fontSize.xs, marginTop: 2 },
-  rowRight: { alignItems: 'flex-end' },
   rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },
-  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2 },
+  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2, alignItems: 'center' },
   statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl },
   emptyTitle: { fontSize: typography.fontSize.lg, fontWeight: '600', marginTop: spacing.lg, marginBottom: spacing.xs },
