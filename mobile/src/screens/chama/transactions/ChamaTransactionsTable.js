@@ -77,26 +77,26 @@ const ChamaTransactionsTable = ({
           contentContainerStyle={styles.tableScrollContent}
         >
           <View style={styles.tableContent}>
-            <View style={styles.tableHeader}>
-              <View style={[styles.tableCell, styles.nameCell]}>
-                <Text style={[styles.tableHeaderText, styles.tableHeaderTextLeft]}>User</Text>
+              <View style={styles.tableHeader}>
+                <View style={[styles.tableCell, styles.nameCell]}>
+                  <Text numberOfLines={1} style={[styles.tableHeaderText, styles.tableHeaderTextLeft]}>User</Text>
+                </View>
+                <View style={[styles.tableCell, styles.descriptionCell]}>
+                  <Text numberOfLines={1} style={styles.tableHeaderText}>Description</Text>
+                </View>
+                <View style={[styles.tableCell, styles.amountCell]}>
+                  <Text numberOfLines={1} style={styles.tableHeaderText}>Amount(KSH)</Text>
+                </View>
+                <View style={[styles.tableCell, styles.dateCell]}>
+                  <Text numberOfLines={1} style={styles.tableHeaderText}>Date</Text>
+                </View>
+                <View style={[styles.tableCell, styles.typeCell]}>
+                  <Text numberOfLines={1} style={styles.tableHeaderText}>Type</Text>
+                </View>
+                <View style={[styles.tableCell, styles.actionsCell]}>
+                  <Text numberOfLines={1} style={styles.tableHeaderText}>Action</Text>
+                </View>
               </View>
-              <View style={[styles.tableCell, styles.descriptionCell]}>
-                <Text style={styles.tableHeaderText}>Description</Text>
-              </View>
-              <View style={[styles.tableCell, styles.amountCell]}>
-                <Text style={styles.tableHeaderText}>Amount</Text>
-              </View>
-              <View style={[styles.tableCell, styles.dateCell]}>
-                <Text style={styles.tableHeaderText}>Date</Text>
-              </View>
-              <View style={[styles.tableCell, styles.typeCell]}>
-                <Text style={styles.tableHeaderText}>Type</Text>
-              </View>
-              <View style={[styles.tableCell, styles.actionsCell]}>
-                <Text style={styles.tableHeaderText}>Action</Text>
-              </View>
-            </View>
 
             <FlatList
               data={transactions}
@@ -119,7 +119,7 @@ const ChamaTransactionsTable = ({
               )}
             />
 
-            {transactions.length > 15 && (
+            {totalPages > 1 && (
               <View style={styles.pagination}>
                 <TouchableOpacity
                   style={[
@@ -129,11 +129,9 @@ const ChamaTransactionsTable = ({
                   onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
                   disabled={currentPage === 1}
                 >
-                  <Ionicons
-                    name="chevron-back"
-                    size={16}
-                    color={currentPage === 1 ? colors.textSecondary : colors.text}
-                  />
+                  <Text style={[styles.pageButtonText, currentPage === 1 && styles.pageButtonTextDisabled]}>
+                    Previous
+                  </Text>
                 </TouchableOpacity>
                 <Text style={[styles.pageText, styles.pageTextDefault]}>
                   {currentPage} of {totalPages}
@@ -146,11 +144,9 @@ const ChamaTransactionsTable = ({
                   onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
                   disabled={currentPage === totalPages}
                 >
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={currentPage === totalPages ? colors.textSecondary : colors.text}
-                  />
+                  <Text style={[styles.pageButtonText, currentPage === totalPages && styles.pageButtonTextDisabled]}>
+                    Next
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -203,16 +199,15 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableContent: {
     position: 'relative',
-    minWidth: Math.max(width - 32, 760),
     width: '100%',
   },
   tableHeader: {
     flexDirection: 'row',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.03)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: colors.primary + '10',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
   tableCell: {
     flex: 1,
@@ -290,8 +285,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
-    color: colors.text,
-    fontSize: typography.fontSize.xs,
+    color: colors.primary,
+    fontSize: 12,
     textAlign: 'center',
   },
   tableHeaderTextLeft: {
@@ -323,6 +318,14 @@ const createStyles = (colors) => StyleSheet.create({
   },
   pageTextDefault: {
     color: colors.text,
+  },
+  pageButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary,
+  },
+  pageButtonTextDisabled: {
+    color: colors.textSecondary,
   },
 });
 

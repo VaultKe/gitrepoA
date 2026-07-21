@@ -4,10 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import {
   formatCurrency,
+  formatAmountOnly,
   getShortTypeLabel,
   getTransactionAmount,
   getTransactionColor,
-  getTransactionIcon,
   getTransactionUserName,
 } from './chamaTransactionsUtils';
 
@@ -23,7 +23,6 @@ const ChamaTransactionRow = ({
   const styles = createStyles(colors);
   const transactionType = item.type || item.transaction_type || 'other';
   const transactionColor = getTransactionColor(transactionType, colors);
-  const typeIconStyle = getTypeIconStyle(transactionType, styles);
   const typeBadgeStyle = getTypeBadgeStyle(transactionType, styles);
   const typeTextStyle = getTypeTextStyle(transactionType, styles);
   const amountTextStyle = getAmountTextStyle(transactionType, styles);
@@ -31,21 +30,12 @@ const ChamaTransactionRow = ({
   return (
     <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
       <View style={[styles.tableCell, styles.nameCell]}>
-        <View style={styles.nameContainer}>
-          <View style={[styles.typeIcon, typeIconStyle]}>
-            <Ionicons
-              name={getTransactionIcon(transactionType)}
-              size={12}
-              color={transactionColor}
-            />
-          </View>
-          <Text style={[styles.tableCellText, styles.nameText]}>
-            {(item.metadata?.isAnonymous || item.metadata?.displayName === 'Anonymous')
-              ? 'Anonymous'
-              : getTransactionUserName(item, chamaMembers)
-            }
-          </Text>
-        </View>
+        <Text style={[styles.tableCellText, styles.nameText]} numberOfLines={1}>
+          {(item.metadata?.isAnonymous || item.metadata?.displayName === 'Anonymous')
+            ? 'Anonymous'
+            : getTransactionUserName(item, chamaMembers)
+          }
+        </Text>
       </View>
 
       <Text style={[styles.tableCellText, styles.descriptionCellText, styles.descriptionText]}>
@@ -53,7 +43,7 @@ const ChamaTransactionRow = ({
       </Text>
 
       <Text style={[styles.tableCellText, styles.amountCellText, styles.amountText, amountTextStyle]}>
-        {transactionType === 'contribution' ? '+' : '-'}{formatCurrency(getTransactionAmount(item))}
+        {transactionType === 'contribution' ? '+' : '-'}{formatAmountOnly(getTransactionAmount(item))}
       </Text>
 
       <Text style={[styles.tableCellText, styles.dateCellText]}>
@@ -105,21 +95,6 @@ const getTransactionDescription = (item) => {
          item.purpose ||
          item.metadata?.description ||
          `${item.type || item.transaction_type || 'Transaction'} transaction`;
-};
-
-const getTypeIconStyle = (type, styles) => {
-  switch (type) {
-    case 'contribution':
-      return styles.typeIconSuccess;
-    case 'withdrawal':
-      return styles.typeIconWarning;
-    case 'loan':
-      return styles.typeIconInfo;
-    case 'expense':
-      return styles.typeIconError;
-    default:
-      return styles.typeIconMuted;
-  }
 };
 
 const getTypeBadgeStyle = (type, styles) => {
@@ -213,34 +188,6 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     paddingHorizontal: spacing.xs,
-  },
-  nameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.xs,
-  },
-  typeIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs,
-  },
-  typeIconSuccess: {
-    backgroundColor: colors.success + '20',
-  },
-  typeIconWarning: {
-    backgroundColor: colors.warning + '20',
-  },
-  typeIconInfo: {
-    backgroundColor: colors.info + '20',
-  },
-  typeIconError: {
-    backgroundColor: colors.error + '20',
-  },
-  typeIconMuted: {
-    backgroundColor: colors.textSecondary + '20',
   },
   nameText: {
     fontWeight: typography.fontWeight.medium,

@@ -56,7 +56,7 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
   const [showMemberSelector, setShowMemberSelector] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 13;
+  const itemsPerPage = 10;
   const [isLoadingAll, setIsLoadingAll] = useState(false);
 
   const isPrivateTransaction = (item) => {

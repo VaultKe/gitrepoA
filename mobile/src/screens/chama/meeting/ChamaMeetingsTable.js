@@ -89,19 +89,19 @@ const ChamaMeetingsTable = ({
           <View style={styles.tableContent}>
             <View style={styles.tableHeader}>
               <View style={[styles.tableCell, styles.titleCell]}>
-                <Text style={[styles.tableHeaderText, styles.tableHeaderTextTitle]}>Title</Text>
+                <Text numberOfLines={1} style={[styles.tableHeaderText, styles.tableHeaderTextTitle]}>Title</Text>
               </View>
               <View style={[styles.tableCell, styles.dateCell]}>
-                <Text style={styles.tableHeaderText}>Date</Text>
+                <Text numberOfLines={1} style={styles.tableHeaderText}>Date</Text>
               </View>
               <View style={[styles.tableCell, styles.locationCell]}>
-                <Text style={styles.tableHeaderText}>Location</Text>
+                <Text numberOfLines={1} style={styles.tableHeaderText}>Location</Text>
               </View>
               <View style={[styles.tableCell, styles.statusCell]}>
-                <Text style={styles.tableHeaderText}>Status</Text>
+                <Text numberOfLines={1} style={styles.tableHeaderText}>Status</Text>
               </View>
               <View style={[styles.tableCell, styles.actionsCell]}>
-                <Text style={styles.tableHeaderText}>Actions</Text>
+                <Text numberOfLines={1} style={styles.tableHeaderText}>Actions</Text>
               </View>
             </View>
 
@@ -128,16 +128,14 @@ const ChamaMeetingsTable = ({
                 <TouchableOpacity
                   style={[
                     styles.pageButton,
-                    currentPage === 1 ? styles.pageButtonDisabled : styles.pageButtonActive,
+                    currentPage === 1 && styles.pageButtonDisabled,
                   ]}
                   onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
                   disabled={currentPage === 1}
                 >
-                  <Ionicons
-                    name="chevron-back"
-                    size={16}
-                    color={currentPage === 1 ? colors.textSecondary : colors.text}
-                  />
+                  <Text style={[styles.pageButtonText, currentPage === 1 && styles.pageButtonTextDisabled]}>
+                    Previous
+                  </Text>
                 </TouchableOpacity>
                 <Text style={[styles.pageText, styles.pageTextDefault]}>
                   {currentPage} of {totalPages}
@@ -145,16 +143,14 @@ const ChamaMeetingsTable = ({
                 <TouchableOpacity
                   style={[
                     styles.pageButton,
-                    currentPage === totalPages ? styles.pageButtonDisabled : styles.pageButtonActive,
+                    currentPage === totalPages && styles.pageButtonDisabled,
                   ]}
                   onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
                   disabled={currentPage === totalPages}
                 >
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={currentPage === totalPages ? colors.textSecondary : colors.text}
-                  />
+                  <Text style={[styles.pageButtonText, currentPage === totalPages && styles.pageButtonTextDisabled]}>
+                    Next
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -254,7 +250,7 @@ const createStyles = (colors) => StyleSheet.create({
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
     color: colors.primary,
-    fontSize: 13,
+    fontSize: 12,
     textAlign: 'center',
   },
   tableHeaderTextTitle: {
@@ -372,6 +368,14 @@ const createStyles = (colors) => StyleSheet.create({
   },
   pageTextDefault: {
     color: colors.text,
+  },
+  pageButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary,
+  },
+  pageButtonTextDisabled: {
+    color: colors.textSecondary,
   },
 });
 

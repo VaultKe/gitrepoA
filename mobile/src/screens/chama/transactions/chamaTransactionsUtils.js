@@ -20,6 +20,17 @@ export const formatCurrency = (amount) => {
   }).format(amount);
 };
 
+export const formatAmountOnly = (amount) => {
+  if (amount === null || amount === undefined || isNaN(amount)) {
+    return '0';
+  }
+
+  return new Intl.NumberFormat('en-KE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
 export const formatUserName = (fullName) => {
   if (!fullName || fullName === 'Unknown Member') return fullName;
 
