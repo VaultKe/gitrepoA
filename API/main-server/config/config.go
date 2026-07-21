@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -16,14 +17,16 @@ type Config struct {
 	JWTExpiration int
 
 	// M-Pesa Configuration
-	MpesaConsumerKey       string
-	MpesaConsumerSecret    string
-	MpesaPasskey           string
-	MpesaShortcode         string
-	MpesaCallbackURL       string
-	MpesaInitiatorName     string
-	MpesaInitiatorPassword string
-	BaseURL                string
+	MpesaConsumerKey           string
+	MpesaConsumerSecret        string
+	MpesaPasskey               string
+	MpesaShortcode             string
+	MpesaCallbackURL           string
+	MpesaInitiatorName         string
+	MpesaInitiatorPassword     string
+	MpesaPublicKeyCertPath     string // Path to M-Pesa public key certificate for RSA-OAEP encryption
+	MpesaCallbackSecret        string // Shared secret for callback endpoint authentication
+	BaseURL                    string
 
 	// Centralized Paybill Configuration (for all chama payments)
 	SystemPaybillBusinessNumber string // Single paybill for all chama payments
@@ -111,8 +114,10 @@ func Load() *Config {
 		MpesaPasskey:           getEnv("MPESA_PASSKEY", ""),
 		MpesaShortcode:         getEnv("MPESA_SHORTCODE", ""),
 		MpesaCallbackURL:       getEnv("MPESA_CALLBACK_URL", ""),
-		MpesaInitiatorName:     getEnv("MPESA_INITIATOR_NAME", "testapi"),
-		MpesaInitiatorPassword: getEnv("MPESA_INITIATOR_PASSWORD", "Safaricom999!*!"),
+		MpesaInitiatorName:     getEnv("MPESA_INITIATOR_NAME", ""),
+		MpesaInitiatorPassword: getEnv("MPESA_INITIATOR_PASSWORD", ""),
+		MpesaPublicKeyCertPath: getEnv("MPESA_PUBLIC_KEY_CERT_PATH", ""),
+		MpesaCallbackSecret:    getEnv("MPESA_CALLBACK_SECRET", ""),
 		BaseURL:                getEnv("BASE_URL", "https://gitrepoa-1.onrender.com"),
 
 		// Centralized Paybill Configuration
@@ -254,6 +259,35 @@ func (c *Config) Validate() error {
 	}
 	if !validEnvs[c.Environment] {
 		return fmt.Errorf("invalid environment: %s", c.Environment)
+	}
+
+	// Production-specific validations
+	if c.Environment == "production" {
+		if c.MpesaInitiatorName == "" || c.MpesaInitiatorName == "testapi" {
+			return fmt.Errorf("MPESA_INITIATOR_NAME must be set to a production value in production environment")
+		}
+		if c.MpesaInitiatorPassword == "" || c.MpesaInitiatorPassword == "Safaricom999!*!" {
+			return fmt.Errorf("MPESA_INITIATOR_PASSWORD must be set to a production value in production environment")
+		}
+		if c.MpesaConsumerKey == "" {
+			return fmt.Errorf("MPESA_CONSUMER_KEY is required in production")
+		}
+		if c.MpesaConsumerSecret == "" {
+			return fmt.Errorf("MPESA_CONSUMER_SECRET is required in production")
+		}
+		if c.MpesaShortcode == "" {
+			return fmt.Errorf("MPESA_SHORTCODE is required in production")
+		}
+		if c.MpesaPasskey == "" {
+			return fmt.Errorf("MPESA_PASSKEY is required in production")
+		}
+		if c.MpesaPublicKeyCertPath == "" {
+			return fmt.Errorf("MPESA_PUBLIC_KEY_CERT_PATH is required in production for B2C security credential encryption")
+		}
+		// Warn (but don't fail) if callback secret is missing
+		if c.MpesaCallbackSecret == "" {
+			log.Printf("[CONFIG][WARN] MPESA_CALLBACK_SECRET is not set — callback endpoints are protected by IP whitelist only")
+		}
 	}
 
 	return nil

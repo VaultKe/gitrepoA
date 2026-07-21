@@ -3,6 +3,7 @@ package routes
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -98,6 +99,58 @@ func SetupRoutes(
 		c.Next()
 	}
 
+	// Known Safaricom M-Pesa callback IPs (documented at developer.safaricom.co.ke)
+	safaricomCallbackIPs := []string{
+		"196.201.214.133",
+		"196.201.214.138",
+		"196.201.213.114",
+		"196.201.212.61",
+		"196.201.212.73",
+	}
+
+	mpesaCallbackAuthMiddleware := func(c *gin.Context) {
+		// In sandbox/development, skip IP whitelist but still require the shared secret
+		if cfg.Environment != "production" {
+			// Only validate shared secret in non-prod
+			if cfg.MpesaCallbackSecret != "" {
+				if c.GetHeader("X-M-Pesa-Token") != cfg.MpesaCallbackSecret {
+					c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid callback token"})
+					c.Abort()
+					return
+				}
+			}
+			c.Next()
+			return
+		}
+
+		// Production: enforce IP whitelist
+		clientIP := c.ClientIP()
+		allowed := false
+		for _, ip := range safaricomCallbackIPs {
+			if clientIP == ip {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			log.Printf("[MPESA_CALLBACK] Rejected callback from unauthorized IP: %s", clientIP)
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized callback source"})
+			c.Abort()
+			return
+		}
+
+		// Production: also require shared secret
+		if cfg.MpesaCallbackSecret != "" {
+			if c.GetHeader("X-M-Pesa-Token") != cfg.MpesaCallbackSecret {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid callback token"})
+				c.Abort()
+				return
+			}
+		}
+
+		c.Next()
+	}
+
 	subwalletMiddleware := func(c *gin.Context) {
 		c.Set("subwalletHandlers", subwalletHandlers)
 		c.Next()
@@ -161,9 +214,9 @@ func SetupRoutes(
 		publicPayments.Use(dbMiddleware)
 		publicPayments.Use(configMiddleware)
 		{
-			publicPayments.POST("/mpesa/callback", api.HandleMpesaCallback)
-			publicPayments.POST("/mpesa/b2c/callback", api.HandleMpesaB2CCallback)
-			publicPayments.POST("/mpesa/b2c/timeout", api.HandleMpesaB2CTimeout)
+			publicPayments.POST("/mpesa/callback", mpesaCallbackAuthMiddleware, api.HandleMpesaCallback)
+			publicPayments.POST("/mpesa/b2c/callback", mpesaCallbackAuthMiddleware, api.HandleMpesaB2CCallback)
+			publicPayments.POST("/mpesa/b2c/timeout", mpesaCallbackAuthMiddleware, api.HandleMpesaB2CTimeout)
 		}
 
 		publicAuth := apiGroup.Group("/auth")

@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -430,10 +431,32 @@ func WithdrawMoney(c *gin.Context) {
 		b2cResponse, err := mpesaService.InitiateB2C(phoneNumber, req.Amount, fmt.Sprintf("Withdrawal for %s", processedTransaction.ID))
 		if err != nil {
 			log.Printf("B2C initiation failed: %v", err)
-			// Continue with pending status - can be processed manually
-		} else {
-			log.Printf("M-Pesa B2C withdrawal initiated: %s, ConversationID: %s", processedTransaction.ID, b2cResponse.ConversationID)
+			// Mark transaction as failed so it doesn't hang in pending
+			_, _ = db.(*sql.DB).Exec("UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3",
+				models.TransactionStatusFailed, time.Now(), processedTransaction.ID)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to initiate M-Pesa B2C payment: " + err.Error(),
+			})
+			return
 		}
+
+		// Store B2C conversation IDs in metadata and mark as processing
+		// so the B2C callback/timeout can find and complete this transaction.
+		metadata := make(map[string]interface{})
+		if processedTransaction.Metadata != nil {
+			metadata = processedTransaction.Metadata
+		}
+		metadata["conversation_id"] = b2cResponse.ConversationID
+		metadata["originator_conversation_id"] = b2cResponse.OriginatorConversationID
+		metadata["b2c_phone_number"] = phoneNumber
+		metadataBytes, _ := json.Marshal(metadata)
+
+		_, _ = db.(*sql.DB).Exec(
+			"UPDATE transactions SET status = $1, metadata = $2, updated_at = $3 WHERE id = $4",
+			models.TransactionStatusProcessing, string(metadataBytes), time.Now(), processedTransaction.ID,
+		)
+		log.Printf("M-Pesa B2C withdrawal initiated: %s, ConversationID: %s", processedTransaction.ID, b2cResponse.ConversationID)
 	}
 
 	// For bank withdrawals, create a pending request for manual processing

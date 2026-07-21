@@ -510,12 +510,6 @@ func (s *DisbursementService) ProcessDisbursementBatch(batchID string) error {
 			continue
 		}
 
-		_, err := s.mpesaService.InitiateB2C(recipientPhone, d.Amount, d.Purpose)
-		if err != nil {
-			log.Printf("Failed to process disbursement %s: %v", d.ID, err)
-			continue
-		}
-
 		transactionID := "TXN_" + uuid.New().String()
 		now := time.Now()
 		reference := fmt.Sprintf("BATCH-%s-%s", batchID, d.ID)
@@ -524,10 +518,28 @@ func (s *DisbursementService) ProcessDisbursementBatch(batchID string) error {
 			INSERT INTO transactions (
 				id, type, status, amount, currency, description, reference, payment_method,
 				initiated_by, created_at, updated_at
-			) VALUES ($1, 'withdrawal', 'processing', $2, 'KES', $3, $4, 'mobile_money', $5, $6, $7)
+			) VALUES ($1, 'withdrawal', 'pending', $2, 'KES', $3, $4, 'mobile_money', $5, $6, $7)
 		`, transactionID, d.Amount, d.Purpose, reference, d.RecipientID, now, now)
 		if err != nil {
 			log.Printf("Failed to create batch disbursement transaction %s: %v", transactionID, err)
+			continue
+		}
+
+		b2cResp, err := s.mpesaService.InitiateB2C(recipientPhone, d.Amount, d.Purpose)
+		if err != nil {
+			_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
+			log.Printf("Failed B2C for batch disbursement %s: %v", transactionID, err)
+			continue
+		}
+
+		// Store B2C conversation IDs and mark as processing so callbacks can match.
+		_, err = tx.Exec(
+			"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+			fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s", "b2c_phone_number": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID, recipientPhone),
+			now, transactionID,
+		)
+		if err != nil {
+			log.Printf("Failed to update batch disbursement transaction %s: %v", transactionID, err)
 			continue
 		}
 

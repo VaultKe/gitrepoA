@@ -3,13 +3,21 @@ package services
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"vaultke-backend/config"
@@ -18,9 +26,12 @@ import (
 
 // MpesaService handles M-Pesa payment integration
 type MpesaService struct {
-	db     *sql.DB
-	config *config.Config
-	client *http.Client
+	db             *sql.DB
+	config         *config.Config
+	client         *http.Client
+	mpesaPublicKey *rsa.PublicKey
+	loadPublicKey  sync.Once
+	loadPublicKeyErr error
 }
 
 // getBaseURL returns the appropriate M-Pesa API base URL based on environment
@@ -226,14 +237,15 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 
 	// Check if payment was successful
 	if callback.ResultCode == 0 {
-		amount := callback.GetMpesaAmount()
+		callbackAmount := callback.GetMpesaAmount()
 		receiptNumber := callback.GetMpesaReceiptNumber()
 		phoneNumber := callback.GetMpesaPhoneNumber()
+		merchantRequestID := callback.MerchantRequestID
 
 		// Find the pending transaction by checkout request ID
 		// The checkout_request_id is stored in the reference field during STK initiation
 		findQuery := `
-			SELECT id, to_wallet_id, metadata, initiated_by
+			SELECT id, to_wallet_id, metadata, initiated_by, amount
 			FROM transactions
 			WHERE reference = $1 AND status = $2 AND payment_method = $3
 			LIMIT 1
@@ -242,7 +254,8 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		var toWalletID sql.NullString
 		var metadataJSON sql.NullString
 		var initiatedBy string
-		err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID, &toWalletID, &metadataJSON, &initiatedBy)
+		var originalAmount float64
+		err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID, &toWalletID, &metadataJSON, &initiatedBy, &originalAmount)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Printf("No pending transaction found for checkout request ID: %s - rejecting callback to prevent arbitrary deposits", callback.CheckoutRequestID)
@@ -255,22 +268,38 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 			return fmt.Errorf("transaction %s has no target wallet - cannot process callback", transactionID)
 		}
 
+		// Validate callback amount matches original transaction amount
+		if callbackAmount > 0 && originalAmount > 0 && callbackAmount != originalAmount {
+			log.Printf("[MPESA][AMOUNT_MISMATCH] Transaction %s: original=%.2f, callback=%.2f, receipt=%s", transactionID, originalAmount, callbackAmount, receiptNumber)
+			// Still process but flag in metadata for review
+		}
+
 		// Update the transaction with receipt and phone metadata
 		metadata := make(map[string]interface{})
 		if metadataJSON.Valid && metadataJSON.String != "" {
-			metadata["mpesa_receipt_number"] = receiptNumber
-			metadata["mpesa_phone_number"] = phoneNumber
 			if err := json.Unmarshal([]byte(metadataJSON.String), &metadata); err != nil {
 				log.Printf("Warning: failed to parse existing metadata for transaction %s: %v", transactionID, err)
-				metadata = map[string]interface{}{
-					"mpesa_receipt_number": receiptNumber,
-					"mpesa_phone_number":   phoneNumber,
-				}
-			} else {
-				metadata["mpesa_receipt_number"] = receiptNumber
-				metadata["mpesa_phone_number"] = phoneNumber
+				metadata = make(map[string]interface{})
 			}
 		}
+		// Capture M-Pesa transaction codes
+		if receiptNumber != "" {
+			metadata["mpesa_receipt_number"] = receiptNumber
+		}
+		if merchantRequestID != "" {
+			metadata["mpesa_merchant_request_id"] = merchantRequestID
+		}
+		if phoneNumber != "" {
+			metadata["mpesa_phone_number"] = phoneNumber
+		}
+		if callbackAmount > 0 {
+			metadata["mpesa_callback_amount"] = callbackAmount
+		}
+		if originalAmount > 0 {
+			metadata["original_amount"] = originalAmount
+		}
+		metadata["callback_result_code"] = callback.ResultCode
+		metadata["callback_result_desc"] = callback.ResultDesc
 		metadataJSONBytes, _ := json.Marshal(metadata)
 
 		updateQuery := `
@@ -283,13 +312,17 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 			return fmt.Errorf("failed to update transaction: %w", err)
 		}
 
-		// Credit the target wallet
+		// Credit the target wallet using callback amount (or original if callback amount is 0)
+		creditAmount := callbackAmount
+		if creditAmount <= 0 {
+			creditAmount = originalAmount
+		}
 		creditQuery := `
 			UPDATE wallets
 			SET balance = balance + $1, updated_at = $2
 			WHERE id = $3
 		`
-		result, err := tx.Exec(creditQuery, amount, time.Now(), toWalletID.String)
+		result, err := tx.Exec(creditQuery, creditAmount, time.Now(), toWalletID.String)
 		if err != nil {
 			return fmt.Errorf("failed to credit wallet: %w", err)
 		}
@@ -301,7 +334,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		if err = tx.Commit(); err != nil {
 			return fmt.Errorf("failed to commit callback transaction: %w", err)
 		}
-		log.Printf("Successfully processed callback for transaction %s - credited %s with %.2f", transactionID, toWalletID.String, amount)
+		log.Printf("Successfully processed callback for transaction %s - credited %s with %.2f, receipt=%s", transactionID, toWalletID.String, creditAmount, receiptNumber)
 
 		// Update merry_go_round_payments status to completed for merry-go-round contributions
 		if merryGoRoundId, hasMgr := metadata["merryGoRoundId"].(string); hasMgr && merryGoRoundId != "" {
@@ -362,9 +395,10 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 	}
 
 	// Payment failed - find and mark transaction as failed
-	findQuery := `SELECT id FROM transactions WHERE reference = $1 AND payment_method = $2 LIMIT 1`
+	findQuery := `SELECT id, amount FROM transactions WHERE reference = $1 AND payment_method = $2 LIMIT 1`
 	var transactionID string
-	err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.PaymentMethodMpesa).Scan(&transactionID)
+	var originalAmount float64
+	err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.PaymentMethodMpesa).Scan(&transactionID, &originalAmount)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("No transaction found for failed checkout request ID: %s", callback.CheckoutRequestID)
@@ -381,7 +415,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 	if err != nil {
 		return fmt.Errorf("failed to update failed transaction status: %w", err)
 	}
-	log.Printf("Marked transaction %s as failed for checkout request ID: %s", transactionID, callback.CheckoutRequestID)
+	log.Printf("Marked transaction %s as failed for checkout request ID: %s, ResultDesc: %s", transactionID, callback.CheckoutRequestID, callback.ResultDesc)
 	return nil
 }
 
@@ -443,7 +477,7 @@ func (s *MpesaService) GetTransactionStatus(checkoutRequestID string) (string, e
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", s.getBaseURL()+"/mpesa/stkpushquery/v1/query", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create query request: %w", err)
 	}
@@ -558,27 +592,88 @@ func (s *MpesaService) InitiateB2CRaw(phoneNumber string, amount float64, remark
 }
 
 // encryptSecurityCredential encrypts the M-Pesa initiator password for B2C requests.
-// In production, this must use RSA encryption with the M-Pesa public key certificate
-// (https://developer.safaricom.co.ke/docs/security-credentials).
+// In production, this uses RSA-OAEP encryption with the M-Pesa public key certificate.
 // The encrypted bytes are then base64-encoded.
 // Fallback: base64-encode the plaintext password only when M-Pesa cert encryption is unavailable
 // (e.g. sandbox or local dev without cert files). This fallback is intentionally restricted
 // and must not be relied upon in production.
 func (s *MpesaService) encryptSecurityCredential() string {
-	// TODO: replace with RSA-OAEP encryption using M-Pesa public key certificate.
-	// encrypted, _ := rsa.EncryptOAEP(sha256.New(), rand.Reader, mpesaPublicKey, []byte(s.config.MpesaInitiatorPassword), nil)
-	// return base64.StdEncoding.EncodeToString(encrypted)
+	// Try RSA-OAEP encryption if we have a cert path
+	if s.config.MpesaPublicKeyCertPath != "" {
+		publicKey, err := s.getMpesaPublicKey()
+		if err != nil {
+			log.Printf("[MPESA] Failed to load M-Pesa public key, falling back to base64: %v", err)
+		} else if publicKey != nil {
+			encrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, []byte(s.config.MpesaInitiatorPassword), nil)
+			if err != nil {
+				log.Printf("[MPESA] RSA-OAEP encryption failed, falling back to base64: %v", err)
+			} else {
+				return base64.StdEncoding.EncodeToString(encrypted)
+			}
+		}
+	}
+
+	// Fallback for sandbox/development without cert
+	if s.config.Environment != "production" {
+		return base64.StdEncoding.EncodeToString([]byte(s.config.MpesaInitiatorPassword))
+	}
+
+	// Production without cert is a configuration error — log prominently
+	log.Printf("[MPESA][SECURITY] B2C security credential is base64-encoded plaintext in production. Set MPESA_PUBLIC_KEY_CERT_PATH.")
 	return base64.StdEncoding.EncodeToString([]byte(s.config.MpesaInitiatorPassword))
+}
+
+// getMpesaPublicKey loads and caches the M-Pesa public key from the certificate file.
+func (s *MpesaService) getMpesaPublicKey() (*rsa.PublicKey, error) {
+	s.loadPublicKey.Do(func() {
+		if s.mpesaPublicKey != nil {
+			s.loadPublicKeyErr = nil
+			return
+		}
+		certData, err := os.ReadFile(s.config.MpesaPublicKeyCertPath)
+		if err != nil {
+			s.loadPublicKeyErr = fmt.Errorf("failed to read M-Pesa public key cert: %w", err)
+			return
+		}
+		block, _ := pem.Decode(certData)
+		if block == nil {
+			s.loadPublicKeyErr = fmt.Errorf("failed to decode PEM block from M-Pesa public key cert")
+			return
+		}
+		pub, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			s.loadPublicKeyErr = fmt.Errorf("failed to parse M-Pesa certificate: %w", err)
+			return
+		}
+		s.mpesaPublicKey = pub.PublicKey.(*rsa.PublicKey)
+		s.loadPublicKeyErr = nil
+	})
+	return s.mpesaPublicKey, s.loadPublicKeyErr
 }
 
 // HandleB2CCallback processes M-Pesa B2C result callbacks
 func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) error {
-	log.Printf("Processing B2C callback: %+v", callbackData)
+	log.Printf("Processing B2C callback: ConversationID=%v, ResultCode=%v",
+		callbackData["ConversationID"], callbackData["ResultCode"])
 
 	conversationID, _ := callbackData["ConversationID"].(string)
 	resultCode := 0
 	if rc, ok := callbackData["ResultCode"].(float64); ok {
 		resultCode = int(rc)
+	}
+	resultDesc, _ := callbackData["ResultDesc"].(string)
+
+	// Extract B2C result parameters (amount, receipt, etc.)
+	resultParams := extractB2CResultParameters(callbackData)
+	b2cCallbackAmountStr := resultParams["TransactionAmount"]
+	b2cReceipt := resultParams["TransactionReceipt"]
+	b2cResultType := resultParams["ResultType"]
+
+	var b2cCallbackAmount float64
+	if b2cCallbackAmountStr != "" {
+		if parsed, err := strconv.ParseFloat(b2cCallbackAmountStr, 64); err == nil {
+			b2cCallbackAmount = parsed
+		}
 	}
 
 	tx, err := s.db.Begin()
@@ -589,7 +684,7 @@ func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) er
 
 	// Find the pending B2C transaction by conversation metadata
 	findQuery := `
-		SELECT id, from_wallet_id, amount
+		SELECT id, from_wallet_id, amount, metadata
 		FROM transactions
 		WHERE metadata::text LIKE $1 AND status = $2 AND payment_method = $3
 		LIMIT 1
@@ -597,7 +692,8 @@ func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) er
 	var transactionID string
 	var fromWalletID sql.NullString
 	var b2cAmount float64
-	err = tx.QueryRow(findQuery, "%"+conversationID+"%", models.TransactionStatusProcessing, "mpesa").Scan(&transactionID, &fromWalletID, &b2cAmount)
+	var existingMetadataJSON sql.NullString
+	err = tx.QueryRow(findQuery, "%"+conversationID+"%", models.TransactionStatusProcessing, "mpesa").Scan(&transactionID, &fromWalletID, &b2cAmount, &existingMetadataJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("No B2C transaction found for conversation ID: %s", conversationID)
@@ -606,29 +702,63 @@ func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) er
 		return fmt.Errorf("failed to find B2C transaction: %w", err)
 	}
 
+	// Build updated metadata with B2C callback codes
+	metadata := make(map[string]interface{})
+	if existingMetadataJSON.Valid && existingMetadataJSON.String != "" {
+		if err := json.Unmarshal([]byte(existingMetadataJSON.String), &metadata); err != nil {
+			metadata = make(map[string]interface{})
+		}
+	}
+	if b2cReceipt != "" {
+		metadata["b2c_transaction_receipt"] = b2cReceipt
+	}
+	if b2cResultType != "" {
+		metadata["b2c_result_type"] = b2cResultType
+	}
+	metadata["b2c_result_code"] = resultCode
+	metadata["b2c_result_desc"] = resultDesc
+	metadata["b2c_callback_amount"] = b2cCallbackAmount
+	for k, v := range resultParams {
+		if k != "TransactionAmount" && k != "TransactionReceipt" && k != "ResultType" {
+			metadata["b2c_"+strings.ToLower(k)] = v
+		}
+	}
+	metadataJSONBytes, _ := json.Marshal(metadata)
+
 	if resultCode == 0 {
+		// Validate B2C callback amount matches local transaction amount
+		if b2cCallbackAmount > 0 && b2cAmount > 0 && b2cCallbackAmount != b2cAmount {
+			log.Printf("[MPESA][B2C_AMOUNT_MISMATCH] Transaction %s: local=%.2f, callback=%.2f, receipt=%s", transactionID, b2cAmount, b2cCallbackAmount, b2cReceipt)
+		}
+
+		// Use callback amount if available, otherwise local amount
+		debitAmount := b2cAmount
+		if b2cCallbackAmount > 0 {
+			debitAmount = b2cCallbackAmount
+		}
+
 		// B2C succeeded - debit the source wallet and mark as completed
 		if fromWalletID.Valid && fromWalletID.String != "" {
 			_, err = tx.Exec("UPDATE wallets SET balance = balance - $1, updated_at = $2 WHERE id = $3",
-				b2cAmount, time.Now(), fromWalletID.String)
+				debitAmount, time.Now(), fromWalletID.String)
 			if err != nil {
 				return fmt.Errorf("failed to debit wallet %s for successful B2C %s: %v", fromWalletID.String, transactionID, err)
 			}
 		}
-		_, err = tx.Exec("UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3",
-			models.TransactionStatusCompleted, time.Now(), transactionID)
+		_, err = tx.Exec("UPDATE transactions SET status = $1, metadata = $2, updated_at = $3 WHERE id = $4",
+			models.TransactionStatusCompleted, string(metadataJSONBytes), time.Now(), transactionID)
 		if err != nil {
 			return fmt.Errorf("failed to complete B2C transaction: %v", err)
 		}
-		log.Printf("B2C transaction %s completed successfully - wallet %s debited", transactionID, fromWalletID.String)
+		log.Printf("B2C transaction %s completed successfully - wallet %s debited %.2f, receipt=%s", transactionID, fromWalletID.String, debitAmount, b2cReceipt)
 	} else {
-		// B2C failed - no refund needed because wallet was not pre-debited
-		_, err = tx.Exec("UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3",
-			models.TransactionStatusFailed, time.Now(), transactionID)
+		// B2C failed - mark as failed
+		_, err = tx.Exec("UPDATE transactions SET status = $1, metadata = $2, updated_at = $3 WHERE id = $4",
+			models.TransactionStatusFailed, string(metadataJSONBytes), time.Now(), transactionID)
 		if err != nil {
 			return fmt.Errorf("failed to mark B2C transaction as failed: %v", err)
 		}
-		log.Printf("B2C transaction %s failed - no wallet debit was performed", transactionID)
+		log.Printf("B2C transaction %s failed (ResultCode=%d, Desc=%s) - no wallet debit performed", transactionID, resultCode, resultDesc)
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -636,6 +766,35 @@ func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) er
 	}
 
 	return nil
+}
+
+// extractB2CResultParameters extracts key-value pairs from M-Pesa B2C ResultParameters
+func extractB2CResultParameters(callbackData map[string]interface{}) map[string]string {
+	result := make(map[string]string)
+
+	resultParams, ok := callbackData["ResultParameters"].(map[string]interface{})
+	if !ok {
+		return result
+	}
+
+	params, ok := resultParams["ResultParameter"].([]interface{})
+	if !ok {
+		return result
+	}
+
+	for _, p := range params {
+		paramMap, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		key, _ := paramMap["Key"].(string)
+		value, _ := paramMap["Value"].(string)
+		if key != "" {
+			result[key] = value
+		}
+	}
+
+	return result
 }
 
 // HandleB2CTimeout processes M-Pesa B2C queue timeout callbacks
