@@ -67,6 +67,26 @@ func (m *AuthMiddleware) AuthRequired() gin.HandlerFunc {
 			return
 		}
 
+		// STRONG: Check token version to enforce immediate session invalidation
+		// when single-device policy kicks out a previous device.
+		validVersion, err := m.authService.ValidateTokenVersion(claims.UserID, claims.TokenVersion)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Session invalidated: " + err.Error(),
+			})
+			c.Abort()
+			return
+		}
+		if !validVersion {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Session expired: your account was logged in from another device",
+			})
+			c.Abort()
+			return
+		}
+
 		// Set user information in context
 		c.Set("userID", claims.UserID)
 		c.Set("userRole", claims.Role)

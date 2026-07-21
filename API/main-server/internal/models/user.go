@@ -63,6 +63,7 @@ type User struct {
 	Rating              float64    `json:"rating" db:"rating"`
 	TotalRatings        int        `json:"totalRatings" db:"total_ratings"`
 	RegistrationFeePaid bool       `json:"registrationFeePaid" db:"registration_fee_paid"`
+	TokenVersion        int        `json:"-" db:"token_version"`
 	CreatedAt           time.Time  `json:"createdAt" db:"created_at"`
 	UpdatedAt           time.Time  `json:"updatedAt" db:"updated_at"`
 }

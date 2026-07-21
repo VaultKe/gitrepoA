@@ -129,7 +129,17 @@ export default function LoginScreen({ navigation }) {
         const result = await login(credentials);
 
         if (result.success) {
-          showMessage('Welcome back! Logging you in...', 'success', 2000);
+          // Check if previous device was logged out due to single-device policy
+          if (result.previousDeviceLoggedOut) {
+            const deviceName = result.previousDeviceName || 'another device';
+            showMessage(
+              `Security: Your account was logged out from ${deviceName}. Only one device can be active at a time.`,
+              'warning',
+              6000
+            );
+          } else {
+            showMessage('Welcome back! Logging you in...', 'success', 2000);
+          }
           // Navigation will be handled by useEffect when isAuthenticated changes
         } else {
           throw new Error(result.error || 'Login failed');

@@ -36,9 +36,10 @@ func NewAuthService(db *sql.DB, jwtSecret string, jwtExpirationSeconds int) *Aut
 
 // JWTClaims represents JWT token claims
 type JWTClaims struct {
-	UserID string `json:"userId"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
+	UserID      string `json:"userId"`
+	Email       string `json:"email"`
+	Role        string `json:"role"`
+	TokenVersion int   `json:"tokenVersion"`
 	jwt.RegisteredClaims
 }
 
@@ -46,9 +47,10 @@ type JWTClaims struct {
 func (s *AuthService) GenerateToken(user *models.User) (string, error) {
 	now := time.Now()
 	claims := &JWTClaims{
-		UserID: user.ID,
-		Email:  user.Email,
-		Role:   string(user.Role),
+		UserID:       user.ID,
+		Email:        user.Email,
+		Role:         string(user.Role),
+		TokenVersion: user.TokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiration)),
@@ -256,15 +258,17 @@ func (s *AuthService) getUserByID(userID string) (*models.User, error) {
 		SELECT id, email, phone, first_name, last_name, password_hash, avatar, role, status,
 		       is_email_verified, is_phone_verified, language, theme, county, town,
 		       latitude, longitude, business_type, business_description, bio, occupation,
-		       date_of_birth, gender, rating, total_ratings, created_at, updated_at
+		       date_of_birth, gender, rating, total_ratings, registration_fee_paid, token_version,
+		       created_at, updated_at
 		FROM users WHERE id = $1
 	`
 	err := s.db.QueryRow(query, userID).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.FirstName, &user.LastName, &user.PasswordHash,
 		&user.Avatar, &user.Role, &user.Status, &user.IsEmailVerified, &user.IsPhoneVerified,
-		&user.Language, &user.Theme, &user.County, &user.Town, &user.Latitude, &user.Longitude,
-		&user.BusinessType, &user.BusinessDescription, &user.Bio, &user.Occupation,
-		&user.DateOfBirth, &user.Gender, &user.Rating, &user.TotalRatings,
+		&user.Language, &user.Theme, &user.County, &user.Town,
+		&user.Latitude, &user.Longitude, &user.BusinessType, &user.BusinessDescription,
+		&user.Bio, &user.Occupation, &user.DateOfBirth, &user.Gender,
+		&user.Rating, &user.TotalRatings, &user.RegistrationFeePaid, &user.TokenVersion,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -319,6 +323,16 @@ func (s *AuthService) GetTokenExpiryTime(tokenString string) (time.Time, error) 
 		return time.Time{}, err
 	}
 	return claims.ExpiresAt.Time, nil
+}
+
+// ValidateTokenVersion checks if the JWT token version matches the user's current token version in DB.
+// Returns false if the token has been invalidated by a single-device policy enforcement.
+func (s *AuthService) ValidateTokenVersion(userID string, tokenVersion int) (bool, error) {
+	user, err := s.getUserByID(userID)
+	if err != nil {
+		return false, err
+	}
+	return user.TokenVersion == tokenVersion, nil
 }
 
 // ExtractUserIDFromToken extracts user ID from token without full validation

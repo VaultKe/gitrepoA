@@ -434,6 +434,18 @@ const AppContext = createContext();
       const response = await ApiService.login(credentials);
 
       if (response.success) {
+        // Check if previous device was logged out due to single-device policy
+        const previousDeviceLoggedOut = response.data?.previousDeviceLoggedOut;
+        const previousDeviceName = response.data?.previousDeviceName;
+
+        // If a previous device was logged out, store this info for the UI to show
+        if (previousDeviceLoggedOut) {
+          await AsyncStorage.setItem('deviceLogoutWarning', JSON.stringify({
+            previousDeviceName: previousDeviceName || 'another device',
+            timestamp: Date.now(),
+          }));
+        }
+
         // Compress user data before storing to prevent storage quota errors
         const rawUserData = response.data.user;
 
@@ -571,7 +583,11 @@ const AppContext = createContext();
           }
         }, 100); // Small delay to ensure UI renders first
 
-        return { success: true };
+        return { 
+          success: true, 
+          previousDeviceLoggedOut: !!previousDeviceLoggedOut,
+          previousDeviceName: previousDeviceName,
+        };
       } else {
         throw new Error(response.error || 'Login failed');
       }

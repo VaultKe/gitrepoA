@@ -80,6 +80,9 @@ func main() {
 	// Initialize email service
 	emailService := services.NewEmailService()
 
+	// Initialize device policy service for single-device enforcement
+	devicePolicyService := services.NewDevicePolicyService(db, authService, emailService)
+
 	// Initialize password reset service
 	passwordResetService := services.NewPasswordResetService(db, emailService)
 
@@ -101,7 +104,7 @@ func main() {
 	notificationScheduler.Start()
 
 	// Initialize scheduler service for meeting auto-unlock
-	authHandlers := api.NewAuthHandlers(db, cfg.JWTSecret, cfg.JWTExpiration)
+	authHandlers := api.NewAuthHandlers(db, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService)
 	reminderHandlers := api.NewReminderHandlers(db)
 
 	pollsHandlers := api.NewPollsHandlers(db)
@@ -126,7 +129,7 @@ func main() {
 	api.InitializeMeetingService(db, nil)
 
 	// Register routes and middleware
-	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService)
+	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService, devicePolicyService)
 
 	// Start server
 	port := os.Getenv("PORT")

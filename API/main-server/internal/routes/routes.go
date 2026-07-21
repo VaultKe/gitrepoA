@@ -40,6 +40,7 @@ func SetupRoutes(
 	testDataGenerator *services.TestDataGenerator,
 	subwalletHandlers *api.SubWalletHandlers,
 	disbursementService *services.DisbursementService,
+	devicePolicyService *services.DevicePolicyService,
 ) {
 	// HTML templates for OAuth pages
 	router.LoadHTMLGlob("templates/*")

@@ -32,6 +32,9 @@ func MigrateCore(db *sql.DB) error {
 	if err := addRegistrationFeeColumns(db); err != nil {
 		return err
 	}
+	if err := addTokenVersionColumn(db); err != nil {
+		return err
+	}
 	if err := createRefreshTokensTable(db); err != nil {
 		return err
 	}
@@ -127,6 +130,8 @@ CREATE TABLE IF NOT EXISTS users (
     rating REAL DEFAULT 0,
     total_ratings INTEGER DEFAULT 0,
     id_number TEXT,
+    registration_fee_paid BOOLEAN DEFAULT FALSE,
+    token_version INTEGER DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`
@@ -326,5 +331,19 @@ func addRegistrationFeeColumns(db *sql.DB) error {
 		}
 	}
 	log.Println("registration fee columns ready")
+	return nil
+}
+
+func addTokenVersionColumn(db *sql.DB) error {
+	queries := []string{
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 1`,
+		`CREATE INDEX IF NOT EXISTS idx_users_token_version ON users(token_version)`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			return fmt.Errorf("failed to add token_version column: %w", err)
+		}
+	}
+	log.Println("token_version column ready")
 	return nil
 }

@@ -80,6 +80,18 @@ func (s *EmailService) sendEmail(toEmail, message string) error {
 	return nil
 }
 
+// SendHTMLEmail sends an HTML email using SMTP
+func (s *EmailService) SendHTMLEmail(toEmail, subject, htmlBody string) error {
+	if s.smtpHost == "" || s.smtpPort == "" || s.smtpUsername == "" || s.smtpPassword == "" {
+		return nil
+	}
+
+	message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
+		s.fromEmail, toEmail, subject, htmlBody)
+
+	return s.sendEmail(toEmail, message)
+}
+
 // SendChamaInvitationEmail sends a chama invitation email to the invitee
 func (s *EmailService) SendChamaInvitationEmail(toEmail, chamaName, inviterName, message, invitationToken string) error {
 	if toEmail == "" || chamaName == "" || inviterName == "" || invitationToken == "" {

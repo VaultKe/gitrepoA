@@ -248,17 +248,19 @@ func extractDeviceInfo(c *gin.Context) DeviceInfo {
 
 // AuthHandlers contains all authentication-related handlers
 type AuthHandlers struct {
-	userService *services.UserService
-	authService *services.AuthService
-	db          *sql.DB
+	userService         *services.UserService
+	authService         *services.AuthService
+	devicePolicyService *services.DevicePolicyService
+	db                  *sql.DB
 }
 
 // NewAuthHandlers creates new auth handlers
-func NewAuthHandlers(db *sql.DB, jwtSecret string, jwtExpiration int) *AuthHandlers {
+func NewAuthHandlers(db *sql.DB, jwtSecret string, jwtExpiration int, devicePolicyService *services.DevicePolicyService) *AuthHandlers {
 	return &AuthHandlers{
-		userService: services.NewUserService(db),
-		authService: services.NewAuthService(db, jwtSecret, jwtExpiration),
-		db:          db,
+		userService:         services.NewUserService(db),
+		authService:         services.NewAuthService(db, jwtSecret, jwtExpiration),
+		devicePolicyService: devicePolicyService,
+		db:                  db,
 	}
 }
 
@@ -272,9 +274,11 @@ type AuthResponse struct {
 
 // AuthData represents the data in auth response
 type AuthData struct {
-	User         *models.User `json:"user,omitempty"`
-	Token        string       `json:"token,omitempty"`
-	RefreshToken string       `json:"refreshToken,omitempty"`
+	User                   *models.User `json:"user,omitempty"`
+	Token                  string       `json:"token,omitempty"`
+	RefreshToken           string       `json:"refreshToken,omitempty"`
+	PreviousDeviceLoggedOut bool        `json:"previousDeviceLoggedOut,omitempty"`
+	PreviousDeviceName     string       `json:"previousDeviceName,omitempty"`
 }
 
 // issueRefreshToken generates and returns a refresh token for a user
@@ -382,24 +386,18 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 
 	userAgent := c.GetHeader("User-Agent")
 	clientIP := c.ClientIP()
-	refreshToken, _, err := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)
-	if err != nil {
-		fmt.Printf("Failed to issue refresh token for user %s: %v\n", user.ID, err)
-	}
 
 	db, exists := c.Get("db")
 	if exists {
 		deviceInfo := extractDeviceInfo(c)
 		fmt.Printf("Extracted device info for user %s: %+v\n", user.ID, deviceInfo)
 
-		ip := c.ClientIP()
 		realIP := c.GetHeader("X-Real-IP")
 		forwardedFor := c.GetHeader("X-Forwarded-For")
 		cfConnectingIP := c.GetHeader("CF-Connecting-IP")
 		trueClientIP := c.GetHeader("True-Client-IP")
 		xClientIP := c.GetHeader("X-Client-IP")
 
-		clientIP := ip
 		if cfConnectingIP != "" {
 			clientIP = cfConnectingIP
 		} else if trueClientIP != "" {
@@ -415,7 +413,30 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 			}
 		}
 
-		err := RecordLoginSession(
+		// STRONG SINGLE-DEVICE ENFORCEMENT:
+		// Before issuing a new session, enforce the single-active-device policy.
+		// This revokes all tokens and deactivates any previously active device
+		// for this user, then returns whether a previous device was logged out.
+		devicePolicyResult, policyErr := h.devicePolicyService.EnforceSingleDevicePolicy(
+			user.ID,
+			deviceInfo.DeviceUID,
+			deviceInfo.DeviceName,
+			clientIP,
+		)
+		if policyErr != nil {
+			fmt.Printf("SECURITY: single-device policy enforcement failed for user %s: %v\n", user.ID, policyErr)
+		} else if devicePolicyResult != nil && devicePolicyResult.PreviousDeviceLoggedOut {
+			fmt.Printf("SECURITY: previous device logged out for user %s. Old device: %s (UID: %s)\n",
+				user.ID, devicePolicyResult.PreviousDeviceName, devicePolicyResult.PreviousDeviceUID)
+		}
+
+		// Now issue the new refresh token (the only valid one after enforcement)
+		refreshToken, _, err := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)
+		if err != nil {
+			fmt.Printf("Failed to issue refresh token for user %s: %v\n", user.ID, err)
+		}
+
+		err = RecordLoginSession(
 			db.(*sql.DB),
 			user.ID,
 			deviceInfo.DeviceUID,
@@ -432,9 +453,7 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 			fmt.Printf("Successfully called RecordLoginSession for user %s with IP %s\n", user.ID, clientIP)
 		}
 
-		// Keep the registered-devices registry accurate on every login. This
-		// powers login history and surfaces unrecognised devices that could
-		// indicate account takeover.
+		// Keep the registered-devices registry accurate on every login.
 		isNewDevice, devErr := UpsertUserDevice(
 			db.(*sql.DB),
 			user.ID,
@@ -454,19 +473,45 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		} else if isNewDevice {
 			fmt.Printf("New device registered for user %s: %s (%s)\n", user.ID, deviceInfo.DeviceName, clientIP)
 		}
-	} else {
-		fmt.Printf("Database not available in context for recording login session\n")
-	}
 
-	c.JSON(http.StatusOK, AuthResponse{
-		Success: true,
-		Message: "Login successful",
-		Data: &AuthData{
+		// Build response
+		authData := &AuthData{
 			User:         user,
 			Token:        token,
 			RefreshToken: refreshToken,
-		},
-	})
+		}
+
+		// If a previous device was logged out, include that info so the client can act on it
+		if devicePolicyResult != nil && devicePolicyResult.PreviousDeviceLoggedOut {
+			authData.PreviousDeviceLoggedOut = true
+			authData.PreviousDeviceName = devicePolicyResult.PreviousDeviceName
+		}
+
+		response := AuthResponse{
+			Success: true,
+			Message: "Login successful",
+			Data:    authData,
+		}
+
+		c.JSON(http.StatusOK, response)
+	} else {
+		fmt.Printf("Database not available in context for recording login session\n")
+
+		refreshToken, _, err := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)
+		if err != nil {
+			fmt.Printf("Failed to issue refresh token for user %s: %v\n", user.ID, err)
+		}
+
+		c.JSON(http.StatusOK, AuthResponse{
+			Success: true,
+			Message: "Login successful",
+			Data: &AuthData{
+				User:         user,
+				Token:        token,
+				RefreshToken: refreshToken,
+			},
+		})
+	}
 }
 
 // Logout handles user logout
