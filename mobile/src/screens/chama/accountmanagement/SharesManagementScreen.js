@@ -143,6 +143,11 @@ const SharesManagementScreen = ({ route, navigation }) => {
             <Button title="Create Offering" size="small" icon={<Ionicons name="add" size={14} color={colors.white} />} onPress={() => setShowCreateModal(true)} />
           </View>
 
+          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Offering</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Price Per Share</Text>
+          </View>
+
           <FlatList
             data={offerings}
             renderItem={renderRow}

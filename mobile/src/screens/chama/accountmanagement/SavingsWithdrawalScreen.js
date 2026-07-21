@@ -34,7 +34,7 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
     flexDirection: 'row',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary + '10',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
   },
@@ -68,7 +68,7 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
-    color: colors.text,
+    color: colors.primary,
     fontSize: 12,
     textAlign: 'center',
   },

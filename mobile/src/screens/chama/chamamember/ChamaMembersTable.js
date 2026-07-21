@@ -31,10 +31,10 @@ const ChamaMembersTable = ({
       <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, width: '100%' }}>
           <View style={{ minWidth: 320, width: '100%' }}>
-            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Name</Text>
-              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Role</Text>
-              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Actions</Text>
+            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Name</Text>
+              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Role</Text>
+              <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Actions</Text>
             </View>
 
             <FlatList

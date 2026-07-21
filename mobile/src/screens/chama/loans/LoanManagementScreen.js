@@ -31,7 +31,7 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
     flexDirection: 'row',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary + '10',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
   },
@@ -65,7 +65,7 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
-    color: colors.text,
+    color: colors.primary,
     fontSize: 12,
     textAlign: 'center',
   },
@@ -736,21 +736,21 @@ const LoanManagementScreen = ({ route, navigation }) => {
             {/* Subview content */}
             {loanSubview === 'loans' ? (
               <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-                <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+                <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
                   <View style={{ flex: 2, paddingHorizontal: spacing.xs }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Member</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Member</Text>
                   </View>
                   <View style={{ flex: 1.5, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Amount</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Amount</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Date</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Date</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Status</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Status</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.text }}>Actions</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Actions</Text>
                   </View>
                 </View>
                 <FlatList
@@ -772,12 +772,12 @@ const LoanManagementScreen = ({ route, navigation }) => {
               </View>
             ) : loanSubview === 'loan-types' ? (
               <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
-                <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-                  <Text style={{ flex: 2, fontSize: 12, fontWeight: 'semibold', color: colors.text, paddingHorizontal: spacing.xs }}>Name</Text>
-                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Max Amount</Text>
-                  <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Rate</Text>
-                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Term</Text>
-                  <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.text, textAlign: 'center' }}>Status</Text>
+                <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+                  <Text style={{ flex: 2, fontSize: 12, fontWeight: 'semibold', color: colors.primary, paddingHorizontal: spacing.xs }}>Name</Text>
+                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Max Amount</Text>
+                  <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Rate</Text>
+                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Term</Text>
+                  <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Status</Text>
                 </View>
                 <FlatList
                   data={loanTypes}

@@ -283,6 +283,12 @@ const DividendsManagementScreen = ({ route, navigation }) => {
             <Button title="Declare Dividends" size="small" icon={<Ionicons name="cash" size={14} color={colors.white} />} onPress={() => setShowDeclareModal(true)} />
           </View>
 
+          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Declaration</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Amount</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Status</Text>
+          </View>
+
           <FlatList
             data={declarations}
             renderItem={renderRow}

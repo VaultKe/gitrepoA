@@ -39,7 +39,7 @@ const WelfareScreen = ({ route, navigation }) => {
       flexDirection: 'row',
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.primary + '10',
       borderBottomWidth: 2,
       borderBottomColor: colors.primary,
     },
@@ -80,7 +80,7 @@ const WelfareScreen = ({ route, navigation }) => {
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
-    color: colors.text,
+    color: colors.primary,
     fontSize: 10,
     textAlign: 'center',
   },
@@ -1502,9 +1502,9 @@ const WelfareScreen = ({ route, navigation }) => {
           {activeTab === 'requests' ? (
             <>
               <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View>
-                    <View style={[tableStyles.tableHeader, { backgroundColor: colors.surface, borderBottomColor: colors.primary }]}>
+                    <View style={[tableStyles.tableHeader, { backgroundColor: colors.primary + '10', borderBottomColor: colors.primary }]}>
                       <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
                         <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
                       </View>
@@ -1585,11 +1585,11 @@ const WelfareScreen = ({ route, navigation }) => {
               </Card>
             </>
           ) : (
-            <>
+             <>
               <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View>
-                    <View style={[tableStyles.tableHeader, { backgroundColor: colors.surface, borderBottomColor: colors.primary }]}>
+                    <View style={[tableStyles.tableHeader, { backgroundColor: colors.primary + '10', borderBottomColor: colors.primary }]}>
                       <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
                         <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
                       </View>

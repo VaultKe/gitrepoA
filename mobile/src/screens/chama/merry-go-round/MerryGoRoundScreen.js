@@ -663,7 +663,7 @@ const getRowData = () => {
                     )}
                   </View>
                  )}
-                    <View style={[styles.tableHeaderRow, { backgroundColor: colors.surface }]}>
+                    <View style={[styles.tableHeaderRow, { backgroundColor: colors.primary + '10', borderBottomColor: colors.primary }]}>
                       <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 0.8 }]}>#</Text>
                       <Text style={[styles.tableHeaderText, { color: colors.primary }, { flex: 2.5 }]}>Member</Text>
                       <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'center' }, { flex: 1.8 }]}>Status</Text>

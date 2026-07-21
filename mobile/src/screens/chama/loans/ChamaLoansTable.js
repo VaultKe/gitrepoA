@@ -172,7 +172,7 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary + '10',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary,
   },
@@ -199,7 +199,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
-    color: colors.text,
+    color: colors.primary,
     fontSize: 12,
     textAlign: 'center',
   },
