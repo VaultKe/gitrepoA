@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"vaultke-backend/internal/models"
@@ -36,7 +37,7 @@ type ActiveDeviceResult struct {
 // EnforceSingleDevicePolicy enforces the single-device policy for a user.
 // When a user logs in on a new device, any previously active device is logged out
 // and an email notification is sent to the account owner.
-func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, newDeviceName, ipAddress string) (*ActiveDeviceResult, error) {
+func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, newDeviceName, ipAddress, userAgent string) (*ActiveDeviceResult, error) {
 	if userID == "" || newDeviceUID == "" {
 		return nil, fmt.Errorf("userID and deviceUID are required")
 	}
@@ -50,7 +51,24 @@ func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, ne
 	}
 
 	if activeDevice != nil {
-		// There IS an active device - enforce single device policy
+		// Check if this is likely the SAME physical device re-authenticating
+		// (e.g., app reload, storage cleared, same browser/device name)
+		isSameDevice := s.isLikelySameDevice(activeDevice, newDeviceName, ipAddress, userAgent)
+
+		if isSameDevice {
+			// Same device re-authenticating - update the existing device record
+			// instead of kicking it out. This prevents false logout loops.
+			if _, err := s.db.Exec(
+				"UPDATE devices SET last_seen = $1, last_login_at = $1, updated_at = $1 WHERE id = $2",
+				time.Now(), activeDevice.ID,
+			); err != nil {
+				fmt.Printf("Failed to update active device %s for user %s: %v\n", activeDevice.ID, userID, err)
+			}
+			result.PreviousDeviceLoggedOut = false
+			return result, nil
+		}
+
+		// Different device - enforce single device policy
 		result.PreviousDeviceLoggedOut = true
 		result.PreviousDeviceName = activeDevice.DeviceName
 		result.PreviousDeviceUID = activeDevice.ID
@@ -90,6 +108,38 @@ func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, ne
 	}
 
 	return result, nil
+}
+
+// isLikelySameDevice checks if the new login appears to be from the same physical
+// device as the currently active one, based on device name, IP, recency, and user agent.
+// This prevents false "new device" detections when the device ID changes but the
+// underlying device/browser is the same (e.g., app reload, storage cleared).
+func (s *DevicePolicyService) isLikelySameDevice(activeDevice *models.Device, newDeviceName, ipAddress, userAgent string) bool {
+	// If the device names match, it's very likely the same device
+	if activeDevice.DeviceName != "" && newDeviceName != "" && activeDevice.DeviceName == newDeviceName {
+		// Same device name - check if it was active recently (within last 30 minutes)
+		if time.Since(activeDevice.LastLogin) < 30*time.Minute {
+			return true
+		}
+	}
+
+	// If IP addresses match and login was very recent (within 5 minutes)
+	if activeDevice.IPAddress == ipAddress && time.Since(activeDevice.LastLogin) < 5*time.Minute {
+		return true
+	}
+
+	// Check user agent similarity if available
+	if userAgent != "" {
+		// If both are from the same browser/app family, consider it the same device
+		activeIsMobile := activeDevice.DeviceType == "mobile"
+		newIsMobile := strings.Contains(userAgent, "Mobile") || strings.Contains(userAgent, "Android") || strings.Contains(userAgent, "iPhone")
+		
+		if activeIsMobile == newIsMobile && time.Since(activeDevice.LastLogin) < 10*time.Minute {
+			return true
+		}
+	}
+
+	return false
 }
 
 // GetActiveDeviceForUser returns the currently active device for a user,

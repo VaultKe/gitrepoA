@@ -422,6 +422,7 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 			deviceInfo.DeviceUID,
 			deviceInfo.DeviceName,
 			clientIP,
+			userAgent,
 		)
 		if policyErr != nil {
 			fmt.Printf("SECURITY: single-device policy enforcement failed for user %s: %v\n", user.ID, policyErr)

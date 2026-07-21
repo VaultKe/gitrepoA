@@ -32,6 +32,11 @@ type MpesaService struct {
 	mpesaPublicKey *rsa.PublicKey
 	loadPublicKey  sync.Once
 	loadPublicKeyErr error
+
+	// Token cache to avoid excessive OAuth calls and invalid-token errors
+	cachedAccessToken string
+	cachedTokenExpiry time.Time
+	tokenMu           sync.Mutex
 }
 
 // getBaseURL returns the appropriate M-Pesa API base URL based on environment
@@ -106,8 +111,17 @@ type B2CResponse struct {
 	ResponseDescription      string `json:"ResponseDescription"`
 }
 
-// GetAccessToken gets M-Pesa access token
+// GetAccessToken gets M-Pesa access token with caching to avoid invalid-token errors
 func (s *MpesaService) GetAccessToken() (string, error) {
+	// Return cached token if it's still valid (with 5-minute safety buffer)
+	s.tokenMu.Lock()
+	if s.cachedAccessToken != "" && time.Now().Before(s.cachedTokenExpiry.Add(-5*time.Minute)) {
+		token := s.cachedAccessToken
+		s.tokenMu.Unlock()
+		return token, nil
+	}
+	s.tokenMu.Unlock()
+
 	// Create basic auth header
 	auth := base64.StdEncoding.EncodeToString(
 		[]byte(s.config.MpesaConsumerKey + ":" + s.config.MpesaConsumerSecret),
@@ -148,6 +162,22 @@ func (s *MpesaService) GetAccessToken() (string, error) {
 	if tokenResp.AccessToken == "" {
 		return "", fmt.Errorf("empty access token received from M-Pesa: %s", string(body))
 	}
+
+	// Parse expires_in to set cache expiry
+	expiresIn := 3600 // default 1 hour
+	if tokenResp.ExpiresIn != "" {
+		if secs, err := strconv.Atoi(tokenResp.ExpiresIn); err == nil && secs > 0 {
+			expiresIn = secs
+		}
+	}
+
+	// Cache the token
+	s.tokenMu.Lock()
+	s.cachedAccessToken = tokenResp.AccessToken
+	s.cachedTokenExpiry = time.Now().Add(time.Duration(expiresIn) * time.Second)
+	s.tokenMu.Unlock()
+
+	log.Printf("[MPESA] Cached new access token, expires in %d seconds", expiresIn)
 
 	return tokenResp.AccessToken, nil
 }

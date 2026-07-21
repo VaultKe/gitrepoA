@@ -47,6 +47,11 @@ export const getStableDeviceId = async () => {
 };
 
 const mapDeviceType = (type) => {
+  // On web, always report as 'web' regardless of expo-device emulation.
+  // This prevents desktop-browser mobile emulation from being recorded as a real mobile device.
+  if (Platform.OS === 'web') {
+    return 'web';
+  }
   switch (type) {
     case Device.DeviceType.PHONE:
       return 'mobile';
@@ -56,7 +61,7 @@ const mapDeviceType = (type) => {
     case Device.DeviceType.DESKTOP:
       return 'desktop';
     default:
-      return Platform.OS === 'ios' || Platform.OS === 'android' ? 'mobile' : 'unknown';
+      return 'mobile';
   }
 };
 
@@ -102,21 +107,25 @@ export const getDeviceInfo = async () => {
   let deviceInfo = { ...fallback };
 
   try {
-    const osName = Device.osName || (Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Unknown');
-    const osVersion = Device.osVersion || '';
-    const manufacturer = Device.manufacturer || '';
-    const brand = Device.brand || '';
-    const model = Device.modelName || '';
+    const isWeb = Platform.OS === 'web';
+    const osName = isWeb ? 'Web' : (Device.osName || (Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Unknown'));
+    const osVersion = isWeb ? '' : (Device.osVersion || '');
+    const manufacturer = isWeb ? '' : (Device.manufacturer || '');
+    const brand = isWeb ? '' : (Device.brand || '');
+    const model = isWeb ? '' : (Device.modelName || '');
     const deviceType = mapDeviceType(Device.deviceType);
 
-    const deviceName =
-      Device.deviceName || buildHumanReadableName(manufacturer, brand, model, osName);
+    const deviceName = isWeb
+      ? 'Web Browser'
+      : (Device.deviceName || buildHumanReadableName(manufacturer, brand, model, osName));
 
     let appVersion = '';
-    try {
-      appVersion = Application.nativeApplicationVersion || Application.nativeBuildVersion || '';
-    } catch (e) {
-      appVersion = '';
+    if (!isWeb) {
+      try {
+        appVersion = Application.nativeApplicationVersion || Application.nativeBuildVersion || '';
+      } catch (e) {
+        appVersion = '';
+      }
     }
 
     let timezone = 'UTC';
@@ -153,14 +162,14 @@ export const getDeviceInfo = async () => {
 
     deviceInfo = {
       deviceId: await getStableDeviceId(),
-      userAgent: `VaultKe-Mobile-App/${appVersion || '1.0'} (${osName} ${osVersion})`,
+      userAgent: isWeb ? 'VaultKe-Web/1.0' : `VaultKe-Mobile-App/${appVersion || '1.0'} (${osName} ${osVersion})`,
       platform: Platform.OS || 'mobile',
       language: locale,
       locale,
       timezone,
       deviceType,
       deviceName,
-      browserName: 'VaultKe App',
+      browserName: isWeb ? 'Web Browser' : 'VaultKe App',
       osName,
       osVersion,
       manufacturer,
