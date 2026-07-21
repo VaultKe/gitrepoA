@@ -394,28 +394,58 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		return nil
 	}
 
-	// Payment failed - find and mark transaction as failed
-	findQuery := `SELECT id, amount FROM transactions WHERE reference = $1 AND payment_method = $2 LIMIT 1`
+	// Payment failed / cancelled - find pending transaction and mark as failed with reason
+	findQuery := `
+		SELECT id, to_wallet_id, metadata, amount
+		FROM transactions
+		WHERE reference = $1 AND status = $2 AND payment_method = $3
+		LIMIT 1
+	`
 	var transactionID string
+	var toWalletID sql.NullString
+	var metadataJSON sql.NullString
 	var originalAmount float64
-	err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.PaymentMethodMpesa).Scan(&transactionID, &originalAmount)
+	err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID, &toWalletID, &metadataJSON, &originalAmount)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Printf("No transaction found for failed checkout request ID: %s", callback.CheckoutRequestID)
-			return fmt.Errorf("no transaction found for failed checkout request ID: %s", callback.CheckoutRequestID)
+			log.Printf("No pending transaction found for failed checkout request ID: %s - callback may be a retry for already-handled transaction", callback.CheckoutRequestID)
+			// Acknowledge the callback even if we have no pending transaction
+			// (it may have been handled by a previous callback attempt)
+			if err = tx.Commit(); err != nil {
+				return fmt.Errorf("failed to commit empty failure ack: %w", err)
+			}
+			return nil
 		}
-		return fmt.Errorf("failed to find transaction: %w", err)
+		return fmt.Errorf("failed to find transaction for failure: %w", err)
+	}
+
+	// Build failure metadata
+	failureMetadata := make(map[string]interface{})
+	if metadataJSON.Valid && metadataJSON.String != "" {
+		if err := json.Unmarshal([]byte(metadataJSON.String), &failureMetadata); err != nil {
+			failureMetadata = make(map[string]interface{})
+		}
+	}
+	failureMetadata["callback_result_code"] = callback.ResultCode
+	failureMetadata["callback_result_desc"] = callback.ResultDesc
+	failureMetadata["failed_at"] = time.Now().Format(time.RFC3339)
+	failureMetadata["original_amount"] = originalAmount
+	failureMetadataJSON, _ := json.Marshal(failureMetadata)
+
+	_, err = tx.Exec(
+		"UPDATE transactions SET status = $1, metadata = $2, updated_at = $3 WHERE id = $4",
+		models.TransactionStatusFailed, string(failureMetadataJSON), time.Now(), transactionID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to mark transaction %s as failed: %w", transactionID, err)
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit failed transaction update: %w", err)
+		return fmt.Errorf("failed to commit failure update for transaction %s: %w", transactionID, err)
 	}
 
-	err = s.updateTransactionStatus(transactionID, models.TransactionStatusFailed)
-	if err != nil {
-		return fmt.Errorf("failed to update failed transaction status: %w", err)
-	}
-	log.Printf("Marked transaction %s as failed for checkout request ID: %s, ResultDesc: %s", transactionID, callback.CheckoutRequestID, callback.ResultDesc)
+	log.Printf("Marked transaction %s as failed (ResultCode=%d, Desc=%s, CheckoutRequestID=%s)",
+		transactionID, callback.ResultCode, callback.ResultDesc, callback.CheckoutRequestID)
 	return nil
 }
 
@@ -516,7 +546,173 @@ func (s *MpesaService) GetTransactionStatus(checkoutRequestID string) (string, e
 	return "pending", nil
 }
 
-// InitiateB2C initiates a Business to Customer (B2C) transaction for withdrawals
+// ReconcilePendingSTKTransactions queries M-Pesa for pending STK transactions
+// that are older than the given age and updates their status based on the result.
+// This handles the case where Safaricom does not send a callback (e.g., user cancels,
+// network failure, app closed before callback arrives).
+func (s *MpesaService) ReconcilePendingSTKTransactions(maxAge time.Duration) (int, error) {
+	cutoff := time.Now().Add(-maxAge)
+
+	// Find all pending M-Pesa STK transactions older than the cutoff.
+	// The checkoutRequestID is stored in the reference field.
+	rows, err := s.db.Query(`
+		SELECT id, to_wallet_id, amount, reference, metadata, initiated_by
+		FROM transactions
+		WHERE status = $1
+		  AND payment_method = $2
+		  AND created_at < $3
+		  AND reference LIKE 'TXN_%'
+		ORDER BY created_at ASC
+		LIMIT 100
+	`, models.TransactionStatusPending, models.PaymentMethodMpesa, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query pending STK transactions: %w", err)
+	}
+	defer rows.Close()
+
+	type pendingTxn struct {
+		id            string
+		toWalletID    sql.NullString
+		amount        float64
+		reference     string
+		metadataJSON  sql.NullString
+		initiatedBy   string
+	}
+	var pendings []pendingTxn
+	for rows.Next() {
+		var p pendingTxn
+		if err := rows.Scan(&p.id, &p.toWalletID, &p.amount, &p.reference, &p.metadataJSON, &p.initiatedBy); err != nil {
+			log.Printf("[MPESA][RECONCILE] Failed to scan pending transaction: %v", err)
+			continue
+		}
+		pendings = append(pendings, p)
+	}
+
+	if len(pendings) == 0 {
+		return 0, nil
+	}
+
+	reconciled := 0
+	for _, p := range pendings {
+		checkoutRequestID := p.reference
+		status, err := s.GetTransactionStatus(checkoutRequestID)
+		if err != nil {
+			log.Printf("[MPESA][RECONCILE] Failed to query status for %s (checkoutRequestID=%s): %v",
+				p.id, checkoutRequestID, err)
+			continue
+		}
+
+		switch status {
+		case "completed":
+			// Credit the wallet and mark as completed — same logic as the success callback
+			metadata := make(map[string]interface{})
+			if p.metadataJSON.Valid && p.metadataJSON.String != "" {
+				json.Unmarshal([]byte(p.metadataJSON.String), &metadata)
+			}
+			metadata["reconciled"] = true
+			metadata["reconciled_at"] = time.Now().Format(time.RFC3339)
+			metadata["reconciliation_source"] = "stk_push_query"
+
+			tx, txErr := s.db.Begin()
+			if txErr != nil {
+				log.Printf("[MPESA][RECONCILE] Failed to start tx for %s: %v", p.id, txErr)
+				continue
+			}
+
+			metadataBytes, _ := json.Marshal(metadata)
+			_, txErr = tx.Exec(
+				"UPDATE transactions SET status = $1, metadata = $2, updated_at = $3 WHERE id = $4",
+				models.TransactionStatusCompleted, string(metadataBytes), time.Now(), p.id,
+			)
+			if txErr != nil {
+				tx.Rollback()
+				log.Printf("[MPESA][RECONCILE] Failed to update transaction %s: %v", p.id, txErr)
+				continue
+			}
+
+			if p.toWalletID.Valid && p.toWalletID.String != "" {
+				_, txErr = tx.Exec(
+					"UPDATE wallets SET balance = balance + $1, updated_at = $2 WHERE id = $3",
+					p.amount, time.Now(), p.toWalletID.String,
+				)
+				if txErr != nil {
+					tx.Rollback()
+					log.Printf("[MPESA][RECONCILE] Failed to credit wallet for %s: %v", p.id, txErr)
+					continue
+				}
+			}
+
+			if txErr = tx.Commit(); txErr != nil {
+				log.Printf("[MPESA][RECONCILE] Failed to commit reconciliation for %s: %v", p.id, txErr)
+				continue
+			}
+			log.Printf("[MPESA][RECONCILE] Transaction %s reconciled as completed (checkoutRequestID=%s)", p.id, checkoutRequestID)
+			reconciled++
+
+		case "failed":
+			metadata := make(map[string]interface{})
+			if p.metadataJSON.Valid && p.metadataJSON.String != "" {
+				json.Unmarshal([]byte(p.metadataJSON.String), &metadata)
+			}
+			metadata["reconciled"] = true
+			metadata["reconciled_at"] = time.Now().Format(time.RFC3339)
+			metadata["reconciliation_source"] = "stk_push_query"
+			metadata["callback_result_desc"] = "Transaction expired or cancelled (reconciled via STK query)"
+			metadata["original_amount"] = p.amount
+			metadataBytes, _ := json.Marshal(metadata)
+
+			_, err = s.db.Exec(
+				"UPDATE transactions SET status = $1, metadata = $2, updated_at = $3 WHERE id = $4",
+				models.TransactionStatusFailed, string(metadataBytes), time.Now(), p.id,
+			)
+			if err != nil {
+				log.Printf("[MPESA][RECONCILE] Failed to mark transaction %s as failed: %v", p.id, err)
+				continue
+			}
+			log.Printf("[MPESA][RECONCILE] Transaction %s reconciled as failed (checkoutRequestID=%s)", p.id, checkoutRequestID)
+			reconciled++
+
+		default:
+			// Still pending according to M-Pesa — leave it alone, will be checked again next cycle
+			log.Printf("[MPESA][RECONCILE] Transaction %s still pending in M-Pesa (checkoutRequestID=%s)", p.id, checkoutRequestID)
+		}
+	}
+
+	return reconciled, nil
+}
+
+// StartSTKReconciler starts a background goroutine that periodically reconciles
+// pending STK transactions against M-Pesa's transaction-status API.
+func StartSTKReconciler(db *sql.DB, cfg *config.Config, interval time.Duration, maxPendingAge time.Duration) {
+	log.Printf("Starting STK push reconciler (interval=%v, max pending age=%v)", interval, maxPendingAge)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[MPESA][RECONCILE] Panic recovered: %v", r)
+			}
+		}()
+
+		for {
+			select {
+			case <-ticker.C:
+				if cfg.MpesaConsumerKey == "" || cfg.MpesaShortcode == "" {
+					continue
+				}
+				mpesaService := NewMpesaService(db, cfg)
+				reconciled, err := mpesaService.ReconcilePendingSTKTransactions(maxPendingAge)
+				if err != nil {
+					log.Printf("[MPESA][RECONCILE] Error: %v", err)
+				} else if reconciled > 0 {
+					log.Printf("[MPESA][RECONCILE] Reconciled %d pending STK transactions", reconciled)
+				}
+			}
+		}
+	}()
+}
 func (s *MpesaService) InitiateB2C(phoneNumber string, amount float64, remarks string) (*B2CResponse, error) {
 	return s.InitiateB2CRaw(phoneNumber, amount, remarks, "BusinessPayment")
 }
@@ -799,9 +995,14 @@ func extractB2CResultParameters(callbackData map[string]interface{}) map[string]
 
 // HandleB2CTimeout processes M-Pesa B2C queue timeout callbacks
 func (s *MpesaService) HandleB2CTimeout(callbackData map[string]interface{}) error {
-	log.Printf("Processing B2C timeout: %+v", callbackData)
+	log.Printf("Processing B2C timeout: ConversationID=%v", callbackData["ConversationID"])
 
 	conversationID, _ := callbackData["ConversationID"].(string)
+	resultDesc, _ := callbackData["ResultDesc"].(string)
+	resultCode := 0
+	if rc, ok := callbackData["ResultCode"].(float64); ok {
+		resultCode = int(rc)
+	}
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -811,7 +1012,7 @@ func (s *MpesaService) HandleB2CTimeout(callbackData map[string]interface{}) err
 
 	// Find the pending B2C transaction
 	findQuery := `
-		SELECT id, from_wallet_id, amount
+		SELECT id, from_wallet_id, amount, metadata
 		FROM transactions
 		WHERE metadata::text LIKE $1 AND status = $2 AND payment_method = $3
 		LIMIT 1
@@ -819,7 +1020,8 @@ func (s *MpesaService) HandleB2CTimeout(callbackData map[string]interface{}) err
 	var transactionID string
 	var fromWalletID sql.NullString
 	var b2cAmount float64
-	err = tx.QueryRow(findQuery, "%"+conversationID+"%", models.TransactionStatusProcessing, "mpesa").Scan(&transactionID, &fromWalletID, &b2cAmount)
+	var existingMetadataJSON sql.NullString
+	err = tx.QueryRow(findQuery, "%"+conversationID+"%", models.TransactionStatusProcessing, "mpesa").Scan(&transactionID, &fromWalletID, &b2cAmount, &existingMetadataJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("No B2C transaction found for timeout conversation ID: %s", conversationID)
@@ -828,9 +1030,23 @@ func (s *MpesaService) HandleB2CTimeout(callbackData map[string]interface{}) err
 		return fmt.Errorf("failed to find B2C transaction: %w", err)
 	}
 
+	// Build timeout metadata
+	metadata := make(map[string]interface{})
+	if existingMetadataJSON.Valid && existingMetadataJSON.String != "" {
+		if err := json.Unmarshal([]byte(existingMetadataJSON.String), &metadata); err != nil {
+			metadata = make(map[string]interface{})
+		}
+	}
+	metadata["b2c_timeout"] = true
+	metadata["b2c_result_code"] = resultCode
+	metadata["b2c_result_desc"] = resultDesc
+	metadata["failed_at"] = time.Now().Format(time.RFC3339)
+	metadata["original_amount"] = b2cAmount
+	metadataJSONBytes, _ := json.Marshal(metadata)
+
 	// No refund needed because wallet was not pre-debited
-	_, err = tx.Exec("UPDATE transactions SET status = $1, updated_at = $2 WHERE id = $3",
-		models.TransactionStatusFailed, time.Now(), transactionID)
+	_, err = tx.Exec("UPDATE transactions SET status = $1, metadata = $2, updated_at = $3 WHERE id = $4",
+		models.TransactionStatusFailed, string(metadataJSONBytes), time.Now(), transactionID)
 	if err != nil {
 		return fmt.Errorf("failed to mark B2C timeout transaction as failed: %v", err)
 	}
@@ -839,6 +1055,6 @@ func (s *MpesaService) HandleB2CTimeout(callbackData map[string]interface{}) err
 		return fmt.Errorf("failed to commit B2C timeout transaction: %v", err)
 	}
 
-	log.Printf("B2C transaction %s timed out - no wallet debit was performed", transactionID)
+	log.Printf("B2C transaction %s timed out (ResultDesc=%s) - no wallet debit was performed", transactionID, resultDesc)
 	return nil
 }

@@ -103,6 +103,10 @@ func main() {
 	notificationScheduler := services.NewNotificationScheduler(db)
 	notificationScheduler.Start()
 
+	// Start STK push reconciler to catch cancelled/failed payments that never got callbacks
+	cfgForReconciler := cfg
+	services.StartSTKReconciler(db, cfgForReconciler, 10*time.Minute, 15*time.Minute)
+
 	// Initialize scheduler service for meeting auto-unlock
 	authHandlers := api.NewAuthHandlers(db, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService)
 	reminderHandlers := api.NewReminderHandlers(db)
