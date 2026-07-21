@@ -26,6 +26,7 @@ type Config struct {
 	MpesaInitiatorPassword     string
 	MpesaPublicKeyCertPath     string // Path to M-Pesa public key certificate for RSA-OAEP encryption
 	MpesaCallbackSecret        string // Shared secret for callback endpoint authentication
+	MpesaEnvironment           string // "sandbox" or "production" - controls M-Pesa API base URL
 	BaseURL                    string
 
 	// Centralized Paybill Configuration (for all chama payments)
@@ -118,6 +119,7 @@ func Load() *Config {
 		MpesaInitiatorPassword: getEnv("MPESA_INITIATOR_PASSWORD", ""),
 		MpesaPublicKeyCertPath: getEnv("MPESA_PUBLIC_KEY_CERT_PATH", ""),
 		MpesaCallbackSecret:    getEnv("MPESA_CALLBACK_SECRET", ""),
+		MpesaEnvironment:       getEnv("MPESA_ENVIRONMENT", "sandbox"),
 		BaseURL:                getEnv("BASE_URL", "https://gitrepoa-1.onrender.com"),
 
 		// Centralized Paybill Configuration

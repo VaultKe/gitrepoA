@@ -39,9 +39,10 @@ type MpesaService struct {
 	tokenMu           sync.Mutex
 }
 
-// getBaseURL returns the appropriate M-Pesa API base URL based on environment
+// getBaseURL returns the appropriate M-Pesa API base URL based on M-Pesa environment
 func (s *MpesaService) getBaseURL() string {
-	if s.config.Environment == "production" {
+	env := strings.ToLower(strings.TrimSpace(s.config.MpesaEnvironment))
+	if env == "production" {
 		return "https://api.safaricom.co.ke"
 	}
 	return "https://sandbox.safaricom.co.ke"
@@ -49,11 +50,40 @@ func (s *MpesaService) getBaseURL() string {
 
 // NewMpesaService creates a new M-Pesa service
 func NewMpesaService(db *sql.DB, cfg *config.Config) *MpesaService {
-	return &MpesaService{
+	svc := &MpesaService{
 		db:     db,
 		config: cfg,
 		client: &http.Client{Timeout: 30 * time.Second},
 	}
+
+	// Log M-Pesa runtime configuration for debugging invalid-token issues.
+	baseURL := svc.getBaseURL()
+	consumerKey := cfg.MpesaConsumerKey
+	consumerSecret := cfg.MpesaConsumerSecret
+	shortcode := cfg.MpesaShortcode
+	passkey := cfg.MpesaPasskey
+	mpesaEnv := cfg.MpesaEnvironment
+	log.Printf("[MPESA][CONFIG] environment=%s baseURL=%s shortcode=%s consumerKey=%s... consumerSecret=%s... passkey=%s...",
+		mpesaEnv,
+		baseURL,
+		shortcode,
+		maskSecret(consumerKey),
+		maskSecret(consumerSecret),
+		maskSecret(passkey),
+	)
+
+	return svc
+}
+
+// maskSecret masks a secret value for safe logging.
+func maskSecret(value string) string {
+	if value == "" {
+		return "<empty>"
+	}
+	if len(value) <= 8 {
+		return "****"
+	}
+	return value[:4] + "****" + value[len(value)-4:]
 }
 
 // MpesaTokenResponse represents M-Pesa access token response
