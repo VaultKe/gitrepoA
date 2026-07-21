@@ -24,7 +24,7 @@ import { sendApprovalNotification, showInAppToast } from '../../../services/disb
 import { approveWelfareDisbursement } from '../../../services/api/welfareEndpoints';
 
 const DividendsManagementScreen = ({ route, navigation }) => {
-  const { theme } = useApp();
+  const { theme, user } = useApp();
   const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
   const chamaId = currentChamaId || route?.params?.chamaId;
@@ -32,6 +32,7 @@ const DividendsManagementScreen = ({ route, navigation }) => {
   const [declarations, setDeclarations] = useState([]);
   const [eligibleMembers, setEligibleMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState('member');
   const [showDeclareModal, setShowDeclareModal] = useState(false);
   const [form, setForm] = useState({ dividendPerShare: '', totalAmount: '', description: '', fromAccount: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +41,18 @@ const DividendsManagementScreen = ({ route, navigation }) => {
   const [otpLoading, setOtpLoading] = useState(false);
   const [selectedApprovalItem, setSelectedApprovalItem] = useState(null);
   const [approvalActionType, setApprovalActionType] = useState(null);
+
+  const loadUserRole = async () => {
+    if (!user?.id || !chamaId) return;
+    try {
+      const response = await ApiService.getMemberRole(chamaId, user.id);
+      if (response.success) {
+        setUserRole(response.data?.role || 'member');
+      }
+    } catch (error) {
+      console.error('Error loading user role:', error);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     if (!chamaId) return;
@@ -60,6 +73,7 @@ const DividendsManagementScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     fetchData();
+    loadUserRole();
   }, [fetchData]);
 
   const handleDeclareDividends = async () => {
@@ -286,7 +300,6 @@ const DividendsManagementScreen = ({ route, navigation }) => {
           <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
             <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Declaration</Text>
             <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'right' }}>Amount</Text>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Status</Text>
           </View>
 
           <FlatList

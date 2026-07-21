@@ -309,6 +309,9 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
       if (response.success) {
         let accountsData = response.data || [];
 
+        // Enrich accounts with member names if missing
+        accountsData = await enrichMemberNames(accountsData);
+
         setSavingsAccounts(accountsData);
         setAllSavingsAccounts(accountsData);
         setTotalItems(accountsData.length);
@@ -328,6 +331,62 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
       setTotalPages(1);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getUserIdFromAccount = (account) => {
+    return (
+      account.user_id ||
+      account.memberId ||
+      account.userId ||
+      account.member_id ||
+      account.user?.id ||
+      null
+    );
+  };
+
+  const enrichMemberNames = async (accounts) => {
+    const accountsNeedingNames = accounts.filter(acc => !acc.member_name && !acc.memberName && !acc.user?.name);
+
+    if (accountsNeedingNames.length === 0) {
+      return accounts;
+    }
+
+    const uniqueIds = [...new Set(accountsNeedingNames.map(getUserIdFromAccount).filter(Boolean))];
+
+    if (uniqueIds.length === 0) {
+      return accounts;
+    }
+
+    try {
+      const userPromises = uniqueIds.map(async (userId) => {
+        try {
+          const response = await ApiService.makeRequest(`/users/${userId}`);
+          if (response.success && response.data) {
+            return { userId, name: response.data.name || response.data.fullName || response.data.first_name || null };
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch user ${userId}:`, error);
+        }
+        return { userId, name: null };
+      });
+
+      const userResults = await Promise.all(userPromises);
+      const userMap = new Map(userResults.map(r => [r.userId, r.name]));
+
+      return accounts.map(account => {
+        const userId = getUserIdFromAccount(account);
+        if (userId && userMap.has(userId)) {
+          const name = userMap.get(userId);
+          if (name) {
+            return { ...account, memberName: name, member_name: name };
+          }
+        }
+        return account;
+      });
+    } catch (error) {
+      console.error('Error enriching member names:', error);
+      return accounts;
     }
   };
 
