@@ -1,5 +1,5 @@
 import { makeRequest, makeRequestWithRetry } from './client';
-import { storeUserData, removeAuthToken, setRefreshToken, getRefreshToken } from './auth';
+import { storeUserData, removeAuthToken, setRefreshToken, getRefreshToken, removeRefreshToken } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const login = async (credentials) => {
