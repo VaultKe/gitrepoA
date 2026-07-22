@@ -692,18 +692,18 @@ export default function TransactionHistoryScreen() {
         />
       )}
 
-      {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.textSecondary, marginTop: spacing.md }]}>
-            Loading transactions...
-          </Text>
-        </View>
-      ) : (
-        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-          <Card variant="outlined" style={{ flex: 1, borderRadius: 8, overflow: 'hidden' }}>
-            {renderTransactionHeader()}
-            <FlatList
+      <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+        <Card variant="outlined" style={{ flex: 1, borderRadius: 8, overflow: 'hidden' }}>
+          {loading && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary }}>
+                Loading transactions...
+              </Text>
+            </View>
+          )}
+          {renderTransactionHeader()}
+          <FlatList
               data={filteredTransactions}
               refreshControl={
                 <RefreshControl
@@ -733,9 +733,8 @@ export default function TransactionHistoryScreen() {
               contentContainerStyle={{ paddingBottom: spacing.md }}
               style={{ flex: 1 }}
             />
-          </Card>
-        </View>
-      )}
+        </Card>
+      </View>
 
       <Modal
         visible={!!showTransactionMenu}
