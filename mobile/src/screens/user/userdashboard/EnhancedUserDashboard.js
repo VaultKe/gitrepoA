@@ -137,37 +137,47 @@ const EnhancedUserDashboard = ({ navigation }) => {
     },
   ];
 
-  const renderGreetingSection = () => (
-    <Card
-      style={{
-        marginHorizontal: spacing.md,
-        marginTop: spacing.lg,
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.xl,
-        backgroundColor: colors.primary + '10',
-        overflow: 'hidden',
-        ...getShadowStyle('sm'),
-      }}
-      variant="outlined"
-    >
-      <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xl }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
-          <View style={{ width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
-            <Ionicons name="flash" size={16} color={colors.primary} />
+  const renderGreetingSection = () => {
+    const waveColor1 = colors.primary;
+    const waveColor2 = theme === 'dark' ? colors.info : '#0891b2';
+    const waveColor3 = theme === 'dark' ? colors.primaryLight : '#22d3ee';
+
+    return (
+      <View style={{ marginHorizontal: spacing.md, marginTop: spacing.lg, marginBottom: spacing.md, borderRadius: borderRadius.xl, overflow: 'hidden', ...getShadowStyle('sm') }}>
+        <Card
+          style={{
+            borderRadius: borderRadius.xl,
+            backgroundColor: waveColor1 + '14',
+            borderWidth: 1,
+            borderColor: waveColor1 + '44',
+          }}
+          variant="outlined"
+        >
+          <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xl, position: 'relative', zIndex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+              <View style={{ width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: waveColor1 + '24', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+                <Ionicons name="flash" size={16} color={waveColor1} />
+              </View>
+              <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary, fontWeight: typography.fontWeight.medium }}>
+                {getGreeting()}
+              </Text>
+            </View>
+            <Text style={{ fontSize: typography.fontSize['2xl'], fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs }}>
+              Welcome back, {getUserFirstName(user)}
+            </Text>
+            <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary }}>
+              Here's what's happening with your finances today
+            </Text>
           </View>
-          <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary, fontWeight: typography.fontWeight.medium }}>
-            {getGreeting()}
-          </Text>
-        </View>
-        <Text style={{ fontSize: typography.fontSize['2xl'], fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs }}>
-          Welcome back, {getUserFirstName(user)}
-        </Text>
-        <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary }}>
-          Here's what's happening with your finances today
-        </Text>
+
+          {/* Waterwave layers */}
+          <View style={{ position: 'absolute', bottom: -12, left: -8, right: -8, height: 50, backgroundColor: waveColor1 + '28', borderTopLeftRadius: 36, borderTopRightRadius: 36 }} />
+          <View style={{ position: 'absolute', bottom: -28, left: 16, right: -24, height: 70, backgroundColor: waveColor2 + '22', borderTopLeftRadius: 48, borderTopRightRadius: 48 }} />
+          <View style={{ position: 'absolute', bottom: -42, left: -20, right: 30, height: 90, backgroundColor: waveColor3 + '18', borderTopLeftRadius: 60, borderTopRightRadius: 60 }} />
+        </Card>
       </View>
-    </Card>
-  );
+    );
+  };
 
   const renderStats = () => {
     const StatTile = ({ icon, label, value, color }) => (
