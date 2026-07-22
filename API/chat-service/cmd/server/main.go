@@ -106,6 +106,13 @@ func main() {
 		rooms.POST("/:roomId/files", middleware.RequireRoomMember(roomMgr.IsMember), h.UploadFile)
 	}
 
+	chatWs := r.Group("/chat-ws")
+	chatWs.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	{
+		chatWs.POST("/ws-token", h.GetWSToken)
+		chatWs.GET("/ws", h.WebSocketEndpoint)
+	}
+
 	srv := &http.Server{
 		Addr:    ":" + cfg.ServerPort,
 		Handler: r,
