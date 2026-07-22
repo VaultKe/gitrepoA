@@ -93,16 +93,16 @@ func main() {
 	{
 		rooms.POST("", h.CreateRoom)
 		rooms.GET("", h.GetRooms)
-		rooms.GET("/:roomId", h.GetRoom)
+		rooms.GET("/:roomId", middleware.RequireRoomMember(roomMgr.IsMember), h.GetRoom)
 		rooms.POST("/:roomId/join", h.JoinRoom)
 		rooms.POST("/:roomId/leave", h.LeaveRoom)
-		rooms.GET("/:roomId/messages", h.GetMessages)
-		rooms.POST("/:roomId/messages", h.SendMessage)
+		rooms.GET("/:roomId/messages", middleware.RequireRoomMember(roomMgr.IsMember), h.GetMessages)
+		rooms.POST("/:roomId/messages", middleware.RequireRoomMember(roomMgr.IsMember), h.SendMessage)
 		rooms.GET("/:roomId/ws", h.WebSocketEndpoint)
-		rooms.POST("/:roomId/read", h.MarkAsRead)
-		rooms.DELETE("/messages/:messageId", h.DeleteMessage)
-		rooms.GET("/:roomId/search", h.SearchMessages)
-		rooms.POST("/:roomId/files", h.UploadFile)
+		rooms.POST("/:roomId/read", middleware.RequireRoomMember(roomMgr.IsMember), h.MarkAsRead)
+		rooms.DELETE("/messages/:messageId", middleware.RequireRoomMember(roomMgr.IsMember), h.DeleteMessage)
+		rooms.GET("/:roomId/search", middleware.RequireRoomMember(roomMgr.IsMember), h.SearchMessages)
+		rooms.POST("/:roomId/files", middleware.RequireRoomMember(roomMgr.IsMember), h.UploadFile)
 	}
 
 	srv := &http.Server{
@@ -127,4 +127,6 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Println("server shutdown error:", err)
 	}
+	hub.Close()
+	log.Println("chat service stopped")
 }

@@ -102,6 +102,8 @@ func (h *Hub) LeaveRoom(c *Client, roomID string) {
 }
 
 func (h *Hub) leaveAllRoomsLocked(c *Client) {
+	c.roomsMu.Lock()
+	defer c.roomsMu.Unlock()
 	for roomID := range c.rooms {
 		if room, ok := h.roomClients[roomID]; ok {
 			if _, exists := room[c]; exists {
@@ -157,6 +159,18 @@ func (h *Hub) ConnectedUserCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.userClients)
+}
+
+// Close initiates a graceful shutdown: every live connection is closed, which
+// unblocks the read pump and lets the hub drain.
+func (h *Hub) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, clients := range h.userClients {
+		for c := range clients {
+			c.Conn.Close()
+		}
+	}
 }
 
 // Client is a single WebSocket connection. Each client owns its own

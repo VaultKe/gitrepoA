@@ -16,7 +16,7 @@ import (
 type RoomManager struct {
 	rooms     map[string]*models.ChatRoom
 	members   map[string]map[string]*models.ChatRoomMember
-	userRooms map[string]string
+	userRooms map[string]map[string]struct{} // userID -> set of roomIDs
 	mu        sync.RWMutex
 	db        *sql.DB
 }
@@ -25,7 +25,7 @@ func NewRoomManager(db *sql.DB) *RoomManager {
 	return &RoomManager{
 		rooms:     make(map[string]*models.ChatRoom),
 		members:   make(map[string]map[string]*models.ChatRoomMember),
-		userRooms: make(map[string]string),
+		userRooms: make(map[string]map[string]struct{}),
 		db:        db,
 	}
 }
@@ -80,7 +80,10 @@ func (rm *RoomManager) LoadFromDB() error {
 			rm.members[member.RoomID] = make(map[string]*models.ChatRoomMember)
 		}
 		rm.members[member.RoomID][member.UserID] = &member
-		rm.userRooms[member.UserID] = member.RoomID
+		if rm.userRooms[member.UserID] == nil {
+			rm.userRooms[member.UserID] = make(map[string]struct{})
+		}
+		rm.userRooms[member.UserID][member.RoomID] = struct{}{}
 	}
 
 	return nil
@@ -98,7 +101,10 @@ func (rm *RoomManager) CreateRoom(room *models.ChatRoom, members []*models.ChatR
 
 	for _, m := range members {
 		rm.members[room.ID][m.UserID] = m
-		rm.userRooms[m.UserID] = room.ID
+		if rm.userRooms[m.UserID] == nil {
+			rm.userRooms[m.UserID] = make(map[string]struct{})
+		}
+		rm.userRooms[m.UserID][room.ID] = struct{}{}
 	}
 
 	return nil
@@ -237,7 +243,10 @@ func (rm *RoomManager) JoinRoom(roomID, userID, role string) error {
 		JoinedAt: time.Now().UTC(),
 		IsActive: true,
 	}
-	rm.userRooms[userID] = roomID
+	if rm.userRooms[userID] == nil {
+		rm.userRooms[userID] = make(map[string]struct{})
+	}
+	rm.userRooms[userID][roomID] = struct{}{}
 	return nil
 }
 
@@ -250,7 +259,12 @@ func (rm *RoomManager) LeaveRoom(roomID, userID string) error {
 	}
 
 	delete(rm.members[roomID], userID)
-	delete(rm.userRooms, userID)
+	if rooms, ok := rm.userRooms[userID]; ok {
+		delete(rooms, roomID)
+		if len(rooms) == 0 {
+			delete(rm.userRooms, userID)
+		}
+	}
 	return nil
 }
 
@@ -283,12 +297,16 @@ func (rm *RoomManager) GetMembers(roomID string) ([]*models.ChatRoomMember, erro
 		}
 		m.LastReadAt = lastReadAt.Time
 		members = append(members, &m)
+	}
 
+	if len(members) > 0 {
 		rm.mu.Lock()
 		if rm.members[roomID] == nil {
 			rm.members[roomID] = make(map[string]*models.ChatRoomMember)
 		}
-		rm.members[roomID][m.UserID] = &m
+		for _, m := range members {
+			rm.members[roomID][m.UserID] = m
+		}
 		rm.mu.Unlock()
 	}
 	return members, nil
@@ -317,16 +335,19 @@ func (rm *RoomManager) IsMember(roomID, userID string) bool {
 		rm.members[roomID] = make(map[string]*models.ChatRoomMember)
 	}
 	if !exists {
-		delete(rm.members[roomID], userID)
-	} else {
-		rm.members[roomID][userID] = &models.ChatRoomMember{
-			RoomID:   roomID,
-			UserID:   userID,
-			IsActive: true,
-			JoinedAt: time.Now().UTC(),
-		}
+		return false
 	}
-	return exists
+	rm.members[roomID][userID] = &models.ChatRoomMember{
+		RoomID:   roomID,
+		UserID:   userID,
+		IsActive: true,
+		JoinedAt: time.Now().UTC(),
+	}
+	if rm.userRooms[userID] == nil {
+		rm.userRooms[userID] = make(map[string]struct{})
+	}
+	rm.userRooms[userID][roomID] = struct{}{}
+	return true
 }
 
 func (rm *RoomManager) FindPrivateRoom(userA, userB string) (*models.ChatRoom, error) {
@@ -382,16 +403,16 @@ func privatePairKey(members map[string]*models.ChatRoomMember) string {
 
 func (rm *RoomManager) UpdateLastMessage(roomID, content string) error {
 	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
 	room, exists := rm.rooms[roomID]
 	if !exists {
+		rm.mu.Unlock()
 		return sql.ErrNoRows
 	}
 
 	room.LastMessage = content
 	room.LastMessageAt = time.Now().UTC()
 	room.UpdatedAt = time.Now().UTC()
+	rm.mu.Unlock()
 
 	_, err := rm.db.Exec(`UPDATE chat_rooms SET last_message = $1, last_message_at = $2, updated_at = $3 WHERE id = $4`,
 		content, room.LastMessageAt, room.UpdatedAt, roomID)
@@ -401,21 +422,24 @@ func (rm *RoomManager) UpdateLastMessage(roomID, content string) error {
 	return nil
 }
 
-func (rm *RoomManager) MarkAsRead(roomID, userID string) error {
+func (rm *RoomManager) MarkAsRead(roomID, userID string) (time.Time, error) {
 	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	if rm.members[roomID] == nil {
-		return sql.ErrNoRows
-	}
-
 	member, exists := rm.members[roomID][userID]
 	if !exists {
-		return sql.ErrNoRows
+		rm.mu.Unlock()
+		return time.Time{}, sql.ErrNoRows
 	}
 
-	member.LastReadAt = time.Now().UTC()
-	return nil
+	now := time.Now().UTC()
+	member.LastReadAt = now
+	rm.mu.Unlock()
+
+	_, err := rm.db.Exec(`UPDATE chat_room_members SET last_read_at = $1 WHERE room_id = $2 AND user_id = $3`,
+		now, roomID, userID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return now, nil
 }
 
 func (rm *RoomManager) CleanupStaleRooms(maxAge time.Duration) error {

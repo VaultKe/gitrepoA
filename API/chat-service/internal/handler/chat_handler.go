@@ -403,14 +403,21 @@ func (h *ChatHandler) GetRooms(c *gin.Context) {
 
 func (h *ChatHandler) GetRoom(c *gin.Context) {
 	roomID := c.Param("roomId")
-	room, err := h.roomMgr.GetRoom(roomID)
-	if err != nil {
+	userID := c.GetString("userID")
+
+	if !h.roomMgr.IsMember(roomID, userID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
+
+	room, err := h.roomMgr.GetRoom(roomID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		return
+	}
 
 	cacheKey := "chat:room:" + roomID
 	if cached, cacheErr := h.getCachedRoom(ctx, cacheKey); cacheErr == nil {
@@ -478,6 +485,13 @@ func (h *ChatHandler) LeaveRoom(c *gin.Context) {
 
 func (h *ChatHandler) GetMessages(c *gin.Context) {
 	roomID := c.Param("roomId")
+	userID := c.GetString("userID")
+
+	if !h.roomMgr.IsMember(roomID, userID) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		return
+	}
+
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 	before := c.Query("before")
@@ -510,7 +524,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	chatMsg := h.buildChatMessage(roomID, userID, req.Content, req.Type, req.ReplyTo, req.Metadata)
+	chatMsg := h.buildChatMessage(roomID, userID, req.Content, req.Type, req.ReplyTo, req.Metadata, "")
 	if chatMsg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save message"})
 		return
@@ -523,8 +537,9 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 // returns the saved message (with server-assigned id/timestamp) or nil on
 // failure. The DB insert is synchronous (so nothing is acked before it is
 // persisted); the room "last message" preview is updated asynchronously to
-// keep delivery off the critical path.
-func (h *ChatHandler) buildChatMessage(roomID, userID, content string, msgType models.MessageType, replyTo string, metadata map[string]interface{}) *models.ChatMessage {
+// keep delivery off the critical path. The broadcast explicitly excludes the
+// sender — the caller is responsible for acking the sender directly.
+func (h *ChatHandler) buildChatMessage(roomID, userID, content string, msgType models.MessageType, replyTo string, metadata map[string]interface{}, clientMessageID string) *models.ChatMessage {
 	chatMsg := models.NewChatMessage(roomID, userID, content, msgType)
 	if replyTo != "" {
 		chatMsg.ReplyToID = sql.NullString{String: replyTo, Valid: true}
@@ -540,7 +555,11 @@ func (h *ChatHandler) buildChatMessage(roomID, userID, content string, msgType m
 		}
 	}
 
-	metadataJSON, _ := json.Marshal(chatMsg.Metadata)
+	metadataJSON, err := json.Marshal(chatMsg.Metadata)
+	if err != nil {
+		fmt.Printf("MESSAGE MARSHAL ERROR room=%s user=%s err=%v\n", roomID, userID, err)
+		return nil
+	}
 	_, dbErr := h.db.Exec(`INSERT INTO chat_messages (id, room_id, sender_id, content, type, metadata, image_url, is_deleted, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		chatMsg.ID, roomID, userID, chatMsg.Content, msgType, metadataJSON, chatMsg.ImageUrl, chatMsg.IsDeleted, chatMsg.CreatedAt)
 	if dbErr != nil {
@@ -564,11 +583,11 @@ func (h *ChatHandler) buildChatMessage(roomID, userID, content string, msgType m
 			"metadata":        chatMsg.Metadata,
 			"imageUrl":        chatMsg.ImageUrl,
 			"createdAt":       chatMsg.CreatedAt,
-			"clientMessageId": "",
+			"clientMessageId": clientMessageID,
 		},
 	}
 	if broadcastData, err := json.Marshal(broadcastResp); err == nil {
-		h.hub.BroadcastToRoom(roomID, broadcastData, "")
+		h.hub.BroadcastToRoom(roomID, broadcastData, userID)
 	}
 
 	return chatMsg
@@ -696,7 +715,9 @@ func (h *ChatHandler) handleWSMessage(cl *ws.Client, userID string, raw []byte) 
 		if limit <= 0 || limit > 100 {
 			limit = 50
 		}
-		msgs, err := h.fetchMessages(context.Background(), wsMsg.RoomID, wsMsg.Before, limit, wsMsg.Offset)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		msgs, err := h.fetchMessages(ctx, wsMsg.RoomID, wsMsg.Before, limit, wsMsg.Offset)
+		cancel()
 		if err != nil {
 			send(gin.H{"type": "messages_list", "requestId": wsMsg.RequestID, "success": false, "error": "failed to load messages"})
 			return
@@ -773,7 +794,7 @@ func (h *ChatHandler) handleWSMessage(cl *ws.Client, userID string, raw []byte) 
 				replyTo = s
 			}
 		}
-		chatMsg := h.buildChatMessage(roomIDToUse, userID, wsMsg.Content, msgType, replyTo, wsMsg.Metadata)
+		chatMsg := h.buildChatMessage(roomIDToUse, userID, wsMsg.Content, msgType, replyTo, wsMsg.Metadata, wsMsg.ClientMsgID)
 		if chatMsg == nil {
 			send(gin.H{"type": "message_sent", "requestId": wsMsg.RequestID, "success": false, "error": "failed to save message"})
 			return
@@ -802,13 +823,14 @@ func (h *ChatHandler) handleWSMessage(cl *ws.Client, userID string, raw []byte) 
 
 	case "mark_read":
 		if wsMsg.RoomID != "" {
-			h.roomMgr.MarkAsRead(wsMsg.RoomID, userID)
+			readAt, _ := h.roomMgr.MarkAsRead(wsMsg.RoomID, userID)
 			readResp := gin.H{
 				"type":   "message_read",
 				"roomId": wsMsg.RoomID,
 				"data": gin.H{
 					"messageId": wsMsg.MessageID,
 					"userId":    userID,
+					"readAt":    readAt,
 				},
 			}
 			if readData, err := json.Marshal(readResp); err == nil {
@@ -854,13 +876,26 @@ func (h *ChatHandler) MarkAsRead(c *gin.Context) {
 	userID := c.GetString("userID")
 	roomID := c.Param("roomId")
 
-	err := h.roomMgr.MarkAsRead(roomID, userID)
+	readAt, err := h.roomMgr.MarkAsRead(roomID, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "room or member not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"status": "read"}})
+	readResp := gin.H{
+		"type":   "message_read",
+		"roomId": roomID,
+		"data": gin.H{
+			"messageId": "",
+			"userId":    userID,
+			"readAt":    readAt,
+		},
+	}
+	if readData, err := json.Marshal(readResp); err == nil {
+		h.hub.BroadcastToRoom(roomID, readData, "")
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"status": "read", "readAt": readAt}})
 }
 
 func (h *ChatHandler) DeleteMessage(c *gin.Context) {
@@ -897,7 +932,10 @@ func (h *ChatHandler) SearchMessages(c *gin.Context) {
 		return
 	}
 
-	rows, err := h.db.Query(`SELECT id, room_id as "roomId", sender_id as "senderId", content, type, 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	rows, err := h.db.QueryContext(ctx, `SELECT id, room_id as "roomId", sender_id as "senderId", content, type, 
 		created_at as "createdAt" FROM chat_messages WHERE room_id = $1 AND content ILIKE $2 
 		AND is_deleted = false ORDER BY created_at DESC LIMIT 50`, roomID, "%"+query+"%")
 	if err != nil {

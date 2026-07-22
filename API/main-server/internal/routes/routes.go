@@ -653,12 +653,12 @@ func proxyTo(targetBase string, _ string) gin.HandlerFunc {
 		// Use a custom transport with sane timeouts so a slow backend does not
 		// pin a proxy goroutine forever.
 		proxy.Transport = &http.Transport{
-			Proxy:               http.ProxyFromEnvironment,
-			TLSHandshakeTimeout:  10 * time.Second,
-			IdleConnTimeout:      90 * time.Second,
+			Proxy:                 http.ProxyFromEnvironment,
+			TLSHandshakeTimeout:   10 * time.Second,
+			IdleConnTimeout:       90 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 			ResponseHeaderTimeout: 30 * time.Second,
-			DisableKeepAlives:    true,
+			DisableKeepAlives:     true,
 		}
 		proxy.Director = func(req *http.Request) {
 			req.URL.Scheme = u.Scheme
