@@ -1,6 +1,7 @@
 package room
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -138,6 +139,10 @@ func (rm *RoomManager) GetRoom(roomID string) (*models.ChatRoom, error) {
 }
 
 func (rm *RoomManager) GetUserRooms(userID string) ([]*models.ChatRoom, error) {
+	return rm.GetUserRoomsWithContext(context.Background(), userID)
+}
+
+func (rm *RoomManager) GetUserRoomsWithContext(ctx context.Context, userID string) ([]*models.ChatRoom, error) {
 	rm.mu.RLock()
 	var cached []*models.ChatRoom
 	seen := make(map[string]bool)
@@ -175,7 +180,7 @@ func (rm *RoomManager) GetUserRooms(userID string) ([]*models.ChatRoom, error) {
 		return cached, nil
 	}
 
-	rows, err := rm.db.Query(`
+	rows, err := rm.db.QueryContext(ctx, `
 		SELECT r.id, r.chama_id, r.name, r.type, r.created_by, r.is_active, r.last_message, r.last_message_at, r.created_at, r.updated_at
 		FROM chat_rooms r
 		JOIN chat_room_members m ON m.room_id = r.id AND m.user_id = $1 AND m.is_active = TRUE

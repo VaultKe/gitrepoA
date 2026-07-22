@@ -35,6 +35,11 @@ func main() {
 	if err := db.Ping(); err != nil {
 		log.Fatal("database unreachable, refusing to start:", err)
 	}
+	// Match the main-server pool tuning so Neon doesn't get torn apart
+	// by a flood of concurrent chat polls.
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
 	defer db.Close()
 
 	// Redis is a required dependency. If it cannot be reached the
@@ -61,7 +66,19 @@ func main() {
 		log.Fatal("failed to load rooms from DB, refusing to start:", err)
 	}
 
-	h := handler.NewChatHandler(db, hub, roomMgr)
+	// Ensure chat performance indexes exist on the shared database.
+	chatIdx := []string{
+		`CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created_active ON chat_messages(room_id, created_at DESC) WHERE is_deleted = false`,
+		`CREATE INDEX IF NOT EXISTS idx_chat_room_members_room_active ON chat_room_members(room_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_chat_rooms_active ON chat_rooms(is_active) WHERE is_active = TRUE`,
+	}
+	for _, q := range chatIdx {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("WARNING: chat index migration failed: %v", err)
+		}
+	}
+
+	h := handler.NewChatHandler(db, hub, roomMgr, redisClient)
 
 	r := gin.Default()
 
