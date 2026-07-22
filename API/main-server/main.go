@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -67,6 +68,12 @@ func main() {
 		start := time.Now()
 		c.Next()
 		duration := time.Since(start)
+
+		// Skip slow-request logging for websocket upgrades; they are long-lived
+		// by design and the proxy already logs explicit lifecycle events.
+		if strings.EqualFold(c.Request.Header.Get("Upgrade"), "websocket") {
+			return
+		}
 
 		// Log memory-intensive requests
 		if duration > 5*time.Second {

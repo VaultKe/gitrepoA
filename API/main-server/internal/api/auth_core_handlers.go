@@ -16,17 +16,17 @@ import (
 
 // DeviceInfo represents device information extracted from request
 type DeviceInfo struct {
-	DeviceUID   string
-	DeviceType  string
-	DeviceName  string
-	OS          string
-	OSVersion   string
-	AppVersion  string
+	DeviceUID    string
+	DeviceType   string
+	DeviceName   string
+	OS           string
+	OSVersion    string
+	AppVersion   string
 	Manufacturer string
-	Model       string
-	Locale      string
-	Browser     string
-	Location    string
+	Model        string
+	Locale       string
+	Browser      string
+	Location     string
 }
 
 // extractDeviceInfo extracts device information from request headers
@@ -275,11 +275,11 @@ type AuthResponse struct {
 
 // AuthData represents the data in auth response
 type AuthData struct {
-	User                   *models.User `json:"user,omitempty"`
-	Token                  string       `json:"token,omitempty"`
-	RefreshToken           string       `json:"refreshToken,omitempty"`
-	PreviousDeviceLoggedOut bool        `json:"previousDeviceLoggedOut,omitempty"`
-	PreviousDeviceName     string       `json:"previousDeviceName,omitempty"`
+	User                    *models.User `json:"user,omitempty"`
+	Token                   string       `json:"token,omitempty"`
+	RefreshToken            string       `json:"refreshToken,omitempty"`
+	PreviousDeviceLoggedOut bool         `json:"previousDeviceLoggedOut,omitempty"`
+	PreviousDeviceName      string       `json:"previousDeviceName,omitempty"`
 }
 
 // issueRefreshToken generates and returns a refresh token for a user
@@ -435,10 +435,10 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		// Now issue the new refresh token, record the login session, and
 		// update the device registry in parallel - they are independent DB writes.
 		var (
-			wg sync.WaitGroup
-			sessionErr    error
-			deviceErr     error
-			isNewDevice   bool
+			wg          sync.WaitGroup
+			sessionErr  error
+			deviceErr   error
+			isNewDevice bool
 		)
 
 		refreshToken, _, refreshErr := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)

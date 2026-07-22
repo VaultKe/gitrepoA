@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -649,6 +650,16 @@ func proxyTo(targetBase string, _ string) gin.HandlerFunc {
 		u, _ := url.Parse(targetURL)
 		proxy := httputil.NewSingleHostReverseProxy(u)
 		proxy.FlushInterval = 100 * time.Millisecond
+		// Use a custom transport with sane timeouts so a slow backend does not
+		// pin a proxy goroutine forever.
+		proxy.Transport = &http.Transport{
+			Proxy:               http.ProxyFromEnvironment,
+			TLSHandshakeTimeout:  10 * time.Second,
+			IdleConnTimeout:      90 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			DisableKeepAlives:    true,
+		}
 		proxy.Director = func(req *http.Request) {
 			req.URL.Scheme = u.Scheme
 			req.URL.Host = u.Host
@@ -702,19 +713,56 @@ func proxyWebSocket(c *gin.Context, targetURL string) {
 	defer clientConn.Close()
 
 	errChan := make(chan error, 2)
-	go copyWebSocketMessages(clientConn, backendConn, errChan)
-	go copyWebSocketMessages(backendConn, clientConn, errChan)
-	<-errChan
+	ctx := c.Request.Context()
+
+	go copyWebSocketMessages(clientConn, backendConn, errChan, ctx)
+	go copyWebSocketMessages(backendConn, clientConn, errChan, ctx)
+
+	// Wait for either side to finish, the context to cancel, or an overall
+	// reasonable timeout so a hung proxy does not pin a goroutine forever.
+	select {
+	case err := <-errChan:
+		if err != nil {
+			log.Printf("proxy ws error: %v", err)
+		}
+	case <-ctx.Done():
+		log.Printf("proxy ws cancelled: %v", ctx.Err())
+	case <-time.After(5 * time.Minute):
+		log.Println("proxy ws reached max duration")
+	}
 }
 
-func copyWebSocketMessages(dst, src *websocket.Conn, errChan chan<- error) {
+func copyWebSocketMessages(dst, src *websocket.Conn, errChan chan<- error, ctx context.Context) {
 	for {
+		select {
+		case <-ctx.Done():
+			errChan <- ctx.Err()
+			return
+		default:
+		}
+
 		msgType, msg, err := src.ReadMessage()
 		if err != nil {
+			// Normal websocket closes (1000-1006) are expected in a proxy;
+			// only surface true errors to the caller.
+			if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code >= websocket.CloseNormalClosure && closeErr.Code <= websocket.CloseAbnormalClosure {
+				return
+			}
 			errChan <- err
 			return
 		}
+
+		select {
+		case <-ctx.Done():
+			errChan <- ctx.Err()
+			return
+		default:
+		}
+
 		if err := dst.WriteMessage(msgType, msg); err != nil {
+			if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code >= websocket.CloseNormalClosure && closeErr.Code <= websocket.CloseAbnormalClosure {
+				return
+			}
 			errChan <- err
 			return
 		}
@@ -829,8 +877,8 @@ func chatWSHandler(cfg *config.Config) gin.HandlerFunc {
 		errChan := make(chan error, 2)
 		ctx := c.Request.Context()
 
-		go copyWebSocketMessages(clientConn, backendConn, errChan)
-		go copyWebSocketMessages(backendConn, clientConn, errChan)
+		go copyWebSocketMessages(clientConn, backendConn, errChan, ctx)
+		go copyWebSocketMessages(backendConn, clientConn, errChan, ctx)
 
 		// Wait for either side to finish, the context to cancel, or an overall
 		// reasonable timeout so a hung proxy does not pin a goroutine forever.

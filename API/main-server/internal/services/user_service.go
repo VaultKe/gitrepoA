@@ -394,7 +394,6 @@ func (s *UserService) UserExists(email, phone string) (bool, error) {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 	formattedPhone := utils.FormatPhoneNumber(phone)
 
-
 	// Since we now store all emails in lowercase, we can do direct comparison
 	// But we also check with LOWER() for existing data that might not be normalized
 	query := "SELECT COUNT(*) FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3"
@@ -1037,7 +1036,6 @@ func (s *UserService) getSystemChamaAnalytics(dateFilter string) (map[string]int
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
-
 
 	// Get new chamas in period
 	var newChamas int

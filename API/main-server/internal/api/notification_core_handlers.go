@@ -307,7 +307,6 @@ func DeleteNotification(c *gin.Context) {
 	userID := c.GetString("userID")
 	notificationID := c.Param("id")
 
-
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,

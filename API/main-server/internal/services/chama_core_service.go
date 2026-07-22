@@ -355,21 +355,21 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 	defer rows.Close()
 
 	var chamas []*models.Chama
-		for rows.Next() {
-			chama := &models.Chama{}
-			var rulesJSON, permissionsJSON string
-			var meetingFreq, meetingTime *string
-			var meetingDayOfWeek, meetingDayOfMonth *int
+	for rows.Next() {
+		chama := &models.Chama{}
+		var rulesJSON, permissionsJSON string
+		var meetingFreq, meetingTime *string
+		var meetingDayOfWeek, meetingDayOfMonth *int
 
-			err := rows.Scan(
-				&chama.ID, &chama.Name, &chama.Description, &chama.Category, &chama.Type, &chama.Status,
-				&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
-				&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
-				&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
-				&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-				&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
-				&chama.RulesFilePath, &chama.RulesFileName,
-			)
+		err := rows.Scan(
+			&chama.ID, &chama.Name, &chama.Description, &chama.Category, &chama.Type, &chama.Status,
+			&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
+			&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
+			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
+			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
+			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+			&chama.RulesFilePath, &chama.RulesFileName,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
 		}
@@ -432,21 +432,21 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 	defer rows.Close()
 
 	var chamas []*models.Chama
-		for rows.Next() {
-			chama := &models.Chama{}
-			var rulesJSON, permissionsJSON string
-			var meetingFreq, meetingTime *string
-			var meetingDayOfWeek, meetingDayOfMonth *int
+	for rows.Next() {
+		chama := &models.Chama{}
+		var rulesJSON, permissionsJSON string
+		var meetingFreq, meetingTime *string
+		var meetingDayOfWeek, meetingDayOfMonth *int
 
-			err := rows.Scan(
-				&chama.ID, &chama.Name, &chama.Description, &chama.Type, &chama.Status,
-				&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
-				&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
-				&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
-				&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
-				&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
-				&chama.RulesFilePath, &chama.RulesFileName,
-			)
+		err := rows.Scan(
+			&chama.ID, &chama.Name, &chama.Description, &chama.Type, &chama.Status,
+			&chama.Avatar, &chama.County, &chama.Town, &chama.Latitude, &chama.Longitude,
+			&chama.ContributionAmount, &chama.ContributionFrequency, &chama.MaxMembers,
+			&chama.CurrentMembers, &chama.TotalFunds, &chama.IsPublic, &chama.RequiresApproval,
+			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
+			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
+			&chama.RulesFilePath, &chama.RulesFileName,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
 		}
@@ -729,15 +729,15 @@ func (s *ChamaService) GetChamaStatistics(chamaID, userID string) (map[string]in
 	var (
 		wg sync.WaitGroup
 
-		chamaObj      *models.Chama
-		memberStats   map[string]interface{}
+		chamaObj       *models.Chama
+		memberStats    map[string]interface{}
 		financialStats map[string]interface{}
-		activityStats map[string]interface{}
-		walletBalance float64
-		userStats     map[string]interface{}
+		activityStats  map[string]interface{}
+		walletBalance  float64
+		userStats      map[string]interface{}
 
 		chamaErr, memberErr, financialErr, activityErr error
-		walletErr, userStatsErr                          error
+		walletErr, userStatsErr                        error
 	)
 
 	wg.Add(6)
