@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,56 +39,80 @@ func GetNotifications(c *gin.Context) {
 		return
 	}
 
-	// Get all notifications from different sources
+	// Get all notifications from different sources in parallel.
 	allNotifications := []map[string]interface{}{}
 
-	// Get deleted virtual notification IDs for filtering
+	// Get deleted virtual notification IDs for filtering (best-effort)
 	deletedVirtualNotifications := getDeletedVirtualNotificationIDs(db.(*sql.DB), userID)
 
-	// 1. Get system notifications
-	systemNotifications, err := getSystemNotifications(db.(*sql.DB), userID)
-	if err == nil {
-		allNotifications = append(allNotifications, systemNotifications...)
-	}
+	var (
+		wg sync.WaitGroup
 
-	// 2. Get chama invitations
-	invitationNotifications, err := getChamaInvitationNotifications(db.(*sql.DB), userID)
-	if err == nil {
-		// Filter out deleted virtual notifications
-		filteredInvitations := filterDeletedNotifications(invitationNotifications, deletedVirtualNotifications)
-		allNotifications = append(allNotifications, filteredInvitations...)
-	}
+		systemNotifs, invitationNotifs, meetingNotifs []map[string]interface{}
+		financialNotifs, chamaNotifs, supportNotifs   []map[string]interface{}
 
-	// 3. Get meeting notifications
-	meetingNotifications, err := getMeetingNotifications(db.(*sql.DB), userID)
-	if err == nil {
-		// Filter out deleted virtual notifications
-		filteredMeetings := filterDeletedNotifications(meetingNotifications, deletedVirtualNotifications)
-		allNotifications = append(allNotifications, filteredMeetings...)
-	}
+		invitationErr, meetingErr, financialErr, chamaErr, supportErr error
+	)
 
-	// 4. Get financial notifications
-	financialNotifications, err := getFinancialNotifications(db.(*sql.DB), userID)
-	if err == nil {
-		// Filter out deleted virtual notifications
-		filteredFinancial := filterDeletedNotifications(financialNotifications, deletedVirtualNotifications)
-		allNotifications = append(allNotifications, filteredFinancial...)
-	}
+	wg.Add(6)
+	go func() {
+		defer wg.Done()
+		systemNotifs, _ = getSystemNotifications(db.(*sql.DB), userID)
+	}()
+	go func() {
+		defer wg.Done()
+		invitationNotifs, invitationErr = getChamaInvitationNotifications(db.(*sql.DB), userID)
+		if invitationErr == nil {
+			invitationNotifs = filterDeletedNotifications(invitationNotifs, deletedVirtualNotifications)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		meetingNotifs, meetingErr = getMeetingNotifications(db.(*sql.DB), userID)
+		if meetingErr == nil {
+			meetingNotifs = filterDeletedNotifications(meetingNotifs, deletedVirtualNotifications)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		financialNotifs, financialErr = getFinancialNotifications(db.(*sql.DB), userID)
+		if financialErr == nil {
+			financialNotifs = filterDeletedNotifications(financialNotifs, deletedVirtualNotifications)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		chamaNotifs, chamaErr = getChamaActivityNotifications(db.(*sql.DB), userID)
+		if chamaErr == nil {
+			chamaNotifs = filterDeletedNotifications(chamaNotifs, deletedVirtualNotifications)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		supportNotifs, supportErr = getSupportRequestNotifications(db.(*sql.DB), userID)
+		if supportErr == nil {
+			supportNotifs = filterDeletedNotifications(supportNotifs, deletedVirtualNotifications)
+		}
+	}()
+	wg.Wait()
 
-	// 5. Get chama activity notifications
-	chamaNotifications, err := getChamaActivityNotifications(db.(*sql.DB), userID)
-	if err == nil {
-		// Filter out deleted virtual notifications
-		filteredChama := filterDeletedNotifications(chamaNotifications, deletedVirtualNotifications)
-		allNotifications = append(allNotifications, filteredChama...)
+	if len(systemNotifs) > 0 {
+		allNotifications = append(allNotifications, systemNotifs...)
 	}
-
-	// 6. Get support request notifications
-	supportNotifications, err := getSupportRequestNotifications(db.(*sql.DB), userID)
-	if err == nil {
-		// Filter out deleted virtual notifications
-		filteredSupport := filterDeletedNotifications(supportNotifications, deletedVirtualNotifications)
-		allNotifications = append(allNotifications, filteredSupport...)
+	if len(invitationNotifs) > 0 {
+		allNotifications = append(allNotifications, invitationNotifs...)
+	}
+	if len(meetingNotifs) > 0 {
+		allNotifications = append(allNotifications, meetingNotifs...)
+	}
+	if len(financialNotifs) > 0 {
+		allNotifications = append(allNotifications, financialNotifs...)
+	}
+	if len(chamaNotifs) > 0 {
+		allNotifications = append(allNotifications, chamaNotifs...)
+	}
+	if len(supportNotifs) > 0 {
+		allNotifications = append(allNotifications, supportNotifs...)
 	}
 
 	// Sort all notifications by created_at (most recent first)

@@ -5,33 +5,47 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
+var ensureDeletedNotificationsTableOnce sync.Once
+
+func ensureDeletedNotificationsTable(db *sql.DB) {
+	ensureDeletedNotificationsTableOnce.Do(func() {
+		createTableQuery := `
+			CREATE TABLE IF NOT EXISTS deleted_virtual_notifications (
+				id SERIAL PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				notification_id TEXT NOT NULL,
+				notification_type TEXT NOT NULL,
+				deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(user_id, notification_id)
+			)
+		`
+		_, _ = db.Exec(createTableQuery)
+	})
+}
+
 // sortNotificationsByDate sorts notifications by created_at in descending order (most recent first)
 func sortNotificationsByDate(notifications []map[string]interface{}) {
-	// Simple bubble sort for small datasets
-	n := len(notifications)
-	for i := 0; i < n-1; i++ {
-		for j := 0; j < n-i-1; j++ {
-			date1, ok1 := notifications[j]["createdAt"].(string)
-			date2, ok2 := notifications[j+1]["createdAt"].(string)
-
-			if ok1 && ok2 {
-				// Parse dates and compare
-				time1, err1 := time.Parse("2006-01-02 15:04:05", date1)
-				time2, err2 := time.Parse("2006-01-02 15:04:05", date2)
-
-				if err1 == nil && err2 == nil && time1.Before(time2) {
-					// Swap if j is older than j+1
-					notifications[j], notifications[j+1] = notifications[j+1], notifications[j]
-				}
-			}
+	sort.Slice(notifications, func(i, j int) bool {
+		date1, ok1 := notifications[i]["createdAt"].(string)
+		date2, ok2 := notifications[j]["createdAt"].(string)
+		if !ok1 || !ok2 {
+			return false
 		}
-	}
+		time1, err1 := time.Parse("2006-01-02 15:04:05", date1)
+		time2, err2 := time.Parse("2006-01-02 15:04:05", date2)
+		if err1 != nil || err2 != nil {
+			return false
+		}
+		return time1.After(time2)
+	})
 }
 
 // handleSpecialNotificationRead handles marking special notification types as read
@@ -172,25 +186,8 @@ func handleSpecialNotificationDelete(db *sql.DB, notificationID, userID string) 
 
 // storeVirtualNotificationDeletion stores a record that a virtual notification was deleted
 func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notificationType string) bool {
-	// Create a table to track deleted virtual notifications if it doesn't exist
-	createTableQuery := `
-		CREATE TABLE IF NOT EXISTS deleted_virtual_notifications (
-			id SERIAL PRIMARY KEY,
-			user_id TEXT NOT NULL,
-			notification_id TEXT NOT NULL,
-			notification_type TEXT NOT NULL,
-			deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(user_id, notification_id)
-		)
-	`
+	ensureDeletedNotificationsTable(db)
 
-	_, err := db.Exec(createTableQuery)
-	if err != nil {
-		// Even if table creation fails, we can still return success for virtual notifications
-		return true
-	}
-
-	// Insert deletion record (PostgreSQL uses ON CONFLICT for upsert)
 	insertQuery := `
 		INSERT INTO deleted_virtual_notifications
 		(user_id, notification_id, notification_type)
@@ -199,7 +196,7 @@ func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notifi
 		SET notification_type = EXCLUDED.notification_type, deleted_at = CURRENT_TIMESTAMP
 	`
 
-	_, err = db.Exec(insertQuery, userID, notificationID, notificationType)
+	_, err := db.Exec(insertQuery, userID, notificationID, notificationType)
 	if err != nil {
 		// Even if storage fails, we can still return success for virtual notifications
 		return true
@@ -212,22 +209,7 @@ func storeVirtualNotificationDeletion(db *sql.DB, userID, notificationID, notifi
 func getDeletedVirtualNotificationIDs(db *sql.DB, userID string) map[string]bool {
 	deletedIDs := make(map[string]bool)
 
-	// Create the table if it doesn't exist
-	createTableQuery := `
-		CREATE TABLE IF NOT EXISTS deleted_virtual_notifications (
-			id SERIAL PRIMARY KEY,
-			user_id TEXT NOT NULL,
-			notification_id TEXT NOT NULL,
-			notification_type TEXT NOT NULL,
-			deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(user_id, notification_id)
-		)
-	`
-
-	_, err := db.Exec(createTableQuery)
-	if err != nil {
-		return deletedIDs
-	}
+	ensureDeletedNotificationsTable(db)
 
 	query := `
 		SELECT notification_id

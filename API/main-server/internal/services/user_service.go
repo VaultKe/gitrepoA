@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -487,39 +488,55 @@ func (s *UserService) GetUsersByLocation(county, town string, limit, offset int)
 func (s *UserService) GetUserStatistics(userID string) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	// Get user info
+	// Get user info first - if this fails we cannot build the response
 	user, err := s.GetUserByID(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Get wallet statistics
-	walletStats, err := s.getUserWalletStatistics(userID)
-	if err != nil {
-		fmt.Printf("Warning: Failed to get wallet statistics: %v\n", err)
-		walletStats = make(map[string]interface{})
-	}
+	// Fan out the remaining independent queries in parallel.
+	var (
+		wg sync.WaitGroup
 
-	// Get chama statistics
-	chamaStats, err := s.getUserChamaStatistics(userID)
-	if err != nil {
-		fmt.Printf("Warning: Failed to get chama statistics: %v\n", err)
-		chamaStats = make(map[string]interface{})
-	}
+		walletStats, chamaStats, contributionStats, meetingStats map[string]interface{}
 
-	// Get contribution statistics
-	contributionStats, err := s.getUserContributionStatistics(userID)
-	if err != nil {
-		fmt.Printf("Warning: Failed to get contribution statistics: %v\n", err)
-		contributionStats = make(map[string]interface{})
-	}
+		walletErr, chamaErr, contribErr, meetingErr error
+	)
 
-	// Get meeting statistics
-	meetingStats, err := s.getUserMeetingStatistics(userID)
-	if err != nil {
-		fmt.Printf("Warning: Failed to get meeting statistics: %v\n", err)
-		meetingStats = make(map[string]interface{})
-	}
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		walletStats, walletErr = s.getUserWalletStatistics(userID)
+		if walletErr != nil {
+			fmt.Printf("Warning: Failed to get wallet statistics: %v\n", walletErr)
+			walletStats = make(map[string]interface{})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		chamaStats, chamaErr = s.getUserChamaStatistics(userID)
+		if chamaErr != nil {
+			fmt.Printf("Warning: Failed to get chama statistics: %v\n", chamaErr)
+			chamaStats = make(map[string]interface{})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		contributionStats, contribErr = s.getUserContributionStatistics(userID)
+		if contribErr != nil {
+			fmt.Printf("Warning: Failed to get contribution statistics: %v\n", contribErr)
+			contributionStats = make(map[string]interface{})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		meetingStats, meetingErr = s.getUserMeetingStatistics(userID)
+		if meetingErr != nil {
+			fmt.Printf("Warning: Failed to get meeting statistics: %v\n", meetingErr)
+			meetingStats = make(map[string]interface{})
+		}
+	}()
+	wg.Wait()
 
 	// Build response
 	stats["user_info"] = map[string]interface{}{

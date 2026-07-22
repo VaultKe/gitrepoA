@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -249,21 +250,40 @@ func getFinancialNotifications(db *sql.DB, userID string) ([]map[string]interfac
 	var notifications []map[string]interface{}
 
 	// 1. Get loan notifications (applications, approvals, disbursements)
-	loanNotifications, err := getLoanNotifications(db, userID)
-	if err == nil {
-		notifications = append(notifications, loanNotifications...)
-	}
-
 	// 2. Get welfare request notifications
-	welfareNotifications, err := getWelfareNotifications(db, userID)
-	if err == nil {
-		notifications = append(notifications, welfareNotifications...)
-	}
-
 	// 3. Get transaction notifications (contributions, payments)
-	transactionNotifications, err := getTransactionNotifications(db, userID)
-	if err == nil {
-		notifications = append(notifications, transactionNotifications...)
+	// These are independent, so fan them out.
+	var (
+		wg sync.WaitGroup
+
+		loanNotifs, welfareNotifs, transactionNotifs []map[string]interface{}
+
+		loanErr, welfareErr, transactionErr error
+	)
+
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		loanNotifs, loanErr = getLoanNotifications(db, userID)
+	}()
+	go func() {
+		defer wg.Done()
+		welfareNotifs, welfareErr = getWelfareNotifications(db, userID)
+	}()
+	go func() {
+		defer wg.Done()
+		transactionNotifs, transactionErr = getTransactionNotifications(db, userID)
+	}()
+	wg.Wait()
+
+	if loanErr == nil {
+		notifications = append(notifications, loanNotifs...)
+	}
+	if welfareErr == nil {
+		notifications = append(notifications, welfareNotifs...)
+	}
+	if transactionErr == nil {
+		notifications = append(notifications, transactionNotifs...)
 	}
 
 	return notifications, nil

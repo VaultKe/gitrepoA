@@ -725,52 +725,78 @@ func (s *ChamaService) GetChamaStatistics(chamaID, userID string) (map[string]in
 
 	stats := make(map[string]interface{})
 
-	// Get basic chama info
-	chama, err := s.GetChamaByID(chamaID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get chama: %w", err)
-	}
+	// Fan out the independent queries in parallel.
+	var (
+		wg sync.WaitGroup
 
-	// Get member statistics
-	memberStats, err := s.getMemberStatistics(chamaID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get member statistics: %w", err)
-	}
+		chamaObj      *models.Chama
+		memberStats   map[string]interface{}
+		financialStats map[string]interface{}
+		activityStats map[string]interface{}
+		walletBalance float64
+		userStats     map[string]interface{}
 
-	// Get financial statistics
-	financialStats, err := s.getFinancialStatistics(chamaID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get financial statistics: %w", err)
-	}
+		chamaErr, memberErr, financialErr, activityErr error
+		walletErr, userStatsErr                          error
+	)
 
-	// Get activity statistics
-	activityStats, err := s.getActivityStatistics(chamaID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get activity statistics: %w", err)
-	}
+	wg.Add(6)
+	go func() {
+		defer wg.Done()
+		chamaObj, chamaErr = s.GetChamaByID(chamaID)
+	}()
+	go func() {
+		defer wg.Done()
+		memberStats, memberErr = s.getMemberStatistics(chamaID)
+	}()
+	go func() {
+		defer wg.Done()
+		financialStats, financialErr = s.getFinancialStatistics(chamaID)
+	}()
+	go func() {
+		defer wg.Done()
+		activityStats, activityErr = s.getActivityStatistics(chamaID)
+	}()
+	go func() {
+		defer wg.Done()
+		walletBalance, walletErr = s.getChamaWalletBalance(chamaID)
+		if walletErr != nil {
+			walletBalance = 0
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		userStats, userStatsErr = s.getUserChamaStatistics(chamaID, userID)
+		if userStatsErr != nil {
+			userStats = make(map[string]interface{})
+		}
+	}()
+	wg.Wait()
 
-	// Get chama wallet balance
-	walletBalance, err := s.getChamaWalletBalance(chamaID)
-	if err != nil {
-		walletBalance = 0
+	// Preserve original error semantics: abort in the same order queries used to run.
+	if chamaErr != nil {
+		return nil, fmt.Errorf("failed to get chama: %w", chamaErr)
 	}
-
-	// Get user-specific statistics
-	userStats, err := s.getUserChamaStatistics(chamaID, userID)
-	if err != nil {
-		userStats = make(map[string]interface{})
+	if memberErr != nil {
+		return nil, fmt.Errorf("failed to get member statistics: %w", memberErr)
+	}
+	if financialErr != nil {
+		return nil, fmt.Errorf("failed to get financial statistics: %w", financialErr)
+	}
+	if activityErr != nil {
+		return nil, fmt.Errorf("failed to get activity statistics: %w", activityErr)
 	}
 
 	stats["chama_info"] = map[string]interface{}{
-		"id":                     chama.ID,
-		"name":                   chama.Name,
-		"type":                   chama.Type,
-		"status":                 chama.Status,
-		"created_at":             chama.CreatedAt,
-		"contribution_amount":    chama.ContributionAmount,
-		"contribution_frequency": chama.ContributionFrequency,
-		"max_members":            chama.MaxMembers,
-		"current_members":        chama.CurrentMembers,
+		"id":                     chamaObj.ID,
+		"name":                   chamaObj.Name,
+		"type":                   chamaObj.Type,
+		"status":                 chamaObj.Status,
+		"created_at":             chamaObj.CreatedAt,
+		"contribution_amount":    chamaObj.ContributionAmount,
+		"contribution_frequency": chamaObj.ContributionFrequency,
+		"max_members":            chamaObj.MaxMembers,
+		"current_members":        chamaObj.CurrentMembers,
 		"total_funds":            walletBalance, // Use actual wallet balance
 		"wallet_balance":         walletBalance,
 	}

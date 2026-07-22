@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
@@ -431,49 +432,63 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 				user.ID, devicePolicyResult.PreviousDeviceName, devicePolicyResult.PreviousDeviceUID)
 		}
 
-		// Now issue the new refresh token (the only valid one after enforcement)
-		refreshToken, _, err := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)
-		if err != nil {
-			fmt.Printf("Failed to issue refresh token for user %s: %v\n", user.ID, err)
+		// Now issue the new refresh token, record the login session, and
+		// update the device registry in parallel - they are independent DB writes.
+		var (
+			wg sync.WaitGroup
+			sessionErr    error
+			deviceErr     error
+			isNewDevice   bool
+		)
+
+		refreshToken, _, refreshErr := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)
+		if refreshErr != nil {
+			fmt.Printf("Failed to issue refresh token for user %s: %v\n", user.ID, refreshErr)
 		}
 
-		err = RecordLoginSession(
-			db.(*sql.DB),
-			user.ID,
-			deviceInfo.DeviceUID,
-			deviceInfo.DeviceType,
-			deviceInfo.DeviceName,
-			deviceInfo.OS,
-			deviceInfo.Browser,
-			clientIP,
-			deviceInfo.Location,
-		)
-		if err != nil {
-			fmt.Printf("Failed to record login session: %v\n", err)
-		} else {
-			fmt.Printf("Successfully called RecordLoginSession for user %s with IP %s\n", user.ID, clientIP)
-		}
-
-		// Keep the registered-devices registry accurate on every login.
-		isNewDevice, devErr := UpsertUserDevice(
-			db.(*sql.DB),
-			user.ID,
-			deviceInfo.DeviceUID,
-			deviceInfo.DeviceName,
-			deviceInfo.DeviceType,
-			clientIP,
-			deviceInfo.OSVersion,
-			deviceInfo.AppVersion,
-			deviceInfo.Manufacturer,
-			deviceInfo.Model,
-			deviceInfo.Locale,
-			c.GetHeader("X-Timezone"),
-		)
-		if devErr != nil {
-			fmt.Printf("Failed to upsert user device for user %s: %v\n", user.ID, devErr)
-		} else if isNewDevice {
-			fmt.Printf("New device registered for user %s: %s (%s)\n", user.ID, deviceInfo.DeviceName, clientIP)
-		}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			sessionErr = RecordLoginSession(
+				db.(*sql.DB),
+				user.ID,
+				deviceInfo.DeviceUID,
+				deviceInfo.DeviceType,
+				deviceInfo.DeviceName,
+				deviceInfo.OS,
+				deviceInfo.Browser,
+				clientIP,
+				deviceInfo.Location,
+			)
+			if sessionErr != nil {
+				fmt.Printf("Failed to record login session: %v\n", sessionErr)
+			} else {
+				fmt.Printf("Successfully called RecordLoginSession for user %s with IP %s\n", user.ID, clientIP)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			isNewDevice, deviceErr = UpsertUserDevice(
+				db.(*sql.DB),
+				user.ID,
+				deviceInfo.DeviceUID,
+				deviceInfo.DeviceName,
+				deviceInfo.DeviceType,
+				clientIP,
+				deviceInfo.OSVersion,
+				deviceInfo.AppVersion,
+				deviceInfo.Manufacturer,
+				deviceInfo.Model,
+				deviceInfo.Locale,
+				c.GetHeader("X-Timezone"),
+			)
+			if deviceErr != nil {
+				fmt.Printf("Failed to upsert user device for user %s: %v\n", user.ID, deviceErr)
+			} else if isNewDevice {
+				fmt.Printf("New device registered for user %s: %s (%s)\n", user.ID, deviceInfo.DeviceName, clientIP)
+			}
+		}()
+		wg.Wait()
 
 		// Build response
 		authData := &AuthData{

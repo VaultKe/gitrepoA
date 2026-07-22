@@ -827,8 +827,22 @@ func chatWSHandler(cfg *config.Config) gin.HandlerFunc {
 		defer clientConn.Close()
 
 		errChan := make(chan error, 2)
+		ctx := c.Request.Context()
+
 		go copyWebSocketMessages(clientConn, backendConn, errChan)
 		go copyWebSocketMessages(backendConn, clientConn, errChan)
-		<-errChan
+
+		// Wait for either side to finish, the context to cancel, or an overall
+		// reasonable timeout so a hung proxy does not pin a goroutine forever.
+		select {
+		case err := <-errChan:
+			if err != nil {
+				log.Printf("chat ws proxy error: %v", err)
+			}
+		case <-ctx.Done():
+			log.Printf("chat ws proxy cancelled: %v", ctx.Err())
+		case <-time.After(5 * time.Minute):
+			log.Println("chat ws proxy reached max duration")
+		}
 	}
 }
