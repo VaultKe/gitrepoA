@@ -17,6 +17,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import ApiService from '../../../services/api';
@@ -45,12 +46,21 @@ export default function TransactionHistoryScreen() {
       let apiTransactions = [];
       try {
         const response = await ApiService.getTransactions(50, 0);
-        if (response.success && response.data) {
-          apiTransactions = response.data;
+        if (response.success) {
+          if (Array.isArray(response.data)) {
+            apiTransactions = response.data;
+          } else if (response.data && typeof response.data === 'object') {
+            apiTransactions = response.data.transactions || response.data.data || [];
+          }
+        }
+
+        if (apiTransactions.length > 0 || response.success) {
           const formattedTransactions = apiTransactions.map(tx => ({
             ...tx,
             date: tx.createdAt || tx.created_at,
-            amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+            amount: tx.type === 'deposit' || tx.type === 'contribution'
+              ? Math.abs(parseFloat(tx.amount) || 0)
+              : -Math.abs(parseFloat(tx.amount) || 0),
           }));
           setTransactions(formattedTransactions);
           return;
@@ -66,7 +76,9 @@ export default function TransactionHistoryScreen() {
           const formattedTransactions = localTransactions.map(tx => ({
             ...tx,
             date: tx.createdAt || tx.created_at,
-            amount: tx.type === 'deposit' ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+            amount: tx.type === 'deposit' || tx.type === 'contribution'
+              ? Math.abs(parseFloat(tx.amount) || 0)
+              : -Math.abs(parseFloat(tx.amount) || 0),
           }));
           setTransactions(formattedTransactions);
           return;
@@ -98,10 +110,16 @@ export default function TransactionHistoryScreen() {
     initializeData();
   }, [loadTransactions]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      loadTransactions();
+    }, [loadTransactions])
+  );
+
   const filterTypes = [
     { id: 'all', name: 'All', icon: 'list' },
     { id: 'deposit', name: 'Deposits', icon: 'arrow-down-circle' },
-    { id: 'withdraw', name: 'Withdrawals', icon: 'arrow-up-circle' },
+    { id: 'withdrawal', name: 'Withdrawals', icon: 'arrow-up-circle' },
     { id: 'transfer', name: 'Transfers', icon: 'swap-horizontal' },
   ];
 
@@ -111,7 +129,7 @@ export default function TransactionHistoryScreen() {
 
   const getTransactionColor = (type, amount) => {
     if (amount > 0) return colors.success;
-    if (type === 'withdraw') return colors.error;
+    if (amount < 0) return colors.error;
     return colors.primary;
   };
 
@@ -682,52 +700,41 @@ export default function TransactionHistoryScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView
-          style={{ flex: 1, paddingHorizontal: spacing.md }}
-          nestedScrollEnabled
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-        >
-          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ flexGrow: 1, minWidth: Math.max(screenWidth - 32, 760) }}
-            >
-              <View style={{ width: '100%' }}>
-                {renderTransactionHeader()}
-                <FlatList
-                  data={filteredTransactions}
-                  renderItem={renderTransaction}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                  showsVerticalScrollIndicator={false}
-                  ListEmptyComponent={() => (
-                    <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
-                      <Ionicons name="receipt-outline" size={64} color={colors.textTertiary} />
-                      <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.textSecondary, marginTop: spacing.md }]}>
-                        {transactions.length === 0 ? 'No transactions yet' : 'No transactions found'}
-                      </Text>
-                      <Text style={[{ fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center', color: colors.textTertiary }]}>
-                        {transactions.length === 0
-                          ? 'Start by making a deposit or transfer'
-                          : 'Try changing the filter above'
-                        }
-                      </Text>
-                    </View>
-                  )}
+        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+          <Card variant="outlined" style={{ flex: 1, borderRadius: 8, overflow: 'hidden' }}>
+            {renderTransactionHeader()}
+            <FlatList
+              data={filteredTransactions}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
                 />
-              </View>
-            </ScrollView>
+              }
+              renderItem={renderTransaction}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={() => (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
+                  <Ionicons name="receipt-outline" size={64} color={colors.textTertiary} />
+                  <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.textSecondary, marginTop: spacing.md }]}>
+                    {transactions.length === 0 ? 'No transactions yet' : 'No transactions found'}
+                  </Text>
+                  <Text style={[{ fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center', color: colors.textTertiary }]}>
+                    {transactions.length === 0
+                      ? 'Start by making a deposit or transfer'
+                      : 'Try changing the filter above'
+                    }
+                  </Text>
+                </View>
+              )}
+              contentContainerStyle={{ paddingBottom: spacing.md }}
+              style={{ flex: 1 }}
+            />
           </Card>
-        </ScrollView>
+        </View>
       )}
 
       <Modal
