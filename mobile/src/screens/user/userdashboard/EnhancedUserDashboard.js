@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius, shadows, getShadowStyle } from '../../../utils/theme';
 import { getUserFirstName } from '../../../utils/userUtils';
 import WalletCard from '../../../components/wallet/WalletCard';
 import Card from '../../../components/common/Card';
@@ -142,18 +142,24 @@ const EnhancedUserDashboard = ({ navigation }) => {
       style={{
         marginHorizontal: spacing.md,
         marginTop: spacing.lg,
-        marginBottom: spacing.xs,
-        borderRadius: 0,
-        borderBottomLeftRadius: borderRadius.lg,
-        borderBottomRightRadius: borderRadius.lg,
+        marginBottom: spacing.md,
+        borderRadius: borderRadius.xl,
+        backgroundColor: colors.primary + '10',
+        overflow: 'hidden',
+        ...getShadowStyle('sm'),
       }}
       variant="outlined"
     >
-      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.lg }}>
-        <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, marginBottom: spacing.xs }}>
-          {getGreeting()}
-        </Text>
-        <Text style={{ fontSize: typography.fontSize['3xl'], fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs }}>
+      <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.xl }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+          <View style={{ width: 32, height: 32, borderRadius: borderRadius.full, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+            <Ionicons name="flash" size={16} color={colors.primary} />
+          </View>
+          <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary, fontWeight: typography.fontWeight.medium }}>
+            {getGreeting()}
+          </Text>
+        </View>
+        <Text style={{ fontSize: typography.fontSize['2xl'], fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs }}>
           Welcome back, {getUserFirstName(user)}
         </Text>
         <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary }}>
