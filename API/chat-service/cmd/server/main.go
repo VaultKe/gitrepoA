@@ -42,9 +42,9 @@ func main() {
 	db.SetConnMaxLifetime(5 * time.Minute)
 	defer db.Close()
 
-	// Redis is a required dependency. If it cannot be reached the
-	// server must not start (and must not run degraded), so we treat a
-	// failed Redis ping as fatal.
+	// Redis is used for optional short-lived caching (message/room history).
+	// If it is unreachable the server must keep running degraded — cache
+	// misses simply fall back to the database.
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:         cfg.RedisAddr,
 		Password:     cfg.RedisPassword,
@@ -55,9 +55,10 @@ func main() {
 	})
 	defer redisClient.Close()
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		log.Fatal("redis connection failed (required dependency):", err)
+		log.Printf("WARNING: redis unreachable (%v), running without message cache", err)
+	} else {
+		log.Println("redis connected")
 	}
-	log.Println("redis connected")
 
 	roomMgr := room.NewRoomManager(db)
 	hub := websocket.NewHub()
