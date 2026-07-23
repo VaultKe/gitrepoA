@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"vaultke-backend/internal/services"
 )
 
 // createNotificationTx inserts a notification with all required fields using a transaction
@@ -426,9 +428,215 @@ func CreateLoanApplication(c *gin.Context) {
 }
 
 func GetLoanApplication(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	loan, err := services.NewLoanService(db.(*sql.DB)).GetLoanByID(loanID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Loan not found",
+		})
+		return
+	}
+
+	var borrowerFirstName, borrowerLastName, borrowerEmail string
+	err = db.(*sql.DB).QueryRow(
+		"SELECT first_name, last_name, email FROM users WHERE id = $1",
+		loan.BorrowerID,
+	).Scan(&borrowerFirstName, &borrowerLastName, &borrowerEmail)
+	if err != nil {
+		borrowerFirstName = "Unknown"
+		borrowerLastName = "User"
+		borrowerEmail = ""
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Get loan application endpoint - coming soon",
+		"data": map[string]interface{}{
+			"id":                 loan.ID,
+			"borrowerId":         loan.BorrowerID,
+			"chamaId":            loan.ChamaID,
+			"type":               loan.Type,
+			"amount":             loan.Amount,
+			"interestRate":       loan.InterestRate,
+			"duration":           loan.Duration,
+			"purpose":            loan.Purpose,
+			"status":             loan.Status,
+			"approvedBy":         loan.ApprovedBy,
+			"approvedAt":         loan.ApprovedAt,
+			"disbursedAt":        loan.DisbursedAt,
+			"dueDate":            loan.DueDate,
+			"totalAmount":        loan.TotalAmount,
+			"paidAmount":         loan.PaidAmount,
+			"remainingAmount":    loan.RemainingAmount,
+			"requiredGuarantors": loan.RequiredGuarantors,
+			"approvedGuarantors": loan.ApprovedGuarantors,
+			"createdAt":          loan.CreatedAt,
+			"updatedAt":          loan.UpdatedAt,
+			"borrower": map[string]interface{}{
+				"id":        loan.BorrowerID,
+				"firstName": borrowerFirstName,
+				"lastName":  borrowerLastName,
+				"email":     borrowerEmail,
+				"fullName":  borrowerFirstName + " " + borrowerLastName,
+			},
+		},
+	})
+}
+
+// GetLoanRepaymentHistory returns disbursement info, installment schedule,
+// and repayment history (successful and failed) for a loan.
+func GetLoanRepaymentHistory(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	sqlDB := db.(*sql.DB)
+
+	loanService := services.NewLoanService(sqlDB)
+
+	loan, err := loanService.GetLoanByID(loanID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Loan not found",
+		})
+		return
+	}
+
+	payments, err := loanService.GetLoanPayments(loanID)
+	if err != nil {
+		payments = nil
+	}
+
+	type disbursementInfo struct {
+		ID          string     `json:"id"`
+		Status      string     `json:"status"`
+		Amount      float64    `json:"amount"`
+		Description string     `json:"description"`
+		Reference   string     `json:"reference"`
+		CreatedAt   time.Time  `json:"createdAt"`
+		UpdatedAt   *time.Time `json:"updatedAt,omitempty"`
+	}
+
+	var dB disbursementInfo
+	disbursementTx := interface{}(nil)
+	err = sqlDB.QueryRow(`
+		SELECT id, status, amount, description, reference, created_at, updated_at
+		FROM transactions
+		WHERE reference = $1 AND type = 'loan'
+		ORDER BY created_at DESC LIMIT 1
+	`, "LOAN-DISB-"+loanID).Scan(
+		&dB.ID, &dB.Status, &dB.Amount, &dB.Description,
+		&dB.Reference, &dB.CreatedAt, &dB.UpdatedAt,
+	)
+	if err == nil {
+		disbursementTx = dB
+	} else if err != sql.ErrNoRows {
+		fmt.Printf("Error fetching disbursement transaction for loan %s: %v\n", loanID, err)
+	}
+
+	type installment struct {
+		Number    int     `json:"number"`
+		DueDate   string  `json:"dueDate"`
+		Amount    float64 `json:"amount"`
+		Principal float64 `json:"principal"`
+		Interest  float64 `json:"interest"`
+		Status    string  `json:"status"`
+	}
+
+	var schedule []installment
+	if loan.DisbursedAt != nil && loan.Duration > 0 && loan.TotalAmount > 0 {
+		monthlyPayment := loan.TotalAmount / float64(loan.Duration)
+		monthlyInterest := 0.0
+		monthlyPrincipal := monthlyPayment
+		if loan.TotalAmount > loan.Amount {
+			monthlyInterest = (loan.TotalAmount - loan.Amount) / float64(loan.Duration)
+			monthlyPrincipal = monthlyPayment - monthlyInterest
+		}
+
+		startDate := *loan.DisbursedAt
+		paidInstallments := 0
+		if monthlyPayment > 0 {
+			paidInstallments = int(loan.PaidAmount / monthlyPayment)
+		}
+		if paidInstallments > loan.Duration {
+			paidInstallments = loan.Duration
+		}
+
+		// Round to 2 decimal places
+		round := func(v float64) float64 {
+			return float64(int64(v*100+0.5)) / 100
+		}
+
+		for i := 1; i <= loan.Duration; i++ {
+			dueDate := startDate.AddDate(0, i, 0)
+			status := "pending"
+			if i <= paidInstallments {
+				status = "paid"
+			} else if loan.Status == "completed" {
+				status = "paid"
+			}
+
+			schedule = append(schedule, installment{
+				Number:    i,
+				DueDate:   dueDate.Format(time.RFC3339),
+				Amount:    round(monthlyPayment),
+				Principal: round(monthlyPrincipal),
+				Interest:  round(monthlyInterest),
+				Status:    status,
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": map[string]interface{}{
+			"loan": map[string]interface{}{
+				"id":              loan.ID,
+				"status":          loan.Status,
+				"amount":          loan.Amount,
+				"totalAmount":     loan.TotalAmount,
+				"paidAmount":      loan.PaidAmount,
+				"remainingAmount": loan.RemainingAmount,
+				"duration":        loan.Duration,
+				"interestRate":    loan.InterestRate,
+				"disbursedAt":     loan.DisbursedAt,
+				"dueDate":         loan.DueDate,
+			},
+			"disbursement": disbursementTx,
+			"schedule":     schedule,
+			"payments":     payments,
+		},
 	})
 }
 

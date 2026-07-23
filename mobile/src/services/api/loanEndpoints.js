@@ -128,6 +128,10 @@ const getLoanTypes = async (chamaId, status = '') => {
   return await makeRequest(`/loans/${chamaId}/loan-types${qs}`);
 };
 
+const getLoanRepaymentHistory = async (loanId) => {
+  return await makeRequest(`/loans/${loanId}/repayment-history`);
+};
+
 const getLoanType = async (loanTypeId) => {
   return await makeRequest(`/loans/loan-types/${loanTypeId}`);
 };
@@ -166,4 +170,5 @@ export {
   createLoanType,
   updateLoanType,
   deleteLoanType,
+  getLoanRepaymentHistory,
 };

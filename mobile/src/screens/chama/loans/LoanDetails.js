@@ -16,6 +16,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
+import { getLoanRepaymentHistory } from '../../../services/api/loanEndpoints';
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableContainer: {
@@ -93,6 +94,9 @@ const LoanDetails = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [payments, setPayments] = useState([]);
   const [allPayments, setAllPayments] = useState([]);
+  const [repaymentHistory, setRepaymentHistory] = useState(null);
+  const [disbursement, setDisbursement] = useState(null);
+  const [schedule, setSchedule] = useState([]);
 
   // Repayment history pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -126,32 +130,29 @@ const LoanDetails = ({ route, navigation }) => {
         setLoan(foundLoan);
       }
 
-      // Load repayment history - simulate API call for now
-      // In production, this would be: ApiService.getLoanRepaymentHistory(loanId)
-      const mockPayments = [
-        { id: 'pay-1', date: '2024-01-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-2', date: '2024-02-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-3', date: '2024-03-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-4', date: '2024-04-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-5', date: '2024-05-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-6', date: '2024-06-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-7', date: '2024-07-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-8', date: '2024-08-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-9', date: '2024-09-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-10', date: '2024-10-15', amount: 5000, type: 'Principal + Interest', status: 'completed' },
-        { id: 'pay-11', date: '2024-11-15', amount: 5000, type: 'Principal + Interest', status: 'pending' },
-        { id: 'pay-12', date: '2024-12-15', amount: 5000, type: 'Principal + Interest', status: 'pending' },
-      ];
-
-      setAllPayments(mockPayments);
-      setTotalItems(mockPayments.length);
-      setTotalPages(Math.ceil(mockPayments.length / pageSize));
-
-      // Set initial page data
-      const startIndex = 0;
-      const endIndex = pageSize;
-      setPayments(mockPayments.slice(startIndex, endIndex));
-      setCurrentPage(1);
+      // Load repayment history from API
+      try {
+        const historyResponse = await getLoanRepaymentHistory(loanId);
+        if (historyResponse?.success && historyResponse?.data) {
+          setRepaymentHistory(historyResponse.data);
+          setDisbursement(historyResponse.data.disbursement || null);
+          setSchedule(Array.isArray(historyResponse.data.schedule) ? historyResponse.data.schedule : []);
+          const paymentList = Array.isArray(historyResponse.data.payments) ? historyResponse.data.payments : [];
+          setAllPayments(paymentList);
+          setTotalItems(paymentList.length);
+          setTotalPages(Math.ceil(paymentList.length / pageSize));
+          const startIndex = 0;
+          const endIndex = pageSize;
+          setPayments(paymentList.slice(startIndex, endIndex));
+          setCurrentPage(1);
+        }
+      } catch (historyError) {
+        console.error('Failed to load repayment history:', historyError);
+        setAllPayments([]);
+        setTotalItems(0);
+        setTotalPages(1);
+        setCurrentPage(1);
+      }
 
     } catch (error) {
       console.error('Error loading loan details:', error);
@@ -189,12 +190,21 @@ const LoanDetails = ({ route, navigation }) => {
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'disbursed': return colors.success;
-      case 'partial': return colors.warning;
-      case 'delinquent': return colors.error;
-      case 'recovery active': return colors.info;
-      case 'collections': return colors.secondary;
-      default: return colors.textSecondary;
+      case 'disbursed':
+      case 'completed':
+        return colors.success;
+      case 'partial':
+      case 'processing':
+        return colors.warning;
+      case 'delinquent':
+      case 'failed':
+        return colors.error;
+      case 'recovery active':
+        return colors.info;
+      case 'collections':
+        return colors.secondary;
+      default:
+        return colors.textSecondary;
     }
   };
 
@@ -261,6 +271,66 @@ const LoanDetails = ({ route, navigation }) => {
           </View>
         </Card>
 
+        {/* Disbursement Info */}
+        {disbursement && (
+          <Card variant="outlined" style={styles.amountCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.success + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+                <Ionicons name="cash-outline" size={20} color={colors.success} />
+              </View>
+              <View>
+                <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Disbursement</Text>
+                <Text style={[styles.amountValue, { color: getStatusColor(disbursement.status), fontSize: typography.fontSize.lg }]}>
+                  {formatCurrency(disbursement.amount)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.statusRow}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(disbursement.status) + '20' }]}>
+                <Text style={[styles.statusText, { color: getStatusColor(disbursement.status) }]}>
+                  {disbursement.status?.toUpperCase()}
+                </Text>
+              </View>
+              <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.xs, marginLeft: spacing.sm }}>
+                {formatDate(disbursement.updatedAt || disbursement.createdAt)}
+              </Text>
+            </View>
+          </Card>
+        )}
+
+        {/* Repayment Schedule */}
+        {schedule.length > 0 && (
+          <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+                <Ionicons name="calendar" size={20} color={colors.primary} />
+              </View>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Repayment Schedule</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm }}>
+                {schedule.map((installment) => (
+                  <View
+                    key={installment.number}
+                    style={[
+                      { padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, minWidth: 100, alignItems: 'center' },
+                      { backgroundColor: installment.status === 'paid' ? colors.success + '10' : colors.background, borderColor: installment.status === 'paid' ? colors.success : colors.border }
+                    ]}
+                  >
+                    <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary }}>Month {installment.number}</Text>
+                    <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.text }}>
+                      {formatCurrency(installment.amount)}
+                    </Text>
+                    <Text style={{ fontSize: typography.fontSize['2xs'], color: installment.status === 'paid' ? colors.success : colors.textSecondary }}>
+                      {installment.status === 'paid' ? 'PAID' : 'PENDING'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </Card>
+        )}
+
         {/* Repayment History Table */}
         <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.md }]}>Repayment History</Text>
         <View style={styles.repaymentTable}>
@@ -281,50 +351,55 @@ const LoanDetails = ({ route, navigation }) => {
           </View>
 
           {/* Table Body */}
-          {payments.map((payment, index) => (
-            <View
-              key={payment.id}
-              style={[
-                tableStyles.tableRow,
-                index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }
-              ]}
-            >
-              {/* Date */}
-              <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-                <Text style={[tableStyles.tableCellText, tableStyles.dateText]} numberOfLines={1}>
-                  {formatDate(payment.date)}
-                </Text>
-              </View>
-
-              {/* Type */}
-              <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-                <Text style={tableStyles.tableCellText}>
-                  {payment.type}
-                </Text>
-              </View>
-
-              {/* Amount */}
-              <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium, color: colors.success }]}>
-                  {formatCurrency(payment.amount)}
-                </Text>
-              </View>
-
-              {/* Status */}
-              <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-                <View style={[
-                  tableStyles.statusBadge,
-                  { backgroundColor: payment.status === 'completed' ? colors.success + '20' : colors.warning + '20' }
-                ]}>
-                  <Text style={[
-                    { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: payment.status === 'completed' ? colors.success : colors.warning }
-                  ]}>
-                    {payment.status?.toUpperCase()}
+          {payments.map((payment, index) => {
+            const paymentDate = payment.paidAt || payment.date || payment.createdAt;
+            const paymentType = payment.paymentMethod || payment.type || 'Payment';
+            const paymentStatus = payment.status || 'completed';
+            return (
+              <View
+                key={payment.id}
+                style={[
+                  tableStyles.tableRow,
+                  index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }
+                ]}
+              >
+                {/* Date */}
+                <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+                  <Text style={[tableStyles.tableCellText, tableStyles.dateText]} numberOfLines={1}>
+                    {formatDate(paymentDate)}
                   </Text>
                 </View>
+
+                {/* Type */}
+                <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+                  <Text style={tableStyles.tableCellText}>
+                    {paymentType}
+                  </Text>
+                </View>
+
+                {/* Amount */}
+                <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+                  <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium, color: colors.success }]}>
+                    {formatCurrency(payment.amount)}
+                  </Text>
+                </View>
+
+                {/* Status */}
+                <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
+                  <View style={[
+                    tableStyles.statusBadge,
+                    { backgroundColor: paymentStatus === 'completed' ? colors.success + '20' : paymentStatus === 'failed' ? colors.error + '20' : colors.warning + '20' }
+                  ]}>
+                    <Text style={[
+                      { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: paymentStatus === 'completed' ? colors.success : paymentStatus === 'failed' ? colors.error : colors.warning }
+                    ]}>
+                      {paymentStatus?.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
 
           {/* Pagination */}
           {totalItems > pageSize && (
@@ -482,50 +557,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   detailValue: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-  paymentsCard: {
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  emptyPayments: {
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  emptyText: {
-    fontSize: typography.fontSize.base,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  emptySubtext: {
-    fontSize: typography.fontSize.sm,
-    textAlign: 'center',
-  },
-  paymentsList: {
-    marginTop: spacing.md,
-  },
-  paymentItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  paymentInfo: {
-    flex: 1,
-  },
-  paymentType: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs / 2,
-  },
-  paymentDate: {
-    fontSize: typography.fontSize.xs,
-  },
-  paymentAmount: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
   },

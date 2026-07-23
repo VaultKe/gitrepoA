@@ -769,6 +769,38 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	return existing, nil
 }
 
+// GetLoanPayments retrieves payment records for a loan
+func (s *LoanService) GetLoanPayments(loanID string) ([]*models.LoanPayment, error) {
+	query := `
+		SELECT id, loan_id, amount, principal_amount, interest_amount,
+			   payment_method, reference, paid_at, created_at
+		FROM loan_payments
+		WHERE loan_id = $1
+		ORDER BY paid_at ASC
+	`
+
+	rows, err := s.db.Query(query, loanID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query loan payments: %w", err)
+	}
+	defer rows.Close()
+
+	var payments []*models.LoanPayment
+	for rows.Next() {
+		var p models.LoanPayment
+		err := rows.Scan(
+			&p.ID, &p.LoanID, &p.Amount, &p.PrincipalAmount,
+			&p.InterestAmount, &p.PaymentMethod, &p.Reference, &p.PaidAt, &p.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan loan payment: %w", err)
+		}
+		payments = append(payments, &p)
+	}
+
+	return payments, nil
+}
+
 // DeleteLoanType removes a loan type
 func (s *LoanService) DeleteLoanType(loanTypeID string) error {
 	lt, err := s.GetLoanTypeByID(loanTypeID)
