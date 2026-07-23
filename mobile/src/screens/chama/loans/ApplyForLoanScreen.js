@@ -21,7 +21,7 @@ import Button from '../../../components/common/Button';
 import Card from '../../../components/common/Card';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import { getThemeColors } from '../../../utils/theme';
-import { spacing, typography, borderRadius, shadows } from '../../../utils/theme';
+import { spacing, typography, borderRadius } from '../../../utils/theme';
 
 const ApplyForLoanScreen = () => {
   const route = useRoute();
@@ -225,7 +225,7 @@ const ApplyForLoanScreen = () => {
         }
       >
         {/* Loan Details Card */}
-        <Card style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+        <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
               <Ionicons name="cash" size={20} color={colors.primary} />
@@ -280,58 +280,59 @@ const ApplyForLoanScreen = () => {
             </View>
           </TouchableOpacity>
 
-          {expandedLoanTypes && (
-            <Card style={{ marginBottom: spacing.md, backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }}>
-              <FlatList
-                data={loanTypes}
-                keyExtractor={(item) => item.id}
-                style={{ maxHeight: 240 }}
-                renderItem={({ item }) => {
-                  const isSelected = newLoan.loanTypeId === item.id;
-                  const selectedTextColor = isSelected ? colors.textInverse : colors.text;
-                  const selectedEmailColor = isSelected ? colors.textInverse + 'cc' : colors.textSecondary;
-                  return (
-                    <TouchableOpacity
-                      style={[
-                        styles.guarantorCard,
-                        {
-                          backgroundColor: isSelected ? colors.text : colors.surface,
-                          borderColor: isSelected ? colors.text : colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        handleSelectLoanType(item);
-                        setExpandedLoanTypes(false);
-                      }}
-                    >
-                      <View style={styles.guarantorCardContent}>
-                        <View style={[styles.avatar, { backgroundColor: colors.white }]}>
-                          <Ionicons name="cash" size={20} color={colors.primary} />
-                        </View>
-                        <View style={styles.guarantorDetails}>
-                          <Text style={[styles.guarantorName, { color: selectedTextColor }]}>
-                            {item.name}
-                          </Text>
-                          <Text style={[styles.guarantorEmail, { color: selectedEmailColor }]}>
-                            KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }}
-                ListEmptyComponent={
-                  <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
-                    <Text style={{ color: colors.textSecondary }}>No active loan types</Text>
-                  </View>
-                }
-              />
-            </Card>
-          )}
-        </Card>
+           {expandedLoanTypes && (
+             <View style={{ marginBottom: spacing.md }}>
+               <FlatList
+                 data={loanTypes}
+                 keyExtractor={(item) => item.id}
+                 style={{ maxHeight: 240 }}
+                 renderItem={({ item }) => {
+                   const isSelected = newLoan.loanTypeId === item.id;
+                   return (
+                     <TouchableOpacity
+                       style={[
+                         styles.guarantorCard,
+                         {
+                           backgroundColor: isSelected ? colors.primary + '20' : colors.surface,
+                           borderColor: isSelected ? colors.primary : colors.border,
+                         },
+                       ]}
+                       onPress={() => {
+                         handleSelectLoanType(item);
+                         setExpandedLoanTypes(false);
+                       }}
+                     >
+                       <View style={styles.guarantorCardContent}>
+                         <View style={[styles.avatar, { backgroundColor: colors.white }]}>
+                           <Ionicons name="cash" size={20} color={colors.primary} />
+                         </View>
+                         <View style={styles.guarantorDetails}>
+                           <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
+                             {item.name}
+                           </Text>
+                           <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>
+                             KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
+                           </Text>
+                         </View>
+                         {isSelected && (
+                           <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                         )}
+                       </View>
+                     </TouchableOpacity>
+                   );
+                 }}
+                 ListEmptyComponent={
+                   <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+                     <Text style={{ color: colors.textSecondary }}>No active loan types</Text>
+                   </View>
+                 }
+               />
+              </View>
+             )}
+         </Card>
 
         {/* Loan Terms Card */}
-        <Card style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+        <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
               <Ionicons name="calculator" size={20} color={colors.primary} />
@@ -357,7 +358,7 @@ const ApplyForLoanScreen = () => {
         </Card>
 
         {/* Additional Information Card */}
-        <Card style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+        <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.info + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
               <Ionicons name="information-circle" size={20} color={colors.info} />
@@ -385,7 +386,7 @@ const ApplyForLoanScreen = () => {
         </Card>
 
         {/* Guarantors Card */}
-        <Card style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+        <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.warning + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
               <Ionicons name="people" size={20} color={colors.warning} />
@@ -399,13 +400,13 @@ const ApplyForLoanScreen = () => {
           </Text>
 
           {newLoan.guarantors.map((guarantor) => (
-            <View key={guarantor.id} style={[styles.guarantorItem, { backgroundColor: colors.primary, borderColor: colors.primary, marginBottom: spacing.sm }]}>
-              <View style={styles.guarantorInfo}>
-                <Text style={[styles.guarantorName, { color: colors.white, fontWeight: '700' }]}>
-                  {guarantor.firstName} {guarantor.lastName}
-                </Text>
-                <Text style={[styles.guarantorEmail, { color: colors.white, fontWeight: '600' }]}>{guarantor.email}</Text>
-              </View>
+            <View key={guarantor.id} style={[styles.guarantorItem, { backgroundColor: colors.primary + '20', borderColor: colors.primary, marginBottom: spacing.sm }]}>
+               <View style={styles.guarantorInfo}>
+                 <Text style={[styles.guarantorName, { color: colors.primary }]}>
+                   {guarantor.firstName} {guarantor.lastName}
+                 </Text>
+                 <Text style={[styles.guarantorEmail, { color: colors.textSecondary }]}>{guarantor.email}</Text>
+               </View>
               <TouchableOpacity
                 onPress={() => removeGuarantor(guarantor.id)}
                 style={[styles.removeGuarantorBtn, { backgroundColor: colors.surface }]}
@@ -425,7 +426,7 @@ const ApplyForLoanScreen = () => {
           </TouchableOpacity>
 
           {expandedGuarantors && (
-            <Card style={{ marginTop: spacing.sm, backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ marginTop: spacing.sm }}>
               <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
                 <View style={[styles.searchInputContainer, { backgroundColor: colors.surface }]}>
                   <Ionicons name="search" size={20} color={colors.textSecondary} />
@@ -442,64 +443,61 @@ const ApplyForLoanScreen = () => {
                 </View>
               </View>
 
-              <FlatList
-                data={availableGuarantors}
-                keyExtractor={(item) => item.id}
-                style={{ maxHeight: 240 }}
-                renderItem={({ item }) => {
-                  const isSelected = newLoan.guarantors.some((g) => g.id === (item.userId || item.id));
-                  const selectedBg = isSelected ? colors.text : colors.surface;
-                  const selectedBorder = isSelected ? colors.text : colors.border;
-                  const selectedName = isSelected ? colors.textInverse : colors.text;
-                  const selectedEmail = isSelected ? colors.text : colors.textSecondary;
-                  return (
-                    <TouchableOpacity
-                      style={[
-                        styles.guarantorCard,
-                        {
-                          backgroundColor: selectedBg,
-                          borderColor: selectedBorder,
-                        },
-                      ]}
-                      onPress={() => {
-                        const id = item.userId || item.id;
-                        if (isSelected) {
-                          removeGuarantor(id);
-                        } else {
-                          addGuarantor({
-                            id,
-                            firstName: item.firstName,
-                            lastName: item.lastName,
-                            email: item.email,
-                          });
-                        }
-                      }}
-                    >
-                      <View style={styles.guarantorCardContent}>
-                        <View style={[styles.avatar, { backgroundColor: colors.white }]}>
-                          <Ionicons name="person" size={20} color={colors.primary} />
-                        </View>
-                        <View style={styles.guarantorDetails}>
-                          <Text style={[styles.guarantorName, { color: selectedName, fontWeight: '600' }]}>
-                            {item.firstName} {item.lastName}
-                          </Text>
-                          <Text style={[styles.guarantorEmail, { color: selectedEmail, fontWeight: '500' }]}>
-                            {item.email}
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }}
-                ListEmptyComponent={
-                  <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
-                    <Text style={{ color: colors.textSecondary }}>No guarantors found</Text>
-                  </View>
-                }
-              />
-            </Card>
-          )}
-        </Card>
+               <FlatList
+                 data={availableGuarantors}
+                 keyExtractor={(item) => item.id}
+                 style={{ maxHeight: 240 }}
+                 renderItem={({ item }) => {
+                   const isSelected = newLoan.guarantors.some((g) => g.id === (item.userId || item.id));
+                   return (
+                     <TouchableOpacity
+                       style={[
+                         styles.guarantorCard,
+                         {
+                           backgroundColor: isSelected ? colors.primary + '20' : colors.surface,
+                           borderColor: isSelected ? colors.primary : colors.border,
+                         },
+                       ]}
+                       onPress={() => {
+                         const id = item.userId || item.id;
+                         if (isSelected) {
+                           removeGuarantor(id);
+                         } else {
+                           addGuarantor({
+                             id,
+                             firstName: item.firstName,
+                             lastName: item.lastName,
+                             email: item.email,
+                           });
+                         }
+                       }}
+                     >
+                       <View style={styles.guarantorCardContent}>
+                         <View style={[styles.avatar, { backgroundColor: isSelected ? colors.primary : colors.textSecondary }]}>
+                           <Ionicons name="person" size={20} color={colors.white} />
+                         </View>
+                         <View style={styles.guarantorDetails}>
+                           <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
+                             {item.firstName} {item.lastName}
+                           </Text>
+                           <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>{item.email}</Text>
+                         </View>
+                         {isSelected && (
+                           <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                         )}
+                       </View>
+                     </TouchableOpacity>
+                   );
+                 }}
+                 ListEmptyComponent={
+                   <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+                     <Text style={{ color: colors.textSecondary }}>No guarantors found</Text>
+                   </View>
+                 }
+                 />
+              </View>
+            )}
+          </Card>
 
         <Button
           title={submitting ? 'Submitting...' : 'Submit Application'}
@@ -551,43 +549,45 @@ const ApplyForLoanScreen = () => {
               renderItem={({ item }) => {
                 const user = item.user || item;
                 const isSelected = newLoan.guarantors.some((g) => g.id === (user.id || item.user_id));
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.guarantorCard,
-                      {
-                        backgroundColor: isSelected ? colors.primary + '20' : colors.surface,
-                        borderColor: isSelected ? colors.primary : colors.border,
-                        opacity: isSelected ? 0.95 : 1,
-                      },
-                    ]}
-                    onPress={() => {
-                      const id = user.id || item.user_id;
-                      if (isSelected) {
-                        removeGuarantor(id);
-                      } else {
-                        addGuarantor({
-                          id,
-                          firstName: user.first_name || user.firstName || '',
-                          lastName: user.last_name || user.lastName || '',
-                          email: user.email || '',
-                        });
-                      }
-                    }}
-                  >
-                    <View style={styles.guarantorCardContent}>
-                      <View style={[styles.avatar, { backgroundColor: isSelected ? colors.primary : colors.textSecondary }]}>
-                        <Ionicons name="person" size={20} color={colors.white} />
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.guarantorCard,
+                        {
+                          backgroundColor: isSelected ? colors.primary + '20' : colors.surface,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => {
+                        const id = user.id || item.user_id;
+                        if (isSelected) {
+                          removeGuarantor(id);
+                        } else {
+                          addGuarantor({
+                            id,
+                            firstName: user.first_name || user.firstName || '',
+                            lastName: user.last_name || user.lastName || '',
+                            email: user.email || '',
+                          });
+                        }
+                      }}
+                    >
+                      <View style={styles.guarantorCardContent}>
+                        <View style={[styles.avatar, { backgroundColor: isSelected ? colors.primary : colors.textSecondary }]}>
+                          <Ionicons name="person" size={20} color={colors.white} />
+                        </View>
+                        <View style={styles.guarantorDetails}>
+                          <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
+                            {user.first_name || user.firstName} {user.last_name || user.lastName}
+                          </Text>
+                          <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>{user.email}</Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        )}
                       </View>
-                      <View style={styles.guarantorDetails}>
-                        <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
-                          {user.first_name || user.firstName} {user.last_name || user.lastName}
-                        </Text>
-                        <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary + 'cc' : colors.textSecondary, fontWeight: '500' }]}>{user.email}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
+                    </TouchableOpacity>
+                  );
               }}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
@@ -629,8 +629,8 @@ const ApplyForLoanScreen = () => {
               contentContainerStyle={{ paddingVertical: spacing.sm }}
               renderItem={({ item }) => {
                 const isSelected = newLoan.loanTypeId === item.id;
-                return (
-                  <TouchableOpacity
+                  return (
+                    <TouchableOpacity
                       style={[
                         styles.guarantorCard,
                         {
@@ -638,23 +638,26 @@ const ApplyForLoanScreen = () => {
                           borderColor: isSelected ? colors.primary : colors.border,
                         },
                       ]}
-                    onPress={() => handleSelectLoanType(item)}
-                  >
-                    <View style={styles.guarantorCardContent}>
-                      <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                        <Ionicons name="cash" size={20} color={colors.white} />
+                      onPress={() => handleSelectLoanType(item)}
+                    >
+                      <View style={styles.guarantorCardContent}>
+                        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                          <Ionicons name="cash" size={20} color={colors.white} />
+                        </View>
+                        <View style={styles.guarantorDetails}>
+                          <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
+                            {item.name}
+                          </Text>
+                          <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>
+                            KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={20} color={colors.white} />
+                        )}
                       </View>
-                      <View style={styles.guarantorDetails}>
-                        <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
-                          {item.name}
-                        </Text>
-                        <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary + 'cc' : colors.textSecondary, fontWeight: '500' }]}>
-                          KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
+                    </TouchableOpacity>
+                  );
               }}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
@@ -773,7 +776,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     maxHeight: '90%',
-    ...shadows.xl,
+    borderWidth: 1,
   },
   searchModalHeader: {
     flexDirection: 'row',
