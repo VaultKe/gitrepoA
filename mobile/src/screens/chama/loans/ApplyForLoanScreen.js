@@ -126,8 +126,8 @@ const ApplyForLoanScreen = () => {
       ...prev,
       loanTypeId: loanType.id,
       loanTypeName: loanType.name,
-      termMonths: String(loanType.termMonths || prev.termMonths),
-      interestRate: String(loanType.interestRate || prev.interestRate),
+      repaymentPeriod: String(loanType.termMonths || prev.repaymentPeriod || prev.termMonths || '12'),
+      interestRate: String(loanType.interestRate || prev.interestRate || '5'),
     }));
     setShowLoanTypePicker(false);
   };
@@ -174,7 +174,7 @@ const ApplyForLoanScreen = () => {
         amount,
         purpose: newLoan.purpose,
         interestRate: parseFloat(newLoan.interestRate || '0'),
-        repaymentPeriod: parseInt(newLoan.repaymentPeriod || newLoan.termMonths, 10),
+        repaymentPeriod: parseInt(newLoan.repaymentPeriod, 10),
         monthlyIncome: parseFloat(newLoan.monthlyIncome || '0'),
         guarantors: newLoan.guarantors.map((g) => g.id),
         businessPlan: newLoan.businessPlan,
@@ -246,7 +246,7 @@ const ApplyForLoanScreen = () => {
           <Input
             label="Loan Amount (KES) *"
             value={newLoan.amount}
-            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, amount: text }))}
+            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, amount: text.replace(/[^0-9.]/g, '') }))}
             placeholder="Enter loan amount"
             keyboardType="numeric"
           />
@@ -263,7 +263,7 @@ const ApplyForLoanScreen = () => {
           <Input
             label="Monthly Income (KES) *"
             value={newLoan.monthlyIncome}
-            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, monthlyIncome: text }))}
+            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, monthlyIncome: text.replace(/[^0-9.]/g, '') }))}
             placeholder="Your monthly income"
             keyboardType="numeric"
           />
@@ -353,7 +353,7 @@ const ApplyForLoanScreen = () => {
           <Input
             label="Repayment Period (Months)"
             value={newLoan.repaymentPeriod}
-            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, repaymentPeriod: text }))}
+            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, repaymentPeriod: text.replace(/[^0-9]/g, '') }))}
             placeholder={newLoan.termMonths || '12'}
             keyboardType="numeric"
           />
@@ -361,7 +361,7 @@ const ApplyForLoanScreen = () => {
           <Input
             label="Interest Rate (%)"
             value={newLoan.interestRate}
-            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, interestRate: text }))}
+            onChangeText={(text) => setNewLoan((prev) => ({ ...prev, interestRate: text.replace(/[^0-9.]/g, '').split('.').slice(0, 2).join('.') }))}
             placeholder="5"
             keyboardType="numeric"
           />
@@ -468,19 +468,19 @@ const ApplyForLoanScreen = () => {
                            borderColor: isSelected ? colors.primary : colors.border,
                          },
                        ]}
-                       onPress={() => {
-                         const id = item.userId || item.id;
-                         if (isSelected) {
-                           removeGuarantor(id);
-                         } else {
-                           addGuarantor({
-                             id,
-                             firstName: item.firstName,
-                             lastName: item.lastName,
-                             email: item.email,
-                           });
-                         }
-                       }}
+                        onPress={() => {
+                          const id = item.id;
+                          if (isSelected) {
+                            removeGuarantor(id);
+                          } else {
+                            addGuarantor({
+                              id,
+                              firstName: item.firstName,
+                              lastName: item.lastName,
+                              email: item.email,
+                            });
+                          }
+                        }}
                      >
                        <View style={styles.guarantorCardContent}>
                          <View style={[styles.avatar, { backgroundColor: isSelected ? colors.primary : colors.textSecondary }]}>
