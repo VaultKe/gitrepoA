@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
@@ -218,7 +218,7 @@ const CreateMerryGoRound = ({ route, navigation }) => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          <Card style={styles.formCard}>
+          <Card variant="outlined" style={styles.formCard}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Basic Information
             </Text>
@@ -259,7 +259,7 @@ const CreateMerryGoRound = ({ route, navigation }) => {
             />
           </Card>
 
-          <Card style={styles.formCard}>
+          <Card variant="outlined" style={styles.formCard}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Frequency
             </Text>
@@ -272,7 +272,7 @@ const CreateMerryGoRound = ({ route, navigation }) => {
             </View>
           </Card>
 
-          <Card style={styles.formCard}>
+          <Card variant="outlined" style={styles.formCard}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Select Participants ({selectedParticipants.length} selected)
             </Text>
@@ -328,7 +328,7 @@ const CreateMerryGoRound = ({ route, navigation }) => {
           </Card>
 
           {selectedParticipants.length > 0 && (
-            <Card style={styles.formCard}>
+          <Card variant="outlined" style={styles.formCard}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 Payout Order
               </Text>
@@ -408,7 +408,7 @@ const CreateMerryGoRound = ({ route, navigation }) => {
             </Card>
           )}
 
-          <Card style={styles.summaryCard}>
+          <Card variant="outlined" style={styles.summaryCard}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Summary
             </Text>
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.lg,
-    ...shadows.sm,
+    borderBottomWidth: 1,
   },
   backButton: {
     padding: spacing.sm,
