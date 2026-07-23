@@ -633,10 +633,67 @@ func GetLoanRepaymentHistory(c *gin.Context) {
 				"disbursedAt":     loan.DisbursedAt,
 				"dueDate":         loan.DueDate,
 			},
-			"disbursement": disbursementTx,
-			"schedule":     schedule,
-			"payments":     payments,
-		},
+		"disbursement": disbursementTx,
+		"schedule":     schedule,
+		"payments":     payments,
+	},
+	})
+}
+
+// RecordLoanPayment records a manual repayment for an active loan.
+func RecordLoanPayment(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	var req struct {
+		Amount        float64 `json:"amount" binding:"required,gt=0"`
+		PaymentMethod string  `json:"paymentMethod" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid request data: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	payment, err := services.NewLoanService(db.(*sql.DB)).MakeLoanPayment(loanID, userID.(string), req.Amount, req.PaymentMethod)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Loan payment recorded successfully",
+		"data":    payment,
 	})
 }
 
