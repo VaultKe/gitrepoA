@@ -191,7 +191,7 @@ export function attachMessaging(prototype) {
     }
   };
 
-  // ==================== Event Handlers ====================
+  // --- Event Handlers ---
 
   prototype._handleNewMessage = function(message) {
     const { roomId, data } = message;
@@ -226,12 +226,10 @@ export function attachMessaging(prototype) {
       return;
     } else if (!this.processedMessageIds.has(data.id)) {
       this.processedMessageIds.add(data.id);
-
       if (this.processedMessageIds.size > 10000) {
         const toRemove = Array.from(this.processedMessageIds).slice(0, 1000);
         toRemove.forEach(id => this.processedMessageIds.delete(id));
       }
-
       data.status = 'delivered';
       if (data.imageUrl && !data.metadata?.imageUri && !data.metadata?.imageUrl) {
         data.metadata = { ...data.metadata, imageUrl: data.imageUrl };
@@ -337,7 +335,7 @@ export function attachMessaging(prototype) {
     this.processedMessageIds.delete(messageId);
   };
 
-  // ==================== Mutation Helpers ====================
+  // --- Mutation Helpers ---
 
   prototype._updateRooms = function(rooms) {
     rooms.forEach(room => this._updateRoom(room));
@@ -353,7 +351,12 @@ export function attachMessaging(prototype) {
 
   prototype._updateMessages = function(roomId, messages) {
     const existing = this.messages.get(roomId) || [];
-    const existingIds = new Set(existing.map(m => m.id));
+    const existingIds = new Set();
+    existing.forEach(m => {
+      if (m.id) existingIds.add(m.id);
+      if (m.tempId) existingIds.add(m.tempId);
+      if (m.clientMessageId) existingIds.add(m.clientMessageId);
+    });
 
     const normalizedMessages = messages.map(m => {
       const createdAt = this._toEpochMs(m.createdAt);
@@ -378,20 +381,41 @@ export function attachMessaging(prototype) {
       return m.status === 'sending';
     });
 
-    const newMessages = normalizedMessages.filter(m => !existingIds.has(m.id));
+    const newMessages = normalizedMessages.filter(m => {
+      if (existingIds.has(m.id)) return false;
+      if (m.clientMessageId && existingIds.has(m.clientMessageId)) return false;
+      return true;
+    });
 
     const combined = [...filteredExisting, ...newMessages].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
     this.messages.set(roomId, combined);
     this._schedulePersist();
+    this._deduplicate(roomId);
   };
 
   prototype._addMessage = function(roomId, message) {
     const roomMessages = this.messages.get(roomId) || [];
+    
+    // Prevent duplicate keys: if a message with the same id or tempId
+    // already exists, replace it instead of appending a duplicate.
+    const key = message.id || message.tempId;
+    if (key) {
+      const idx = roomMessages.findIndex(m => (m.id || m.tempId) === key);
+      if (idx !== -1) {
+        roomMessages[idx] = message;
+        this.messages.set(roomId, roomMessages);
+        this._schedulePersist();
+        this._notifyMessageSubscribers(roomId, message);
+        return;
+      }
+    }
+    
     roomMessages.push(message);
     roomMessages.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     this.messages.set(roomId, roomMessages);
     this._schedulePersist();
+    this._deduplicate(roomId);
   };
 
   prototype._removeMessage = function(roomId, tempOrId) {
@@ -414,6 +438,7 @@ export function attachMessaging(prototype) {
         messages[index].tempId = updates.tempId;
       }
       this.messages.set(roomId, messages);
+      this._deduplicate(roomId);
     }
   };
 
@@ -435,7 +460,7 @@ export function attachMessaging(prototype) {
     this._notifyRoomSubscribers(roomId);
   };
 
-  // ==================== Subscriber Notification ====================
+  // --- Subscriber Notification ---
 
   prototype._addRoomSubscriber = function(roomId) {
     if (!this.roomSubscribers.has(roomId)) {
@@ -503,7 +528,28 @@ export function attachMessaging(prototype) {
     }
   };
 
-  // ==================== Utilities ====================
+  // --- Utilities ---
+
+  prototype._deduplicate = function(roomId) {
+    const messages = this.messages.get(roomId) || [];
+    const seen = new Set();
+    const deduped = [];
+    const removedIds = [];
+    for (const m of messages) {
+      const key = m.id || m.tempId;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped.push(m);
+      } else {
+        removedIds.push(key);
+      }
+    }
+    if (deduped.length !== messages.length) {
+      this.messages.set(roomId, deduped);
+      this._schedulePersist();
+      removedIds.forEach(id => this._notifySubscribersOfRemoval(roomId, id));
+    }
+  };
 
   prototype._toEpochMs = function(value) {
     if (value === null || value === undefined) return Date.now();
