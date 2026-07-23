@@ -34,7 +34,7 @@ func createNotification(db *sql.DB, notificationID, userID, notificationType, ti
 // Helper functions to determine notification properties based on type
 func getNotificationPriority(notificationType string) string {
 	switch notificationType {
-	case "guarantor_request", "loan_status_update":
+	case "chama", "loan_status_update":
 		return "high"
 	default:
 		return "normal"
@@ -43,7 +43,7 @@ func getNotificationPriority(notificationType string) string {
 
 func getNotificationCategory(notificationType string) string {
 	switch notificationType {
-	case "guarantor_request", "loan_status_update", "guarantor_response":
+	case "chama", "loan_status_update", "guarantor_response":
 		return "financial"
 	case "meeting_created", "meeting_updated":
 		return "meetings"
@@ -56,7 +56,7 @@ func getNotificationCategory(notificationType string) string {
 
 func getNotificationPushEnabled(notificationType string) int {
 	switch notificationType {
-	case "guarantor_request", "loan_status_update", "meeting_created", "member_joined":
+	case "chama", "loan_status_update", "meeting_created", "member_joined":
 		return 1
 	default:
 		return 0
@@ -65,7 +65,7 @@ func getNotificationPushEnabled(notificationType string) int {
 
 func getNotificationEmailEnabled(notificationType string) int {
 	switch notificationType {
-	case "guarantor_request", "loan_status_update":
+	case "chama", "loan_status_update":
 		return 1
 	default:
 		return 0
@@ -74,7 +74,7 @@ func getNotificationEmailEnabled(notificationType string) int {
 
 func getNotificationSMSEnabled(notificationType string) int {
 	switch notificationType {
-	case "guarantor_request":
+	case "chama":
 		return 1
 	default:
 		return 0
@@ -126,7 +126,7 @@ func mainw() {
 		data := fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f, "purpose": "%s", "requester_id": "%s", "guarantor_id": "%s"}`,
 			loanID, loanAmount, purpose, borrowerID, guarantorID)
 
-		err = createNotification(db, notificationID, userID, "guarantor_request",
+		err = createNotification(db, notificationID, userID, "chama",
 			"Guarantor Request",
 			fmt.Sprintf("You have been requested to guarantee a loan of KES %.2f", loanAmount),
 			data, "loan", nil) // Use nil for reference_id since it's TEXT but schema expects INTEGER

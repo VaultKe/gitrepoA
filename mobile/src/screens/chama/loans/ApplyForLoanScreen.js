@@ -110,7 +110,9 @@ const ApplyForLoanScreen = () => {
     const email = guarantor.email || '';
     setNewLoan((prev) => ({
       ...prev,
-      guarantors: [...prev.guarantors, { id: userId, firstName, lastName, email }],
+      guarantors: prev.guarantors.some((g) => g.id === userId)
+        ? prev.guarantors
+        : [...prev.guarantors, { id: userId, firstName, lastName, email }],
     }));
   };
 

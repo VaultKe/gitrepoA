@@ -163,7 +163,7 @@ func RespondToGuarantorRequest(c *gin.Context) {
 		message += fmt.Sprintf(". Reason: %s", req.Reason)
 	}
 
-	err = createNotification(db.(*sql.DB), notificationID, requesterID, "guarantor_response",
+	err = createNotification(db.(*sql.DB), notificationID, requesterID, "chama",
 		"Guarantor Response",
 		message,
 		fmt.Sprintf(`{"loan_id": "%s", "guarantor_id": "%s", "action": "%s"}`,
@@ -268,7 +268,7 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 		message = "Some guarantors have declined your loan request. Your application has been rejected."
 	}
 
-	err = createNotification(db, notificationID, requesterID, "loan_status_update",
+	err = createNotification(db, notificationID, requesterID, "chama",
 		"Loan Status Update",
 		message,
 		fmt.Sprintf(`{"loan_id": "%s", "status": "%s"}`, loanID, newStatus),
@@ -383,7 +383,7 @@ func ApproveLoan(c *gin.Context) {
 	} else {
 		// Create notification for borrower
 		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
-		err = createNotification(db.(*sql.DB), notificationID, borrowerID, "loan_status_update",
+		err = createNotification(db.(*sql.DB), notificationID, borrowerID, "chama",
 			"Loan Approved",
 			fmt.Sprintf("Your loan application for KES %.2f has been approved and is ready for disbursement.", amount),
 			fmt.Sprintf(`{"loan_id": "%s", "status": "approved", "amount": %.2f}`, loanID, amount),
@@ -525,7 +525,7 @@ func RejectLoan(c *gin.Context) {
 			message += fmt.Sprintf(" Reason: %s", req.Reason)
 		}
 
-		err = createNotification(db.(*sql.DB), notificationID, borrowerID, "loan_status_update",
+		err = createNotification(db.(*sql.DB), notificationID, borrowerID, "chama",
 			"Loan Rejected",
 			message,
 			fmt.Sprintf(`{"loan_id": "%s", "status": "rejected", "reason": "%s", "amount": %.2f}`, loanID, req.Reason, amount),

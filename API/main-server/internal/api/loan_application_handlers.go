@@ -337,12 +337,17 @@ func CreateLoanApplication(c *gin.Context) {
 		return
 	}
 
-	// Insert guarantors and send notifications
+	// Resolve guarantors
+	type guarantorInfo struct {
+		userID   string
+		recordID string
+	}
 	resolvedGuarantorIDs := make([]string, 0, len(req.Guarantors))
+	guarantorRecords := make([]guarantorInfo, 0, len(req.Guarantors))
 	for _, guarantorID := range req.Guarantors {
 		realUserID := guarantorID
 		if strings.HasPrefix(guarantorID, "cm-") {
-			row := sqlDB.QueryRow(`SELECT user_id FROM chama_members WHERE id = $1 AND chama_id = $2`, guarantorID, req.ChamaID)
+			row := tx.QueryRow(`SELECT user_id FROM chama_members WHERE id = $1 AND chama_id = $2`, guarantorID, req.ChamaID)
 			if err := row.Scan(&realUserID); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"success": false,
@@ -352,36 +357,25 @@ func CreateLoanApplication(c *gin.Context) {
 			}
 		}
 		resolvedGuarantorIDs = append(resolvedGuarantorIDs, realUserID)
+		guarantorRecords = append(guarantorRecords, guarantorInfo{
+			userID:   realUserID,
+			recordID: fmt.Sprintf("guarantor-%d-%s", time.Now().UnixNano(), realUserID),
+		})
 	}
 
-	for _, guarantorID := range resolvedGuarantorIDs {
-		guarantorAmount := req.Amount / float64(len(resolvedGuarantorIDs)) // Split equally
-		guarantorRecordID := fmt.Sprintf("guarantor-%d-%s", time.Now().UnixNano(), guarantorID)
-
+	guarantorAmount := req.Amount / float64(len(guarantorRecords))
+	for _, info := range guarantorRecords {
 		_, err = tx.Exec(`
 			INSERT INTO guarantors (
 				id, loan_id, user_id, amount, status, created_at
 			) VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP)
-		`, guarantorRecordID, loanID, guarantorID, guarantorAmount)
+		`, info.recordID, loanID, info.userID, guarantorAmount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   "Failed to add guarantor: " + err.Error(),
 			})
 			return
-		}
-
-		// Create notification for guarantor
-		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
-		err = createNotificationTx(tx, notificationID, guarantorID, "guarantor_request",
-			"Guarantor Request",
-			fmt.Sprintf("You have been requested to guarantee a loan of KES %.2f", req.Amount),
-			fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f, "purpose": "%s", "requester_id": "%s", "guarantor_id": "%s"}`,
-				loanID, req.Amount, req.Purpose, userID.(string), guarantorRecordID),
-			"loan", nil)
-		if err != nil {
-			// Log error but don't fail the transaction
-			fmt.Printf("Failed to create notification for guarantor %s: %v\n", guarantorID, err)
 		}
 	}
 
@@ -392,6 +386,20 @@ func CreateLoanApplication(c *gin.Context) {
 			"error":   "Failed to commit transaction",
 		})
 		return
+	}
+
+	// Create notifications after successful commit (outside transaction)
+	for _, info := range guarantorRecords {
+		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+		err = createNotification(sqlDB, notificationID, info.userID, "chama",
+			"Guarantor Request",
+			fmt.Sprintf("You have been requested to guarantee a loan of KES %.2f", req.Amount),
+			fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f", "purpose": "%s", "requester_id": "%s", "guarantor_id": "%s"}`,
+				loanID, req.Amount, req.Purpose, userID.(string), info.recordID),
+			"loan", nil)
+		if err != nil {
+			fmt.Printf("Failed to create notification for guarantor %s: %v\n", info.userID, err)
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
