@@ -1,9 +1,8 @@
 import { API_BASE_URL, REQUEST_TIMEOUT, getAuthToken, getRefreshToken, setAuthToken, setRefreshToken, getDeviceInfo, sanitizeHeaderValue } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { triggerAppLogout } from '../../utils/authLogout';
+import { triggerAppLogout, getLoggingOut } from '../../utils/authLogout';
 import { maskSensitiveData } from '../../utils/formatters';
 
-let logoutInProgress = false;
 let isRefreshing = false;
 let refreshPromise = null;
 
@@ -61,12 +60,6 @@ const makeRequest = async (endpoint, options = {}) => {
   }
 
   const token = await getAuthToken();
-  // Detect a FormData body. React Native's FormData polyfill is NOT matched by
-  // `instanceof FormData`, and unlike the WHATWG FormData spec it does NOT implement
-  // a `get` method — so we must not require `get`. Requiring `get` caused every RN
-  // FormData (chama rules upload, avatar, etc.) to be JSON.stringify'd to "{}" and
-  // sent as an empty JSON body. We detect it via instanceof, the essential `append`
-  // method, or RN-specific internals (`getParts` / `_parts`).
   const isFormData = !!(options.body &&
     typeof options.body === 'object' &&
     !Array.isArray(options.body) &&
@@ -77,7 +70,6 @@ const makeRequest = async (endpoint, options = {}) => {
       (options.body.constructor && options.body.constructor.name === 'FormData')));
   const deviceInfo = await getDeviceInfo();
 
-  // Auth endpoints should return unmasked data so the app can use real emails/phones
   const isAuthEndpoint = endpoint.startsWith('/auth/') || endpoint.startsWith('/auth/refresh');
 
   const config = {
@@ -143,11 +135,7 @@ const makeRequest = async (endpoint, options = {}) => {
     if (response.status === 401) {
       const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
       if (isAuthEndpoint) {
-        if (!logoutInProgress) {
-          logoutInProgress = true;
-          await triggerAppLogout();
-          logoutInProgress = false;
-        }
+        await triggerAppLogout();
         throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
       }
 
@@ -183,11 +171,7 @@ const makeRequest = async (endpoint, options = {}) => {
           return maskSensitiveData(retryData?.success !== undefined ? retryData : { success: true, data: retryData });
         }
       } catch (refreshError) {
-        if (!logoutInProgress) {
-          logoutInProgress = true;
-          await triggerAppLogout();
-          logoutInProgress = false;
-        }
+        await triggerAppLogout();
         throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
       }
     }
@@ -218,6 +202,14 @@ const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {
       if (error.message.includes('401') || error.message.includes('403') ||
           error.message.includes('400') || error.message.includes('422')) {
         throw error;
+      }
+      // On 429, back off exponentially before retrying so we don't hammer
+      // an already-rate-limited endpoint and turn a single failure into a
+      // logout/429 storm.
+      if (error.message.includes('429') && attempt < maxRetries) {
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt), 16000);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
       }
       // Treat any TypeError from fetch as a transient network error.
       // fetch only throws TypeError for network-level failures (CORS, connection
