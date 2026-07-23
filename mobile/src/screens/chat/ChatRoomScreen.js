@@ -90,14 +90,19 @@ const ChatRoomScreen = ({ route, navigation }) => {
         setTypingUsers(message.users || new Set());
         return;
       }
+      if (message.type === 'remove') {
+        setMessages(prev => prev.filter(m => m.id !== message.id));
+        return;
+      }
       setMessages(prev => {
-        if (message.type === 'remove') {
-          return prev.filter(m => m.id !== message.id);
-        }
-        const idx = prev.findIndex(m => m.id === message.id || m.tempId === message.id);
+        const idx = prev.findIndex(m => m.id === message.id || m.tempId === message.tempId);
         if (idx !== -1) {
           const updated = [...prev];
           updated[idx] = { ...updated[idx], ...message };
+          // After reconciliation two items may share the same `id`; remove
+          // any other duplicate so React keys stay unique.
+          const dupIdx = updated.findIndex((m, i) => i !== idx && m.id && m.id === (message.id || updated[idx].id));
+          if (dupIdx !== -1) updated.splice(dupIdx, 1);
           return updated;
         }
         const filtered = prev.filter(m => m.tempId !== message.tempId && m.id !== message.id);

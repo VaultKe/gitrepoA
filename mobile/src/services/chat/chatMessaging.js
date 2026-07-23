@@ -1,4 +1,5 @@
 import websocketService from '../websocket';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export function attachMessaging(prototype) {
   prototype._getRoomsViaWebSocket = async function(forceRefresh = false) {
@@ -351,11 +352,10 @@ export function attachMessaging(prototype) {
 
   prototype._updateMessages = function(roomId, messages) {
     const existing = this.messages.get(roomId) || [];
-    const existingIds = new Set();
-    existing.forEach(m => {
-      if (m.id) existingIds.add(m.id);
-      if (m.tempId) existingIds.add(m.tempId);
-      if (m.clientMessageId) existingIds.add(m.clientMessageId);
+    const keyToIndex = new Map();
+    existing.forEach((m, idx) => {
+      const key = m.id || m.tempId;
+      if (key) keyToIndex.set(key, idx);
     });
 
     const normalizedMessages = messages.map(m => {
@@ -367,50 +367,51 @@ export function attachMessaging(prototype) {
       return { ...m, createdAt, metadata };
     });
 
-    const serverIds = new Set();
-    const serverClientMessageIds = new Set();
-    normalizedMessages.forEach(m => {
-      if (m.id) serverIds.add(m.id);
-      if (m.clientMessageId) serverClientMessageIds.add(m.clientMessageId);
-    });
-
-    const filteredExisting = existing.filter(m => {
-      if (!m.tempId || m.tempId === m.id) return true;
-      if (serverIds.has(m.id)) return false;
-      if (serverClientMessageIds.has(m.tempId)) return false;
-      return m.status === 'sending';
-    });
-
-    const newMessages = normalizedMessages.filter(m => {
-      if (existingIds.has(m.id)) return false;
-      if (m.clientMessageId && existingIds.has(m.clientMessageId)) return false;
+    const seenKeys = new Set();
+    const addIfNew = function(m) {
+      const serverKey = m.id || m.clientMessageId;
+      if (!serverKey) return true; 
+      if (seenKeys.has(serverKey)) return false;
+      if (keyToIndex.has(serverKey)) return false;
+      seenKeys.add(serverKey);
       return true;
-    });
+    };
 
-    const combined = [...filteredExisting, ...newMessages].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const newMessages = normalizedMessages.filter(addIfNew);
 
-    this.messages.set(roomId, combined);
+    const merged = [...existing];
+    for (const msg of newMessages) {
+      const serverKey = msg.id || msg.clientMessageId;
+      const optimisticIdx = serverKey ? keyToIndex.get(serverKey) : undefined;
+      if (typeof optimisticIdx === 'number' && optimisticIdx >= 0 && optimisticIdx < merged.length) {
+        merged[optimisticIdx] = msg; // replace in-place
+      } else {
+        merged.push(msg);
+      }
+    }
+
+    merged.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    this.messages.set(roomId, merged);
     this._schedulePersist();
     this._deduplicate(roomId);
   };
 
   prototype._addMessage = function(roomId, message) {
     const roomMessages = this.messages.get(roomId) || [];
-    
-    // Prevent duplicate keys: if a message with the same id or tempId
-    // already exists, replace it instead of appending a duplicate.
     const key = message.id || message.tempId;
+
     if (key) {
       const idx = roomMessages.findIndex(m => (m.id || m.tempId) === key);
       if (idx !== -1) {
-        roomMessages[idx] = message;
+        roomMessages[idx] = message; // replace in-place; never create duplicate
         this.messages.set(roomId, roomMessages);
         this._schedulePersist();
+        this._deduplicate(roomId);
         this._notifyMessageSubscribers(roomId, message);
         return;
       }
     }
-    
+
     roomMessages.push(message);
     roomMessages.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     this.messages.set(roomId, roomMessages);

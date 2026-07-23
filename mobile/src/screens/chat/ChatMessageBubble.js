@@ -30,7 +30,17 @@ const ChatMessageBubble = React.memo(({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const isOwn = message.senderId === user?.id;
   const status = message.status || 'sent';
-  const hasImage = message.type === 'image' && (message.imageUrl || message.metadata?.imageUri || message.metadata?.imageUrl);
+
+  // Validate image URI. Some server responses include a base64 data-URI
+  // with missing or corrupt payload; passing it to <Image> on web causes
+  // `ERR_INVALID_URL`. Detection relies on strict data-URI shape checks:
+  const rawImage = message.imageUrl || message.metadata?.imageUri || message.metadata?.imageUrl;
+  const hasValidImage = Boolean(
+    rawImage &&
+    rawImage.startsWith('data:') &&
+    rawImage.includes(';base64,') &&
+    rawImage.length > 40 // naive: ensure real base64 payload
+  );
   const isReply = !!message.replyTo?.id;
 
   const renderReplyInBubble = () => {
@@ -131,24 +141,24 @@ const ChatMessageBubble = React.memo(({
         ]}>
           {renderReplyInBubble()}
 
-          {hasImage && (
-            <Image
-              source={{ uri: message.imageUrl || message.metadata?.imageUri || message.metadata?.imageUrl }}
-              style={[
-                styles.messageImage,
-                { width: MAX_BUBBLE_WIDTH - spacing.md * 2, height: Math.min(280, (MAX_BUBBLE_WIDTH - spacing.md * 2) * 0.75) },
-              ]}
-              resizeMode="cover"
-            />
-          )}
+          {hasValidImage && (
+             <Image
+               source={{ uri: rawImage }}
+               style={[
+                 styles.messageImage,
+                 { width: MAX_BUBBLE_WIDTH - spacing.md * 2, height: Math.min(280, (MAX_BUBBLE_WIDTH - spacing.md * 2) * 0.75) },
+               ]}
+               resizeMode="cover"
+             />
+           )}
 
-          {!!message.content && (
-            <Text
-              style={[
-                styles.messageText,
-                { color: isOwn ? 'white' : colors.text, marginTop: hasImage || isReply ? spacing.xs : 0 },
-              ]}
-            >
+           {!!message.content && (
+             <Text
+               style={[
+                 styles.messageText,
+                 { color: isOwn ? 'white' : colors.text, marginTop: hasValidImage || isReply ? spacing.xs : 0 },
+               ]}
+             >
               {message.content}
             </Text>
           )}
