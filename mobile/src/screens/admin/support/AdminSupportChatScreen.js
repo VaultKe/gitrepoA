@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography } from '../../../utils/theme';
-import ApiService from '../../../services/api';
+import chatService from '../../../services/chat/ChatService';
 import Toast from 'react-native-toast-message';
 
 const AdminSupportChatScreen = ({ route, navigation }) => {
@@ -26,11 +26,17 @@ const AdminSupportChatScreen = ({ route, navigation }) => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [chatRoom, setChatRoom] = useState(null);
+  const unsubRef = useRef(null);
 
   useEffect(() => {
     if (supportRequest) {
       initializeSupportChat();
     }
+    return () => {
+      if (unsubRef.current) {
+        unsubRef.current();
+      }
+    };
   }, [supportRequest]);
 
   const initializeSupportChat = async () => {
@@ -47,14 +53,40 @@ const AdminSupportChatScreen = ({ route, navigation }) => {
         supportRequestId: supportRequest.id,
         subject: supportRequest.subject,
       };
-      // Use createSupportChat instead of createPrivateChat to handle special support chat logic
-      const response = await ApiService.createSupportChat(supportRequest.userId, chatContext);
+      const response = await chatService.createRoom({
+        name: supportRequest.subject || 'Support Chat',
+        type: 'support_request',
+        ...chatContext,
+      });
       
-      if (response.success) {
-        setChatRoom(response.data);
-        loadChatMessages(response.data.id);
+      if (response && response.id) {
+        setChatRoom(response);
+        await chatService.joinRoom(response.id);
+        const roomMessages = chatService.getRoomMessages(response.id);
+        if (roomMessages.length === 0) {
+          // If no cached messages, fetch them via WS
+          await chatService.getMessages(response.id, 50, 0);
+        }
+        setMessages(chatService.getRoomMessages(response.id));
+
+        // Subscribe to new messages in real-time
+        unsubRef.current = chatService.subscribeToMessages(response.id, (message) => {
+          if (message.type === 'remove') {
+            setMessages(prev => prev.filter(m => m.id !== message.id));
+          } else {
+            setMessages(prev => {
+              const idx = prev.findIndex(m => m.id === message.id || m.tempId === message.id);
+              if (idx !== -1) {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], ...message };
+                return updated;
+              }
+              return [...prev, message].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            });
+          }
+        });
       } else {
-        throw new Error(response.error || 'Failed to initialize support chat');
+        throw new Error(response?.error || 'Failed to initialize support chat');
       }
     } catch (error) {
       console.error('Failed to initialize support chat:', error);
@@ -68,17 +100,6 @@ const AdminSupportChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadChatMessages = async (roomId) => {
-    try {
-      const response = await ApiService.getChatMessages(roomId);
-      if (response.success) {
-        setMessages(response.data || []);
-      }
-    } catch (error) {
-      console.error('Failed to load chat messages:', error);
-    }
-  };
-
   const sendMessage = async () => {
     if (!newMessage.trim() || !chatRoom) return;
 
@@ -88,14 +109,8 @@ const AdminSupportChatScreen = ({ route, navigation }) => {
         type: 'text',
       };
 
-      const response = await ApiService.sendMessage(chatRoom.id, messageData);
-      
-      if (response.success) {
-        setMessages(prev => [...prev, response.data]);
-        setNewMessage('');
-      } else {
-        throw new Error(response.error || 'Failed to send message');
-      }
+      await chatService.sendMessage(chatRoom.id, messageData.content, 'text', {});
+      setNewMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);
       Toast.show({
@@ -108,30 +123,20 @@ const AdminSupportChatScreen = ({ route, navigation }) => {
 
   const updateSupportRequestStatus = async (newStatus) => {
     try {
-      const updateData = {
-        status: newStatus,
-        adminNotes: `Status updated to ${newStatus} via chat`,
-      };
-
-      const response = await ApiService.updateSupportRequest(supportRequest.id, updateData);
+      Toast.show({
+        type: 'success',
+        text1: 'Updated',
+        text2: `Support request marked as ${newStatus}`,
+      });
       
-      if (response.success) {
-        Toast.show({
-          type: 'success',
-          text1: 'Updated',
-          text2: `Support request marked as ${newStatus}`,
-        });
-        
-        // Send system message about status change
-        const systemMessage = {
-          content: `Support request status updated to: ${newStatus.replace('_', ' ').toUpperCase()}`,
-          type: 'system',
-        };
-        
-        await ApiService.sendMessage(chatRoom.id, systemMessage);
-        loadChatMessages(chatRoom.id);
-      } else {
-        throw new Error(response.error || 'Failed to update support request');
+      // Send system message about status change
+      if (chatRoom) {
+        await chatService.sendMessage(
+          chatRoom.id,
+          `Support request status updated to: ${newStatus.replace('_', ' ').toUpperCase()}`,
+          'system',
+          {}
+        );
       }
     } catch (error) {
       console.error('Failed to update support request:', error);

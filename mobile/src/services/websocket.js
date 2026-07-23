@@ -21,56 +21,56 @@ class WebSocketService {
     this.pendingRequests = new Map();
   }
 
-async connect() {
-     if (!this.isRealtimeEnabled) {
-       console.warn('[WS DEBUG] Realtime disabled, not connecting');
-       return false;
-     }
+  async connect() {
+    if (!this.isRealtimeEnabled) {
+      console.warn('[WS DEBUG] Realtime disabled, not connecting');
+      return false;
+    }
 
-     if (this.isConnected || this.ws) {
-       this.ws.close();
-       this.ws = null;
-       this.isConnected = false;
-     }
+    if (this.isConnected || this.ws) {
+      this.ws.close();
+      this.ws = null;
+      this.isConnected = false;
+    }
 
-     try {
-       return await this._establishConnection();
-     } catch (error) {
-       console.error('[WS DEBUG] connect() failed:', error);
-       this.startPollingFallback();
-       return false;
-     }
-   }
+    try {
+      return await this._establishConnection();
+    } catch (error) {
+      console.error('[WS DEBUG] connect() failed:', error);
+      this.startPollingFallback();
+      return false;
+    }
+  }
 
-async _establishConnection() {
-     try {
-       const token = await AsyncStorage.getItem('authToken');
-       if (!token) {
-         console.warn('[WS DEBUG] No auth token, cannot connect');
-         return false;
-       }
+  async _establishConnection() {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        console.warn('[WS DEBUG] No auth token, cannot connect');
+        return false;
+      }
 
-       if (!API_BASE_URL) {
-         console.warn('[WS DEBUG] No API_BASE_URL configured');
-         return false;
-       }
+      if (!API_BASE_URL) {
+        console.warn('[WS DEBUG] No API_BASE_URL configured');
+        return false;
+      }
 
-       const sessionRes = await fetch(`${API_BASE_URL}/chat-ws/ws-token`, {
-         method: 'POST',
-         headers: {
-           Authorization: `Bearer ${token}`,
-           'Content-Type': 'application/json',
-         },
-       });
-       if (!sessionRes.ok) {
-         console.warn('[WS DEBUG] WS token request failed');
-         return false;
-       }
-       const { sessionId } = await sessionRes.json();
-       if (!sessionId) return false;
+      const sessionRes = await fetch(`${API_BASE_URL}/chat-ws/ws-token`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!sessionRes.ok) {
+        console.warn('[WS DEBUG] WS token request failed');
+        return false;
+      }
+      const { sessionId } = await sessionRes.json();
+      if (!sessionId) return false;
 
-       const wsUrl = `${WS_URL}/chat-ws/ws?session=${encodeURIComponent(sessionId)}`;
-       this.ws = new WebSocket(wsUrl);
+      const wsUrl = `${WS_URL}/chat-ws/ws?session=${encodeURIComponent(sessionId)}`;
+      this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = this.onOpen.bind(this);
       this.ws.onmessage = this.onMessage.bind(this);
@@ -92,10 +92,7 @@ async _establishConnection() {
       this.pingInterval = null;
     }
 
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-    }
+    this.stopPollingFallback();
 
     if (this.ws) {
       this.ws.close();
@@ -103,81 +100,85 @@ async _establishConnection() {
     }
   }
 
-onOpen() {
-     this.isConnected = true;
-     this.reconnectAttempts = 0;
+  onOpen() {
+    this.isConnected = true;
+    this.reconnectAttempts = 0;
 
-     this.pingInterval = setInterval(() => {
-       this.send({ type: 'ping' });
-     }, 30000);
+    // Stop polling fallback immediately when WS recovers.
+    this.stopPollingFallback();
 
-     this.roomSubscriptions.forEach(roomId => {
-       this.joinRoom(roomId);
-     });
-   }
+    this.pingInterval = setInterval(() => {
+      this.send({ type: 'ping' });
+    }, 30000);
+
+    this.roomSubscriptions.forEach(roomId => {
+      this.send({ type: 'join_room', roomId });
+    });
+  }
 
   onMessage(event) {
-      try {
-        if (!event || event.data === undefined || event.data === null) return;
-        if (typeof event.data !== 'string') return;
-        if (!event.data.trim()) return;
+    try {
+      if (!event || event.data === undefined || event.data === null) return;
+      if (typeof event.data !== 'string') return;
+      if (!event.data.trim()) return;
 
-        const message = JSON.parse(event.data);
-        switch (message.type) {
-          case 'connected':
-            this.subscribeToDataUpdates();
-            break;
-          case 'pong':
-            break;
-          case 'new_message':
-            this._dispatch(message);
-            break;
-          case 'user_typing':
-            this._dispatch(message);
-            break;
-          case 'message_deleted':
-            this._dispatch(message);
-            break;
-          case 'data_update':
-            this.handleDataUpdate(message);
-            break;
-          case 'notification_update':
-            this.handleNotificationUpdate(message);
-            break;
-          case 'wallet_update':
-            this.handleWalletUpdate(message);
-            break;
-          case 'chama_update':
-            this.handleChamaUpdate(message);
-            break;
-          case 'transaction_update':
-            this.handleTransactionUpdate(message);
-            break;
+      const message = JSON.parse(event.data);
+
+      // 1) Resolve correlated request/response first so ack frames never
+      //    also get dispatched as generic events.
+      if (message.requestId && this.pendingRequests.has(message.requestId)) {
+        const pending = this.pendingRequests.get(message.requestId);
+        clearTimeout(pending.timeout);
+        this.pendingRequests.delete(message.requestId);
+        if (message.success) {
+          pending.resolve(message);
+        } else {
+          pending.reject(new Error(message.error || 'request failed'));
         }
+        return;
+      }
 
-        // Correlated request/responses (rooms_list, messages_list,
-        // room_created, message_sent, message_read, ...) resolve the
-        // promise registered by sendRequest().
-        if (message.requestId && this.pendingRequests.has(message.requestId)) {
-          const pending = this.pendingRequests.get(message.requestId);
-          clearTimeout(pending.timeout);
-          this.pendingRequests.delete(message.requestId);
-          if (message.success) {
-            pending.resolve(message);
-          } else {
-            pending.reject(new Error(message.error || 'request failed'));
-          }
-          return;
+      // 2) Dispatch known WS events to registered handlers in O(1).
+      const handler = this.messageHandlers.get(message.type);
+      if (handler) {
+        try {
+          handler(message);
+        } catch (handlerError) {
+          console.error('WS handler error for', message.type, handlerError);
         }
+        return;
+      }
 
-        // Generic event handlers (new_message, user_typing, etc.)
-        this.messageHandlers.forEach((handler, type) => {
-          if (message.type === type) {
-            handler(message);
-          }
-        });
-      } catch (error) {}
+      // 3) Backend-specific update routers.
+      switch (message.type) {
+        case 'connected':
+          this.subscribeToDataUpdates();
+          break;
+        case 'pong':
+          break;
+        case 'data_update':
+          this.handleDataUpdate(message);
+          break;
+        case 'notification_update':
+          this.handleNotificationUpdate(message);
+          break;
+        case 'wallet_update':
+          this.handleWalletUpdate(message);
+          break;
+        case 'chama_update':
+          this.handleChamaUpdate(message);
+          break;
+        case 'transaction_update':
+          this.handleTransactionUpdate(message);
+          break;
+        default:
+          // Ignore unknown message types silently.
+          break;
+      }
+    } catch (error) {
+      console.error('[WS DEBUG] onMessage parse/handler error:', error);
     }
+  }
 
   onClose(event) {
     this.isConnected = false;
@@ -211,7 +212,8 @@ onOpen() {
   }
 
   onError(error) {
-   }
+    console.error('[WS DEBUG] WebSocket error:', error);
+  }
 
   // Send a request and resolve with the correlated server response
   // (matched by requestId). This lets the chat layer run all operations
@@ -242,27 +244,31 @@ onOpen() {
   }
 
   send(message) {
-     if (this.ws && this.isConnected) {
-       try {
-         this.ws.send(JSON.stringify(message));
-         return true;
-       } catch (error) {
-         console.error('[WS DEBUG] send() error:', error);
-         return false;
-       }
-     }
-     console.warn('[WS DEBUG] WebSocket not connected, cannot send');
-     return false;
-   }
+    if (this.ws && this.isConnected) {
+      try {
+        this.ws.send(JSON.stringify(message));
+        return true;
+      } catch (error) {
+        console.error('[WS DEBUG] send() error:', error);
+        return false;
+      }
+    }
+    console.warn('[WS DEBUG] WebSocket not connected, cannot send');
+    return false;
+  }
 
-joinRoom(roomId) {
-     this.roomSubscriptions.add(roomId);
-     this.send({ type: 'join_room', roomId });
-   }
+  joinRoom(roomId) {
+    this.roomSubscriptions.add(roomId);
+    if (this.isConnected) {
+      this.send({ type: 'join_room', roomId });
+    }
+  }
 
   leaveRoom(roomId) {
     this.roomSubscriptions.delete(roomId);
-    this.send({ type: 'leave_room', roomId });
+    if (this.isConnected) {
+      this.send({ type: 'leave_room', roomId });
+    }
   }
 
   registerMessageHandler(type, handler) {
@@ -274,13 +280,14 @@ joinRoom(roomId) {
   }
 
   handleNewMessage(message) {
-    this.messageHandlers.forEach((handler, type) => {
-      if (type === 'new_message') {
-        try {
-          handler(message);
-        } catch (handlerError) {}
+    const handler = this.messageHandlers.get('new_message');
+    if (handler) {
+      try {
+        handler(message);
+      } catch (handlerError) {
+        console.error('new_message handler error:', handlerError);
       }
-    });
+    }
   }
 
   handleDataUpdate(message) {
@@ -353,8 +360,17 @@ joinRoom(roomId) {
     this.pollingInterval = setInterval(async () => {
       try {
         await this.pollCriticalUpdates();
-      } catch (error) {}
+      } catch (error) {
+        // Swallow polling errors; next tick will retry.
+      }
     }, 15000);
+  }
+
+  stopPollingFallback() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
   }
 
   async pollCriticalUpdates() {
@@ -386,7 +402,9 @@ joinRoom(roomId) {
           });
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      // Swallow polling errors.
+    }
   }
 
   getConnectionStatus() {

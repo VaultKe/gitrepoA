@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 import { formatDate } from '../../utils/dateUtils';
 import { useApp } from '../../context/AppContext';
@@ -29,7 +29,6 @@ const ChatScreen = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Refs
   const initializedRef = useRef(false);
@@ -61,27 +60,30 @@ const ChatScreen = () => {
 
     init();
 
+    // Do NOT call chatService.cleanup() here: it unregisters ALL WebSocket
+    // handlers from the singleton, breaking real-time for every other screen.
     return () => {
-      if (chatService.cleanup) chatService.cleanup();
+      // Only unsubscribe from typing/room updates specific to this screen.
     };
   }, []);
 
-  // Subscribe to room updates to refresh unread counts
-  useEffect(() => {
-    if (rooms.length === 0) return;
-
-    const unsubscribers = rooms.map(room => {
-      return chatService.subscribeToRoom(room.id, () => {
-        setRefreshCounter(prev => prev + 1);
-      });
-    });
-
-    return () => {
-      unsubscribers.forEach(unsub => {
-        if (unsub) unsub();
-      });
-    };
-  }, [rooms]);
+  // Refresh the room list whenever the screen regains focus so the latest
+  // messages are visible without subscribing to every room individually.
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      const refresh = async () => {
+        try {
+          const roomList = await chatService.getRooms();
+          if (isActive) setRooms(roomList);
+        } catch (err) {
+          // Silently ignore focus-time refresh errors; cached data remains.
+        }
+      };
+      refresh();
+      return () => { isActive = false; };
+    }, [])
+  );
 
   // Refresh rooms
   const handleRefresh = useCallback(async () => {
@@ -103,32 +105,36 @@ const ChatScreen = () => {
     navigation.navigate('ChatRoom', { roomId: room.id, roomName: room.name });
   }, [navigation]);
 
-  const getLatestMessage = (room) => {
+  const getLatestMessage = useCallback((room) => {
     const roomMessages = chatService.getRoomMessages(room.id);
     if (roomMessages.length === 0) return null;
     return roomMessages.reduce((latest, msg) => msg.createdAt > (latest?.createdAt || 0) ? msg : latest, roomMessages[0]);
-  };
+  }, []);
 
-  const getLatestMessageTime = (room) => {
+  const getLatestMessageTime = useCallback((room) => {
     const latest = getLatestMessage(room);
     if (latest) return latest.createdAt;
     return room.lastMessageAt || room.updatedAt || 0;
-  };
+  }, [getLatestMessage]);
 
-  const sortedRooms = rooms
-    .slice()
-    .sort((a, b) => getLatestMessageTime(b) - getLatestMessageTime(a));
+  const sortedRooms = useMemo(() => {
+    return rooms
+      .slice()
+      .sort((a, b) => getLatestMessageTime(b) - getLatestMessageTime(a));
+  }, [rooms, getLatestMessageTime]);
 
-  const filteredRooms = sortedRooms.filter(room => {
-    const latestMessage = getLatestMessage(room);
-    const matchesSearch = room.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         latestMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTab = activeTab === 'all' || room.type === activeTab;
-    return matchesSearch && matchesTab;
-  });
+  const filteredRooms = useMemo(() => {
+    return sortedRooms.filter(room => {
+      const latestMessage = getLatestMessage(room);
+      const matchesSearch = room.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           latestMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesTab = activeTab === 'all' || room.type === activeTab;
+      return matchesSearch && matchesTab;
+    });
+  }, [sortedRooms, searchQuery, activeTab, getLatestMessage]);
 
   // Render room item
-  const renderRoom = ({ item: room }) => {
+  const renderRoom = useCallback(({ item: room }) => {
     const unreadCount = chatService.getUnreadCount(room.id);
     const lastMessage = getLatestMessage(room) || {};
 
@@ -150,7 +156,7 @@ const ChatScreen = () => {
             <Text style={[styles.roomName, { color: colors.text }]} numberOfLines={1}>
               {room.name || 'Chat'}
             </Text>
-<Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
                {formatDate(lastMessage.createdAt || room.lastMessageAt || room.updatedAt, 'relative')}
              </Text>
           </View>
@@ -170,7 +176,7 @@ const ChatScreen = () => {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [colors, openRoom, getLatestMessage]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

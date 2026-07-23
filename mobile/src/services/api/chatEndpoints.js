@@ -154,7 +154,7 @@ export const getChatRoomMembers = async (roomId) => {
 
 export const getChatRoomDetails = async (roomId) => {
   try {
-    const room = await chatService.getRoom(roomId, true);
+    const room = await chatService.getRoom(roomId);
     return { success: true, data: room };
   } catch (error) {
     console.error('getChatRoomDetails error:', error);
@@ -163,13 +163,28 @@ export const getChatRoomDetails = async (roomId) => {
 };
 
 export const deleteChatRoom = async (roomId) => {
-  // Not implemented in WS yet; could use REST fallback
-  console.warn('deleteChatRoom not implemented');
-  return { success: false, error: 'Not implemented' };
+  try {
+    await chatService.leaveRoom(roomId);
+    // Remove from local cache so it disappears from the list immediately.
+    const room = chatService.getRoom(roomId);
+    if (room) {
+      chatService._updateRoom({ ...room, isActive: false });
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('deleteChatRoom error:', error);
+    return { success: false, error: error.message };
+  }
 };
 
 export const clearChatRoom = async (roomId) => {
-  // Not implemented in WS yet
-  console.warn('clearChatRoom not implemented');
-  return { success: false, error: 'Not implemented' };
+  // Clear local message cache for the room.
+  try {
+    chatService.messages.set(roomId, []);
+    chatService._schedulePersist();
+    return { success: true };
+  } catch (error) {
+    console.error('clearChatRoom error:', error);
+    return { success: false, error: error.message };
+  }
 };

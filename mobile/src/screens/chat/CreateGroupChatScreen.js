@@ -14,7 +14,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getThemeColors } from '../../utils/theme';
 import { formatTime } from '../../utils/dateUtils';
 import chatService from '../../services/chat/ChatService';
-import ApiService from '../../services/api';
 
 export default function CreateGroupChatScreen({ navigation }) {
   const { theme, user } = useApp();
@@ -22,33 +21,21 @@ export default function CreateGroupChatScreen({ navigation }) {
   const [chamas, setChamas] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchLatestMessageForRoom = useCallback(async (room) => {
-    try {
-      const response = await ApiService.makeRequest(`/chat/rooms/${room.id}/messages?limit=20&offset=0`);
-      if (response.success && response.data && response.data.length > 0) {
-        const messages = response.data;
-        const lastMsg = messages[messages.length - 1];
-        return {
-          ...room,
-          lastMessage: lastMsg,
-          lastMessageAt: lastMsg.createdAt || room.lastMessageAt || room.updatedAt,
-        };
-      }
-    } catch (e) {
-      console.warn(`Failed to fetch messages for room ${room.id}:`, e.message);
-    }
-    return room;
-  }, []);
-
   const loadChatRooms = useCallback(async () => {
     try {
       setLoading(true);
       const rooms = await chatService.getRooms();
       
       if (rooms && rooms.length > 0) {
-        const enrichedRooms = await Promise.all(
-          rooms.map(room => fetchLatestMessageForRoom(room))
-        );
+        // Use the lastMessage/lastMessageAt already returned by getRooms rather
+        // than issuing one extra API call per room. The backend populates
+        // chat_rooms.last_message and last_message_at on every new message,
+        // so the list is already enriched.
+        const enrichedRooms = rooms.map(room => ({
+          ...room,
+          lastMessage: room.lastMessage || null,
+          lastMessageAt: room.lastMessageAt || room.updatedAt || Date.now(),
+        }));
         setChamas(enrichedRooms);
       } else {
         setChamas([]);
@@ -59,7 +46,7 @@ export default function CreateGroupChatScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [fetchLatestMessageForRoom]);
+  }, []);
 
   useEffect(() => {
     loadChatRooms();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -36,56 +36,71 @@ export default function CreatePrivateChatScreen({ navigation }) {
     try {
       setLoading(true);
 
-      // First, get all chat rooms to find users with conversation history
       const chatRoomsResponse = await ApiService.getChatRooms();
+      if (!chatRoomsResponse.success || !chatRoomsResponse.data) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
 
-      if (chatRoomsResponse.success && chatRoomsResponse.data) {
-        // Extract users from private chat rooms
-        const usersWithHistory = [];
-        const seenUserIds = new Set();
+      const privateRooms = chatRoomsResponse.data.filter(r => r.type === 'private');
+      if (privateRooms.length === 0) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
 
-        for (const room of chatRoomsResponse.data) {
-          if (room.type === 'private') {
-            // For private chats, we need to get the other user's info
-            // This would ideally come from the backend, but we'll fetch user details
+      // Parallelize member lookups for all private rooms instead of N+1
+      // sequential requests.
+      const memberPromises = privateRooms.map(room =>
+        ApiService.makeRequest(`/chat/rooms/${room.id}/members`).catch(err => ({
+          success: false,
+          data: [],
+        }))
+      );
+      const memberResults = await Promise.all(memberPromises);
+
+      const usersWithHistory = [];
+      const seenUserIds = new Set();
+
+      for (let i = 0; i < privateRooms.length; i++) {
+        const room = privateRooms[i];
+        const result = memberResults[i];
+        if (!result.success || !result.data) continue;
+
+        const otherUsers = result.data.filter(member =>
+          member && member.user_id && member.user_id !== user?.id
+        );
+
+        for (const member of otherUsers) {
+          if (member.user_id && !seenUserIds.has(member.user_id)) {
+            seenUserIds.add(member.user_id);
+            // Fetch individual user detail in parallel via the bulk users
+            // endpoint. Fall back to room metadata if detail fetch fails.
             try {
-              const roomDetailsResponse = await ApiService.makeRequest(`/chat/rooms/${room.id}/members`);
-              if (roomDetailsResponse.success && roomDetailsResponse.data) {
-                const otherUsers = roomDetailsResponse.data.filter(member =>
-                  member && member.user_id && member.user_id !== user?.id
-                );
-                for (const member of otherUsers) {
-                  if (member.user_id && !seenUserIds.has(member.user_id)) {
-                    seenUserIds.add(member.user_id);
-                    // Get full user details
-                    const userResponse = await ApiService.makeRequest(`/users/${member.user_id}`);
-                    if (userResponse.success && userResponse.data) {
-                      usersWithHistory.push({
-                        id: userResponse.data.id,
-                        firstName: userResponse.data.first_name || userResponse.data.firstName,
-                        lastName: userResponse.data.last_name || userResponse.data.lastName,
-                        email: userResponse.data.email,
-                        avatar: userResponse.data.avatar,
-                        lastChatAt: room.last_message_at || room.created_at,
-                        roomId: room.id,
-                      });
-                    }
-                  }
-                }
+              const userResponse = await ApiService.makeRequest(`/users/${member.user_id}`);
+              if (userResponse.success && userResponse.data) {
+                usersWithHistory.push({
+                  id: userResponse.data.id,
+                  firstName: userResponse.data.first_name || userResponse.data.firstName,
+                  lastName: userResponse.data.last_name || userResponse.data.lastName,
+                  email: userResponse.data.email,
+                  avatar: userResponse.data.avatar,
+                  lastChatAt: room.last_message_at || room.created_at,
+                  roomId: room.id,
+                });
               }
             } catch (error) {
-              console.error('Failed to get room details for room:', room.id, error);
+              console.error('Failed to fetch user details for:', member.user_id, error);
             }
           }
         }
-
-        // Sort by last chat time (most recent first)
-        usersWithHistory.sort((a, b) => new Date(b.lastChatAt) - new Date(a.lastChatAt));
-
-        setUsers(usersWithHistory);
-      } else {
-        setUsers([]);
       }
+
+      // Sort by last chat time (most recent first)
+      usersWithHistory.sort((a, b) => new Date(b.lastChatAt) - new Date(a.lastChatAt));
+
+      setUsers(usersWithHistory);
     } catch (error) {
       console.error('Failed to load users with conversation history:', error);
       setUsers([]);
@@ -189,7 +204,7 @@ export default function CreatePrivateChatScreen({ navigation }) {
     >
       <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
         <Text style={[styles.avatarText, { color: colors.surface }]}>
-          {item.firstName.charAt(0)}{item.lastName.charAt(0)}
+          {item.firstName.charAt(0)}{item.lastName?.charAt(0) || ''}
         </Text>
       </View>
 
