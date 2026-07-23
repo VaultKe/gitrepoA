@@ -78,7 +78,17 @@ const ApplyForLoanScreen = () => {
             return uid !== user?.id && isActive;
           }
         );
-        setAvailableGuarantors(members);
+        // Inspect payload shape if needed:
+        // console.log('Available guarantors sample:', members[0]);
+        const normalized = members.map(m => ({
+          id: m.user_id || m.user?.id || m.userId || m.id,
+          firstName: m.user?.first_name || m.first_name || m.firstName || '',
+          lastName: m.user?.last_name || m.last_name || m.lastName || '',
+          email: m.user?.email || m.email || '',
+          phone: m.user?.phone || m.phone || '',
+          memberNumber: m.member_number || m.memberNumber || m.membership_number || '',
+        }));
+        setAvailableGuarantors(normalized);
       }
     } catch (error) {
       console.error('Failed to load available guarantors:', error);
@@ -94,10 +104,10 @@ const ApplyForLoanScreen = () => {
   }, [chamaId, loadLoanTypesForForm, loadAvailableGuarantors]);
 
   const addGuarantor = (guarantor) => {
-    const userId = guarantor.user_id || guarantor.user?.id || guarantor.userId || guarantor.id;
-    const firstName = guarantor.user?.first_name || guarantor.firstName || '';
-    const lastName = guarantor.user?.last_name || guarantor.lastName || '';
-    const email = guarantor.user?.email || guarantor.email || '';
+    const userId = guarantor.id || guarantor.user_id || guarantor.user?.id || guarantor.userId;
+    const firstName = guarantor.firstName || guarantor.first_name || guarantor.user?.first_name || '';
+    const lastName = guarantor.lastName || guarantor.last_name || guarantor.user?.last_name || '';
+    const email = guarantor.email || '';
     setNewLoan((prev) => ({
       ...prev,
       guarantors: [...prev.guarantors, { id: userId, firstName, lastName, email }],
@@ -400,21 +410,21 @@ const ApplyForLoanScreen = () => {
           </Text>
 
           {newLoan.guarantors.map((guarantor) => (
-            <View key={guarantor.id} style={[styles.guarantorItem, { backgroundColor: colors.primary + '20', borderColor: colors.primary, marginBottom: spacing.sm }]}>
+            <View key={guarantor.id} style={[styles.guarantorItem, { backgroundColor: colors.primary + '20', borderColor: colors.primary, borderWidth: 1, marginBottom: spacing.sm }]}>
                <View style={styles.guarantorInfo}>
                  <Text style={[styles.guarantorName, { color: colors.primary }]}>
                    {guarantor.firstName} {guarantor.lastName}
                  </Text>
                  <Text style={[styles.guarantorEmail, { color: colors.textSecondary }]}>{guarantor.email}</Text>
                </View>
-              <TouchableOpacity
-                onPress={() => removeGuarantor(guarantor.id)}
-                style={[styles.removeGuarantorBtn, { backgroundColor: colors.surface }]}
-              >
-                <Ionicons name="close" size={16} color={colors.white} />
-              </TouchableOpacity>
-            </View>
-          ))}
+               <TouchableOpacity
+                 onPress={() => removeGuarantor(guarantor.id)}
+                 style={[styles.removeGuarantorBtn, { backgroundColor: colors.primary }]}
+               >
+                 <Ionicons name="close" size={16} color={colors.white} />
+               </TouchableOpacity>
+             </View>
+           ))}
 
           <TouchableOpacity
             style={[styles.addGuarantorBtn, { borderColor: colors.primary, marginTop: spacing.sm }]}
@@ -448,7 +458,7 @@ const ApplyForLoanScreen = () => {
                  keyExtractor={(item) => item.id}
                  style={{ maxHeight: 240 }}
                  renderItem={({ item }) => {
-                   const isSelected = newLoan.guarantors.some((g) => g.id === (item.userId || item.id));
+                    const isSelected = newLoan.guarantors.some((g) => g.id === item.id);
                    return (
                      <TouchableOpacity
                        style={[
@@ -546,49 +556,48 @@ const ApplyForLoanScreen = () => {
               showsVerticalScrollIndicator
               style={{ maxHeight: 320 }}
               contentContainerStyle={{ paddingVertical: spacing.sm }}
-              renderItem={({ item }) => {
-                const user = item.user || item;
-                const isSelected = newLoan.guarantors.some((g) => g.id === (user.id || item.user_id));
-                  return (
-                    <TouchableOpacity
-                      style={[
-                        styles.guarantorCard,
-                        {
-                          backgroundColor: isSelected ? colors.primary + '20' : colors.surface,
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        const id = user.id || item.user_id;
-                        if (isSelected) {
-                          removeGuarantor(id);
-                        } else {
-                          addGuarantor({
-                            id,
-                            firstName: user.first_name || user.firstName || '',
-                            lastName: user.last_name || user.lastName || '',
-                            email: user.email || '',
-                          });
-                        }
-                      }}
-                    >
-                      <View style={styles.guarantorCardContent}>
-                        <View style={[styles.avatar, { backgroundColor: isSelected ? colors.primary : colors.textSecondary }]}>
-                          <Ionicons name="person" size={20} color={colors.white} />
-                        </View>
-                        <View style={styles.guarantorDetails}>
-                          <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
-                            {user.first_name || user.firstName} {user.last_name || user.lastName}
-                          </Text>
-                          <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>{user.email}</Text>
-                        </View>
-                        {isSelected && (
-                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-              }}
+               renderItem={({ item }) => {
+                 const isSelected = newLoan.guarantors.some((g) => g.id === item.id);
+                   return (
+                     <TouchableOpacity
+                       style={[
+                         styles.guarantorCard,
+                         {
+                           backgroundColor: isSelected ? colors.primary + '20' : colors.surface,
+                           borderColor: isSelected ? colors.primary : colors.border,
+                         },
+                       ]}
+                       onPress={() => {
+                         const id = item.id;
+                         if (isSelected) {
+                           removeGuarantor(id);
+                         } else {
+                           addGuarantor({
+                             id,
+                             firstName: item.firstName,
+                             lastName: item.lastName,
+                             email: item.email,
+                           });
+                         }
+                       }}
+                     >
+                       <View style={styles.guarantorCardContent}>
+                         <View style={[styles.avatar, { backgroundColor: isSelected ? colors.primary : colors.textSecondary }]}>
+                           <Ionicons name="person" size={20} color={colors.white} />
+                         </View>
+                         <View style={styles.guarantorDetails}>
+                           <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>
+                             {item.firstName} {item.lastName}
+                           </Text>
+                           <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>{item.email}</Text>
+                         </View>
+                         {isSelected && (
+                           <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                         )}
+                       </View>
+                     </TouchableOpacity>
+                   );
+               }}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
                   <Text style={{ color: colors.textSecondary }}>No guarantors found</Text>
