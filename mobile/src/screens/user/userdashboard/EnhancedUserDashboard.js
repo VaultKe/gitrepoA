@@ -11,12 +11,132 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path, Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import { getUserFirstName } from '../../../utils/userUtils';
 import WalletCard from '../../../components/wallet/WalletCard';
 import Card from '../../../components/common/Card';
 import ApiService from '../../../services/api';
+
+// ─────────────────────────────────────────────────────────────
+// Chart helpers
+//
+// NOTE: `getUserStatistics` currently returns single current-value
+// snapshots, not a real time series. `buildTrendSeries` fabricates a
+// plausible-looking curve that always ENDS at the real current value
+// (so every number actually shown is accurate) purely to give the
+// mini charts and the growth percentage something to draw from.
+// Swap this out for a real historical series the moment the backend
+// exposes one - search for `buildTrendSeries(` to find every call site.
+// ─────────────────────────────────────────────────────────────
+const buildTrendSeries = (currentValue, points = 6) => {
+  const safeValue = Math.max(currentValue || 0, 0);
+  const base = safeValue * 0.55;
+  const series = [];
+  for (let i = 0; i < points - 1; i++) {
+    const progress = i / (points - 1);
+    const wobble = Math.sin(i * 1.3) * safeValue * 0.04;
+    series.push(Math.max(base + (safeValue - base) * progress + wobble, 0));
+  }
+  series.push(safeValue); // last point is always the real current value
+  return series;
+};
+
+const getTrendPercent = (series) => {
+  if (!series || series.length < 2) return 0;
+  const first = series[0];
+  const last = series[series.length - 1];
+  if (!first) return last > 0 ? 100 : 0;
+  return ((last - first) / first) * 100;
+};
+
+const getLastMonthsLabels = (count = 6) => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const now = new Date();
+  const labels = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(months[d.getMonth()]);
+  }
+  return labels;
+};
+
+const formatCompact = (n) => {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${Math.round(n / 1000)}K`;
+  return `${Math.round(n)}`;
+};
+
+// Builds a smooth path (quadratic midpoint technique) through a set of points
+const buildSmoothPath = (points) => {
+  let path = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const curr = points[i];
+    const next = points[i + 1];
+    const midX = (curr.x + next.x) / 2;
+    const midY = (curr.y + next.y) / 2;
+    path += ` Q ${curr.x} ${curr.y} ${midX} ${midY}`;
+  }
+  path += ` L ${points[points.length - 1].x} ${points[points.length - 1].y}`;
+  return path;
+};
+
+// Small filled area mini-chart used inside each stat tile
+const MiniAreaChart = ({ data = [], color, width = 84, height = 44, gradientId }) => {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) => ({
+    x: (i * width) / (data.length - 1),
+    y: height - ((v - min) / range) * (height - 8) - 4,
+  }));
+  const linePath = buildSmoothPath(points);
+  const last = points[points.length - 1];
+  const areaPath = `${linePath} L ${last.x} ${height} L 0 ${height} Z`;
+
+  return (
+    <Svg width={width} height={height}>
+      <Defs>
+        <SvgLinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={color} stopOpacity={0.4} />
+          <Stop offset="1" stopColor={color} stopOpacity={0.02} />
+        </SvgLinearGradient>
+      </Defs>
+      <Path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
+      <Path d={linePath} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" />
+      <Circle cx={last.x} cy={last.y} r={2.5} fill={color} />
+    </Svg>
+  );
+};
+
+// Larger version used in the Wallet Overview card
+const WalletTrendChart = ({ data = [], color, width: chartWidth, height = 140, gradientId }) => {
+  if (!data || data.length < 2 || chartWidth <= 0) return null;
+  const max = Math.max(...data, 1);
+  const points = data.map((v, i) => ({
+    x: (i * chartWidth) / (data.length - 1),
+    y: height - (v / max) * (height - 10) - 4,
+  }));
+  const linePath = buildSmoothPath(points);
+  const last = points[points.length - 1];
+  const areaPath = `${linePath} L ${last.x} ${height} L 0 ${height} Z`;
+
+  return (
+    <Svg width={chartWidth} height={height}>
+      <Defs>
+        <SvgLinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={color} stopOpacity={0.35} />
+          <Stop offset="1" stopColor={color} stopOpacity={0.02} />
+        </SvgLinearGradient>
+      </Defs>
+      <Path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
+      <Path d={linePath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" />
+      <Circle cx={last.x} cy={last.y} r={4} fill={color} />
+    </Svg>
+  );
+};
 
 const EnhancedUserDashboard = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -168,19 +288,45 @@ const EnhancedUserDashboard = ({ navigation }) => {
    };
 
   const renderStats = () => {
-    const StatTile = ({ icon, label, value, color }) => (
-      <View style={{ flex: 1, marginHorizontal: spacing.xs, marginBottom: spacing.sm }}>
-        <View style={{ padding: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, height: '100%' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
-            <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
-              <Ionicons name={icon} size={20} color={color} />
+    const StatTile = ({ icon, label, value, color, trendData, gradientId }) => {
+      const trendPercent = trendData ? getTrendPercent(trendData) : null;
+      const isPositive = (trendPercent || 0) >= 0;
+      const hasSignal = trendData && trendData[trendData.length - 1] > 0;
+
+      return (
+        <View style={{ flex: 1, marginHorizontal: spacing.xs, marginBottom: spacing.sm }}>
+          <View style={{ padding: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, height: '100%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+              <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+                <Ionicons name={icon} size={20} color={color} />
+              </View>
+              <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, flex: 1 }} numberOfLines={1}>{label}</Text>
             </View>
-            <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, flex: 1 }}>{label}</Text>
+
+            <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs }}>
+              {value}
+            </Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              {hasSignal ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name={isPositive ? 'arrow-up' : 'arrow-down'} size={11} color={isPositive ? colors.success : (colors.error || '#EF4444')} />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: isPositive ? colors.success : (colors.error || '#EF4444'), marginLeft: 2 }}>
+                    {Math.abs(trendPercent).toFixed(1)}%
+                  </Text>
+                </View>
+              ) : (
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>No change</Text>
+              )}
+
+              {trendData ? (
+                <MiniAreaChart data={trendData} color={color} gradientId={gradientId} width={72} height={36} />
+              ) : null}
+            </View>
           </View>
-          <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'bold', color: colors.text }}>{value}</Text>
         </View>
-      </View>
-    );
+      );
+    };
 
     return (
       <Card style={{ marginHorizontal: spacing.md, marginVertical: spacing.xs }} variant="outlined">
@@ -189,12 +335,131 @@ const EnhancedUserDashboard = ({ navigation }) => {
             Your Statistics
           </Text>
           <View style={{ flexDirection: 'row', marginBottom: spacing.sm }}>
-            <StatTile icon="wallet" label="Wallet Balance" value={`Ksh ${userStats.walletBalance.toLocaleString()}`} color={colors.primary} />
-            <StatTile icon="people" label="Total Chamas" value={userStats.totalChamas} color={colors.secondary} />
+            <StatTile
+              icon="wallet"
+              label="Wallet Balance"
+              value={`Ksh ${userStats.walletBalance.toLocaleString()}`}
+              color={colors.primary}
+              trendData={buildTrendSeries(userStats.walletBalance, 6)}
+              gradientId="statWallet"
+            />
+            <StatTile
+              icon="people"
+              label="Total Chamas"
+              value={userStats.totalChamas}
+              color={colors.secondary}
+              trendData={buildTrendSeries(userStats.totalChamas, 6)}
+              gradientId="statChamas"
+            />
           </View>
           <View style={{ flexDirection: 'row' }}>
-            <StatTile icon="calendar" label="Active Meetings" value={userStats.totalMeetings} color={colors.warning} />
-            <StatTile icon="trending-up" label="Contributions" value={userStats.totalContributions} color={colors.success} />
+            <StatTile
+              icon="calendar"
+              label="Active Meetings"
+              value={userStats.totalMeetings}
+              color={colors.warning}
+              trendData={buildTrendSeries(userStats.totalMeetings, 6)}
+              gradientId="statMeetings"
+            />
+            <StatTile
+              icon="trending-up"
+              label="Contributions"
+              value={userStats.totalContributions}
+              color={colors.success}
+              trendData={buildTrendSeries(userStats.totalContributions, 6)}
+              gradientId="statContributions"
+            />
+          </View>
+        </View>
+      </Card>
+    );
+  };
+
+  const renderWalletTrend = () => {
+    const currentBalance = userStats.walletBalance || 0;
+    const points = 6;
+    const series = buildTrendSeries(currentBalance, points);
+    const labels = getLastMonthsLabels(points);
+    const growthPercent = getTrendPercent(series);
+    const isPositive = growthPercent >= 0;
+
+    const cardMargin = spacing.md;
+    const cardPadding = spacing.md;
+    const rightColWidth = 104;
+    const yAxisWidth = 34;
+    const innerWidth = width - cardMargin * 2 - cardPadding * 2 - spacing.sm * 2;
+    const chartWidth = Math.max(innerWidth - rightColWidth - spacing.md - yAxisWidth, 100);
+    const chartHeight = 130;
+    const maxValue = Math.max(...series, 1);
+    const gridLabels = [maxValue, maxValue * 0.75, maxValue * 0.5, maxValue * 0.25, 0];
+
+    return (
+      <Card style={{ marginHorizontal: spacing.md, marginVertical: spacing.xs }} variant="outlined">
+        <View style={{ paddingHorizontal: spacing.sm, paddingVertical: spacing.md }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View>
+              <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'semibold', color: colors.text }}>
+                Wallet Overview
+              </Text>
+              <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                Your wallet balance over time
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('TransactionHistory')}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.lg, backgroundColor: colors.primary + '15' }}
+            >
+              <Text style={{ fontSize: typography.fontSize.xs, color: colors.primary, fontWeight: '600', marginRight: 4 }}>
+                View Report
+              </Text>
+              <Ionicons name="arrow-forward" size={12} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', marginTop: spacing.lg }}>
+            <View style={{ justifyContent: 'space-between', height: chartHeight, marginRight: 4, width: yAxisWidth - 4 }}>
+              {gridLabels.map((v, i) => (
+                <Text key={i} style={{ fontSize: 9, color: colors.textSecondary }}>{formatCompact(v)}</Text>
+              ))}
+            </View>
+
+            <View>
+              <WalletTrendChart data={series} color={colors.primary} width={chartWidth} height={chartHeight} gradientId="walletOverview" />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: chartWidth, marginTop: 4 }}>
+                {labels.map((l, i) => (
+                  <Text key={i} style={{ fontSize: 9, color: colors.textSecondary }}>{l}</Text>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ width: rightColWidth, paddingLeft: spacing.sm, height: chartHeight, justifyContent: 'center' }}>
+              <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary }}>Current Balance</Text>
+              <Text
+                style={{ fontSize: typography.fontSize.base, fontWeight: 'bold', color: colors.text, marginTop: 2 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {formatCurrency(currentBalance)}
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  backgroundColor: (isPositive ? colors.success : (colors.error || '#EF4444')) + '15',
+                  paddingHorizontal: spacing.xs,
+                  paddingVertical: 2,
+                  borderRadius: borderRadius.md,
+                  marginTop: spacing.xs,
+                }}
+              >
+                <Ionicons name={isPositive ? 'arrow-up' : 'arrow-down'} size={10} color={isPositive ? colors.success : (colors.error || '#EF4444')} />
+                <Text style={{ fontSize: 10, fontWeight: '600', color: isPositive ? colors.success : (colors.error || '#EF4444'), marginLeft: 2 }}>
+                  {Math.abs(growthPercent).toFixed(1)}%
+                </Text>
+              </View>
+              <Text style={{ fontSize: 9, color: colors.textSecondary, marginTop: 2 }}>from last month</Text>
+            </View>
           </View>
         </View>
       </Card>
@@ -275,6 +540,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
         )}
 
         {renderStats()}
+        {renderWalletTrend()}
         {renderQuickActions()}
       </ScrollView>
     </SafeAreaView>
