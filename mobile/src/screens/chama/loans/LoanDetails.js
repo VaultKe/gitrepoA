@@ -489,7 +489,7 @@ const LoanDetails = ({ route, navigation }) => {
                 const isLast = index === headers.length - 1;
                 const flex = isFirst ? 0.8 : 2;
                 return (
-                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex }]}>
+                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex, alignItems: 'flex-start' }]}>
                     <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft, { textAlign: 'left' }]}>{header}</Text>
                   </View>
                 );
