@@ -282,15 +282,6 @@ func CreateLoanApplication(c *gin.Context) {
 		return
 	}
 
-	// Validate guarantors
-	if len(req.Guarantors) < 2 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "At least 2 guarantors are required",
-		})
-		return
-	}
-
 	// Get database connection
 	db, exists := c.Get("db")
 	if !exists {
@@ -301,6 +292,28 @@ func CreateLoanApplication(c *gin.Context) {
 		return
 	}
 	sqlDB := db.(*sql.DB)
+
+	// Check if loan type requires guarantors
+	requiresGuarantors := false
+	if req.LoanTypeID != "" {
+		err := sqlDB.QueryRow("SELECT requires_guarantors FROM loan_types WHERE id = $1", req.LoanTypeID).Scan(&requiresGuarantors)
+		if err != nil && err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to validate loan type",
+			})
+			return
+		}
+	}
+
+	// Validate guarantors only if loan type requires them
+	if requiresGuarantors && len(req.Guarantors) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "At least 2 guarantors are required for this loan type",
+		})
+		return
+	}
 
 	// Start transaction
 	tx, err := sqlDB.Begin()

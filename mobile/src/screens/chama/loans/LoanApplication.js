@@ -142,7 +142,7 @@ const LoanApplication = ({ route, navigation, onRouteChange }) => {
       Alert.alert('Validation Error', 'Please specify the purpose of the loan');
       return false;
     }
-    if (formData.guarantors.length < 2) {
+    if (selectedLoanType?.requiresGuarantors && formData.guarantors.length < 2) {
       Alert.alert('Validation Error', 'Please select at least 2 guarantors');
       return false;
     }
@@ -187,7 +187,7 @@ const handleSubmit = async () => {
       purpose: formData.purpose.trim(),
       repaymentPeriod: parseInt(formData.repaymentPeriod),
       interestRate: parseFloat(formData.interestRate || selectedLoanType?.interestRate || 10),
-      guarantors: formData.guarantors,
+      guarantors: selectedLoanType?.requiresGuarantors ? formData.guarantors : [],
       security: formData.security,
       businessPlan: formData.businessPlan.trim(),
       monthlyIncome: parseFloat(formData.monthlyIncome),
@@ -534,26 +534,28 @@ const handleSubmit = async () => {
           </Card>
 
           {/* Guarantors */}
-          <Card style={styles.formCard}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Select Guarantors *
-            </Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-              Choose at least 2 chama members as guarantors. They will be notified to accept or reject.
-            </Text>
-            
-            <View style={styles.guarantorGrid}>
-              {chamaMembers.map(renderGuarantorOption)}
-            </View>
+          {selectedLoanType?.requiresGuarantors && (
+            <Card style={styles.formCard}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Select Guarantors *
+              </Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                Choose at least 2 chama members as guarantors. They will be notified to accept or reject.
+              </Text>
 
-            {formData.guarantors.length > 0 && (
-              <View style={styles.selectedGuarantors}>
-                <Text style={[styles.selectedTitle, { color: colors.text }]}>
-                  Selected Guarantors: {formData.guarantors.length}
-                </Text>
+              <View style={styles.guarantorGrid}>
+                {chamaMembers.map(renderGuarantorOption)}
               </View>
-            )}
-          </Card>
+
+              {formData.guarantors.length > 0 && (
+                <View style={styles.selectedGuarantors}>
+                  <Text style={[styles.selectedTitle, { color: colors.text }]}>
+                    Selected Guarantors: {formData.guarantors.length}
+                  </Text>
+                </View>
+              )}
+            </Card>
+          )}
 
           {/* Loan Summary */}
           {formData.amount && monthlyPayment > 0 && (

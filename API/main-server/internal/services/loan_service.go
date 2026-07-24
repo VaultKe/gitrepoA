@@ -617,6 +617,10 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 	if req.RequiresCollateral != nil {
 		requiresCollateral = *req.RequiresCollateral
 	}
+	requiresGuarantors := false
+	if req.RequiresGuarantors != nil {
+		requiresGuarantors = *req.RequiresGuarantors
+	}
 	status := "active"
 	if req.Status != "" {
 		status = req.Status
@@ -627,7 +631,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 			id, chama_id, name, description, max_amount, min_amount,
 			interest_rate, term_months, eligibility_criteria, approval_required,
 			grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
-			collateral_description, net_disbursement, current_loans,
+			requires_guarantors, collateral_description, net_disbursement, current_loans,
 			default_threshold_days, installment_penalty_type,
 			installment_penalty_amount, loan_penalty_amount,
 			status, created_by, created_at, updated_at
@@ -637,7 +641,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		id, chamaID, req.Name, req.Description, req.MaxAmount, req.MinAmount,
 		req.InterestRate, req.TermMonths, req.EligibilityCriteria, approvalRequired,
 		req.GracePeriodDays, req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral,
-		req.CollateralDesc, req.NetDisbursement, req.CurrentLoans,
+		requiresGuarantors, req.CollateralDesc, req.NetDisbursement, req.CurrentLoans,
 		req.DefaultThresholdDays, req.InstallmentPenaltyType,
 		req.InstallmentPenaltyAmount, req.LoanPenaltyAmount,
 		status, createdBy, now, now,
@@ -661,6 +665,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		PenaltyRate:              req.PenaltyRate,
 		MaxLoansPerMember:        req.MaxLoansPerMember,
 		RequiresCollateral:       requiresCollateral,
+		RequiresGuarantors:       requiresGuarantors,
 		CollateralDesc:           req.CollateralDesc,
 		NetDisbursement:          req.NetDisbursement,
 		CurrentLoans:             req.CurrentLoans,
@@ -681,7 +686,7 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 		SELECT id, chama_id, name, description, max_amount, min_amount,
 		       interest_rate, term_months, eligibility_criteria, approval_required,
 		       grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
-		       collateral_description, net_disbursement, current_loans,
+		       requires_guarantors, collateral_description, net_disbursement, current_loans,
 		       default_threshold_days, installment_penalty_type,
 		       installment_penalty_amount, loan_penalty_amount,
 		       status, created_by, created_at, updated_at
@@ -708,7 +713,7 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 			&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.MaxAmount, &lt.MinAmount,
 			&lt.InterestRate, &lt.TermMonths, &lt.EligibilityCriteria, &lt.ApprovalRequired,
 			&lt.GracePeriodDays, &lt.PenaltyRate, &lt.MaxLoansPerMember, &lt.RequiresCollateral,
-			&lt.CollateralDesc, &lt.NetDisbursement, &lt.CurrentLoans,
+			&lt.RequiresGuarantors, &lt.CollateralDesc, &lt.NetDisbursement, &lt.CurrentLoans,
 			&lt.DefaultThresholdDays, &lt.InstallmentPenaltyType,
 			&lt.InstallmentPenaltyAmount, &lt.LoanPenaltyAmount,
 			&lt.Status, &lt.CreatedBy, &lt.CreatedAt, &lt.UpdatedAt,
@@ -727,7 +732,7 @@ func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, e
 		SELECT id, chama_id, name, description, max_amount, min_amount,
 		       interest_rate, term_months, eligibility_criteria, approval_required,
 		       grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
-		       collateral_description, net_disbursement, current_loans,
+		       requires_guarantors, collateral_description, net_disbursement, current_loans,
 		       default_threshold_days, installment_penalty_type,
 		       installment_penalty_amount, loan_penalty_amount,
 		       status, created_by, created_at, updated_at
@@ -738,7 +743,7 @@ func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, e
 		&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.MaxAmount, &lt.MinAmount,
 		&lt.InterestRate, &lt.TermMonths, &lt.EligibilityCriteria, &lt.ApprovalRequired,
 		&lt.GracePeriodDays, &lt.PenaltyRate, &lt.MaxLoansPerMember, &lt.RequiresCollateral,
-		&lt.CollateralDesc, &lt.NetDisbursement, &lt.CurrentLoans,
+		&lt.RequiresGuarantors, &lt.CollateralDesc, &lt.NetDisbursement, &lt.CurrentLoans,
 		&lt.DefaultThresholdDays, &lt.InstallmentPenaltyType,
 		&lt.InstallmentPenaltyAmount, &lt.LoanPenaltyAmount,
 		&lt.Status, &lt.CreatedBy, &lt.CreatedAt, &lt.UpdatedAt,
@@ -767,6 +772,10 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	if req.RequiresCollateral != nil {
 		requiresCollateral = *req.RequiresCollateral
 	}
+	requiresGuarantors := existing.RequiresGuarantors
+	if req.RequiresGuarantors != nil {
+		requiresGuarantors = *req.RequiresGuarantors
+	}
 	status := existing.Status
 	if req.Status != "" {
 		status = req.Status
@@ -778,18 +787,18 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 			name = $1, description = $2, max_amount = $3, min_amount = $4,
 			interest_rate = $5, term_months = $6, eligibility_criteria = $7,
 			approval_required = $8, grace_period_days = $9, penalty_rate = $10,
-			max_loans_per_member = $11, requires_collateral = $12, collateral_description = $13,
-			net_disbursement = $14, current_loans = $15,
-			default_threshold_days = $16, installment_penalty_type = $17,
-			installment_penalty_amount = $18, loan_penalty_amount = $19,
-			status = $20, updated_at = $21
-		WHERE id = $22
+			max_loans_per_member = $11, requires_collateral = $12, requires_guarantors = $13,
+			collateral_description = $14, net_disbursement = $15, current_loans = $16,
+			default_threshold_days = $17, installment_penalty_type = $18,
+			installment_penalty_amount = $19, loan_penalty_amount = $20,
+			status = $21, updated_at = $22
+		WHERE id = $23
 	`
 	_, err = s.db.Exec(query,
 		req.Name, req.Description, req.MaxAmount, req.MinAmount, req.InterestRate,
 		req.TermMonths, req.EligibilityCriteria, approvalRequired, req.GracePeriodDays,
-		req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral, req.CollateralDesc,
-		req.NetDisbursement, req.CurrentLoans,
+		req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral, requiresGuarantors,
+		req.CollateralDesc, req.NetDisbursement, req.CurrentLoans,
 		req.DefaultThresholdDays, req.InstallmentPenaltyType,
 		req.InstallmentPenaltyAmount, req.LoanPenaltyAmount,
 		status, now, loanTypeID,
@@ -809,6 +818,7 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	existing.PenaltyRate = req.PenaltyRate
 	existing.MaxLoansPerMember = req.MaxLoansPerMember
 	existing.RequiresCollateral = requiresCollateral
+	existing.RequiresGuarantors = requiresGuarantors
 	existing.CollateralDesc = req.CollateralDesc
 	existing.NetDisbursement = req.NetDisbursement
 	existing.CurrentLoans = req.CurrentLoans

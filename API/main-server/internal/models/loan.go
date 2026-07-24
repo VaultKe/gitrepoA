@@ -157,8 +157,9 @@ type LoanProduct struct {
 	GracePeriodDays     int        `json:"gracePeriodDays" db:"grace_period_days"`
 	PenaltyRate         float64    `json:"penaltyRate" db:"penalty_rate"`
 	MaxLoansPerMember   int        `json:"maxLoansPerMember" db:"max_loans_per_member"`
-	RequiresCollateral  bool       `json:"requiresCollateral" db:"requires_collateral"`
-	CollateralDesc      *string    `json:"collateralDescription,omitempty" db:"collateral_description"`
+	RequiresCollateral     bool       `json:"requiresCollateral" db:"requires_collateral"`
+	RequiresGuarantors     bool       `json:"requiresGuarantors" db:"requires_guarantors"`
+	CollateralDesc         *string    `json:"collateralDescription,omitempty" db:"collateral_description"`
 	NetDisbursement     float64    `json:"netDisbursement" db:"net_disbursement"`
 	CurrentLoans        int        `json:"currentLoans" db:"current_loans"`
 	DefaultThresholdDays int       `json:"defaultThresholdDays" db:"default_threshold_days"`
@@ -185,6 +186,7 @@ type LoanProductRequest struct {
 	PenaltyRate            float64  `json:"penaltyRate" validate:"gte=0"`
 	MaxLoansPerMember      int      `json:"maxLoansPerMember" validate:"gte=1"`
 	RequiresCollateral     *bool    `json:"requiresCollateral,omitempty"`
+	RequiresGuarantors     *bool    `json:"requiresGuarantors,omitempty"`
 	CollateralDesc         *string  `json:"collateralDescription,omitempty"`
 	NetDisbursement        float64  `json:"netDisbursement" validate:"gte=0"`
 	CurrentLoans           int      `json:"currentLoans" validate:"gte=0"`

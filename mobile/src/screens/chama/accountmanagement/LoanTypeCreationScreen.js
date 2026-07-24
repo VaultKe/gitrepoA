@@ -219,6 +219,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
     penaltyRate: '',
     maxLoansPerMember: '1',
     requiresCollateral: false,
+    requiresGuarantors: false,
     collateralDescription: '',
     netDisbursement: '',
     currentLoans: '0',
@@ -226,6 +227,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
     installmentPenaltyType: 'fixed',
     installmentPenaltyAmount: '',
     loanPenaltyAmount: '',
+    status: 'active',
   });
 
   const filters = [
@@ -344,6 +346,8 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         gracePeriodDays: parseInt(createForm.gracePeriodDays) || 0,
         penaltyRate: parseFloat(createForm.penaltyRate) || 0,
         maxLoansPerMember: parseInt(createForm.maxLoansPerMember) || 1,
+        requiresCollateral: createForm.requiresCollateral,
+        requiresGuarantors: createForm.requiresGuarantors,
         netDisbursement: parseFloat(createForm.netDisbursement) || 0,
         currentLoans: parseInt(createForm.currentLoans) || 0,
         defaultThresholdDays: parseInt(createForm.defaultThresholdDays) || 30,
@@ -382,9 +386,10 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
       eligibilityCriteria: loanType.eligibilityCriteria || 'active_members',
       approvalRequired: loanType.approvalRequired ?? true,
       gracePeriodDays: loanType.gracePeriodDays?.toString() || '',
-      penaltyRate: loanType.penaltyRate?.toString() || '',
+      penaltyRate: loanType.penaltyRate?.toString() || '0',
       maxLoansPerMember: loanType.maxLoansPerMember?.toString() || '1',
       requiresCollateral: loanType.requiresCollateral ?? false,
+      requiresGuarantors: loanType.requiresGuarantors ?? false,
       collateralDescription: loanType.collateralDescription || '',
       netDisbursement: loanType.netDisbursement?.toString() || '',
       currentLoans: loanType.currentLoans?.toString() || '0',
@@ -392,6 +397,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
       installmentPenaltyType: loanType.installmentPenaltyType || 'fixed',
       installmentPenaltyAmount: loanType.installmentPenaltyAmount?.toString() || '',
       loanPenaltyAmount: loanType.loanPenaltyAmount?.toString() || '',
+      status: loanType.status || 'active',
     });
     setShowEditModal(true);
   };
@@ -409,6 +415,8 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         gracePeriodDays: parseInt(createForm.gracePeriodDays) || 0,
         penaltyRate: parseFloat(createForm.penaltyRate) || 0,
         maxLoansPerMember: parseInt(createForm.maxLoansPerMember) || 1,
+        requiresCollateral: createForm.requiresCollateral,
+        requiresGuarantors: createForm.requiresGuarantors,
         netDisbursement: parseFloat(createForm.netDisbursement) || 0,
         currentLoans: parseInt(createForm.currentLoans) || 0,
         defaultThresholdDays: parseInt(createForm.defaultThresholdDays) || 30,
@@ -469,10 +477,11 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
       termMonths: '',
       eligibilityCriteria: 'active_members',
       approvalRequired: true,
-      gracePeriodDays: '',
-      penaltyRate: '',
+      gracePeriodDays: '0',
+      penaltyRate: '0',
       maxLoansPerMember: '1',
       requiresCollateral: false,
+      requiresGuarantors: false,
       collateralDescription: '',
       netDisbursement: '',
       currentLoans: '0',
@@ -480,6 +489,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
       installmentPenaltyType: 'fixed',
       installmentPenaltyAmount: '',
       loanPenaltyAmount: '',
+      status: 'active',
     });
   };
 
