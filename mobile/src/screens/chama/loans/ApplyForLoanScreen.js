@@ -128,6 +128,7 @@ const ApplyForLoanScreen = () => {
       ...prev,
       loanTypeId: loanType.id,
       loanTypeName: loanType.name,
+      amount: String(loanType.exactAmount || ''),
       repaymentPeriod: String(loanType.termMonths || prev.repaymentPeriod || prev.termMonths || '12'),
       interestRate: String(loanType.interestRate || prev.interestRate || '5'),
     }));
@@ -248,9 +249,11 @@ const ApplyForLoanScreen = () => {
           <Input
             label="Loan Amount (KES) *"
             value={newLoan.amount}
+            editable={!newLoan.loanTypeId}
             onChangeText={(text) => setNewLoan((prev) => ({ ...prev, amount: text.replace(/[^0-9.]/g, '') }))}
             placeholder="Enter loan amount"
             keyboardType="numeric"
+            helperText={newLoan.loanTypeId ? 'Amount set by selected loan type' : ''}
           />
 
           <Input
@@ -323,7 +326,7 @@ const ApplyForLoanScreen = () => {
                              {item.name}
                            </Text>
                            <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>
-                             KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
+                             KES {item.exactAmount ? item.exactAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
                            </Text>
                          </View>
                          {isSelected && (
@@ -660,7 +663,7 @@ const ApplyForLoanScreen = () => {
                             {item.name}
                           </Text>
                           <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>
-                            KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
+                             KES {item.exactAmount ? item.exactAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months
                           </Text>
                         </View>
                         {isSelected && (

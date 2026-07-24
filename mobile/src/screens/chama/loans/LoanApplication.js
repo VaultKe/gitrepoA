@@ -337,7 +337,7 @@ const handleSubmit = async () => {
                       {loanType.name}
                     </Text>
                     <Text style={[styles.loanTypeAmount, { color: colors.textSecondary }]}>
-                      {formatCurrency(loanType.minAmount)} - {formatCurrency(loanType.maxAmount)}
+                      {formatCurrency(loanType.exactAmount)}
                     </Text>
                     <Text style={[styles.loanTypeRate, { color: colors.textSecondary }]}>
                       {loanType.interestRate}% · {loanType.termMonths} months
@@ -355,12 +355,8 @@ const handleSubmit = async () => {
                 <Text style={[styles.productTitle, { color: colors.text }]}>Product Details</Text>
                 <View style={styles.productGrid}>
                   <View style={styles.productItem}>
-                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Min Amount</Text>
-                    <Text style={[styles.productValue, { color: colors.text }]}>{formatCurrency(selectedLoanType.minAmount)}</Text>
-                  </View>
-                  <View style={styles.productItem}>
-                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Max Amount</Text>
-                    <Text style={[styles.productValue, { color: colors.text }]}>{formatCurrency(selectedLoanType.maxAmount)}</Text>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Loan Amount</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{formatCurrency(selectedLoanType.exactAmount)}</Text>
                   </View>
                   <View style={styles.productItem}>
                     <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Interest Rate</Text>

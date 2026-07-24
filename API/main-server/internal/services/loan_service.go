@@ -628,17 +628,17 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 
 	query := `
 		INSERT INTO loan_types (
-			id, chama_id, name, description, max_amount, min_amount,
+			id, chama_id, name, description, exact_amount,
 			interest_rate, term_months, eligibility_criteria, approval_required,
 			grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
 			requires_guarantors, collateral_description, net_disbursement, current_loans,
 			default_threshold_days, installment_penalty_type,
 			installment_penalty_amount, loan_penalty_amount,
 			status, created_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 	`
 	_, err := s.db.Exec(query,
-		id, chamaID, req.Name, req.Description, req.MaxAmount, req.MinAmount,
+		id, chamaID, req.Name, req.Description, req.ExactAmount,
 		req.InterestRate, req.TermMonths, req.EligibilityCriteria, approvalRequired,
 		req.GracePeriodDays, req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral,
 		requiresGuarantors, req.CollateralDesc, req.NetDisbursement, req.CurrentLoans,
@@ -655,8 +655,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		ChamaID:                  chamaID,
 		Name:                     req.Name,
 		Description:              req.Description,
-		MaxAmount:                req.MaxAmount,
-		MinAmount:                req.MinAmount,
+		ExactAmount:               req.ExactAmount,
 		InterestRate:             req.InterestRate,
 		TermMonths:               req.TermMonths,
 		EligibilityCriteria:      req.EligibilityCriteria,
@@ -683,7 +682,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 // GetChamaLoanTypes retrieves loan types for a chama, optionally filtered by status
 func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models.LoanProduct, error) {
 	query := `
-		SELECT id, chama_id, name, description, max_amount, min_amount,
+		SELECT id, chama_id, name, description, exact_amount,
 		       interest_rate, term_months, eligibility_criteria, approval_required,
 		       grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
 		       requires_guarantors, collateral_description, net_disbursement, current_loans,
@@ -710,7 +709,7 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 	for rows.Next() {
 		var lt models.LoanProduct
 		err := rows.Scan(
-			&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.MaxAmount, &lt.MinAmount,
+			&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.ExactAmount,
 			&lt.InterestRate, &lt.TermMonths, &lt.EligibilityCriteria, &lt.ApprovalRequired,
 			&lt.GracePeriodDays, &lt.PenaltyRate, &lt.MaxLoansPerMember, &lt.RequiresCollateral,
 			&lt.RequiresGuarantors, &lt.CollateralDesc, &lt.NetDisbursement, &lt.CurrentLoans,
@@ -729,7 +728,7 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 // GetLoanTypeByID fetches a single loan type
 func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, error) {
 	query := `
-		SELECT id, chama_id, name, description, max_amount, min_amount,
+		SELECT id, chama_id, name, description, exact_amount,
 		       interest_rate, term_months, eligibility_criteria, approval_required,
 		       grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
 		       requires_guarantors, collateral_description, net_disbursement, current_loans,
@@ -740,7 +739,7 @@ func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, e
 	`
 	var lt models.LoanProduct
 	err := s.db.QueryRow(query, loanTypeID).Scan(
-		&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.MaxAmount, &lt.MinAmount,
+		&lt.ID, &lt.ChamaID, &lt.Name, &lt.Description, &lt.ExactAmount,
 		&lt.InterestRate, &lt.TermMonths, &lt.EligibilityCriteria, &lt.ApprovalRequired,
 		&lt.GracePeriodDays, &lt.PenaltyRate, &lt.MaxLoansPerMember, &lt.RequiresCollateral,
 		&lt.RequiresGuarantors, &lt.CollateralDesc, &lt.NetDisbursement, &lt.CurrentLoans,
@@ -784,18 +783,18 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 
 	query := `
 		UPDATE loan_types SET
-			name = $1, description = $2, max_amount = $3, min_amount = $4,
-			interest_rate = $5, term_months = $6, eligibility_criteria = $7,
-			approval_required = $8, grace_period_days = $9, penalty_rate = $10,
-			max_loans_per_member = $11, requires_collateral = $12, requires_guarantors = $13,
-			collateral_description = $14, net_disbursement = $15, current_loans = $16,
-			default_threshold_days = $17, installment_penalty_type = $18,
-			installment_penalty_amount = $19, loan_penalty_amount = $20,
-			status = $21, updated_at = $22
-		WHERE id = $23
+			name = $1, description = $2, exact_amount = $3,
+			interest_rate = $4, term_months = $5, eligibility_criteria = $6,
+			approval_required = $7, grace_period_days = $8, penalty_rate = $9,
+			max_loans_per_member = $10, requires_collateral = $11, requires_guarantors = $12,
+			collateral_description = $13, net_disbursement = $14, current_loans = $15,
+			default_threshold_days = $16, installment_penalty_type = $17,
+			installment_penalty_amount = $18, loan_penalty_amount = $19,
+			status = $20, updated_at = $21
+		WHERE id = $22
 	`
 	_, err = s.db.Exec(query,
-		req.Name, req.Description, req.MaxAmount, req.MinAmount, req.InterestRate,
+		req.Name, req.Description, req.ExactAmount, req.InterestRate,
 		req.TermMonths, req.EligibilityCriteria, approvalRequired, req.GracePeriodDays,
 		req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral, requiresGuarantors,
 		req.CollateralDesc, req.NetDisbursement, req.CurrentLoans,
@@ -808,8 +807,7 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	}
 	existing.Name = req.Name
 	existing.Description = req.Description
-	existing.MaxAmount = req.MaxAmount
-	existing.MinAmount = req.MinAmount
+	existing.ExactAmount = req.ExactAmount
 	existing.InterestRate = req.InterestRate
 	existing.TermMonths = req.TermMonths
 	existing.EligibilityCriteria = req.EligibilityCriteria
