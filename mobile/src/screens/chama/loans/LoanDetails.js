@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
@@ -16,78 +17,14 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
-import { getLoanRepaymentHistory } from '../../../services/api/loanEndpoints';
-
-const createTableStyles = (colors, spacing, typography, shadows) => ({
-  tableContainer: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tableCell: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  dateCell: {
-    flex: 1.5,
-    alignItems: 'flex-start',
-  },
-  typeCell: {
-    flex: 2,
-  },
-  amountCell: {
-    flex: 1.5,
-  },
-  statusCell: {
-    flex: 1.2,
-  },
-  tableHeaderText: {
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  tableCellText: {
-    fontSize: 12,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  dateText: {
-    fontWeight: typography.fontWeight.medium,
-    textAlign: 'left',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
-    gap: spacing.xs,
-  },
-});
+import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan } from '../../../services/api/loanEndpoints';
+import RecordPaymentModal from './RecordPaymentModal';
 
 const LoanDetails = ({ route, navigation }) => {
-  const { theme, user } = useApp();
+  const { theme } = useApp();
   const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
-  const tableStyles = createTableStyles(colors, spacing, typography, shadows);
+  const styles = createStyles(colors);
   const { loanId, chamaId } = route?.params || {};
 
   const [loan, setLoan] = useState(null);
@@ -97,40 +34,39 @@ const LoanDetails = ({ route, navigation }) => {
   const [repaymentHistory, setRepaymentHistory] = useState(null);
   const [disbursement, setDisbursement] = useState(null);
   const [schedule, setSchedule] = useState([]);
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('mobile_money');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
-  // Repayment history pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const pageSize = 10;
+  const scrollViewRef = useRef(null);
 
   useEffect(() => {
-    if (loanId) {
-      loadLoanDetails();
-    }
+    if (loanId) loadLoanDetails();
   }, [loanId]);
 
-  // Handle pagination
   useEffect(() => {
     if (allPayments.length > 0) {
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      setPayments(allPayments.slice(startIndex, endIndex));
+      const start = (currentPage - 1) * pageSize;
+      setPayments(allPayments.slice(start, start + pageSize));
+    } else {
+      setPayments([]);
     }
   }, [currentPage, allPayments]);
 
   const loadLoanDetails = async () => {
     try {
       setLoading(true);
-
-      // Load loan details
       const loansResponse = await ApiService.getLoans(chamaId || currentChamaId);
       if (loansResponse.success) {
         const foundLoan = loansResponse.data?.find(l => l.id === loanId);
         setLoan(foundLoan);
       }
 
-      // Load repayment history from API
       try {
         const historyResponse = await getLoanRepaymentHistory(loanId);
         if (historyResponse?.success && historyResponse?.data) {
@@ -140,10 +76,7 @@ const LoanDetails = ({ route, navigation }) => {
           const paymentList = Array.isArray(historyResponse.data.payments) ? historyResponse.data.payments : [];
           setAllPayments(paymentList);
           setTotalItems(paymentList.length);
-          setTotalPages(Math.ceil(paymentList.length / pageSize));
-          const startIndex = 0;
-          const endIndex = pageSize;
-          setPayments(paymentList.slice(startIndex, endIndex));
+          setTotalPages(Math.max(1, Math.ceil(paymentList.length / pageSize)));
           setCurrentPage(1);
         }
       } catch (historyError) {
@@ -153,7 +86,6 @@ const LoanDetails = ({ route, navigation }) => {
         setTotalPages(1);
         setCurrentPage(1);
       }
-
     } catch (error) {
       console.error('Error loading loan details:', error);
       Alert.alert('Error', 'Failed to load loan details');
@@ -163,14 +95,8 @@ const LoanDetails = ({ route, navigation }) => {
   };
 
   const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || isNaN(amount)) {
-      return 'KES 0';
-    }
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      minimumFractionDigits: 0,
-    }).format(amount);
+    if (amount === null || amount === undefined || isNaN(amount)) return 'KES 0';
+    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount);
   };
 
   const formatDate = (dateString) => {
@@ -178,11 +104,7 @@ const LoanDetails = ({ route, navigation }) => {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid Date';
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     } catch (error) {
       return 'Invalid Date';
     }
@@ -208,70 +130,259 @@ const LoanDetails = ({ route, navigation }) => {
     }
   };
 
-  if (loading) {
+  const getLoanStatusStyles = (status) => {
+    const normalized = status?.toLowerCase();
+    switch (normalized) {
+      case 'approved':
+      case 'completed':
+      case 'disbursed':
+        return [[styles.statusBadge, styles.statusBadgeSuccess], [styles.statusText, styles.statusTextSuccess]];
+      case 'pending':
+        return [[styles.statusBadge, styles.statusBadgeWarning], [styles.statusText, styles.statusTextWarning]];
+      case 'rejected':
+      case 'failed':
+        return [[styles.statusBadge, styles.statusBadgeError], [styles.statusText, styles.statusTextError]];
+      default:
+        return [[styles.statusBadge, styles.statusBadgeMuted], [styles.statusText, styles.statusTextMuted]];
+    }
+  };
+
+  const renderStatusBadge = (status) => {
+    const badgeStyle = getLoanStatusStyles(status);
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <LoadingSpinner />
-      </SafeAreaView>
+      <View style={badgeStyle[0]}>
+        <Text style={badgeStyle[1]}>{status?.toUpperCase()}</Text>
+      </View>
     );
-  }
+  };
+
+  const handleDisburseLoan = async () => {
+    Alert.alert('Disburse Loan', 'Are you sure you want to disburse this loan?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disburse',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            const response = await disburseLoan(loanId);
+            if (response?.success) {
+              Alert.alert('Success', 'Loan disbursed successfully');
+              loadLoanDetails();
+            } else {
+              Alert.alert('Error', response?.error || 'Failed to disburse loan');
+            }
+          } catch (error) {
+            Alert.alert('Error', 'Failed to disburse loan');
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleRecordPayment = async () => {
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
+      return;
+    }
+    try {
+      setSubmittingPayment(true);
+      const response = await makeLoanPayment(loanId, parseFloat(paymentAmount), paymentMethod);
+      if (response?.success) {
+        Alert.alert('Success', 'Payment recorded successfully');
+        setPaymentModalVisible(false);
+        setPaymentAmount('');
+        setPaymentMethod('mobile_money');
+        loadLoanDetails();
+      } else {
+        Alert.alert('Error', response?.error || 'Failed to record payment');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to record payment');
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
+
+  const borrowerName = loan?.borrower?.fullName || loan?.memberName || 'Unknown Borrower';
+
+  const detailsHeaders = ['Field', 'Value'];
+  const detailsData = [
+    { id: 'status', cells: ['Status', renderStatusBadge(loan?.status)] },
+    { id: 'type', cells: ['Type', loan?.type || 'N/A'] },
+    { id: 'purpose', cells: ['Purpose', loan?.purpose || 'N/A'] },
+    { id: 'borrower', cells: ['Borrower', borrowerName] },
+    { id: 'amount', cells: ['Loan Amount', formatCurrency(loan?.amount)] },
+    { id: 'rate', cells: ['Interest Rate', `${loan?.interestRate || 0}%`] },
+    { id: 'duration', cells: ['Duration', `${loan?.duration || 0} months`] },
+    { id: 'total', cells: ['Total Amount', formatCurrency(loan?.totalAmount)] },
+    { id: 'paid', cells: ['Paid Amount', formatCurrency(loan?.paidAmount)] },
+    { id: 'remaining', cells: ['Remaining', formatCurrency(loan?.remainingAmount)] },
+    { id: 'due', cells: ['Due Date', formatDate(loan?.dueDate)] },
+    { id: 'reqGuarantors', cells: ['Required Guarantors', loan?.requiredGuarantors?.toString() || '0'] },
+    { id: 'appGuarantors', cells: ['Approved Guarantors', loan?.approvedGuarantors?.toString() || '0'] },
+    { id: 'created', cells: ['Created At', formatDate(loan?.createdAt)] },
+  ];
+
+  const scheduleHeaders = ['Month', 'Due Date', 'Amount', 'Principal', 'Interest', 'Status'];
+  const scheduleData = schedule.map((item) => ({
+    id: String(item.number),
+    cells: [
+      `Month ${item.number}`,
+      formatDate(item.dueDate),
+      formatCurrency(item.amount),
+      formatCurrency(item.principal),
+      formatCurrency(item.interest),
+      item.status?.toUpperCase(),
+    ],
+  }));
+
+  const paymentHeaders = ['Date', 'Type', 'Amount', 'Status'];
+  const paymentData = payments.map((payment) => {
+    const paymentDate = payment.paidAt || payment.date || payment.createdAt;
+    const paymentType = payment.paymentMethod || payment.type || 'Payment';
+    const paymentStatus = payment.status || 'completed';
+    return {
+      id: payment.id,
+      cells: [
+        formatDate(paymentDate),
+        paymentType,
+        formatCurrency(payment.amount),
+        renderStatusBadge(paymentStatus),
+      ],
+    };
+  });
+
+  const renderCell = (cell, index, totalCells) => {
+    const isFirst = index === 0;
+    const isLast = index === totalCells - 1;
+    const flex = isFirst ? 1.5 : isLast ? 1 : 1.5;
+    return (
+      <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex }]}>
+        <Text style={[styles.tableCellText, isFirst && styles.nameText]}>{cell}</Text>
+      </View>
+    );
+  };
+
+  const renderEmpty = (message) => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="document-outline" size={24} color={colors.textSecondary} />
+      <Text style={styles.emptyText}>{message}</Text>
+    </View>
+  );
+
+  const renderLoanTable = ({ title, headers, data, emptyMessage }) => (
+    <View style={styles.tableContainer}>
+      <Card variant="outlined" padding="none" style={styles.tableCard}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tableScrollContent}>
+          <View style={styles.tableContent}>
+            <View style={styles.tableHeader}>
+              {headers.map((header, index) => {
+                const isFirst = index === 0;
+                const isLast = index === headers.length - 1;
+                const flex = isFirst ? 1.6 : isLast ? 1 : 1.5;
+                return (
+                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex }]}>
+                    <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft]}>{header}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <FlatList
+              data={data}
+              renderItem={({ item, index }) => (
+                <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
+                  {item.cells.map((cell, cellIndex) => renderCell(cell, cellIndex, item.cells.length))}
+                </View>
+              )}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.loansList}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={renderEmpty(emptyMessage)}
+            />
+          </View>
+        </ScrollView>
+      </Card>
+    </View>
+  );
+
+  const renderDetailsCell = (cell, index, totalCells) => {
+    const isFirst = index === 0;
+    const isLast = index === totalCells - 1;
+    const flex = isFirst ? 0.8 : 2;
+    return (
+      <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex, alignItems: 'flex-start' }]}>
+        <Text style={[styles.tableCellText, isFirst && styles.nameText, { textAlign: 'left' }]}>{cell}</Text>
+      </View>
+    );
+  };
+
+  const renderDetailsTable = ({ title, headers, data, emptyMessage }) => (
+    <View style={styles.tableContainer}>
+      <Card variant="outlined" padding="none" style={styles.tableCard}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tableScrollContent}>
+          <View style={styles.tableContent}>
+            <View style={styles.tableHeader}>
+              {headers.map((header, index) => {
+                const isFirst = index === 0;
+                const isLast = index === headers.length - 1;
+                const flex = isFirst ? 0.8 : 2;
+                return (
+                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex }]}>
+                    <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft, { textAlign: 'left' }]}>{header}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <FlatList
+              data={data}
+              renderItem={({ item, index }) => (
+                <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
+                  {item.cells.map((cell, cellIndex) => renderDetailsCell(cell, cellIndex, item.cells.length))}
+                </View>
+              )}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.loansList}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={renderEmpty(emptyMessage)}
+            />
+          </View>
+        </ScrollView>
+      </Card>
+    </View>
+  );
 
   if (!loan) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, styles.containerBackground]}>
         <View style={styles.errorState}>
-          <Ionicons name="card-outline" size={64} color={colors.textTertiary} />
+          <Ionicons name="card-outline" size={64} color={colors.textSecondary} />
           <Text style={[styles.errorTitle, { color: colors.text }]}>Loan Not Found</Text>
-          <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
-            Unable to load loan details
-          </Text>
-          <Button
-            title="Go Back"
-            onPress={() => navigation.goBack()}
-            style={{ marginTop: spacing.lg }}
-          />
+          <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>Unable to load loan details</Text>
+          <Button title="Go Back" onPress={() => navigation.goBack()} style={{ marginTop: spacing.lg }} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-
-        {/* Header */}
+    <SafeAreaView style={[styles.container, styles.containerBackground]}>
+      <ScrollView ref={scrollViewRef} style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={[styles.header, { backgroundColor: colors.surface }]}>
           <View style={styles.headerContent}>
             <View style={styles.loanIcon}>
               <Ionicons name="card" size={32} color={colors.primary} />
             </View>
             <View style={styles.loanInfo}>
-              <Text style={[styles.loanTitle, { color: colors.text }]}>
-                Loan #{loan.id?.slice(-8)}
-              </Text>
-              <Text style={[styles.loanMember, { color: colors.textSecondary }]}>
-                {loan.memberName}
-              </Text>
+              <Text style={[styles.loanTitle, { color: colors.text }]}>Loan #{loan.id?.slice(-8)}</Text>
+              <Text style={[styles.loanMember, { color: colors.textSecondary }]}>{borrowerName}</Text>
             </View>
           </View>
         </View>
 
-        {/* Amount Card */}
-        <Card variant="outlined" style={styles.amountCard}>
-          <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Loan Amount</Text>
-          <Text style={[styles.amountValue, { color: getStatusColor(loan.status) }]}>
-            {formatCurrency(loan.amount)}
-          </Text>
-          <View style={styles.statusRow}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(loan.status) + '20' }]}>
-              <Text style={[styles.statusText, { color: getStatusColor(loan.status) }]}>
-                {loan.status?.toUpperCase().replace('_', ' ')}
-              </Text>
-            </View>
-          </View>
-        </Card>
+        {renderDetailsTable({ title: 'Loan Details', headers: detailsHeaders, data: detailsData, emptyMessage: 'No loan details available' })}
 
-        {/* Disbursement Info */}
         {disbursement && (
           <Card variant="outlined" style={styles.amountCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
@@ -280,321 +391,118 @@ const LoanDetails = ({ route, navigation }) => {
               </View>
               <View>
                 <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Disbursement</Text>
-                <Text style={[styles.amountValue, { color: getStatusColor(disbursement.status), fontSize: typography.fontSize.lg }]}>
-                  {formatCurrency(disbursement.amount)}
-                </Text>
+                <Text style={[styles.amountValue, { color: getStatusColor(disbursement.status), fontSize: typography.fontSize.lg }]}>{formatCurrency(disbursement.amount)}</Text>
               </View>
             </View>
             <View style={styles.statusRow}>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(disbursement.status) + '20' }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(disbursement.status) }]}>
-                  {disbursement.status?.toUpperCase()}
-                </Text>
-              </View>
-              <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.xs, marginLeft: spacing.sm }}>
-                {formatDate(disbursement.updatedAt || disbursement.createdAt)}
-              </Text>
+              {renderStatusBadge(disbursement.status)}
+              <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.xs, marginLeft: spacing.sm }}>{formatDate(disbursement.updatedAt || disbursement.createdAt)}</Text>
             </View>
           </Card>
         )}
 
-        {/* Repayment Schedule */}
-        {schedule.length > 0 && (
-          <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
-                <Ionicons name="calendar" size={20} color={colors.primary} />
-              </View>
-              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Repayment Schedule</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm }}>
-                {schedule.map((installment) => (
-                  <View
-                    key={installment.number}
-                    style={[
-                      { padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, minWidth: 100, alignItems: 'center' },
-                      { backgroundColor: installment.status === 'paid' ? colors.success + '10' : colors.background, borderColor: installment.status === 'paid' ? colors.success : colors.border }
-                    ]}
-                  >
-                    <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary }}>Month {installment.number}</Text>
-                    <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.text }}>
-                      {formatCurrency(installment.amount)}
-                    </Text>
-                    <Text style={{ fontSize: typography.fontSize['2xs'], color: installment.status === 'paid' ? colors.success : colors.textSecondary }}>
-                      {installment.status === 'paid' ? 'PAID' : 'PENDING'}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          </Card>
-        )}
+        {renderLoanTable({ title: 'Repayment Schedule', headers: scheduleHeaders, data: scheduleData, emptyMessage: 'No schedule available yet' })}
+        {renderLoanTable({ title: 'Repayment History', headers: paymentHeaders, data: paymentData, emptyMessage: 'No repayment history yet' })}
 
-        {/* Repayment History Table */}
-        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: spacing.md }]}>Repayment History</Text>
-        <View style={styles.repaymentTable}>
-          {/* Table Header */}
-          <View style={tableStyles.tableHeader}>
-            <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-              <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Date</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-              <Text style={tableStyles.tableHeaderText}>Type</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-              <Text style={tableStyles.tableHeaderText}>Amount</Text>
-            </View>
-            <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-              <Text style={tableStyles.tableHeaderText}>Status</Text>
-            </View>
+        {totalItems > pageSize && (
+          <View style={styles.paginationContainer}>
+            <TouchableOpacity
+              style={[styles.paginationArrow, currentPage === 1 && styles.paginationArrowDisabled]}
+              onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? '#9ca3af' : '#2563eb'} />
+            </TouchableOpacity>
+            <Text style={styles.paginationInfo}>{currentPage} / {totalPages}</Text>
+            <TouchableOpacity
+              style={[styles.paginationArrow, currentPage === totalPages && styles.paginationArrowDisabled]}
+              onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? '#9ca3af' : '#2563eb'} />
+            </TouchableOpacity>
           </View>
+        )}
 
-          {/* Table Body */}
-          {payments.map((payment, index) => {
-            const paymentDate = payment.paidAt || payment.date || payment.createdAt;
-            const paymentType = payment.paymentMethod || payment.type || 'Payment';
-            const paymentStatus = payment.status || 'completed';
-            return (
-              <View
-                key={payment.id}
-                style={[
-                  tableStyles.tableRow,
-                  index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }
-                ]}
-              >
-                {/* Date */}
-                <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-                  <Text style={[tableStyles.tableCellText, tableStyles.dateText]} numberOfLines={1}>
-                    {formatDate(paymentDate)}
-                  </Text>
-                </View>
-
-                {/* Type */}
-                <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-                  <Text style={tableStyles.tableCellText}>
-                    {paymentType}
-                  </Text>
-                </View>
-
-                {/* Amount */}
-                <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                  <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium, color: colors.success }]}>
-                    {formatCurrency(payment.amount)}
-                  </Text>
-                </View>
-
-                {/* Status */}
-                <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
-                  <View style={[
-                    tableStyles.statusBadge,
-                    { backgroundColor: paymentStatus === 'completed' ? colors.success + '20' : paymentStatus === 'failed' ? colors.error + '20' : colors.warning + '20' }
-                  ]}>
-                    <Text style={[
-                      { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.bold, color: paymentStatus === 'completed' ? colors.success : paymentStatus === 'failed' ? colors.error : colors.warning }
-                    ]}>
-                      {paymentStatus?.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-
-          {/* Pagination */}
-          {totalItems > pageSize && (
-            <View style={styles.paginationContainer}>
-              <TouchableOpacity
-                style={[styles.paginationArrow, currentPage === 1 && styles.paginationArrowDisabled]}
-                onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? '#9ca3af' : '#2563eb'} />
-              </TouchableOpacity>
-
-              <Text style={styles.paginationInfo}>
-                {currentPage} / {totalPages}
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.paginationArrow, currentPage === totalPages && styles.paginationArrowDisabled]}
-                onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? '#9ca3af' : '#2563eb'} />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Actions */}
         <View style={styles.actions}>
-          {loan.status === 'disbursement' && (
-            <Button
-              title="Disburse Loan"
-              onPress={() => Alert.alert('Coming Soon', 'Loan disbursement will be available in the next update.')}
-              style={{ backgroundColor: colors.primary, marginBottom: spacing.md }}
-              icon={<Ionicons name="send" size={16} color={colors.white} />}
-            />
+          {loan.status === 'approved' && (
+            <Button title="Disburse Loan" onPress={handleDisburseLoan} loading={loading} style={{ backgroundColor: colors.primary, marginBottom: spacing.md }} icon={<Ionicons name="send" size={16} color={colors.white} />} />
           )}
-
-          {['delinquent', 'partial', 'recovery_active'].includes(loan.status?.toLowerCase()) && (
-            <Button
-              title="Record Payment"
-              onPress={() => Alert.alert('Coming Soon', 'Payment recording will be available in the next update.')}
-              style={{ backgroundColor: colors.success, marginBottom: spacing.md }}
-              icon={<Ionicons name="cash" size={16} color={colors.white} />}
-            />
+          {['active', 'delinquent', 'partial', 'recovery_active'].includes(loan.status?.toLowerCase()) && (
+            <Button title="Record Payment" onPress={() => setPaymentModalVisible(true)} style={{ backgroundColor: colors.success, marginBottom: spacing.md }} icon={<Ionicons name="cash" size={16} color={colors.white} />} />
           )}
-
-          <Button
-            title="View Schedule"
-            onPress={() => Alert.alert('Coming Soon', 'Loan schedule will be available in the next update.')}
-            style={{ backgroundColor: colors.info, marginBottom: spacing.md }}
-            icon={<Ionicons name="calendar" size={16} color={colors.white} />}
-          />
-
-          <Button
-            title="Loan Report"
-            onPress={() => Alert.alert('Coming Soon', 'Loan reports will be available in the next update.')}
-            style={{ backgroundColor: colors.secondary }}
-            icon={<Ionicons name="document-text" size={16} color={colors.white} />}
-          />
+          <Button title="View Schedule" onPress={() => {}} style={{ backgroundColor: colors.info, marginBottom: spacing.md }} icon={<Ionicons name="calendar" size={16} color={colors.white} />} />
+          <Button title="Loan Report" onPress={() => Alert.alert('Coming Soon', 'Loan reports will be available in the next update.')} style={{ backgroundColor: colors.secondary, marginBottom: spacing.md }} icon={<Ionicons name="document-text" size={16} color={colors.white} />} />
         </View>
-
       </ScrollView>
+
+      <RecordPaymentModal
+        visible={paymentModalVisible}
+        onClose={() => setPaymentModalVisible(false)}
+        colors={colors}
+        paymentAmount={paymentAmount}
+        setPaymentAmount={setPaymentAmount}
+        paymentMethod={paymentMethod}
+        setPaymentMethod={setPaymentMethod}
+        submittingPayment={submittingPayment}
+        handleRecordPayment={handleRecordPayment}
+      />
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-    padding: spacing.md,
-  },
-  repaymentTable: {
-    marginTop: spacing.md,
-  },
-  header: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  loanIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.lg,
-  },
-  loanInfo: {
-    flex: 1,
-  },
-  loanTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
-  },
-  loanMember: {
-    fontSize: typography.fontSize.sm,
-  },
-  amountCard: {
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  amountLabel: {
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.xs,
-  },
-  amountValue: {
-    fontSize: typography.fontSize.xxxl,
-    fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.sm,
-  },
-  statusRow: {
-    alignItems: 'center',
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
-  },
-  statusText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
-  },
-  detailsCard: {
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  sectionTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.lg,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  detailLabel: {
-    fontSize: typography.fontSize.sm,
-  },
-  detailValue: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-  actions: {
-    marginBottom: spacing.xxxl,
-  },
-
-  // Pagination Styles
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.md,
-    backgroundColor: '#f5f5f5',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    marginTop: spacing.sm,
-  },
-  paginationArrow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: spacing.sm,
-  },
-  paginationArrowDisabled: {
-    opacity: 0.5,
-  },
-  paginationInfo: {
-    fontSize: typography.fontSize.sm,
-    color: '#6b7280',
-    fontWeight: typography.fontWeight.medium,
-    minWidth: 60,
-    textAlign: 'center',
-  },
-
-
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1 },
+  containerBackground: { backgroundColor: colors.background },
+  scrollView: { flex: 1, padding: spacing.md },
+  header: { borderRadius: borderRadius.lg, padding: spacing.lg, marginBottom: spacing.md, ...shadows.sm },
+  headerContent: { flexDirection: 'row', alignItems: 'center' },
+  loanIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(59, 130, 246, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: spacing.lg },
+  loanInfo: { flex: 1 },
+  loanTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.xs },
+  loanMember: { fontSize: typography.fontSize.sm },
+  tableContainer: { marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' },
+  tableCard: { minHeight: 360, borderRadius: 8, width: '100%', alignSelf: 'stretch', padding: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  tableScrollContent: { flexGrow: 1, width: '100%' },
+  tableContent: { minWidth: 680, width: '100%' },
+  tableHeader: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary },
+  tableCell: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
+  nameCell: { flex: 1.6, alignItems: 'flex-start' },
+  amountCell: { flex: 1.3 },
+  statusCell: { flex: 1 },
+  dateCell: { flex: 1.2 },
+  actionsCell: { flex: 1 },
+  tableHeaderText: { fontWeight: typography.fontWeight.bold, color: colors.primary, fontSize: 12, textAlign: 'center' },
+  tableHeaderTextLeft: { textAlign: 'left' },
+  tableRowEven: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center', backgroundColor: colors.background },
+  tableRowOdd: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center', backgroundColor: colors.surface },
+  tableCellText: { fontSize: 12, color: colors.text, textAlign: 'center' },
+  nameText: { fontWeight: typography.fontWeight.medium, textAlign: 'left' },
+  statusBadge: { paddingHorizontal: spacing.xs, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm },
+  statusBadgeSuccess: { backgroundColor: colors.success + '20' },
+  statusBadgeWarning: { backgroundColor: colors.warning + '20' },
+  statusBadgeError: { backgroundColor: colors.error + '20' },
+  statusBadgeMuted: { backgroundColor: colors.textSecondary + '20' },
+  statusText: { fontSize: 7, fontWeight: typography.fontWeight.bold, textTransform: 'capitalize' },
+  statusTextSuccess: { color: colors.success },
+  statusTextWarning: { color: colors.warning },
+  statusTextError: { color: colors.error },
+  statusTextMuted: { color: colors.textSecondary },
+  loansList: { padding: spacing.md },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
+  emptyText: { color: colors.textSecondary, fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center' },
+  amountCard: { padding: spacing.lg, alignItems: 'center', marginBottom: spacing.md, ...shadows.sm },
+  amountLabel: { fontSize: typography.fontSize.sm, marginBottom: spacing.xs },
+  amountValue: { fontSize: typography.fontSize.xxxl, fontWeight: typography.fontWeight.bold, marginBottom: spacing.sm },
+  statusRow: { flexDirection: 'row', alignItems: 'center' },
+  paginationContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md, backgroundColor: '#f5f5f5', borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: spacing.sm },
+  paginationArrow: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginHorizontal: spacing.sm },
+  paginationArrowDisabled: { opacity: 0.5 },
+  paginationInfo: { fontSize: typography.fontSize.sm, color: '#6b7280', fontWeight: typography.fontWeight.medium, minWidth: 60, textAlign: 'center' },
+  actions: { marginBottom: spacing.xxxl },
+  errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  errorTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.md, marginBottom: spacing.xs, color: colors.text },
+  errorSubtitle: { fontSize: typography.fontSize.sm, textAlign: 'center', color: colors.textSecondary },
 });
 
 export default LoanDetails;
