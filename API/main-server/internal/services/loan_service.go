@@ -635,7 +635,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 			default_threshold_days, installment_penalty_type,
 			installment_penalty_amount, loan_penalty_amount,
 			status, created_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 	`
 	_, err := s.db.Exec(query,
 		id, chamaID, req.Name, req.Description, req.ExactAmount,
@@ -644,7 +644,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		requiresGuarantors, req.CollateralDesc, req.NetDisbursement, req.CurrentLoans,
 		req.DefaultThresholdDays, req.InstallmentPenaltyType,
 		req.InstallmentPenaltyAmount, req.LoanPenaltyAmount,
-		status, createdBy, now, now,
+		status, createdBy, now, now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create loan type: %w", err)
