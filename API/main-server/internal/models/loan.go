@@ -148,7 +148,7 @@ type LoanProduct struct {
 	ChamaID             string     `json:"chamaId" db:"chama_id"`
 	Name                string     `json:"name" db:"name"`
 	Description         *string    `json:"description,omitempty" db:"description"`
-	ExactAmount         float64    `json:"exactAmount" db:"exact_amount"`
+	MaxAmount         float64    `json:"exactAmount" db:"max_amount"`
 	InterestRate        float64    `json:"interestRate" db:"interest_rate"`
 	TermMonths          int        `json:"termMonths" db:"term_months"`
 	EligibilityCriteria string     `json:"eligibilityCriteria" db:"eligibility_criteria"`
@@ -175,7 +175,7 @@ type LoanProduct struct {
 type LoanProductRequest struct {
 	Name                   string   `json:"name" validate:"required,min=1,max=100"`
 	Description            *string  `json:"description,omitempty"`
-	ExactAmount            float64  `json:"exactAmount" validate:"required,gt=0"`
+	MaxAmount            float64  `json:"exactAmount" validate:"required,gt=0"`
 	InterestRate           float64  `json:"interestRate" validate:"required,min=0"`
 	TermMonths             int      `json:"termMonths" validate:"required,gt=0"`
 	EligibilityCriteria    string   `json:"eligibilityCriteria" validate:"omitempty"`
