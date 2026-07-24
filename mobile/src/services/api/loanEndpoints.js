@@ -117,6 +117,20 @@ const rejectLoan = async (loanId, reason) => {
   });
 };
 
+const initiateLoanApproval = async (loanId, comment) => {
+  return await makeRequest(`/loans/${loanId}/approve`, {
+    method: 'POST',
+    body: { comment },
+  });
+};
+
+const confirmLoanApproval = async (loanId, otp, comment) => {
+  return await makeRequest(`/loans/${loanId}/approve/confirm`, {
+    method: 'POST',
+    body: { otp, comment },
+  });
+};
+
 const disburseLoan = async (loanId) => {
   return await makeRequest(`/loans/${loanId}/disburse`, {
     method: 'POST',
@@ -171,4 +185,6 @@ export {
   updateLoanType,
   deleteLoanType,
   getLoanRepaymentHistory,
+  initiateLoanApproval,
+  confirmLoanApproval,
 };

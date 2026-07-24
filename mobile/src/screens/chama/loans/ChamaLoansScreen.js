@@ -266,22 +266,81 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
 
   const handleLoanAction = async (loan, action) => {
     try {
-      let response;
-
-      switch (action) {
-        case 'approve':
-          response = await ApiService.approveLoan(loan.id, { approved: true });
-          break;
-        case 'reject':
-          response = await ApiService.approveLoan(loan.id, { approved: false });
-          break;
-        case 'guarantee':
-          response = await ApiService.respondToGuaranteeRequest(loan.id, { accepted: true });
-          break;
-        default:
+      if (action === 'approve') {
+        const comment = await new Promise((resolve) => {
+          Alert.prompt(
+            'Approval Comment',
+            'Please enter your approval comment (required):',
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+              { text: 'Continue', onPress: resolve },
+            ],
+            'plain-text'
+          );
+        });
+        if (!comment || !comment.trim()) {
+          Alert.alert('Comment Required', 'Approval comment is required.');
           return;
+        }
+        const response = await ApiService.initiateLoanApproval(loan.id, comment.trim());
+        if (response?.success) {
+          Alert.alert('OTP Sent', response.message || 'Please enter the OTP sent to your phone to complete approval.');
+          const otp = await new Promise((resolve) => {
+            Alert.prompt(
+              'Enter OTP',
+              'Enter the 6-digit OTP sent to your phone:',
+              [
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+                { text: 'Verify', onPress: resolve },
+              ],
+              'plain-text'
+            );
+          });
+          if (!otp || otp.trim().length !== 6) {
+            Alert.alert('Invalid OTP', 'Please enter the 6-digit OTP.');
+            return;
+          }
+          const confirmResponse = await ApiService.confirmLoanApproval(loan.id, otp.trim(), comment.trim());
+          if (confirmResponse?.success) {
+            Alert.alert('Success', confirmResponse.message || 'Loan approved successfully');
+            loadLoans();
+          } else {
+            Alert.alert('Error', confirmResponse?.error || 'Failed to confirm approval');
+          }
+        } else {
+          Alert.alert('Error', response?.error || 'Failed to initiate approval');
+        }
+        return;
       }
 
+      if (action === 'reject') {
+        const reason = await new Promise((resolve) => {
+          Alert.prompt(
+            'Rejection Reason',
+            'Please enter the reason for rejection (required):',
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+              { text: 'Reject', onPress: resolve },
+            ],
+            'plain-text'
+          );
+        });
+        if (!reason || !reason.trim()) {
+          Alert.alert('Reason Required', 'Rejection reason is required.');
+          return;
+        }
+        const response = await ApiService.rejectLoan(loan.id, reason.trim());
+        if (response?.success) {
+          Alert.alert('Success', 'Loan rejected successfully');
+          loadLoans();
+        } else {
+          Alert.alert('Error', response?.error || 'Failed to reject loan');
+        }
+        return;
+      }
+
+      // Default fallback for other actions
+      const response = await ApiService.approveLoan(loan.id, { approved: true });
       if (response.success) {
         loadLoans();
       } else {

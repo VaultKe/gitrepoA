@@ -220,6 +220,12 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
     maxLoansPerMember: '1',
     requiresCollateral: false,
     collateralDescription: '',
+    netDisbursement: '',
+    currentLoans: '0',
+    defaultThresholdDays: '30',
+    installmentPenaltyType: 'fixed',
+    installmentPenaltyAmount: '',
+    loanPenaltyAmount: '',
   });
 
   const filters = [
@@ -338,6 +344,11 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         gracePeriodDays: parseInt(createForm.gracePeriodDays) || 0,
         penaltyRate: parseFloat(createForm.penaltyRate) || 0,
         maxLoansPerMember: parseInt(createForm.maxLoansPerMember) || 1,
+        netDisbursement: parseFloat(createForm.netDisbursement) || 0,
+        currentLoans: parseInt(createForm.currentLoans) || 0,
+        defaultThresholdDays: parseInt(createForm.defaultThresholdDays) || 30,
+        installmentPenaltyAmount: parseFloat(createForm.installmentPenaltyAmount) || 0,
+        loanPenaltyAmount: parseFloat(createForm.loanPenaltyAmount) || 0,
       };
 
       const response = await ApiService.createLoanType(currentChamaId, loanTypeData);
@@ -375,6 +386,12 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
       maxLoansPerMember: loanType.maxLoansPerMember?.toString() || '1',
       requiresCollateral: loanType.requiresCollateral ?? false,
       collateralDescription: loanType.collateralDescription || '',
+      netDisbursement: loanType.netDisbursement?.toString() || '',
+      currentLoans: loanType.currentLoans?.toString() || '0',
+      defaultThresholdDays: loanType.defaultThresholdDays?.toString() || '30',
+      installmentPenaltyType: loanType.installmentPenaltyType || 'fixed',
+      installmentPenaltyAmount: loanType.installmentPenaltyAmount?.toString() || '',
+      loanPenaltyAmount: loanType.loanPenaltyAmount?.toString() || '',
     });
     setShowEditModal(true);
   };
@@ -392,6 +409,11 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         gracePeriodDays: parseInt(createForm.gracePeriodDays) || 0,
         penaltyRate: parseFloat(createForm.penaltyRate) || 0,
         maxLoansPerMember: parseInt(createForm.maxLoansPerMember) || 1,
+        netDisbursement: parseFloat(createForm.netDisbursement) || 0,
+        currentLoans: parseInt(createForm.currentLoans) || 0,
+        defaultThresholdDays: parseInt(createForm.defaultThresholdDays) || 30,
+        installmentPenaltyAmount: parseFloat(createForm.installmentPenaltyAmount) || 0,
+        loanPenaltyAmount: parseFloat(createForm.loanPenaltyAmount) || 0,
         updatedBy: userRole,
         updatedById: user.id,
         timestamp: new Date().toISOString(),
@@ -450,6 +472,12 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
       maxLoansPerMember: '1',
       requiresCollateral: false,
       collateralDescription: '',
+      netDisbursement: '',
+      currentLoans: '0',
+      defaultThresholdDays: '30',
+      installmentPenaltyType: 'fixed',
+      installmentPenaltyAmount: '',
+      loanPenaltyAmount: '',
     });
   };
 
@@ -815,6 +843,121 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                     value={createForm.termMonths}
                     onChangeText={(text) => setCreateForm(prev => ({ ...prev, termMonths: text }))}
                     placeholder="e.g. 12"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Grace Period (Days)
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.gracePeriodDays}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, gracePeriodDays: text }))}
+                    placeholder="e.g. 7"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Default Threshold (Days)
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.defaultThresholdDays}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, defaultThresholdDays: text }))}
+                    placeholder="e.g. 30"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Net Disbursement (KES)
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.netDisbursement}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, netDisbursement: text }))}
+                    placeholder="e.g. 9500"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Current Loans
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.currentLoans}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, currentLoans: text }))}
+                    placeholder="e.g. 0"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Installment Penalty Type
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.installmentPenaltyType}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, installmentPenaltyType: text }))}
+                    placeholder="fixed / percentage"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Installment Penalty Amount (KES)
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.installmentPenaltyAmount}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, installmentPenaltyAmount: text }))}
+                    placeholder="e.g. 50"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Loan Penalty Amount (KES)
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.loanPenaltyAmount}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, loanPenaltyAmount: text }))}
+                    placeholder="e.g. 500"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>
+                    Penalty Rate (%)
+                  </Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.penaltyRate}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, penaltyRate: text }))}
+                    placeholder="e.g. 5"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
                   />

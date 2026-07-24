@@ -237,7 +237,7 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 	chamaWalletID := fmt.Sprintf("wallet-%s-contribution", loan.ChamaID)
 	transactionID := "TXN_" + uuid.New().String()
 	now := time.Now()
-	reference := fmt.Sprintf("LOAN-DISB-%s", loanID)
+	reference := fmt.Sprintf("LOAN-DISB-%s-%s", now.Format("200601"), loanID)
 
 	_, err = tx.Exec(`
 		INSERT INTO transactions (

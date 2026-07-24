@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
@@ -17,7 +18,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
-import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan } from '../../../services/api/loanEndpoints';
+import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval } from '../../../services/api/loanEndpoints';
 import RecordPaymentModal from './RecordPaymentModal';
 
 const LoanDetails = ({ route, navigation }) => {
@@ -28,6 +29,7 @@ const LoanDetails = ({ route, navigation }) => {
   const { loanId, chamaId } = route?.params || {};
 
   const [loan, setLoan] = useState(null);
+  const [loanType, setLoanType] = useState(null);
   const [loading, setLoading] = useState(false);
   const [payments, setPayments] = useState([]);
   const [allPayments, setAllPayments] = useState([]);
@@ -38,6 +40,10 @@ const LoanDetails = ({ route, navigation }) => {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('mobile_money');
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [approvalComment, setApprovalComment] = useState('');
+  const [approvalOTP, setApprovalOTP] = useState('');
+  const [approvalStep, setApprovalStep] = useState('idle'); // idle, initiate, confirm
+  const [approving, setApproving] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -93,6 +99,16 @@ const LoanDetails = ({ route, navigation }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (loan?.loanTypeId) {
+      ApiService.getLoanType(loan.loanTypeId).then(response => {
+        if (response?.success) {
+          setLoanType(response.data);
+        }
+      }).catch(err => console.error('Failed to load loan type:', err));
+    }
+  }, [loan]);
 
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined || isNaN(amount)) return 'KES 0';
@@ -181,6 +197,95 @@ const LoanDetails = ({ route, navigation }) => {
     ]);
   };
 
+  const getNextApprovalRole = () => {
+    if (!loan) return null;
+    const stage = loan.approvalStage || loan.status;
+    if (stage === 'pending' || stage === 'guarantors_approved') return 'secretary';
+    if (stage === 'secretary_approved') return 'treasurer';
+    if (stage === 'treasurer_approved') return 'chairperson';
+    return null;
+  };
+
+  const handleInitiateApproval = async () => {
+    if (!approvalComment.trim()) {
+      Alert.alert('Comment Required', 'Please enter a comment before approving.');
+      return;
+    }
+    try {
+      setApproving(true);
+      const response = await initiateLoanApproval(loanId, approvalComment.trim());
+      if (response?.success) {
+        setApprovalStep('confirm');
+        Alert.alert('OTP Sent', response.message || 'Please enter the OTP sent to your phone.');
+      } else {
+        Alert.alert('Error', response?.error || 'Failed to initiate approval');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to initiate approval');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleConfirmApproval = async () => {
+    if (!approvalOTP.trim() || approvalOTP.trim().length !== 6) {
+      Alert.alert('Invalid OTP', 'Please enter the 6-digit OTP sent to your phone.');
+      return;
+    }
+    if (!approvalComment.trim()) {
+      Alert.alert('Comment Required', 'Please enter a comment before confirming approval.');
+      return;
+    }
+    try {
+      setApproving(true);
+      const response = await confirmLoanApproval(loanId, approvalOTP.trim(), approvalComment.trim());
+      if (response?.success) {
+        Alert.alert('Success', response.message || 'Loan approved successfully');
+        setApprovalStep('idle');
+        setApprovalComment('');
+        setApprovalOTP('');
+        loadLoanDetails();
+      } else {
+        Alert.alert('Error', response?.error || 'Failed to confirm approval');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to confirm approval');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleRejectLoan = async () => {
+    if (!approvalComment.trim()) {
+      Alert.alert('Comment Required', 'Please enter a reason for rejecting this loan.');
+      return;
+    }
+    Alert.alert('Reject Loan', 'Are you sure you want to reject this loan?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reject',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setApproving(true);
+            const response = await ApiService.rejectLoan(loanId, approvalComment.trim());
+            if (response?.success) {
+              Alert.alert('Success', 'Loan rejected successfully');
+              setApprovalComment('');
+              loadLoanDetails();
+            } else {
+              Alert.alert('Error', response?.error || 'Failed to reject loan');
+            }
+          } catch (error) {
+            Alert.alert('Error', 'Failed to reject loan');
+          } finally {
+            setApproving(false);
+          }
+        },
+      },
+    ]);
+  };
+
   const handleRecordPayment = async () => {
     if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
@@ -222,6 +327,16 @@ const LoanDetails = ({ route, navigation }) => {
     { id: 'due', cells: ['Due Date', formatDate(loan?.dueDate)] },
     { id: 'reqGuarantors', cells: ['Required Guarantors', loan?.requiredGuarantors?.toString() || '0'] },
     { id: 'appGuarantors', cells: ['Approved Guarantors', loan?.approvedGuarantors?.toString() || '0'] },
+    { id: 'approvalStage', cells: ['Approval Stage', loan?.approvalStage?.toUpperCase().replace('_', ' ') || 'N/A'] },
+    { id: 'secretary', cells: ['Secretary Approval', loan?.secretaryApprovedBy ? formatDate(loan?.secretaryApprovedAt) : 'Pending'] },
+    { id: 'treasurer', cells: ['Treasurer Approval', loan?.treasurerApprovedBy ? formatDate(loan?.treasurerApprovedAt) : 'Pending'] },
+    { id: 'chairperson', cells: ['Chairperson Approval', loan?.chairpersonApprovedBy ? formatDate(loan?.chairpersonApprovedAt) : 'Pending'] },
+    { id: 'loanType', cells: ['Loan Type', loanType?.name || loan?.loanTypeId || 'N/A'] },
+    { id: 'gracePeriod', cells: ['Grace Period', loanType ? `${loanType.gracePeriodDays || 0} days` : 'N/A'] },
+    { id: 'defaultThreshold', cells: ['Default Threshold', loanType ? `${loanType.defaultThresholdDays || 30} days` : 'N/A'] },
+    { id: 'netDisbursement', cells: ['Net Disbursement', loanType ? formatCurrency(loanType.netDisbursement || 0) : 'N/A'] },
+    { id: 'installmentPenalty', cells: ['Installment Penalty', loanType ? `${loanType.installmentPenaltyType || 'fixed'} · ${formatCurrency(loanType.installmentPenaltyAmount || 0)}` : 'N/A'] },
+    { id: 'loanPenalty', cells: ['Loan Penalty', loanType ? formatCurrency(loanType.loanPenaltyAmount || 0) : 'N/A'] },
     { id: 'created', cells: ['Created At', formatDate(loan?.createdAt)] },
   ];
 
@@ -281,7 +396,7 @@ const LoanDetails = ({ route, navigation }) => {
               {headers.map((header, index) => {
                 const isFirst = index === 0;
                 const isLast = index === headers.length - 1;
-                const flex = isFirst ? 1.6 : isLast ? 1 : 1.5;
+                const flex = isFirst ? 1.5 : isLast ? 1 : 1.5;
                 return (
                   <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex }]}>
                     <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft]}>{header}</Text>
@@ -375,7 +490,9 @@ const LoanDetails = ({ route, navigation }) => {
               <Ionicons name="card" size={32} color={colors.primary} />
             </View>
             <View style={styles.loanInfo}>
-              <Text style={[styles.loanTitle, { color: colors.text }]}>Loan #{loan.id?.slice(-8)}</Text>
+              <Text style={[styles.loanTitle, { color: colors.text }]}>
+                Loan #{loan.createdAt ? new Date(loan.createdAt).toISOString().slice(0, 7).replace('-', '') : ''}-{loan.id?.slice(-8)}
+              </Text>
               <Text style={[styles.loanMember, { color: colors.textSecondary }]}>{borrowerName}</Text>
             </View>
           </View>
@@ -392,6 +509,11 @@ const LoanDetails = ({ route, navigation }) => {
               <View>
                 <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Disbursement</Text>
                 <Text style={[styles.amountValue, { color: getStatusColor(disbursement.status), fontSize: typography.fontSize.lg }]}>{formatCurrency(disbursement.amount)}</Text>
+                {disbursement.reference ? (
+                  <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }}>
+                    Ref: {disbursement.reference}
+                  </Text>
+                ) : null}
               </View>
             </View>
             <View style={styles.statusRow}>
@@ -425,10 +547,68 @@ const LoanDetails = ({ route, navigation }) => {
         )}
 
         <View style={styles.actions}>
-          {loan.status === 'approved' && (
-            <Button title="Disburse Loan" onPress={handleDisburseLoan} loading={loading} style={{ backgroundColor: colors.primary, marginBottom: spacing.md }} icon={<Ionicons name="send" size={16} color={colors.white} />} />
+          {(loan?.approvalStage === 'pending' || loan?.approvalStage === 'secretary_approved' || loan?.approvalStage === 'treasurer_approved') && (
+            <View style={{ marginBottom: spacing.md }}>
+              <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Approval Comment (Required)</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.text }]}
+                value={approvalComment}
+                onChangeText={setApprovalComment}
+                placeholder="Enter your approval comment"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
           )}
-          {['active', 'delinquent', 'partial', 'recovery_active'].includes(loan.status?.toLowerCase()) && (
+
+          {approvalStep === 'idle' && (loan?.approvalStage === 'pending' || loan?.approvalStage === 'secretary_approved' || loan?.approvalStage === 'treasurer_approved') && (
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
+              <Button
+                title="Approve"
+                onPress={handleInitiateApproval}
+                loading={approving}
+                style={{ backgroundColor: colors.success, flex: 1 }}
+                icon={<Ionicons name="checkmark" size={16} color={colors.white} />}
+              />
+              <Button
+                title="Reject"
+                onPress={handleRejectLoan}
+                loading={approving}
+                style={{ backgroundColor: colors.error, flex: 1 }}
+                icon={<Ionicons name="close" size={16} color={colors.white} />}
+              />
+            </View>
+          )}
+
+          {approvalStep === 'confirm' && (
+            <View style={{ marginBottom: spacing.md }}>
+              <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Enter OTP sent to your phone</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.text, marginBottom: spacing.sm }]}
+                value={approvalOTP}
+                onChangeText={setApprovalOTP}
+                placeholder="123456"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="numeric"
+                maxLength={6}
+              />
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <Button
+                  title="Verify & Approve"
+                  onPress={handleConfirmApproval}
+                  loading={approving}
+                  style={{ backgroundColor: colors.success, flex: 1 }}
+                  icon={<Ionicons name="checkmark" size={16} color={colors.white} />}
+                />
+                <Button
+                  title="Cancel"
+                  onPress={() => { setApprovalStep('idle'); setApprovalOTP(''); }}
+                  style={{ backgroundColor: colors.textSecondary, flex: 1 }}
+                />
+              </View>
+            </View>
+          )}
+
+          {['active', 'delinquent', 'partial', 'recovery_active'].includes(loan?.status?.toLowerCase()) && (
             <Button title="Record Payment" onPress={() => setPaymentModalVisible(true)} style={{ backgroundColor: colors.success, marginBottom: spacing.md }} icon={<Ionicons name="cash" size={16} color={colors.white} />} />
           )}
           <Button title="View Schedule" onPress={() => {}} style={{ backgroundColor: colors.info, marginBottom: spacing.md }} icon={<Ionicons name="calendar" size={16} color={colors.white} />} />
@@ -494,6 +674,8 @@ const createStyles = (colors) => StyleSheet.create({
   amountCard: { padding: spacing.lg, alignItems: 'center', marginBottom: spacing.md, ...shadows.sm },
   amountLabel: { fontSize: typography.fontSize.sm, marginBottom: spacing.xs },
   amountValue: { fontSize: typography.fontSize.xxxl, fontWeight: typography.fontWeight.bold, marginBottom: spacing.sm },
+  label: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginBottom: spacing.xs, color: colors.text },
+  input: { borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: typography.fontSize.base, borderColor: colors.border, color: colors.text },
   statusRow: { flexDirection: 'row', alignItems: 'center' },
   paginationContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md, backgroundColor: '#f5f5f5', borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: spacing.sm },
   paginationArrow: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginHorizontal: spacing.sm },

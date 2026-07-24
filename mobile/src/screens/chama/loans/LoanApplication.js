@@ -26,7 +26,10 @@ const LoanApplication = ({ route, navigation, onRouteChange }) => {
   
   const [loading, setLoading] = useState(false);
   const [chamaMembers, setChamaMembers] = useState([]);
+  const [loanTypes, setLoanTypes] = useState([]);
+  const [selectedLoanType, setSelectedLoanType] = useState(null);
   const [formData, setFormData] = useState({
+    loanTypeId: '',
     amount: '',
     purpose: '',
     repaymentPeriod: '6',
@@ -60,6 +63,7 @@ const LoanApplication = ({ route, navigation, onRouteChange }) => {
 
   useEffect(() => {
     loadChamaMembers();
+    loadLoanTypes();
   }, [chamaId]);
 
   const loadChamaMembers = async () => {
@@ -72,6 +76,22 @@ const LoanApplication = ({ route, navigation, onRouteChange }) => {
       }
     } catch (error) {
       console.error('Failed to load chama members:', error);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    if (amount === null || amount === undefined || isNaN(amount)) return 'KES 0';
+    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount);
+  };
+
+  const loadLoanTypes = async () => {
+    try {
+      const response = await ApiService.getLoanTypes(chamaId, 'active');
+      if (response.success) {
+        setLoanTypes(response.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load loan types:', error);
     }
   };
 
@@ -99,7 +119,21 @@ const LoanApplication = ({ route, navigation, onRouteChange }) => {
     }));
   };
 
+  const handleLoanTypeChange = (loanType) => {
+    setSelectedLoanType(loanType);
+    setFormData(prev => ({
+      ...prev,
+      loanTypeId: loanType.id,
+      interestRate: loanType.interestRate?.toString() || prev.interestRate,
+      repaymentPeriod: loanType.termMonths?.toString() || prev.repaymentPeriod,
+    }));
+  };
+
   const validateForm = () => {
+    if (!formData.loanTypeId) {
+      Alert.alert('Validation Error', 'Please select a loan type');
+      return false;
+    }
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       Alert.alert('Validation Error', 'Please enter a valid loan amount');
       return false;
@@ -148,10 +182,11 @@ const handleSubmit = async () => {
     const loanData = {
       chamaId,
       applicantId: user.id,
+      loanTypeId: formData.loanTypeId,
       amount: parseFloat(formData.amount),
       purpose: formData.purpose.trim(),
       repaymentPeriod: parseInt(formData.repaymentPeriod),
-      interestRate: parseFloat(formData.interestRate || 10),
+      interestRate: parseFloat(formData.interestRate || selectedLoanType?.interestRate || 10),
       guarantors: formData.guarantors,
       security: formData.security,
       businessPlan: formData.businessPlan.trim(),
@@ -279,6 +314,93 @@ const handleSubmit = async () => {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
+          {/* Loan Type Selection */}
+          <Card style={styles.formCard}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Select Loan Type *
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.loanTypeScroll}>
+              <View style={styles.loanTypeRow}>
+                {loanTypes.map((loanType) => (
+                  <TouchableOpacity
+                    key={loanType.id}
+                    style={[
+                      styles.loanTypeCard,
+                      {
+                        backgroundColor: selectedLoanType?.id === loanType.id ? colors.primary + '20' : colors.background,
+                        borderColor: selectedLoanType?.id === loanType.id ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => handleLoanTypeChange(loanType)}
+                  >
+                    <Text style={[styles.loanTypeName, { color: selectedLoanType?.id === loanType.id ? colors.primary : colors.text }]}>
+                      {loanType.name}
+                    </Text>
+                    <Text style={[styles.loanTypeAmount, { color: colors.textSecondary }]}>
+                      {formatCurrency(loanType.minAmount)} - {formatCurrency(loanType.maxAmount)}
+                    </Text>
+                    <Text style={[styles.loanTypeRate, { color: colors.textSecondary }]}>
+                      {loanType.interestRate}% · {loanType.termMonths} months
+                    </Text>
+                    {selectedLoanType?.id === loanType.id && (
+                      <Ionicons name="checkmark-circle" size={20} color={colors.primary} style={styles.loanTypeCheck} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {selectedLoanType && (
+              <View style={[styles.productDetails, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.productTitle, { color: colors.text }]}>Product Details</Text>
+                <View style={styles.productGrid}>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Min Amount</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{formatCurrency(selectedLoanType.minAmount)}</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Max Amount</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{formatCurrency(selectedLoanType.maxAmount)}</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Interest Rate</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{selectedLoanType.interestRate}%</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Term</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{selectedLoanType.termMonths} months</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Grace Period</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{selectedLoanType.gracePeriodDays || 0} days</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Default Threshold</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{selectedLoanType.defaultThresholdDays || 30} days</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Net Disbursement</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{formatCurrency(selectedLoanType.netDisbursement || 0)}</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Current Loans</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{selectedLoanType.currentLoans || 0}</Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Installment Penalty</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>
+                      {selectedLoanType.installmentPenaltyType || 'fixed'} · {formatCurrency(selectedLoanType.installmentPenaltyAmount || 0)}
+                    </Text>
+                  </View>
+                  <View style={styles.productItem}>
+                    <Text style={[styles.productLabel, { color: colors.textSecondary }]}>Loan Penalty</Text>
+                    <Text style={[styles.productValue, { color: colors.text }]}>{formatCurrency(selectedLoanType.loanPenaltyAmount || 0)}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </Card>
+
           {/* Loan Details */}
           <Card style={styles.formCard}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -621,6 +743,67 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginBottom: spacing.xl,
+  },
+  loanTypeScroll: {
+    marginBottom: spacing.md,
+  },
+  loanTypeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  loanTypeCard: {
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    minWidth: 180,
+    maxWidth: 220,
+    position: 'relative',
+  },
+  loanTypeName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
+  },
+  loanTypeAmount: {
+    fontSize: typography.fontSize.xs,
+    marginBottom: spacing.xs / 2,
+  },
+  loanTypeRate: {
+    fontSize: typography.fontSize.xs,
+  },
+  loanTypeCheck: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+  },
+  productDetails: {
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+  },
+  productTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
+  },
+  productGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  productItem: {
+    flex: 1,
+    minWidth: '45%',
+    marginBottom: spacing.xs,
+  },
+  productLabel: {
+    fontSize: typography.fontSize.xs,
+    marginBottom: spacing.xs / 2,
+  },
+  productValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
 });
 

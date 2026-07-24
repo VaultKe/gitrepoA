@@ -278,7 +278,7 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 	}
 }
 
-func ApproveLoan(c *gin.Context) {
+func InitiateLoanApproval(c *gin.Context) {
 	loanID := c.Param("id")
 	if loanID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -288,7 +288,6 @@ func ApproveLoan(c *gin.Context) {
 		return
 	}
 
-	// Get user ID from context
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -298,7 +297,17 @@ func ApproveLoan(c *gin.Context) {
 		return
 	}
 
-	// Get database connection
+	var req struct {
+		Comment string `json:"comment" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Comment is required: " + err.Error(),
+		})
+		return
+	}
+
 	db, exists := c.Get("db")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -308,99 +317,141 @@ func ApproveLoan(c *gin.Context) {
 		return
 	}
 
-	// Check if loan exists and get current status
-	var currentStatus, chamaID string
-	err := db.(*sql.DB).QueryRow(`
-		SELECT status, chama_id FROM loans WHERE id = $1
-	`, loanID).Scan(&currentStatus, &chamaID)
+	// Determine role from the loan's next approval stage
+	var approvalStage string
+	err := db.(*sql.DB).QueryRow("SELECT approval_stage FROM loans WHERE id = $1", loanID).Scan(&approvalStage)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"error":   "Loan not found",
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
-			"error":   "Failed to fetch loan: " + err.Error(),
+			"error":   "Loan not found",
 		})
 		return
 	}
 
-	// Check if user is authorized (chama chairperson or treasurer)
-	var userRole string
-	err = db.(*sql.DB).QueryRow(`
-		SELECT role FROM chama_members WHERE chama_id = $1 AND user_id = $2
-	`, chamaID, userID).Scan(&userRole)
-	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"error":   "You are not authorized to approve loans for this chama",
-		})
-		return
-	}
-
-	if userRole != "chairperson" && userRole != "treasurer" {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"error":   "Only chairperson or treasurer can approve loans",
-		})
-		return
-	}
-
-	// Check if loan can be approved
-	if currentStatus != "guarantors_approved" && currentStatus != "pending" {
+	var role string
+	switch approvalStage {
+	case "pending":
+		role = "secretary"
+	case "secretary_approved":
+		role = "treasurer"
+	case "treasurer_approved":
+		role = "chairperson"
+	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   fmt.Sprintf("Cannot approve loan with status: %s", currentStatus),
+			"error":   "Loan is not in a state that requires approval",
 		})
 		return
 	}
 
-	// Update loan status to approved
-	_, err = db.(*sql.DB).Exec(`
-		UPDATE loans
-		SET status = 'approved', approved_by = $1, approved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $2
-	`, userID, loanID)
+	otpID, err := services.NewLoanService(db.(*sql.DB)).InitiateLoanApproval(loanID, userID.(string), role, req.Comment)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Failed to approve loan: " + err.Error(),
+			"error":   err.Error(),
 		})
 		return
-	}
-
-	// Get loan details for notification
-	var borrowerID string
-	var amount float64
-	err = db.(*sql.DB).QueryRow(`
-		SELECT borrower_id, amount FROM loans WHERE id = $1
-	`, loanID).Scan(&borrowerID, &amount)
-	if err != nil {
-		fmt.Printf("Failed to get loan details for notification: %v\n", err)
-	} else {
-		// Create notification for borrower
-		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
-		err = createNotification(db.(*sql.DB), notificationID, borrowerID, "chama",
-			"Loan Approved",
-			fmt.Sprintf("Your loan application for KES %.2f has been approved and is ready for disbursement.", amount),
-			fmt.Sprintf(`{"loan_id": "%s", "status": "approved", "amount": %.2f}`, loanID, amount),
-			"loan", nil)
-		if err != nil {
-			fmt.Printf("Failed to create loan approval notification: %v\n", err)
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Loan approved successfully",
+		"message": fmt.Sprintf("Approval OTP sent to your phone. Please verify to approve as %s.", role),
 		"data": map[string]interface{}{
-			"loan_id": loanID,
-			"status":  "approved",
+			"otpId": otpID,
+			"role":  role,
 		},
 	})
+}
+
+func ConfirmLoanApproval(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	var req struct {
+		OTP     string `json:"otp" binding:"required,len=6"`
+		Comment string `json:"comment" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "OTP and comment are required: " + err.Error(),
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	// Determine role from current approval stage
+	var approvalStage, role string
+	err := db.(*sql.DB).QueryRow("SELECT approval_stage FROM loans WHERE id = $1", loanID).Scan(&approvalStage)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Loan not found",
+		})
+		return
+	}
+
+	switch approvalStage {
+	case "pending":
+		role = "secretary"
+	case "secretary_approved":
+		role = "treasurer"
+	case "treasurer_approved":
+		role = "chairperson"
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan is not in a state that requires approval",
+		})
+		return
+	}
+
+	err = services.NewLoanService(db.(*sql.DB)).ConfirmLoanApproval(loanID, userID.(string), role, req.OTP, req.Comment)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	response := gin.H{
+		"success": true,
+		"message": fmt.Sprintf("Loan approved successfully as %s", role),
+		"data": map[string]interface{}{
+			"role": role,
+		},
+	}
+
+	if role == "chairperson" {
+		response["message"] = "Loan fully approved and disbursement initiated to borrower's M-Pesa"
+		response["data"].(map[string]interface{})["disbursed"] = true
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func RejectLoan(c *gin.Context) {
