@@ -30,7 +30,7 @@ const LoanDetails = ({ route, navigation }) => {
 
   const [loan, setLoan] = useState(null);
   const [loanType, setLoanType] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [payments, setPayments] = useState([]);
   const [allPayments, setAllPayments] = useState([]);
   const [repaymentHistory, setRepaymentHistory] = useState(null);
@@ -54,7 +54,11 @@ const LoanDetails = ({ route, navigation }) => {
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
-    if (loanId) loadLoanDetails();
+    if (loanId) {
+      loadLoanDetails();
+    } else {
+      setLoading(false);
+    }
   }, [loanId]);
 
   useEffect(() => {
@@ -513,6 +517,17 @@ const LoanDetails = ({ route, navigation }) => {
     </View>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.containerBackground]}>
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading loan details...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!loan) {
     return (
       <SafeAreaView style={[styles.container, styles.containerBackground]}>
@@ -732,6 +747,8 @@ const createStyles = (colors) => StyleSheet.create({
   errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
   errorTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.md, marginBottom: spacing.xs, color: colors.text },
   errorSubtitle: { fontSize: typography.fontSize.sm, textAlign: 'center', color: colors.textSecondary },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  loadingText: { fontSize: typography.fontSize.base },
 });
 
 export default LoanDetails;

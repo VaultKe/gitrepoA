@@ -617,7 +617,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
         {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-            {item.applicant_name || item.memberName || item.applicant?.name || 'Unknown Member'}
+            {item.borrower?.fullName || item.borrower?.name || item.applicant_name || item.memberName || item.applicant?.name || item.borrower?.first_name + ' ' + item.borrower?.last_name || 'Unknown Member'}
           </Text>
         </View>
 
@@ -793,112 +793,99 @@ const LoanManagementScreen = ({ route, navigation }) => {
             </View>
 
             {/* Subview content */}
-            {loanSubview === 'loans' ? (
-              <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-                <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-                  <View style={{ flex: 2, paddingHorizontal: spacing.xs }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Member</Text>
-                  </View>
-                  <View style={{ flex: 1.5, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Amount</Text>
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Date</Text>
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Status</Text>
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'semibold', color: colors.primary }}>Actions</Text>
-                  </View>
-                </View>
-                <FlatList
-                  data={loans}
-                  renderItem={renderTableRow}
-                  keyExtractor={(item) => item.id?.toString()}
-                  style={{ minHeight: 200 }}
-                  showsVerticalScrollIndicator={false}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={refreshing}
-                      onRefresh={onRefresh}
-                      colors={[colors.primary]}
-                      tintColor={colors.primary}
-                    />
-                  }
-                  ListEmptyComponent={!loading && renderEmptyState()}
-                />
-              </View>
-            ) : loanSubview === 'loan-types' ? (
-              <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
-                <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-                  <Text style={{ flex: 2, fontSize: 12, fontWeight: 'semibold', color: colors.primary, paddingHorizontal: spacing.xs }}>Name</Text>
-                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Loan Amount</Text>
-                  <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Rate</Text>
-                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Term</Text>
-                  <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Status</Text>
-                  {canManageLoanTypes() && (
-                    <Text style={{ flex: 0.8, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Actions</Text>
-                  )}
-                </View>
-                <FlatList
-                  data={loanTypes}
-                  keyExtractor={(item) => item.id}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={loanTypesLoading}
-                      onRefresh={loadLoanTypes}
-                      colors={[colors.primary]}
-                      tintColor={colors.primary}
-                    />
-                  }
-                  ListEmptyComponent={
-                    <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
-                      <Ionicons name="cash-outline" size={48} color={colors.textSecondary} />
-                      <Text style={{ color: colors.textSecondary, marginTop: spacing.sm }}>No loan types found</Text>
-                    </View>
-                  }
-                  renderItem={({ item, index }) => (
-                    <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: index % 2 === 0 ? colors.background : colors.surface, alignItems: 'center' }}>
-                      <View style={{ flex: 2, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
-                        <Text style={{ fontSize: 8, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{item.name}</Text>
-                        <Text style={{ fontSize: 7, color: colors.textSecondary }} numberOfLines={1}>{item.description || '-'}</Text>
-                      </View>
-                      <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 7, color: colors.text }}>
-                          {item.exactAmount ? formatCurrency(item.exactAmount) : 'KES 0'}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 8, color: colors.text }}>{item.interestRate}%</Text>
-                      </View>
-                      <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 8, color: colors.text }}>{item.termMonths} mo</Text>
-                        <Text style={{ fontSize: 7, color: colors.textSecondary }}>
-                          Grace: {item.gracePeriodDays || 0}d | Default: {item.defaultThresholdDays || 30}d
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <View style={{ paddingHorizontal: spacing.xs / 2, paddingVertical: spacing.xs / 2, borderRadius: 4, backgroundColor: (item.status === 'active' ? colors.success : colors.textSecondary) + '20' }}>
-                          <Text style={{ fontSize: 7, fontWeight: 'bold', color: item.status === 'active' ? colors.success : colors.textSecondary, textTransform: 'capitalize' }}>{item.status}</Text>
-                        </View>
-                      </View>
-                      {canManageLoanTypes() && (
-                        <View style={{ flex: 0.8, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.xs / 2 }}>
-                          <TouchableOpacity
-                            style={{ width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '20' }}
-                            onPress={() => handleEditLoanType(item)}
-                          >
-                            <Ionicons name="create" size={12} color={colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                  style={{ minHeight: 200 }}
-                  showsVerticalScrollIndicator={false}
-                />
-              </View>
+             {loanSubview === 'loans' ? (
+               <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+                 <View style={{ minWidth: 640 }}>
+                   <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
+                     <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+                       <View style={{ flex: 2, paddingHorizontal: spacing.xs }}>
+                         <Text style={{ fontSize: 13, fontWeight: 'semibold', color: colors.primary }}>Member</Text>
+                       </View>
+                       <View style={{ flex: 1.5, alignItems: 'center' }}>
+                         <Text style={{ fontSize: 13, fontWeight: 'semibold', color: colors.primary }}>Amount</Text>
+                       </View>
+                       <View style={{ flex: 1.5, alignItems: 'center' }}>
+                         <Text style={{ fontSize: 13, fontWeight: 'semibold', color: colors.primary }}>Date</Text>
+                       </View>
+                       <View style={{ flex: 1.2, alignItems: 'center' }}>
+                         <Text style={{ fontSize: 13, fontWeight: 'semibold', color: colors.primary }}>Status</Text>
+                       </View>
+                       <View style={{ flex: 1, alignItems: 'center' }}>
+                         <Text style={{ fontSize: 13, fontWeight: 'semibold', color: colors.primary }}>Actions</Text>
+                       </View>
+                     </View>
+                     {loans.length === 0 && !loading ? (
+                       <View style={{ alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm }}>
+                         <Ionicons name="card-outline" size={36} color={colors.textTertiary} />
+                         <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.sm }}>No loans found</Text>
+                       </View>
+                     ) : (
+                       loans.map((item, index) => renderTableRow({ item, index }))
+                     )}
+                   </View>
+                 </View>
+               </ScrollView>
+             ) : loanSubview === 'loan-types' ? (
+               <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+                 <View style={{ minWidth: 640 }}>
+                   <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
+                   <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+                     <Text style={{ flex: 2, fontSize: 13, fontWeight: 'semibold', color: colors.primary, paddingHorizontal: spacing.xs }}>Name</Text>
+                     <Text style={{ flex: 1.5, fontSize: 13, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Loan Amount</Text>
+                     <Text style={{ flex: 1, fontSize: 13, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Rate</Text>
+                     <Text style={{ flex: 1.5, fontSize: 13, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Term</Text>
+                     <Text style={{ flex: 1, fontSize: 13, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Status</Text>
+                     {canManageLoanTypes() && (
+                       <Text style={{ flex: 0.8, fontSize: 13, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Actions</Text>
+                     )}
+                   </View>
+                   {loanTypes.length === 0 && !loanTypesLoading ? (
+                     <View style={{ alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm }}>
+                       <Ionicons name="cash-outline" size={36} color={colors.textSecondary} />
+                       <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.sm }}>No loan types found</Text>
+                     </View>
+                   ) : (
+                     loanTypes.map((item, index) => (
+                       <View key={item.id} style={{ flexDirection: 'row', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: index % 2 === 0 ? colors.background : colors.surface, alignItems: 'center' }}>
+                         <View style={{ flex: 2, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
+                           <Text style={{ fontSize: 11, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{item.name}</Text>
+                           <Text style={{ fontSize: 10, color: colors.textSecondary }} numberOfLines={1}>{item.description || '-'}</Text>
+                         </View>
+                         <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
+                           <Text style={{ fontSize: 11, color: colors.text }}>
+                             {item.exactAmount ? formatCurrency(item.exactAmount) : 'KES 0'}
+                           </Text>
+                         </View>
+                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                           <Text style={{ fontSize: 11, color: colors.text }}>{item.interestRate}%</Text>
+                         </View>
+                         <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
+                           <Text style={{ fontSize: 11, color: colors.text }}>{item.termMonths} mo</Text>
+                           <Text style={{ fontSize: 10, color: colors.textSecondary }}>
+                             Grace: {item.gracePeriodDays || 0}d | Default: {item.defaultThresholdDays || 30}d
+                           </Text>
+                         </View>
+                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                           <View style={{ paddingHorizontal: spacing.xs / 2, paddingVertical: spacing.xs / 2, borderRadius: 4, backgroundColor: (item.status === 'active' ? colors.success : colors.textSecondary) + '20' }}>
+                             <Text style={{ fontSize: 11, fontWeight: 'bold', color: item.status === 'active' ? colors.success : colors.textSecondary, textTransform: 'capitalize' }}>{item.status}</Text>
+                           </View>
+                         </View>
+                         {canManageLoanTypes() && (
+                           <View style={{ flex: 0.8, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.xs / 2 }}>
+                             <TouchableOpacity
+                               style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '20' }}
+                               onPress={() => handleEditLoanType(item)}
+                             >
+                               <Ionicons name="create" size={14} color={colors.primary} />
+                             </TouchableOpacity>
+                           </View>
+                         )}
+                       </View>
+                     ))
+                   )}
+                   </View>
+                 </View>
+               </ScrollView>
             ) : loanSubview === 'create-loan-type' ? (
               <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
                 <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
