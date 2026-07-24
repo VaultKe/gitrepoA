@@ -420,7 +420,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         loanPenaltyAmount: parseFloat(createForm.loanPenaltyAmount) || 0,
       };
 
-      const response = await ApiService.updateLoanType(currentChamaId, selectedLoanType.id, updateData);
+      const response = await ApiService.updateLoanType(selectedLoanType.id, updateData);
       if (response.success) {
         Alert.alert('Success', 'Loan type updated successfully');
         setShowEditModal(false);
@@ -444,7 +444,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
 
     const newStatus = loanType.status === 'active' ? 'inactive' : 'active';
     try {
-      const response = await ApiService.updateLoanType(currentChamaId, loanType.id, {
+      const response = await ApiService.updateLoanType(loanType.id, {
         status: newStatus,
         updatedBy: userRole,
         updatedById: user.id,

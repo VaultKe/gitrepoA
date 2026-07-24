@@ -472,7 +472,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
 
       let response;
       if (editingLoanType) {
-        response = await ApiService.updateLoanType(currentChamaId, editingLoanType.id, payload);
+        response = await ApiService.updateLoanType(editingLoanType.id, payload);
         if (response.success) {
           Alert.alert('Success', 'Loan type updated successfully');
         }
