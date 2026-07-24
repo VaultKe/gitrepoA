@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   RefreshControl,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -154,17 +155,15 @@ const EnhancedUserDashboard = ({ navigation }) => {
                {greeting.text} {greeting.emoji}
              </Text>
              <Text style={{ fontSize: typography.fontSize.xl, fontWeight: 'bold', color: '#fff', marginBottom: spacing.xs }}>
-               Welcome back, <Text style={{ fontWeight: '800' }}>{getUserFirstName(user)}</Text> 👋
+               Welcome back, <Text style={{ fontWeight: '800' }}>{getUserFirstName(user)}</Text>
              </Text>
              <Text style={{ fontSize: typography.fontSize.sm, color: 'rgba(255,255,255,0.85)' }}>
                Here's what's happening with your finances today
              </Text>
            </View>
-           <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-             <Ionicons name="wallet" size={36} color="rgba(255,255,255,0.85)" />
-           </View>
-         </View>
-       </LinearGradient>
+          <Image source={require('../../../../assets/wallet.png')} style={{ width: 128, height: 128, resizeMode: 'contain' }} />
+          </View>
+        </LinearGradient>
      );
    };
 
