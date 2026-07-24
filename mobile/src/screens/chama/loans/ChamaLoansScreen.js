@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -9,9 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, shadows } from '../../../utils/theme';
 import ApiService from '../../../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 import ChamaLoansSearchCard from './ChamaLoansSearchCard';
 import ChamaLoansTable from './ChamaLoansTable';
 import ApplyForLoanScreen from './ApplyForLoanScreen';
+import MessageBanner from '../../../components/common/MessageBanner';
 
 const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   const { chamaId } = route.params;
@@ -28,6 +30,7 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   const [pageSize] = useState(10);
   const [totalLoans, setTotalLoans] = useState(0);
   const [userRole, setUserRole] = useState('member'); // Track user role for security
+  const [successBanner, setSuccessBanner] = useState({ visible: false, message: '' });
   const [newLoan, setNewLoan] = useState({
     amount: '',
     purpose: '',
@@ -49,6 +52,28 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
     loadUserRole();
     loadLoans();
   }, [chamaId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.loanApplicationSuccess) {
+        setSuccessBanner({
+          visible: true,
+          message: 'Loan application submitted successfully!',
+        });
+
+        // Clear the success flag from route params so it doesn't reappear
+        if (navigation?.setParams) {
+          navigation.setParams({ loanApplicationSuccess: undefined });
+        }
+
+        const timeoutId = setTimeout(() => {
+          setSuccessBanner({ visible: false, message: '' });
+        }, 5000);
+
+        return () => clearTimeout(timeoutId);
+      }
+    }, [route.params?.loanApplicationSuccess, navigation])
+  );
 
   useEffect(() => {
     loadLoans(currentPage);
@@ -358,6 +383,14 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
 
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
+      {successBanner.visible && (
+        <MessageBanner
+          type="success"
+          message={successBanner.message}
+          onClose={() => setSuccessBanner({ visible: false, message: '' })}
+        />
+      )}
+
       <ChamaLoansSearchCard
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}

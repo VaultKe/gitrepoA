@@ -207,10 +207,9 @@ const ApplyForLoanScreen = () => {
                 termMonths: '12',
                 requiresGuarantors: false,
               });
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'LoanManagement', params: { chamaId } }],
-              });
+              setTimeout(() => {
+                navigation.navigate('ChamaLoansScreen', { chamaId, loanApplicationSuccess: true });
+              }, 100);
             },
           },
         ]);
