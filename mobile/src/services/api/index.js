@@ -5,7 +5,6 @@ import * as chamaEndpoints from './chamaEndpoints';
 import * as loanEndpoints from './loanEndpoints';
 import * as chatEndpoints from './chatEndpoints';
 import * as notificationEndpoints from './notificationEndpoints';
-import * as learningEndpoints from './learningEndpoints';
 import * as settingsEndpoints from './settingsEndpoints';
 import * as invitationEndpoints from './invitationEndpoints';
 import * as contributionEndpoints from './contributionEndpoints';
@@ -26,9 +25,8 @@ const ApiService = {
   ...chamaEndpoints,
   ...loanEndpoints,
   ...chatEndpoints,
-  ...notificationEndpoints,
-  ...learningEndpoints,
-  ...settingsEndpoints,
+	...notificationEndpoints,
+	...settingsEndpoints,
   ...invitationEndpoints,
   ...contributionEndpoints,
   ...welfareEndpoints,

@@ -83,7 +83,7 @@ function UserTabNavigator() {
 
           // Determine if back button should be shown based on navigation state
           const canGoBack = navigation.canGoBack();
-          const isTabScreen = ['Home', 'Learn', 'Meetings', 'History', 'Chat'].includes(route.name);
+          const isTabScreen = ['Home', 'Meetings', 'History', 'Chat'].includes(route.name);
 
           // Get navigation state for more intelligent back button logic
           const state = navigation.getState();

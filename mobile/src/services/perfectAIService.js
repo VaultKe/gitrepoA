@@ -92,7 +92,7 @@ class PerfectAIService {
         // STEP 8: Final validation and quality check
         const validatedResponse = await this.validateResponseQuality(response, questionAnalysis, userData);
 
-        // STEP 9: Index interaction for learning
+        // STEP 9: Index interaction for analytics
         await this.indexInteraction(questionId, questionAnalysis, userData, validatedResponse);
 
         const processingTime = Date.now() - startTime;
@@ -261,7 +261,7 @@ class PerfectAIService {
   }
 
   /**
-   * INTERACTION INDEXING FOR LEARNING
+   * INTERACTION INDEXING FOR ANALYTICS
    */
   async indexInteraction(questionId, questionAnalysis, userData, response) {
     try {
@@ -277,7 +277,7 @@ class PerfectAIService {
         processingSuccess: true
       };
 
-      // Store for future learning (in a real app, this would go to a database)
+      // Store for analytics (in a real app, this would go to a database)
       console.log('📚 Indexing interaction:', interaction);
       
     } catch (error) {

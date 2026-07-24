@@ -32,8 +32,6 @@ const ContactSupportScreen = ({ navigation }) => {
     { id: 'payment', label: 'Payment Problems', icon: 'card-outline' },
     { id: 'chama', label: 'Chama Management', icon: 'people-outline' },
     { id: 'technical', label: 'Technical Issues', icon: 'bug-outline' },
-    
-    { id: 'learning', label: 'Learning Platform', icon: 'school-outline' },
     { id: 'other', label: 'Other', icon: 'help-outline' },
   ];
 

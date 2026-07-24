@@ -403,41 +403,6 @@ func SetupRoutes(
 				security.POST("/scan-file", api.ScanFile)
 			}
 
-			learning := protected.Group("/learning")
-			{
-				learning.GET("/categories", api.GetLearningCategories)
-				learning.GET("/categories/:id", api.GetLearningCategory)
-				learning.GET("/courses", api.GetLearningCourses)
-				learning.GET("/courses/:id", api.GetLearningCourse)
-				learning.POST("/courses/:id/start", api.StartCourse)
-				learning.POST("/courses/:id/submit-quiz", api.SubmitQuizResults)
-				learning.POST("/upload/image", api.UploadLearningImage)
-				learning.POST("/upload/video", api.UploadLearningVideo)
-				learning.POST("/upload/document", api.UploadLearningDocument)
-				learning.POST("/validate-video-url", api.ValidateVideoURL)
-				admin := learning.Group("/admin")
-				admin.Use(func(c *gin.Context) {
-					userRole := c.GetString("userRole")
-					if userRole != "admin" {
-						c.JSON(http.StatusForbidden, gin.H{
-							"success": false,
-							"error":   "Admin access required",
-						})
-						c.Abort()
-						return
-					}
-					c.Next()
-				})
-				{
-					admin.POST("/categories", api.CreateLearningCategory)
-					admin.PUT("/categories/:id", api.UpdateLearningCategory)
-					admin.DELETE("/categories/:id", api.DeleteLearningCategory)
-					admin.POST("/courses", api.CreateLearningCourse)
-					admin.PUT("/courses/:id", api.UpdateLearningCourse)
-					admin.DELETE("/courses/:id", api.DeleteLearningCourse)
-				}
-			}
-
 			reminders := protected.Group("/reminders")
 			{
 				reminders.POST("/", reminderHandlers.CreateReminder)

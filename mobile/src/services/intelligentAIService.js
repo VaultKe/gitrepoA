@@ -60,7 +60,7 @@ class IntelligentAIService {
       // STEP 6: Response Validation and Quality Check
       const validatedResponse = await this.validateResponseAccuracy(response, userData, questionAnalysis);
       
-      // STEP 7: Index this interaction for future learning
+      // STEP 7: Index this interaction for future analysis
       await this.indexInteraction(question, questionAnalysis, userData, validatedResponse);
       
       return {

@@ -113,8 +113,6 @@ class DataFetcher {
         return await ApiService.getAllUsersComplete();
       case 'system-analytics':
         return await ApiService.getSystemAnalytics('7d');
-      case 'learning-analytics':
-        return await ApiService.getLearningAnalytics();
       case 'products-complete':
         return await ApiService.getAllProductsComplete();
       case 'marketplace-categories':

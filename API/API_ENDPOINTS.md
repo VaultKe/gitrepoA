@@ -162,19 +162,6 @@
 | GET | `/results` | Get vote results |
 | POST | `/role-escalation` | Create role escalation vote |
 
-### Learning (`/api/v1/learning`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/categories` | List categories |
-| GET | `/categories/:id` | Get category |
-| GET | `/courses` | List courses |
-| GET | `/courses/:id` | Get course |
-| POST | `/courses/:id/start` | Start course |
-| POST | `/courses/:id/submit-quiz` | Submit quiz |
-| POST | `/upload/image` | Upload learning image |
-| POST | `/upload/video` | Upload video |
-| POST | `/validate-video-url` | Validate video URL |
-
 ### Reminders (`/api/v1/reminders`)
 | Method | Endpoint | Description |
 |--------|----------|-------------|

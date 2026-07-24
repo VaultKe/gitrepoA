@@ -45,9 +45,6 @@ func MigrateAll(db *sql.DB) error {
 	if err := MigrateNotifications(db); err != nil {
 		return fmt.Errorf("notifications: %w", err)
 	}
-	if err := MigrateLearning(db); err != nil {
-		return fmt.Errorf("learning: %w", err)
-	}
 	if err := MigrateDisbursements(db); err != nil {
 		return fmt.Errorf("disbursements: %w", err)
 	}

@@ -21,12 +21,6 @@ export const getDashboardForScreen = (screenName) => {
     'PayBills': 'user',
     
     'Invitations': 'user',
-    'Learn': 'user',
-    'CourseDetail': 'user',
-    'QuizTaking': 'user',
-    'VideoPlayer': 'user',
-    'ArticleReader': 'user',
-    'CourseNavigation': 'user',
     'Meetings': 'user',
     'AIAssistant': 'user',
     'Chat': 'user',
@@ -38,14 +32,11 @@ export const getDashboardForScreen = (screenName) => {
     'AdminMain': 'admin',
     'UserManagement': 'admin',
     'ChamaManagement': 'admin',
-    'LearningManagement': 'admin',
     'SystemAnalytics': 'admin',
     'SecurityCenter': 'admin',
     'PaymentSystem': 'admin',
     'BackupMaintenance': 'admin',
     'AdminSettings': 'admin',
-    'CreateLearningCategory': 'admin',
-    'CreateLearningCourse': 'admin',
 
     // Chama Dashboard Screens
     'ChamaMain': 'chama',
@@ -126,9 +117,8 @@ export const getScreenTitle = (screenName) => {
     'Withdraw': 'Withdraw Money',
     'TransactionHistory': 'Transaction History',
     'BuyAirtime': 'Buy Airtime',
-    'PayBills': 'Pay Bills',
-    
-    'Learn': 'Learning Hub',
+'PayBills': 'Pay Bills',
+
     'Meetings': 'Meetings',
     'AIAssistant': 'AI Assistant',
     'Chat': 'Messages',
@@ -140,14 +130,11 @@ export const getScreenTitle = (screenName) => {
     'AdminMain': 'Admin Dashboard',
     'UserManagement': 'User Management',
     'ChamaManagement': 'Chama Management',
-    'LearningManagement': 'Learning Management',
     'SystemAnalytics': 'System Analytics',
     'SecurityCenter': 'Security Center',
     'PaymentSystem': 'Payment System',
     'BackupMaintenance': 'Backup & Maintenance',
     'AdminSettings': 'Admin Settings',
-    'CreateLearningCategory': 'Create Category',
-    'CreateLearningCourse': 'Create Course',
 
     // Chama Dashboard
     'ChamaMain': 'Chama Dashboard',

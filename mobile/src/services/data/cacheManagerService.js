@@ -8,7 +8,7 @@ const DATA_DEPENDENCIES = {
   'chama-dashboard': ['chamas', 'meetings'],
   'marketplace': ['products-complete', 'marketplace-categories', 'cart', 'orders', 'wishlist'],
   'chat': ['chat-rooms', 'chat-messages-preload'],
-  'admin': ['users-complete', 'all-chamas', 'system-analytics', 'learning-analytics', 'marketplace-analytics', 'support-requests'],
+  'admin': ['users-complete', 'all-chamas', 'system-analytics', 'marketplace-analytics', 'support-requests'],
   'wallet': ['wallet', 'transactions', 'recent-contacts'],
   'notifications': ['notifications', 'unread-count'],
 };

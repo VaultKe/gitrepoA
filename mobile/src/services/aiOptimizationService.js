@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * AI Optimization Service
- * Handles learning from user interactions to improve AI responses
+ * Handles improvement of AI responses based on user feedback
  */
 class AIOptimizationService {
   constructor() {
@@ -14,8 +14,8 @@ class AIOptimizationService {
     };
   }
 
-  /**
-   * Track user question patterns for learning
+/**
+ * Track user question patterns for analysis
    */
   async trackQuestionPattern(question, userContext, responseType) {
     try {
@@ -55,33 +55,30 @@ class AIOptimizationService {
   /**
    * Track user feedback on AI responses
    */
-  async trackResponseFeedback(questionId, responseId, feedback) {
-    try {
-      const feedbackData = {
-        questionId,
-        responseId,
-        feedback, // 'helpful', 'not_helpful', 'partially_helpful'
-        timestamp: new Date().toISOString(),
-        improvements: feedback.improvements || null
-      };
+async trackResponseFeedback(questionId, responseId, feedback) {
+     try {
+       const feedbackData = {
+         questionId,
+         responseId,
+         feedback, // 'helpful', 'not_helpful', 'partially_helpful'
+         timestamp: new Date().toISOString(),
+         improvements: feedback.improvements || null
+       };
 
-      const feedbacks = await this.getStoredData(this.STORAGE_KEYS.RESPONSE_FEEDBACK, []);
-      feedbacks.push(feedbackData);
+       const feedbacks = await this.getStoredData(this.STORAGE_KEYS.RESPONSE_FEEDBACK, []);
+       feedbacks.push(feedbackData);
 
-      // Keep only last 100 feedbacks
-      if (feedbacks.length > 100) {
-        feedbacks.splice(0, feedbacks.length - 100);
-      }
+       // Keep only last 100 feedbacks
+       if (feedbacks.length > 100) {
+         feedbacks.splice(0, feedbacks.length - 100);
+       }
 
-      await AsyncStorage.setItem(this.STORAGE_KEYS.RESPONSE_FEEDBACK, JSON.stringify(feedbacks));
-      
-      // Learn from feedback to improve future responses
-      await this.learnFromFeedback(feedbackData);
-      
-    } catch (error) {
-      console.warn('Failed to track response feedback:', error);
-    }
-  }
+       await AsyncStorage.setItem(this.STORAGE_KEYS.RESPONSE_FEEDBACK, JSON.stringify(feedbacks));
+       
+     } catch (error) {
+       console.warn('Failed to track response feedback:', error);
+     }
+   }
 
   /**
    * Find similar questions to improve response quality
@@ -205,17 +202,11 @@ class AIOptimizationService {
         optimizedResponse = this.addDetailedExamples(optimizedResponse, questionContext);
       }
 
-      if (preferences.prefersActionableSteps) {
-        optimizedResponse = this.emphasizeActionableSteps(optimizedResponse);
-      }
+       if (preferences.prefersActionableSteps) {
+         optimizedResponse = this.emphasizeActionableSteps(optimizedResponse);
+       }
 
-      // Add learning from similar questions
-      if (similarQuestions.length > 0) {
-        const learnings = this.extractLearningsFromSimilar(similarQuestions);
-        optimizedResponse += `\n\n💡 **Additional insights based on similar questions:**\n${learnings}`;
-      }
-
-      return optimizedResponse;
+       return optimizedResponse;
     } catch (error) {
       console.warn('Failed to optimize response:', error);
       return baseResponse;
@@ -275,12 +266,6 @@ class AIOptimizationService {
     }
   }
 
-  async learnFromFeedback(feedbackData) {
-    // Implementation for learning from user feedback
-    // This would adjust response strategies based on what users find helpful
-    console.log('Learning from feedback:', feedbackData);
-  }
-
   generateSuggestionText(type, context) {
     const suggestions = {
       savings: 'How can I improve my savings strategy?',
@@ -328,23 +313,6 @@ class AIOptimizationService {
   emphasizeActionableSteps(response) {
     // Highlight actionable steps for users who prefer clear actions
     return response.replace(/(\d+\.\s)/g, '✅ $1');
-  }
-
-  extractLearningsFromSimilar(similarQuestions) {
-    // Extract common patterns from similar questions
-    const commonKeywords = {};
-    similarQuestions.forEach(q => {
-      q.keywords.forEach(keyword => {
-        commonKeywords[keyword] = (commonKeywords[keyword] || 0) + 1;
-      });
-    });
-
-    const topKeywords = Object.entries(commonKeywords)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 3)
-      .map(([keyword]) => keyword);
-
-    return `Users often ask about: ${topKeywords.join(', ')}`;
   }
 }
 

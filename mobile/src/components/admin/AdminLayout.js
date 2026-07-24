@@ -59,13 +59,6 @@ export default function AdminLayout({
       description: 'Oversee all chamas'
     },
     {
-      id: 'learning',
-      title: 'Learning Management',
-      icon: 'school',
-      route: 'LearningManagement',
-      description: 'Manage courses and categories'
-    },
-    {
       id: 'analytics',
       title: 'System Analytics',
       icon: 'analytics',
@@ -121,12 +114,6 @@ export default function AdminLayout({
       title: 'Chamas',
       icon: 'business-outline',
       iconFocused: 'business',
-    },
-    {
-      id: 'learning',
-      title: 'Learning',
-      icon: 'school-outline',
-      iconFocused: 'school',
     },
     {
       id: 'analytics',
