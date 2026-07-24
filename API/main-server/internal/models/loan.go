@@ -108,6 +108,17 @@ type LoanPayment struct {
 	CreatedAt       time.Time `json:"createdAt" db:"created_at"`
 }
 
+// LoanFine represents a fine or penalty on a loan
+type LoanFine struct {
+	ID        string     `json:"id" db:"id"`
+	LoanID    string     `json:"loanId" db:"loan_id"`
+	Amount    float64    `json:"amount" db:"amount"`
+	Reason    string     `json:"reason" db:"reason"`
+	Status    string     `json:"status" db:"status"`
+	PaidAt    *time.Time `json:"paidAt,omitempty" db:"paid_at"`
+	CreatedAt time.Time  `json:"createdAt" db:"created_at"`
+}
+
 // LoanApplication represents loan application data
 type LoanApplication struct {
 	Type               LoanType `json:"type" validate:"required"`

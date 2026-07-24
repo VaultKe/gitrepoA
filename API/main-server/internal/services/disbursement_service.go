@@ -229,7 +229,7 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec("UPDATE loans SET status = 'active', disbursed_at = CURRENT_TIMESTAMP WHERE id = $1", loanID)
+	_, err = tx.Exec("UPDATE loans SET status = 'active', disbursed_at = CURRENT_TIMESTAMP, due_date = CURRENT_TIMESTAMP + ($2 || ' months')::interval WHERE id = $1", loanID, loan.Duration)
 	if err != nil {
 		return fmt.Errorf("failed to update loan status: %w", err)
 	}
@@ -566,6 +566,7 @@ type loan struct {
 	ChamaID     string
 	Amount      float64
 	TotalAmount float64
+	Duration    int
 	Status      string
 }
 
@@ -604,9 +605,9 @@ type disbursementItem struct {
 func (s *DisbursementService) getLoanByID(loanID string) (*loan, error) {
 	var l loan
 	err := s.db.QueryRow(
-		"SELECT id, borrower_id, chama_id, amount, total_amount, status FROM loans WHERE id = $1",
+		"SELECT id, borrower_id, chama_id, amount, total_amount, duration, status FROM loans WHERE id = $1",
 		loanID,
-	).Scan(&l.ID, &l.BorrowerID, &l.ChamaID, &l.Amount, &l.TotalAmount, &l.Status)
+	).Scan(&l.ID, &l.BorrowerID, &l.ChamaID, &l.Amount, &l.TotalAmount, &l.Duration, &l.Status)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get loan: %w", err)
 	}

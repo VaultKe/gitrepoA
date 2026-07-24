@@ -18,7 +18,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
-import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval } from '../../../services/api/loanEndpoints';
+import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanFines } from '../../../services/api/loanEndpoints';
 import RecordPaymentModal from './RecordPaymentModal';
 
 const LoanDetails = ({ route, navigation }) => {
@@ -36,6 +36,8 @@ const LoanDetails = ({ route, navigation }) => {
   const [repaymentHistory, setRepaymentHistory] = useState(null);
   const [disbursement, setDisbursement] = useState(null);
   const [schedule, setSchedule] = useState([]);
+  const [guarantors, setGuarantors] = useState([]);
+  const [fines, setFines] = useState([]);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('mobile_money');
@@ -91,6 +93,30 @@ const LoanDetails = ({ route, navigation }) => {
         setTotalItems(0);
         setTotalPages(1);
         setCurrentPage(1);
+      }
+
+      try {
+        const guarantorsResponse = await getLoanGuarantors(loanId);
+        if (guarantorsResponse?.success) {
+          setGuarantors(Array.isArray(guarantorsResponse.data) ? guarantorsResponse.data : []);
+        } else {
+          setGuarantors([]);
+        }
+      } catch (guarantorError) {
+        console.error('Failed to load guarantors:', guarantorError);
+        setGuarantors([]);
+      }
+
+      try {
+        const finesResponse = await getLoanFines(loanId);
+        if (finesResponse?.success) {
+          setFines(Array.isArray(finesResponse.data) ? finesResponse.data : []);
+        } else {
+          setFines([]);
+        }
+      } catch (finesError) {
+        console.error('Failed to load fines:', finesError);
+        setFines([]);
       }
     } catch (error) {
       console.error('Error loading loan details:', error);
@@ -340,34 +366,53 @@ const LoanDetails = ({ route, navigation }) => {
     { id: 'created', cells: ['Created At', formatDate(loan?.createdAt)] },
   ];
 
-  const scheduleHeaders = ['Month', 'Due Date', 'Amount', 'Principal', 'Interest', 'Status'];
+  const scheduleHeaders = ['Month', 'Amount', 'Status'];
   const scheduleData = schedule.map((item) => ({
     id: String(item.number),
     cells: [
       `Month ${item.number}`,
-      formatDate(item.dueDate),
       formatCurrency(item.amount),
-      formatCurrency(item.principal),
-      formatCurrency(item.interest),
       item.status?.toUpperCase(),
     ],
   }));
 
-  const paymentHeaders = ['Date', 'Type', 'Amount', 'Status'];
+  const paymentHeaders = ['Date', 'Amount', 'Status'];
   const paymentData = payments.map((payment) => {
     const paymentDate = payment.paidAt || payment.date || payment.createdAt;
-    const paymentType = payment.paymentMethod || payment.type || 'Payment';
     const paymentStatus = payment.status || 'completed';
     return {
       id: payment.id,
       cells: [
         formatDate(paymentDate),
-        paymentType,
         formatCurrency(payment.amount),
         renderStatusBadge(paymentStatus),
       ],
     };
   });
+
+  const guarantorHeaders = ['Guarantor', 'Amount', 'Status'];
+  const guarantorData = guarantors.map((g) => {
+    const fullName = g.user ? `${g.user.firstName || ''} ${g.user.lastName || ''}`.trim() : 'Unknown';
+    return {
+      id: g.id,
+      cells: [
+        fullName,
+        formatCurrency(g.amount),
+        renderStatusBadge(g.status),
+      ],
+    };
+  });
+
+  const fineHeaders = ['Date', 'Reason', 'Amount', 'Status'];
+  const fineData = fines.map((f) => ({
+    id: f.id,
+    cells: [
+      formatDate(f.createdAt),
+      f.reason,
+      formatCurrency(f.amount),
+      renderStatusBadge(f.status),
+    ],
+  }));
 
   const renderCell = (cell, index, totalCells) => {
     const isFirst = index === 0;
@@ -525,6 +570,8 @@ const LoanDetails = ({ route, navigation }) => {
 
         {renderLoanTable({ title: 'Repayment Schedule', headers: scheduleHeaders, data: scheduleData, emptyMessage: 'No schedule available yet' })}
         {renderLoanTable({ title: 'Repayment History', headers: paymentHeaders, data: paymentData, emptyMessage: 'No repayment history yet' })}
+        {renderLoanTable({ title: 'Guarantors', headers: guarantorHeaders, data: guarantorData, emptyMessage: 'No guarantors for this loan' })}
+        {renderLoanTable({ title: 'Fines / Penalties', headers: fineHeaders, data: fineData, emptyMessage: 'No fines for this loan' })}
 
         {totalItems > pageSize && (
           <View style={styles.paginationContainer}>

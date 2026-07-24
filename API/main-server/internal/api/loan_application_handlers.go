@@ -319,18 +319,15 @@ func CreateLoanApplication(c *gin.Context) {
 	// Calculate total amount with interest
 	totalAmount := req.Amount * (1 + req.InterestRate/100)
 
-	// Calculate due date (repayment period in months)
-	dueDate := time.Now().AddDate(0, req.RepaymentPeriod, 0)
-
 	// Insert loan application
 	_, err = tx.Exec(`
 		INSERT INTO loans (
 			id, borrower_id, chama_id, loan_type_id, type, amount, interest_rate,
 			duration, purpose, status, total_amount, remaining_amount,
-			required_guarantors, approved_guarantors, due_date,
+			required_guarantors, approved_guarantors,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'regular'), $6, $7, $8, $9, 'pending', $10, $10, $11, 0, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, loanID, userID, req.ChamaID, req.LoanTypeID, req.LoanTypeName, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, len(req.Guarantors), dueDate)
+		) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'regular'), $6, $7, $8, $9, 'pending', $10, $10, $11, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, loanID, userID, req.ChamaID, req.LoanTypeID, req.LoanTypeName, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, len(req.Guarantors))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -421,7 +418,6 @@ func CreateLoanApplication(c *gin.Context) {
 			"status":             "pending",
 			"requiredGuarantors": len(req.Guarantors),
 			"approvedGuarantors": 0,
-			"dueDate":            dueDate.Format(time.RFC3339),
 			"createdAt":          time.Now().Format(time.RFC3339),
 		},
 	})
@@ -720,6 +716,76 @@ func RecordLoanPayment(c *gin.Context) {
 		"success": true,
 		"message": "Loan payment recorded successfully",
 		"data":    payment,
+	})
+}
+
+// GetLoanGuarantors returns guarantors for a loan
+func GetLoanGuarantors(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	guarantors, err := services.NewLoanService(db.(*sql.DB)).GetLoanGuarantors(loanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to get guarantors: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    guarantors,
+	})
+}
+
+// GetLoanFines returns fines for a loan
+func GetLoanFines(c *gin.Context) {
+	loanID := c.Param("id")
+	if loanID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Loan ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+
+	fines, err := services.NewLoanService(db.(*sql.DB)).GetLoanFines(loanID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to get fines: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    fines,
 	})
 }
 

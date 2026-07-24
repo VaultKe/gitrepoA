@@ -222,6 +222,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
   const [loanSubview, setLoanSubview] = useState('loans'); // 'loans' | 'loan-types' | 'create-loan-type'
   const [loanTypes, setLoanTypes] = useState([]);
   const [loanTypesLoading, setLoanTypesLoading] = useState(false);
+  const [editingLoanType, setEditingLoanType] = useState(null);
   const [createForm, setCreateForm] = useState({
     name: '',
     description: '',
@@ -236,6 +237,12 @@ const LoanManagementScreen = ({ route, navigation }) => {
     maxLoansPerMember: '1',
     requiresCollateral: false,
     collateralDescription: '',
+    netDisbursement: '',
+    currentLoans: '0',
+    defaultThresholdDays: '30',
+    installmentPenaltyType: 'fixed',
+    installmentPenaltyAmount: '',
+    loanPenaltyAmount: '',
     status: 'active',
   });
   const [createSubmitting, setCreateSubmitting] = useState(false);
@@ -377,8 +384,46 @@ const LoanManagementScreen = ({ route, navigation }) => {
       maxLoansPerMember: '1',
       requiresCollateral: false,
       collateralDescription: '',
+      netDisbursement: '',
+      currentLoans: '0',
+      defaultThresholdDays: '30',
+      installmentPenaltyType: 'fixed',
+      installmentPenaltyAmount: '',
+      loanPenaltyAmount: '',
       status: 'active',
     });
+    setEditingLoanType(null);
+  };
+
+  const handleEditLoanType = (loanType) => {
+    if (!canManageLoanTypes()) {
+      Alert.alert('Access Denied', 'You do not have permission to edit loan types.');
+      return;
+    }
+    setEditingLoanType(loanType);
+    setCreateForm({
+      name: loanType.name || '',
+      description: loanType.description || '',
+      maxAmount: loanType.maxAmount?.toString() || '',
+      minAmount: loanType.minAmount?.toString() || '',
+      interestRate: loanType.interestRate?.toString() || '',
+      termMonths: loanType.termMonths?.toString() || '',
+      eligibilityCriteria: loanType.eligibilityCriteria || 'active_members',
+      approvalRequired: loanType.approvalRequired ?? true,
+      gracePeriodDays: loanType.gracePeriodDays?.toString() || '0',
+      penaltyRate: loanType.penaltyRate?.toString() || '0',
+      maxLoansPerMember: loanType.maxLoansPerMember?.toString() || '1',
+      requiresCollateral: loanType.requiresCollateral ?? false,
+      collateralDescription: loanType.collateralDescription || '',
+      netDisbursement: loanType.netDisbursement?.toString() || '',
+      currentLoans: loanType.currentLoans?.toString() || '0',
+      defaultThresholdDays: loanType.defaultThresholdDays?.toString() || '30',
+      installmentPenaltyType: loanType.installmentPenaltyType || 'fixed',
+      installmentPenaltyAmount: loanType.installmentPenaltyAmount?.toString() || '',
+      loanPenaltyAmount: loanType.loanPenaltyAmount?.toString() || '',
+      status: loanType.status || 'active',
+    });
+    setLoanSubview('create-loan-type');
   };
 
   const loadLoanTypes = async () => {
@@ -400,7 +445,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
 
   const handleCreateLoanType = async () => {
     if (!canManageLoanTypes()) {
-      Alert.alert('Access Denied', 'You do not have permission to create loan types.');
+      Alert.alert('Access Denied', 'You do not have permission to manage loan types.');
       return;
     }
 
@@ -420,20 +465,36 @@ const LoanManagementScreen = ({ route, navigation }) => {
         gracePeriodDays: parseInt(createForm.gracePeriodDays, 10) || 0,
         penaltyRate: parseFloat(createForm.penaltyRate) || 0,
         maxLoansPerMember: parseInt(createForm.maxLoansPerMember, 10) || 1,
+        netDisbursement: parseFloat(createForm.netDisbursement) || 0,
+        currentLoans: parseInt(createForm.currentLoans) || 0,
+        defaultThresholdDays: parseInt(createForm.defaultThresholdDays) || 30,
+        installmentPenaltyAmount: parseFloat(createForm.installmentPenaltyAmount) || 0,
+        loanPenaltyAmount: parseFloat(createForm.loanPenaltyAmount) || 0,
       };
 
-      const response = await ApiService.createLoanType(currentChamaId, payload);
-      if (response.success) {
-        Alert.alert('Success', 'Loan type created successfully');
-        setLoanSubview('loan-types');
+      let response;
+      if (editingLoanType) {
+        response = await ApiService.updateLoanType(currentChamaId, editingLoanType.id, payload);
+        if (response.success) {
+          Alert.alert('Success', 'Loan type updated successfully');
+        }
+      } else {
+        response = await ApiService.createLoanType(currentChamaId, payload);
+        if (response.success) {
+          Alert.alert('Success', 'Loan type created successfully');
+        }
+      }
+
+      if (response?.success) {
         resetCreateForm();
         await loadLoanTypes();
+        setLoanSubview('loan-types');
       } else {
-        Alert.alert('Error', response.error || 'Failed to create loan type');
+        Alert.alert('Error', response?.error || 'Failed to save loan type');
       }
     } catch (error) {
-      console.error('Create loan type error:', error);
-      Alert.alert('Error', 'Failed to create loan type. Please try again.');
+      console.error('Save loan type error:', error);
+      Alert.alert('Error', 'Failed to save loan type. Please try again.');
     } finally {
       setCreateSubmitting(false);
     }
@@ -774,10 +835,13 @@ const LoanManagementScreen = ({ route, navigation }) => {
               <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
                 <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
                   <Text style={{ flex: 2, fontSize: 12, fontWeight: 'semibold', color: colors.primary, paddingHorizontal: spacing.xs }}>Name</Text>
-                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Max Amount</Text>
+                  <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Min - Max</Text>
                   <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Rate</Text>
                   <Text style={{ flex: 1.5, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Term</Text>
                   <Text style={{ flex: 1, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Status</Text>
+                  {canManageLoanTypes() && (
+                    <Text style={{ flex: 0.8, fontSize: 12, fontWeight: 'semibold', color: colors.primary, textAlign: 'center' }}>Actions</Text>
+                  )}
                 </View>
                 <FlatList
                   data={loanTypes}
@@ -797,25 +861,40 @@ const LoanManagementScreen = ({ route, navigation }) => {
                     </View>
                   }
                   renderItem={({ item, index }) => (
-                    <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: index % 2 === 0 ? colors.background : colors.surface }}>
+                    <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: index % 2 === 0 ? colors.background : colors.surface, alignItems: 'center' }}>
                       <View style={{ flex: 2, justifyContent: 'center', paddingHorizontal: spacing.xs }}>
                         <Text style={{ fontSize: 8, fontWeight: 'medium', color: colors.text }} numberOfLines={1}>{item.name}</Text>
                         <Text style={{ fontSize: 7, color: colors.textSecondary }} numberOfLines={1}>{item.description || '-'}</Text>
                       </View>
                       <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 8, color: colors.text }}>KES {item.maxAmount ? item.maxAmount.toLocaleString() : '-'}</Text>
+                        <Text style={{ fontSize: 7, color: colors.text }}>
+                          {item.minAmount ? formatCurrency(item.minAmount) : 'KES 0'} - {formatCurrency(item.maxAmount)}
+                        </Text>
                       </View>
                       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: 8, color: colors.text }}>{item.interestRate}%</Text>
                       </View>
                       <View style={{ flex: 1.5, alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ fontSize: 8, color: colors.text }}>{item.termMonths} mo</Text>
+                        <Text style={{ fontSize: 7, color: colors.textSecondary }}>
+                          Grace: {item.gracePeriodDays || 0}d | Default: {item.defaultThresholdDays || 30}d
+                        </Text>
                       </View>
                       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                         <View style={{ paddingHorizontal: spacing.xs / 2, paddingVertical: spacing.xs / 2, borderRadius: 4, backgroundColor: (item.status === 'active' ? colors.success : colors.textSecondary) + '20' }}>
                           <Text style={{ fontSize: 7, fontWeight: 'bold', color: item.status === 'active' ? colors.success : colors.textSecondary, textTransform: 'capitalize' }}>{item.status}</Text>
                         </View>
                       </View>
+                      {canManageLoanTypes() && (
+                        <View style={{ flex: 0.8, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.xs / 2 }}>
+                          <TouchableOpacity
+                            style={{ width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '20' }}
+                            onPress={() => handleEditLoanType(item)}
+                          >
+                            <Ionicons name="create" size={12} color={colors.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   )}
                   style={{ minHeight: 200 }}
@@ -827,8 +906,12 @@ const LoanManagementScreen = ({ route, navigation }) => {
                 <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
                   <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
                     <View style={{ marginBottom: spacing.lg }}>
-                      <Text style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.text, marginBottom: spacing.xs }}>Loan Type Information</Text>
-                      <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary }}>Fill in the details below to define a new loan product for this chama.</Text>
+                      <Text style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.text, marginBottom: spacing.xs }}>
+                        {editingLoanType ? 'Edit Loan Type' : 'Loan Type Information'}
+                      </Text>
+                      <Text style={{ fontSize: typography.fontSize.base, color: colors.textSecondary }}>
+                        {editingLoanType ? 'Update the loan product details below.' : 'Fill in the details below to define a new loan product for this chama.'}
+                      </Text>
                     </View>
                     <View style={{ gap: spacing.md }}>
                       <View>
@@ -956,11 +1039,11 @@ const LoanManagementScreen = ({ route, navigation }) => {
                         </View>
                       </View>
                       <Button
-                        title={createSubmitting ? 'Creating...' : 'Create Loan Type'}
+                        title={createSubmitting ? (editingLoanType ? 'Updating...' : 'Creating...') : (editingLoanType ? 'Update Loan Type' : 'Create Loan Type')}
                         onPress={handleCreateLoanType}
                         disabled={createSubmitting}
                         style={{ backgroundColor: colors.primary, marginTop: spacing.md }}
-                        icon={!createSubmitting && <Ionicons name="add" size={16} color={colors.white} />}
+                        icon={!createSubmitting && <Ionicons name={editingLoanType ? 'save' : 'add'} size={16} color={colors.white} />}
                       />
                     </View>
                   </View>

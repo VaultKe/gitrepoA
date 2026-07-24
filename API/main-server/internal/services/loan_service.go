@@ -853,6 +853,74 @@ func (s *LoanService) GetLoanPayments(loanID string) ([]*models.LoanPayment, err
 	return payments, nil
 }
 
+// GetLoanGuarantors retrieves guarantors for a loan
+func (s *LoanService) GetLoanGuarantors(loanID string) ([]*models.Guarantor, error) {
+	query := `
+		SELECT g.id, g.loan_id, g.user_id, g.amount, g.status, g.message,
+			   g.responded_at, g.created_at,
+			   u.first_name, u.last_name, u.email, u.phone
+		FROM guarantors g
+		LEFT JOIN users u ON g.user_id = u.id
+		WHERE g.loan_id = $1
+		ORDER BY g.created_at ASC
+	`
+
+	rows, err := s.db.Query(query, loanID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query loan guarantors: %w", err)
+	}
+	defer rows.Close()
+
+	var guarantors []*models.Guarantor
+	for rows.Next() {
+		var g models.Guarantor
+		var user models.User
+		err := rows.Scan(
+			&g.ID, &g.LoanID, &g.UserID, &g.Amount, &g.Status, &g.Message,
+			&g.RespondedAt, &g.CreatedAt,
+			&user.FirstName, &user.LastName, &user.Email, &user.Phone,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan guarantor: %w", err)
+		}
+		user.ID = g.UserID
+		g.User = &user
+		guarantors = append(guarantors, &g)
+	}
+
+	return guarantors, nil
+}
+
+// GetLoanFines retrieves fines for a loan
+func (s *LoanService) GetLoanFines(loanID string) ([]*models.LoanFine, error) {
+	query := `
+		SELECT id, loan_id, amount, reason, status, paid_at, created_at
+		FROM loan_fines
+		WHERE loan_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.Query(query, loanID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query loan fines: %w", err)
+	}
+	defer rows.Close()
+
+	var fines []*models.LoanFine
+	for rows.Next() {
+		var f models.LoanFine
+		err := rows.Scan(
+			&f.ID, &f.LoanID, &f.Amount, &f.Reason, &f.Status, &f.PaidAt, &f.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan loan fine: %w", err)
+		}
+		fines = append(fines, &f)
+	}
+
+	return fines, nil
+}
+
 // DeleteLoanType removes a loan type
 func (s *LoanService) DeleteLoanType(loanTypeID string) error {
 	lt, err := s.GetLoanTypeByID(loanTypeID)

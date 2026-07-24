@@ -106,6 +106,14 @@ const makeLoanPayment = async (loanId, amount, paymentMethod) => {
   });
 };
 
+const getLoanGuarantors = async (loanId) => {
+  return await makeRequest(`/loans/${loanId}/guarantors`);
+};
+
+const getLoanFines = async (loanId) => {
+  return await makeRequest(`/loans/${loanId}/fines`);
+};
+
 const getGuarantorRequests = async (userId) => {
   return await makeRequest(`/loans/guarantor-requests?userId=${userId}`);
 };
@@ -177,6 +185,8 @@ export {
   approveLoan,
   makeLoanPayment,
   getGuarantorRequests,
+  getLoanGuarantors,
+  getLoanFines,
   rejectLoan,
   disburseLoan,
   getLoanTypes,

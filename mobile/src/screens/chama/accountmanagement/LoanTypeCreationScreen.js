@@ -414,16 +414,18 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         defaultThresholdDays: parseInt(createForm.defaultThresholdDays) || 30,
         installmentPenaltyAmount: parseFloat(createForm.installmentPenaltyAmount) || 0,
         loanPenaltyAmount: parseFloat(createForm.loanPenaltyAmount) || 0,
-        updatedBy: userRole,
-        updatedById: user.id,
-        timestamp: new Date().toISOString(),
       };
 
-      // TODO: Implement updateLoanType API in backend
-      Alert.alert('Feature Coming Soon', 'Loan type updates will be available once the backend API is implemented.');
-      setShowEditModal(false);
-      setSelectedLoanType(null);
-      resetCreateForm();
+      const response = await ApiService.updateLoanType(currentChamaId, selectedLoanType.id, updateData);
+      if (response.success) {
+        Alert.alert('Success', 'Loan type updated successfully');
+        setShowEditModal(false);
+        setSelectedLoanType(null);
+        resetCreateForm();
+        loadLoanTypes();
+      } else {
+        Alert.alert('Error', response.error || 'Failed to update loan type');
+      }
     } catch (error) {
       console.error('Update loan type error:', error);
       Alert.alert('Error', 'Failed to update loan type. Please try again.');
@@ -764,27 +766,23 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
 
             <ScrollView style={styles.modalBody}>
               <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: colors.text }]}>
-                  Loan Type Name *
-                </Text>
+                <Text style={[styles.formLabel, { color: colors.text }]}>Loan Name *</Text>
                 <TextInput
                   style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                   value={createForm.name}
                   onChangeText={(text) => setCreateForm(prev => ({ ...prev, name: text }))}
-                  placeholder="Enter loan type name"
+                  placeholder="Enter loan name"
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: colors.text }]}>
-                  Description
-                </Text>
+                <Text style={[styles.formLabel, { color: colors.text }]}>Loan Description</Text>
                 <TextInput
                   style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                   value={createForm.description}
                   onChangeText={(text) => setCreateForm(prev => ({ ...prev, description: text }))}
-                  placeholder="Describe this loan type"
+                  placeholder="Describe this loan"
                   placeholderTextColor={colors.textSecondary}
                   multiline
                   numberOfLines={2}
@@ -793,51 +791,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
 
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Maximum Amount (KES) *
-                  </Text>
-                  <TextInput
-                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={createForm.maxAmount}
-                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, maxAmount: text }))}
-                    placeholder="Max loan amount"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Minimum Amount (KES)
-                  </Text>
-                  <TextInput
-                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={createForm.minAmount}
-                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, minAmount: text }))}
-                    placeholder="Min loan amount"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Interest Rate (%) *
-                  </Text>
-                  <TextInput
-                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={createForm.interestRate}
-                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, interestRate: text }))}
-                    placeholder="e.g. 12.5"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Term (Months) *
-                  </Text>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Loan Period</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     value={createForm.termMonths}
@@ -847,13 +801,8 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                     keyboardType="numeric"
                   />
                 </View>
-              </View>
-
-              <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Grace Period (Days)
-                  </Text>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Grace Period (Days)</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     value={createForm.gracePeriodDays}
@@ -863,15 +812,27 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                     keyboardType="numeric"
                   />
                 </View>
-                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Default Threshold (Days)
-                  </Text>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Minimum Amount (KES)</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={createForm.defaultThresholdDays}
-                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, defaultThresholdDays: text }))}
-                    placeholder="e.g. 30"
+                    value={createForm.minAmount}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, minAmount: text }))}
+                    placeholder="Min loan amount"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Maximum Amount (KES) *</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.maxAmount}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, maxAmount: text }))}
+                    placeholder="Max loan amount"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
                   />
@@ -880,9 +841,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
 
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Net Disbursement (KES)
-                  </Text>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Net Disbursement (KES)</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     value={createForm.netDisbursement}
@@ -893,9 +852,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                   />
                 </View>
                 <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Current Loans
-                  </Text>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Current Loans</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     value={createForm.currentLoans}
@@ -909,9 +866,32 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
 
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Installment Penalty Type
-                  </Text>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Loan Tenure (Repayment Cycle)</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.termMonths}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, termMonths: text }))}
+                    placeholder="e.g. 12"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Default Threshold Days</Text>
+                  <TextInput
+                    style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                    value={createForm.defaultThresholdDays}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, defaultThresholdDays: text }))}
+                    placeholder="e.g. 30"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Installment Penalty Type</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     value={createForm.installmentPenaltyType}
@@ -921,9 +901,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                   />
                 </View>
                 <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Installment Penalty Amount (KES)
-                  </Text>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Installment Penalty Amount (KES)</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     value={createForm.installmentPenaltyAmount}
@@ -937,9 +915,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
 
               <View style={styles.formRow}>
                 <View style={[styles.formGroup, { flex: 1, marginRight: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Loan Penalty Amount (KES)
-                  </Text>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Loan Penalty Amount (KES)</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     value={createForm.loanPenaltyAmount}
@@ -950,14 +926,12 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                   />
                 </View>
                 <View style={[styles.formGroup, { flex: 1, marginLeft: spacing.sm }]}>
-                  <Text style={[styles.formLabel, { color: colors.text }]}>
-                    Penalty Rate (%)
-                  </Text>
+                  <Text style={[styles.formLabel, { color: colors.text }]}>Interest Rate (%) *</Text>
                   <TextInput
                     style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={createForm.penaltyRate}
-                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, penaltyRate: text }))}
-                    placeholder="e.g. 5"
+                    value={createForm.interestRate}
+                    onChangeText={(text) => setCreateForm(prev => ({ ...prev, interestRate: text }))}
+                    placeholder="e.g. 12.5"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
                   />

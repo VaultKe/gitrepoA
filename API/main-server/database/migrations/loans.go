@@ -12,6 +12,7 @@ func MigrateLoans(db *sql.DB) error {
 		createLoansTable,
 		createGuarantorsTable,
 		createLoanPaymentsTable,
+		createLoanFinesTable,
 		createLoanTypesTable,
 		createLoanApprovalOTPsTable,
 		"CREATE INDEX IF NOT EXISTS idx_loan_types_chama ON loan_types(chama_id)",
@@ -91,7 +92,19 @@ CREATE TABLE IF NOT EXISTS loan_payments (
     interest_amount REAL NOT NULL,
     payment_method TEXT NOT NULL,
     reference TEXT,
-    paid_at TIMESTAMP NOT NULL,
+    paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (loan_id) REFERENCES loans(id)
+);`
+
+const createLoanFinesTable = `
+CREATE TABLE IF NOT EXISTS loan_fines (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    paid_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (loan_id) REFERENCES loans(id)
 );`
