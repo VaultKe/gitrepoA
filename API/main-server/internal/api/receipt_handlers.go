@@ -227,7 +227,7 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 			   description, reference, payment_method, metadata, fees, initiated_by,
 			   approved_by, requires_approval, approval_deadline, created_at, updated_at
 		FROM transactions 
-		WHERE id = $1 OR transaction_id = $1
+		WHERE id = $1
 	`
 
 	var transaction models.Transaction
@@ -356,6 +356,19 @@ func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, er
 			return actualID, nil
 		}
 		if err == sql.ErrNoRows {
+			// Fallback: search by reference for loan IDs (e.g. loan-1784814615645395284)
+			if strings.HasPrefix(transactionID, "loan-") {
+				loanRefQuery := `
+					SELECT id
+					FROM transactions
+					WHERE reference LIKE '%' || $1
+					LIMIT 1
+				`
+				err = h.db.QueryRow(loanRefQuery, transactionID).Scan(&actualID)
+				if err == nil {
+					return actualID, nil
+				}
+			}
 			return "", sql.ErrNoRows
 		}
 		return "", err
