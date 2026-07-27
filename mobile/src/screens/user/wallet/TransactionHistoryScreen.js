@@ -41,80 +41,206 @@ export default function TransactionHistoryScreen() {
   const [showTransactionMenu, setShowTransactionMenu] = useState(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
 
-  const loadTransactions = useCallback(async () => {
-    try {
-      let apiTransactions = [];
-      try {
-        const response = await ApiService.getTransactions(50, 0);
-        if (response.success) {
-          if (Array.isArray(response.data)) {
-            apiTransactions = response.data;
-          } else if (response.data && typeof response.data === 'object') {
-            apiTransactions = response.data.transactions || response.data.data || [];
-          }
-        }
+  const fetchAllPages = async (label, fetchFn) => {
+    const results = [];
+    let page = 1;
+    let hasMore = true;
+    const pageSize = 100;
 
-        if (apiTransactions.length > 0 || response.success) {
-          const formattedTransactions = apiTransactions.map(tx => ({
-            ...tx,
-            date: tx.createdAt || tx.created_at,
-            amount: tx.type === 'deposit' || tx.type === 'contribution'
-              ? Math.abs(parseFloat(tx.amount) || 0)
-              : -Math.abs(parseFloat(tx.amount) || 0),
-          }));
-          setTransactions(formattedTransactions);
-          return;
+    while (hasMore) {
+      const offset = (page - 1) * pageSize;
+      try {
+        const response = await fetchFn(pageSize, offset);
+        if (response.success && response.data) {
+          const batch = Array.isArray(response.data)
+            ? response.data
+            : response.data.transactions || response.data.data || [];
+          results.push(...batch);
+          hasMore = batch.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
         }
       } catch (error) {
-        console.warn('Failed to load transactions from API:', error);
+        console.warn(`${label}: fetch page ${page} error:`, error.message);
+        hasMore = false;
       }
+    }
 
+    return results;
+  };
+
+  const loadAllUserTransactions = useCallback(async () => {
       try {
-        const localData = await AsyncStorage.getItem('cachedTransactions');
-        if (localData) {
-          const localTransactions = JSON.parse(localData);
-          const formattedTransactions = localTransactions.map(tx => ({
+        // 1. Load wallet transactions first (paginated)
+        let allTransactions = [];
+        try {
+          const walletTxns = await fetchAllPages('walletTransactions', (limit, offset) =>
+            ApiService.getTransactions(limit, offset)
+          );
+          allTransactions.push(...walletTxns);
+        } catch (e) {
+          console.warn('Failed to load wallet transactions:', e);
+        }
+
+        // 2. Load user's chamas
+        let userChamas = [];
+        try {
+          const chamasResponse = await ApiService.getUserChamas(100, 0);
+          if (chamasResponse.success && chamasResponse.data) {
+            userChamas = Array.isArray(chamasResponse.data) ? chamasResponse.data : (chamasResponse.data.chamas || chamasResponse.data.data || []);
+          }
+        } catch (e) {
+          console.warn('Failed to load user chamas:', e);
+        }
+
+        // 3. For each chama, fetch all transaction types (paginated)
+        const seenIds = new Set();
+        const dedupPush = (items, typeOverride) => {
+          (items || []).forEach(item => {
+            const itemId = String(item.id || item.transaction_id || item.reference || '');
+            if (!itemId || seenIds.has(itemId)) return;
+            seenIds.add(itemId);
+            const tx = { ...item };
+            if (typeOverride) tx.type = typeOverride;
+            allTransactions.push(tx);
+          });
+        };
+
+        await Promise.allSettled(
+          userChamas.map(async (chama) => {
+            const chamaId = chama.id || chama.chamaId;
+            if (!chamaId) return;
+
+            // Chama transactions (paginated)
+            try {
+              const txnTxns = await fetchAllPages(`chamaTxns-${chamaId}`, (limit, offset) =>
+                ApiService.getChamaTransactions(chamaId, limit, offset)
+              );
+              dedupPush(txnTxns, 'transaction');
+            } catch (e) { /* skip */ }
+
+            // Contributions (paginated)
+            try {
+              const contribTxns = await fetchAllPages(`contrib-${chamaId}`, (limit, offset) =>
+                ApiService.getContributions(chamaId, limit, offset)
+              );
+              dedupPush(contribTxns, 'contribution');
+            } catch (e) { /* skip */ }
+
+            // Loans (paginated)
+            try {
+              const loanTxns = await fetchAllPages(`loans-${chamaId}`, (limit, offset) =>
+                ApiService.getLoans(chamaId, limit, offset)
+              );
+              dedupPush(loanTxns, 'loan');
+            } catch (e) { /* skip */ }
+
+            // Welfare requests + contributions (paginated)
+            try {
+              const welfareRequests = await fetchAllPages(`welfare-${chamaId}`, (limit, offset) =>
+                ApiService.getWelfareRequests(chamaId, limit, offset)
+              );
+              dedupPush(welfareRequests, 'welfare');
+
+              // Fetch contributions for each welfare request in parallel
+              await Promise.allSettled(
+                welfareRequests.map(async (req) => {
+                  try {
+                    const welfareId = req.id || req.welfareId;
+                    if (!welfareId) return;
+                    const wContribTxns = await fetchAllPages(`welfareContrib-${welfareId}`, (limit, offset) =>
+                      ApiService.getWelfareContributions(welfareId, limit, offset)
+                    );
+                    dedupPush(wContribTxns, 'welfare_contribution');
+                  } catch (e) { /* skip */ }
+                })
+              );
+            } catch (e) { /* skip */ }
+
+            // Merry-go-round rounds + payments
+            try {
+              const mgrResp = await ApiService.getMerryGoRounds(chamaId);
+              if (mgrResp.success && mgrResp.data) {
+                const rounds = Array.isArray(mgrResp.data) ? mgrResp.data : (mgrResp.data.rounds || mgrResp.data.data || []);
+
+                await Promise.allSettled(
+                  rounds.map(async (round) => {
+                    try {
+                      const roundId = round.id || round.roundId;
+                      if (!roundId) return;
+                      const paymentsResp = await ApiService.getMerryGoRoundPayments(roundId);
+                      if (paymentsResp.success && paymentsResp.data) {
+                        dedupPush(Array.isArray(paymentsResp.data) ? paymentsResp.data : (paymentsResp.data.payments || paymentsResp.data.data || []), 'merry-go-round');
+                      }
+                    } catch (e) { /* skip */ }
+                  })
+                );
+              }
+            } catch (e) { /* skip */ }
+          })
+        );
+
+        // 4. Format and set transactions
+        if (allTransactions.length > 0) {
+          const formattedTransactions = allTransactions.map(tx => ({
             ...tx,
             date: tx.createdAt || tx.created_at,
-            amount: tx.type === 'deposit' || tx.type === 'contribution'
+            amount: tx.type === 'deposit' || tx.type === 'contribution' || tx.type === 'welfare_contribution'
               ? Math.abs(parseFloat(tx.amount) || 0)
               : -Math.abs(parseFloat(tx.amount) || 0),
           }));
           setTransactions(formattedTransactions);
           return;
         }
-      } catch (storageError) {
-        console.warn('Failed to load transactions from local storage:', storageError);
+
+        // 5. Fallback to local storage if no API data
+        try {
+          const localData = await AsyncStorage.getItem('cachedTransactions');
+          if (localData) {
+            const localTransactions = JSON.parse(localData);
+            const formattedTransactions = localTransactions.map(tx => ({
+              ...tx,
+              date: tx.createdAt || tx.created_at,
+              amount: tx.type === 'deposit' || tx.type === 'contribution'
+                ? Math.abs(parseFloat(tx.amount) || 0)
+                : -Math.abs(parseFloat(tx.amount) || 0),
+            }));
+            setTransactions(formattedTransactions);
+            return;
+          }
+        } catch (storageError) {
+          console.warn('Failed to load transactions from local storage:', storageError);
+        }
+
+        setTransactions([]);
+      } catch (error) {
+        console.error('Error in loadAllUserTransactions:', error);
+        Alert.alert('Error', 'Failed to load transaction history');
+        setTransactions([]);
       }
+    }, []);
 
-      setTransactions([]);
-    } catch (error) {
-      console.error('Error in loadTransactions:', error);
-      Alert.alert('Error', 'Failed to load transaction history');
-      setTransactions([]);
-    }
-  }, []);
+   const onRefresh = useCallback(async () => {
+     setRefreshing(true);
+     await loadAllUserTransactions();
+     setRefreshing(false);
+   }, [loadAllUserTransactions]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadTransactions();
-    setRefreshing(false);
-  }, [loadTransactions]);
+   useEffect(() => {
+     const initializeData = async () => {
+       setLoading(true);
+       await loadAllUserTransactions();
+       setLoading(false);
+     };
+     initializeData();
+   }, [loadAllUserTransactions]);
 
-  useEffect(() => {
-    const initializeData = async () => {
-      setLoading(true);
-      await loadTransactions();
-      setLoading(false);
-    };
-    initializeData();
-  }, [loadTransactions]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      loadTransactions();
-    }, [loadTransactions])
-  );
+   useFocusEffect(
+     React.useCallback(() => {
+       loadAllUserTransactions();
+     }, [loadAllUserTransactions])
+   );
 
   const filterTypes = [
     { id: 'all', name: 'All', icon: 'list' },
