@@ -1,4 +1,4 @@
-package com.somulo1.vaultke
+package com.somulos-team.vaultke
 
 import android.app.Application
 import android.content.res.Configuration

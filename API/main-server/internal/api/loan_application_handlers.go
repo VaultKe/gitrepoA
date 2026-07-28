@@ -575,9 +575,9 @@ func GetLoanRepaymentHistory(c *gin.Context) {
 	err = sqlDB.QueryRow(`
 		SELECT id, status, amount, description, reference, created_at, updated_at
 		FROM transactions
-		WHERE reference = $1 AND type = 'loan'
+		WHERE reference ILIKE $1 AND type = 'loan'
 		ORDER BY created_at DESC LIMIT 1
-	`, "LOAN-DISB-"+loanID).Scan(
+	`, "LOAN-DISB-%-"+loanID).Scan(
 		&dB.ID, &dB.Status, &dB.Amount, &dB.Description,
 		&dB.Reference, &dB.CreatedAt, &dB.UpdatedAt,
 	)

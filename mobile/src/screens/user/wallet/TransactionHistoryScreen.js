@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -37,207 +37,77 @@ export default function TransactionHistoryScreen() {
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [showTransactionMenu, setShowTransactionMenu] = useState(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
-
-  const fetchAllPages = async (label, fetchFn) => {
-    const results = [];
-    let page = 1;
-    let hasMore = true;
-    const pageSize = 100;
-
-    while (hasMore) {
-      const offset = (page - 1) * pageSize;
-      try {
-        const response = await fetchFn(pageSize, offset);
-        if (response.success && response.data) {
-          const batch = Array.isArray(response.data)
-            ? response.data
-            : response.data.transactions || response.data.data || [];
-          results.push(...batch);
-          hasMore = batch.length === pageSize;
-          page++;
-        } else {
-          hasMore = false;
-        }
-      } catch (error) {
-        console.warn(`${label}: fetch page ${page} error:`, error.message);
-        hasMore = false;
-      }
-    }
-
-    return results;
-  };
+  const fetchRef = useRef(false);
 
   const loadAllUserTransactions = useCallback(async () => {
-      try {
-        // 1. Load wallet transactions first (paginated)
-        let allTransactions = [];
-        try {
-          const walletTxns = await fetchAllPages('walletTransactions', (limit, offset) =>
-            ApiService.getTransactions(limit, offset)
-          );
-          allTransactions.push(...walletTxns);
-        } catch (e) {
-          console.warn('Failed to load wallet transactions:', e);
-        }
+    if (fetchRef.current) return;
+    fetchRef.current = true;
 
-        // 2. Load user's chamas
-        let userChamas = [];
-        try {
-          const chamasResponse = await ApiService.getUserChamas(100, 0);
-          if (chamasResponse.success && chamasResponse.data) {
-            userChamas = Array.isArray(chamasResponse.data) ? chamasResponse.data : (chamasResponse.data.chamas || chamasResponse.data.data || []);
-          }
-        } catch (e) {
-          console.warn('Failed to load user chamas:', e);
-        }
+    try {
+      const response = await ApiService.getTransactions(100, 0);
 
-        // 3. For each chama, fetch all transaction types (paginated)
-        const seenIds = new Set();
-        const dedupPush = (items, typeOverride) => {
-          (items || []).forEach(item => {
-            const itemId = String(item.id || item.transaction_id || item.reference || '');
-            if (!itemId || seenIds.has(itemId)) return;
-            seenIds.add(itemId);
-            const tx = { ...item };
-            if (typeOverride) tx.type = typeOverride;
-            allTransactions.push(tx);
-          });
-        };
-
-        await Promise.allSettled(
-          userChamas.map(async (chama) => {
-            const chamaId = chama.id || chama.chamaId;
-            if (!chamaId) return;
-
-            // Chama transactions (paginated)
-            try {
-              const txnTxns = await fetchAllPages(`chamaTxns-${chamaId}`, (limit, offset) =>
-                ApiService.getChamaTransactions(chamaId, limit, offset)
-              );
-              dedupPush(txnTxns, 'transaction');
-            } catch (e) { /* skip */ }
-
-            // Contributions (paginated)
-            try {
-              const contribTxns = await fetchAllPages(`contrib-${chamaId}`, (limit, offset) =>
-                ApiService.getContributions(chamaId, limit, offset)
-              );
-              dedupPush(contribTxns, 'contribution');
-            } catch (e) { /* skip */ }
-
-            // Loans (paginated)
-            try {
-              const loanTxns = await fetchAllPages(`loans-${chamaId}`, (limit, offset) =>
-                ApiService.getLoans(chamaId, limit, offset)
-              );
-              dedupPush(loanTxns, 'loan');
-            } catch (e) { /* skip */ }
-
-            // Welfare requests + contributions (paginated)
-            try {
-              const welfareRequests = await fetchAllPages(`welfare-${chamaId}`, (limit, offset) =>
-                ApiService.getWelfareRequests(chamaId, limit, offset)
-              );
-              dedupPush(welfareRequests, 'welfare');
-
-              // Fetch contributions for each welfare request in parallel
-              await Promise.allSettled(
-                welfareRequests.map(async (req) => {
-                  try {
-                    const welfareId = req.id || req.welfareId;
-                    if (!welfareId) return;
-                    const wContribTxns = await fetchAllPages(`welfareContrib-${welfareId}`, (limit, offset) =>
-                      ApiService.getWelfareContributions(welfareId, limit, offset)
-                    );
-                    dedupPush(wContribTxns, 'welfare_contribution');
-                  } catch (e) { /* skip */ }
-                })
-              );
-            } catch (e) { /* skip */ }
-
-            // Merry-go-round rounds + payments
-            try {
-              const mgrResp = await ApiService.getMerryGoRounds(chamaId);
-              if (mgrResp.success && mgrResp.data) {
-                const rounds = Array.isArray(mgrResp.data) ? mgrResp.data : (mgrResp.data.rounds || mgrResp.data.data || []);
-
-                await Promise.allSettled(
-                  rounds.map(async (round) => {
-                    try {
-                      const roundId = round.id || round.roundId;
-                      if (!roundId) return;
-                      const paymentsResp = await ApiService.getMerryGoRoundPayments(roundId);
-                      if (paymentsResp.success && paymentsResp.data) {
-                        dedupPush(Array.isArray(paymentsResp.data) ? paymentsResp.data : (paymentsResp.data.payments || paymentsResp.data.data || []), 'merry-go-round');
-                      }
-                    } catch (e) { /* skip */ }
-                  })
-                );
-              }
-            } catch (e) { /* skip */ }
-          })
-        );
-
-        // 4. Format and set transactions
-        if (allTransactions.length > 0) {
-          const formattedTransactions = allTransactions.map(tx => ({
-            ...tx,
-            date: tx.createdAt || tx.created_at,
-            amount: tx.type === 'deposit' || tx.type === 'contribution' || tx.type === 'welfare_contribution'
-              ? Math.abs(parseFloat(tx.amount) || 0)
-              : -Math.abs(parseFloat(tx.amount) || 0),
-          }));
-          setTransactions(formattedTransactions);
-          return;
-        }
-
-        // 5. Fallback to local storage if no API data
-        try {
-          const localData = await AsyncStorage.getItem('cachedTransactions');
-          if (localData) {
-            const localTransactions = JSON.parse(localData);
-            const formattedTransactions = localTransactions.map(tx => ({
-              ...tx,
-              date: tx.createdAt || tx.created_at,
-              amount: tx.type === 'deposit' || tx.type === 'contribution'
-                ? Math.abs(parseFloat(tx.amount) || 0)
-                : -Math.abs(parseFloat(tx.amount) || 0),
-            }));
-            setTransactions(formattedTransactions);
-            return;
-          }
-        } catch (storageError) {
-          console.warn('Failed to load transactions from local storage:', storageError);
-        }
-
-        setTransactions([]);
-      } catch (error) {
-        console.error('Error in loadAllUserTransactions:', error);
-        Alert.alert('Error', 'Failed to load transaction history');
-        setTransactions([]);
+      if (response.success && Array.isArray(response.data)) {
+        const formattedTransactions = response.data.map((tx) => ({
+          id: tx.id,
+          type: tx.type,
+          status: tx.status,
+          amount:
+            tx.type === 'deposit' ||
+            tx.type === 'contribution' ||
+            tx.type === 'welfare_contribution'
+              ? Math.abs(tx.amount || 0)
+              : -Math.abs(tx.amount || 0),
+          currency: tx.currency,
+          description: tx.description,
+          reference: tx.reference,
+          paymentMethod: tx.paymentMethod,
+          fees: tx.fees,
+          initiatedBy: tx.initiatedBy,
+          recipientId: tx.recipientId,
+          date: tx.createdAt,
+          updatedAt: tx.updatedAt,
+          chamaId: tx.chamaId,
+          metadata: tx.metadata,
+          chamaName: tx.chamaName,
+          contributionType: tx.contributionType,
+        }));
+        setTransactions(formattedTransactions);
+        return;
       }
-    }, []);
 
-   const onRefresh = useCallback(async () => {
-     setRefreshing(true);
-     await loadAllUserTransactions();
-     setRefreshing(false);
-   }, [loadAllUserTransactions]);
+      setTransactions([]);
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+      setTransactions([]);
+    } finally {
+      fetchRef.current = false;
+    }
+  }, []);
 
-   useEffect(() => {
-     const initializeData = async () => {
-       setLoading(true);
-       await loadAllUserTransactions();
-       setLoading(false);
-     };
-     initializeData();
-   }, [loadAllUserTransactions]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadAllUserTransactions();
+    setRefreshing(false);
+  }, [loadAllUserTransactions]);
 
-   useFocusEffect(
-     React.useCallback(() => {
-       loadAllUserTransactions();
-     }, [loadAllUserTransactions])
-   );
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+      const initializeData = async () => {
+        if (isActive) {
+          setLoading(true);
+        }
+        await loadAllUserTransactions();
+        if (isActive) {
+          setLoading(false);
+        }
+      };
+      initializeData();
+      return () => {
+        isActive = false;
+      };
+    }, [loadAllUserTransactions])
+  );
 
   const filterTypes = [
     { id: 'all', name: 'All', icon: 'list' },
@@ -248,7 +118,7 @@ export default function TransactionHistoryScreen() {
 
   const filteredTransactions = filter === 'all'
     ? transactions
-    : transactions.filter(t => t.type === filter);
+    : transactions.filter((t) => t.type === filter);
 
   const getTransactionColor = (type, amount) => {
     if (amount > 0) return colors.success;
@@ -370,8 +240,8 @@ export default function TransactionHistoryScreen() {
   };
 
   const buildUserInfo = () => {
-    const firstName = user?.firstName || user?.first_name || '';
-    const lastName = user?.lastName || user?.last_name || '';
+    const firstName = user?.firstName || '';
+    const lastName = user?.lastName || '';
     const fullName = `${firstName} ${lastName}`.trim() || 'User';
     return {
       name: fullName,
@@ -387,7 +257,7 @@ export default function TransactionHistoryScreen() {
     if (!transaction) return;
     setReceiptLoading(true);
     try {
-      const transactionId = transaction?.id || transaction?.transaction_id || transaction?.reference;
+      const transactionId = transaction.id;
       if (!transactionId) {
         throw new Error('Transaction ID not found');
       }
@@ -400,7 +270,7 @@ export default function TransactionHistoryScreen() {
         throw new Error(result.error || 'Download failed');
       }
     } catch (error) {
-      Alert.alert('Download Failed', error.message || 'Unable to download receipt. Please try again.', [{ text: 'OK', style: 'default' }]);
+      Alert.alert('Download Failed', error.message || 'Unable to download receipt. Please try again.', [{ text: 'OK' }]);
     } finally {
       setReceiptLoading(false);
     }
@@ -410,7 +280,7 @@ export default function TransactionHistoryScreen() {
     if (!transaction) return;
     setReceiptLoading(true);
     try {
-      const transactionId = transaction?.id || transaction?.transaction_id || transaction?.reference;
+      const transactionId = transaction.id;
       if (!transactionId) {
         throw new Error('Transaction ID not found');
       }
@@ -433,7 +303,7 @@ export default function TransactionHistoryScreen() {
     if (!transaction) return;
     setReceiptLoading(true);
     try {
-      const transactionId = transaction?.id || transaction?.transaction_id || transaction?.reference;
+      const transactionId = transaction.id;
       if (!transactionId) {
         throw new Error('Transaction ID not found');
       }
@@ -463,7 +333,7 @@ export default function TransactionHistoryScreen() {
     try {
       let downloadedCount = 0;
       for (const transaction of transactions) {
-        const transactionId = transaction?.id || transaction?.transaction_id || transaction?.reference;
+        const transactionId = transaction.id;
         if (!transactionId) continue;
         const receiptId = `RCP-${String(transactionId).substring(0, 8).toUpperCase()}`;
         const fileName = getReceiptFileName(receiptId);
@@ -495,7 +365,7 @@ export default function TransactionHistoryScreen() {
     try {
       let printedCount = 0;
       for (const transaction of transactions) {
-        const transactionId = transaction?.id || transaction?.transaction_id || transaction?.reference;
+        const transactionId = transaction.id;
         if (!transactionId) continue;
         const receiptId = `RCP-${String(transactionId).substring(0, 8).toUpperCase()}`;
         try {
@@ -709,7 +579,7 @@ export default function TransactionHistoryScreen() {
             <TouchableOpacity
               style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
               onPress={() => handleTransactionMenuAction(
-                filteredTransactions.find(t => t.id === showTransactionMenu),
+                filteredTransactions.find((t) => t.id === showTransactionMenu),
                 'download'
               )}
               activeOpacity={0.7}
@@ -723,7 +593,7 @@ export default function TransactionHistoryScreen() {
             <TouchableOpacity
               style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
               onPress={() => handleTransactionMenuAction(
-                filteredTransactions.find(t => t.id === showTransactionMenu),
+                filteredTransactions.find((t) => t.id === showTransactionMenu),
                 'print'
               )}
               activeOpacity={0.7}
@@ -737,7 +607,7 @@ export default function TransactionHistoryScreen() {
             <TouchableOpacity
               style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md }}
               onPress={() => handleTransactionMenuAction(
-                filteredTransactions.find(t => t.id === showTransactionMenu),
+                filteredTransactions.find((t) => t.id === showTransactionMenu),
                 'share'
               )}
               activeOpacity={0.7}

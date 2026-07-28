@@ -348,7 +348,7 @@ func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, er
 			SELECT id
 			FROM transactions
 			WHERE lower(metadata) LIKE $1
-			   OR reference LIKE $2
+			   OR reference ILIKE $2
 			LIMIT 1
 		`
 		err = h.db.QueryRow(fallbackQuery, lookupQueries[1], lookupQueries[2]).Scan(&actualID)
@@ -358,15 +358,27 @@ func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, er
 		if err == sql.ErrNoRows {
 			// Fallback: search by reference for loan IDs (e.g. loan-1784814615645395284)
 			if strings.HasPrefix(transactionID, "loan-") {
-				loanRefQuery := `
-					SELECT id
-					FROM transactions
-					WHERE reference LIKE '%' || $1
-					LIMIT 1
-				`
-				err = h.db.QueryRow(loanRefQuery, transactionID).Scan(&actualID)
-				if err == nil {
-					return actualID, nil
+				// Verify the loan exists in the loans table first
+				var loanExists bool
+				loanCheckErr := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM loans WHERE id = $1)", transactionID).Scan(&loanExists)
+				if loanCheckErr == nil && loanExists {
+					// Search for transactions with loan-related references (case-insensitive)
+					loanRefQuery := `
+						SELECT id
+						FROM transactions
+						WHERE reference ILIKE $1
+						   OR reference ILIKE $2
+						   OR reference ILIKE $3
+						LIMIT 1
+					`
+					err = h.db.QueryRow(loanRefQuery,
+						"%"+transactionID,
+						"LOAN-DISB-"+transactionID,
+						"LOAN-DISB-%-"+transactionID,
+					).Scan(&actualID)
+					if err == nil {
+						return actualID, nil
+					}
 				}
 			}
 			return "", sql.ErrNoRows

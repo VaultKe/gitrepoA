@@ -4,75 +4,24 @@ import { getUserChamas } from './chamaEndpoints';
 const getLoans = async (chamaId, limit = 20, offset = 0) => {
   const response = await makeRequest(`/loans/?chamaId=${chamaId}&limit=${limit}&offset=${offset}&includeUserContext=true`);
 
-  if (response.success && response.data && response.data.length > 0) {
-    const enrichedLoans = await Promise.all(
-      response.data.map(async (loan) => {
-        try {
-          const userId = loan.borrowerId || loan.borrower_id || loan.applicant_id || loan.user_id;
-          if (userId) {
-            const userResponse = await makeRequest(`/users/${userId}`);
-            if (userResponse.success && userResponse.data) {
-              const userData = userResponse.data;
-              const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-              return {
-                ...loan,
-                applicant: {
-                  id: userData.id,
-                  first_name: userData.firstName || userData.first_name,
-                  last_name: userData.lastName || userData.last_name,
-                  name: fullName,
-                  username: userData.username || userData.email
-                },
-                applicant_name: fullName,
-                borrower_id: userId,
-                user_id: userId
-              };
-            } else {
-              const fallbackUserId = userId;
-              return {
-                ...loan,
-                applicant: {
-                  id: fallbackUserId,
-                  first_name: 'Unknown',
-                  last_name: 'User',
-                  name: 'Unknown User',
-                  username: 'unknown'
-                },
-                applicant_name: 'Unknown User',
-                borrower_id: fallbackUserId,
-                user_id: fallbackUserId
-              };
-            }
-          }
-          return {
-            ...loan,
-            applicant: {
-              id: 'unknown',
-              first_name: 'Unknown',
-              last_name: 'User',
-              name: 'Unknown User',
-              username: 'unknown'
-            },
-            applicant_name: 'Unknown User'
-          };
-        } catch (userError) {
-          const fallbackUserId = loan.borrowerId || loan.borrower_id || loan.applicant_id || loan.user_id || 'unknown';
-          return {
-            ...loan,
-            applicant: {
-              id: fallbackUserId,
-              first_name: 'Unknown',
-              last_name: 'User',
-              name: 'Unknown User',
-              username: 'unknown'
-            },
-            applicant_name: 'Unknown User',
-            borrower_id: fallbackUserId,
-            user_id: fallbackUserId
-          };
-        }
-      })
-    );
+  if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+    const enrichedLoans = response.data.map((loan) => {
+      const borrower = loan.borrower || {};
+      const fullName = `${borrower.firstName || ''} ${borrower.lastName || ''}`.trim() || 'Unknown User';
+      return {
+        ...loan,
+        applicant: {
+          id: borrower.id || loan.borrowerId,
+          first_name: borrower.firstName,
+          last_name: borrower.lastName,
+          name: fullName,
+          username: borrower.username || borrower.email,
+        },
+        applicant_name: fullName,
+        borrower_id: loan.borrowerId,
+        user_id: loan.borrowerId,
+      };
+    });
     return { ...response, data: enrichedLoans };
   }
   return response;

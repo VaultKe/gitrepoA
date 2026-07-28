@@ -257,7 +257,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.somulo1.vaultke";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.somulos-team.vaultke";
 				PRODUCT_NAME = "VaultKe";
 				SWIFT_OBJC_BRIDGING_HEADER = "VaultKe/VaultKe-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -286,7 +286,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.somulo1.vaultke";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.somulos-team.vaultke";
 				PRODUCT_NAME = "VaultKe";
 				SWIFT_OBJC_BRIDGING_HEADER = "VaultKe/VaultKe-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
