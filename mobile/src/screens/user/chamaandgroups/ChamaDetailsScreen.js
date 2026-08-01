@@ -12,6 +12,7 @@ import {
   Linking,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -152,6 +153,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [transactions, setTransactions] = useState([]);
   const [loans, setLoans] = useState([]);
   const [polls, setPolls] = useState([]);
+  const [pollsLoading, setPollsLoading] = useState(false);
   const [statistics, setStatistics] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [userMembership, setUserMembership] = useState(null);
@@ -174,6 +176,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       setTransactions([]);
       setLoans([]);
       setPolls([]);
+      setPollsLoading(false);
       setStatistics(null);
       setUserMembership(null);
 
@@ -292,9 +295,10 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         }
       }
 
-      setUserMembership(membership);
-      // Load additional data in background (non-blocking)
-      Promise.all([
+       setUserMembership(membership);
+       // Load additional data in background (non-blocking)
+       setPollsLoading(true);
+       Promise.all([
         // Load user transactions
         ApiService.getChamaTransactions(targetChamaId).then(response => {
           if (response.success) {
@@ -314,34 +318,40 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           setTransactions([]);
         }),
 
-        // Load active polls (same logic as PollsVotingScreen)
+        // Load polls — fetch active and completed in parallel, merge results
         Promise.all([
-          ApiService.getActiveVotes(targetChamaId),
-          ApiService.getVoteResults(targetChamaId)
+          ApiService.getActiveVotes(targetChamaId).catch(() => null),
+          ApiService.getVoteResults(targetChamaId).catch(() => null),
         ]).then(([activeResponse, completedResponse]) => {
-
-          // Combine and filter out duplicates, preferring completed status
           const allPolls = [];
           const pollMap = new Map();
 
-          // Add active polls first
-          if (activeResponse.success && activeResponse.data) {
+          if (activeResponse?.success && Array.isArray(activeResponse.data)) {
             activeResponse.data.forEach(poll => pollMap.set(poll.id, poll));
           }
 
-          // Add completed polls (these will override active ones if they exist)
-          if (completedResponse.success && completedResponse.data) {
-            completedResponse.data.forEach(poll => pollMap.set(poll.id, poll));
+          if (completedResponse?.success && Array.isArray(completedResponse.data)) {
+            completedResponse.data.forEach(poll => {
+              if (!pollMap.has(poll.id)) {
+                pollMap.set(poll.id, poll);
+              }
+            });
           }
 
           allPolls.push(...pollMap.values());
 
-          setPolls(allPolls);
+          // Prioritize active polls first, then completed
+          const sorted = allPolls.sort((a, b) => {
+            if (a.status === 'active' && b.status !== 'active') return -1;
+            if (a.status !== 'active' && b.status === 'active') return 1;
+            return 0;
+          });
 
-          if (allPolls.length > 0) {
-          }
-        }).catch(error => {
+          setPolls(sorted.slice(0, 5));
+        }).catch(() => {
           setPolls([]);
+        }).finally(() => {
+          setPollsLoading(false);
         }),
 
         // Load meetings (like ChamaMeetingsScreen does)
@@ -742,9 +752,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     });
   };
 
-  // Pick a stable background color for a local initials avatar from a seed.
-  // Purely local (no network request) so nothing leaks into the browser
-  // network tab and there are no ORB/CORS failures.
   const AVATAR_COLORS = ['#00D4AA', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#EC4899', '#6366F1'];
   const getAvatarColor = (seed) => {
     const str = String(seed || '');
@@ -1017,98 +1024,98 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     </Card>
   );
 
-  const renderActivePolls = () => {
+   const renderActivePolls = () => {
 
-    // Count of new polls user hasn't acted on
-    const newPollsCount = polls.filter(poll => !(poll.userVoted || poll.user_has_voted)).length;
+     // Count of new polls user hasn't acted on
+     const newPollsCount = polls.filter(poll => !(poll.userVoted || poll.user_has_voted)).length;
 
-    return (
-      <Card style={styles.section} variant="outlined">
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Polls & Voting
-          </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
-            <Text style={[styles.viewMoreText, { color: colors.primary }]}>
-              View All
-            </Text>
-          </TouchableOpacity>
-        </View>
+     return (
+       <Card style={styles.section} variant="outlined">
+         <View style={styles.sectionHeader}>
+           <Text style={[styles.sectionTitle, { color: colors.text }]}>
+             Polls & Voting
+           </Text>
+           <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
+             <Text style={[styles.viewMoreText, { color: colors.primary }]}>
+               View All
+             </Text>
+           </TouchableOpacity>
+         </View>
 
-        {polls.length === 0 ? (
-          <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-            <Ionicons name="bar-chart" size={48} color={colors.primary} />
-            <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
-              No polls & vote available
-            </Text>
-          </View>
-        ) : (
-          <View>
-            {/* Notification for new polls */}
-            {newPollsCount > 0 && (
-              <View style={[styles.newPollsNotification, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
-                <Ionicons name="notifications" size={20} color={colors.warning} />
-                <Text style={[styles.newPollsText, { color: colors.warning }]}>
-                  You have {newPollsCount} new poll{newPollsCount !== 1 ? 's' : ''} waiting for your vote!
-                </Text>
-              </View>
-            )}
+         {pollsLoading ? (
+           <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+             <ActivityIndicator size="small" color={colors.primary} />
+             <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: spacing.sm }]}>
+               Loading polls...
+             </Text>
+           </View>
+         ) : polls.length === 0 ? (
+           <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+             <Ionicons name="bar-chart" size={48} color={colors.primary} />
+             <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
+               No polls & vote available
+             </Text>
+           </View>
+         ) : (
+           <View>
+             {/* Notification for new polls */}
+             {newPollsCount > 0 && (
+               <View style={[styles.newPollsNotification, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
+                 <Ionicons name="notifications" size={20} color={colors.warning} />
+                 <Text style={[styles.newPollsText, { color: colors.warning }]}>
+                   You have {newPollsCount} new poll{newPollsCount !== 1 ? 's' : ''} waiting for your vote!
+                 </Text>
+               </View>
+             )}
 
-            {/* Table Header */}
-            <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-              <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Title</Text>
-              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
-              <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
-            </View>
+             {/* Table Header */}
+             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+               <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Title</Text>
+               <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
+               <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+             </View>
 
-            {/* Table Rows - show all polls, active first */}
-            {(() => {
-              const getPollStatus = (poll) => {
-                const pollStatus = poll.status || 'active';
-                const endDate = poll.endDate || poll.end_date || poll.endsAt;
-                const hasEnded = endDate && new Date(endDate) < new Date();
-                const isActive = pollStatus === 'active' && !hasEnded;
-                return { isActive, hasEnded, pollStatus };
-              };
+             {/* Table Rows - active polls first, max 5 */}
+             {(() => {
+               const getPollStatus = (poll) => {
+                 const pollStatus = poll.status || 'active';
+                 const endDate = poll.endDate || poll.end_date || poll.endsAt;
+                 const hasEnded = endDate && new Date(endDate) < new Date();
+                 const isActive = pollStatus === 'active' && !hasEnded;
+                 return { isActive, hasEnded, pollStatus };
+               };
 
-              const sortedPolls = [...polls].sort((a, b) => {
-                const aStatus = getPollStatus(a);
-                const bStatus = getPollStatus(b);
-                if (aStatus.isActive && !bStatus.isActive) return -1;
-                if (!aStatus.isActive && bStatus.isActive) return 1;
-                return 0;
-              });
+               // Show active polls first, then completed (already sorted by loadChamaDetails)
+               const displayPolls = polls.slice(0, 5);
 
-              return sortedPolls.map((poll, index) => {
-                const hasUserVoted = poll.userVoted || poll.user_has_voted;
-                const { isActive, hasEnded } = getPollStatus(poll);
+               return displayPolls.map((poll, index) => {
+                 const hasUserVoted = poll.userVoted || poll.user_has_voted;
+                 const { isActive, hasEnded } = getPollStatus(poll);
 
-                return (
-                   <View key={`poll-${poll.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                     <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
-                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                       <Ionicons
-                         name={hasUserVoted ? "checkmark-circle" : "close-circle"}
-                         size={16}
-                         color={hasUserVoted ? colors.success : colors.error}
-                       />
-                     </View>
-                     <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
-                       {isActive ? 'Active' : 'Closed'}
-                     </Text>
-                   </View>
-                 );
-              });
-            })()}
-          </View>
-        )}
-      </Card>
-    );
-  };
+                 return (
+                    <View key={`poll-${poll.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+                      <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons
+                          name={hasUserVoted ? "checkmark-circle" : "close-circle"}
+                          size={16}
+                          color={hasUserVoted ? colors.success : colors.error}
+                        />
+                      </View>
+                      <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
+                        {isActive ? 'Active' : 'Closed'}
+                      </Text>
+                    </View>
+                  );
+               });
+             })()}
+           </View>
+         )}
+       </Card>
+     );
+   };
 
   const renderChamaRules = () => {
-    // Resolve the uploaded rules document (stored in dedicated columns, with fallback to permissions).
-    // Only considered "present" if a non-empty path exists, so the card only shows for chamas that uploaded a file.
     const rawRulesFilePath = (chama?.rules_file_path && chama.rules_file_path.trim()) ||
       (chama?.permissions && chama.permissions.rules_file_path);
     const rulesFilePath = rawRulesFilePath ? rawRulesFilePath.trim() : null;

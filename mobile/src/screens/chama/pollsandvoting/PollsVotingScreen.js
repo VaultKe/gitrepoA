@@ -14,6 +14,7 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Rect, Text as SvgText, G, Line } from 'react-native-svg';
@@ -167,112 +168,134 @@ const PollsVotingScreen = ({ route, navigation }) => {
     })
   ).current;
 
-  const loadData = async (isTabSwitch = false) => {
-    try {
-      if (!isTabSwitch) {
-        setLoading(true);
-      }
-      await Promise.all([
-        loadPolls(),
-        loadUserRole(),
-        loadChamaMembers(),
-        loadChamaDetails(),
-      ]);
-      if (!isTabSwitch) {
-        setInitialDataLoaded(true);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load data');
-    } finally {
-      if (!isTabSwitch) {
-        setLoading(false);
-        setInitialDataLoaded(true);
-      }
-    }
-  };
+   const loadData = async (isTabSwitch = false) => {
+     try {
+       if (!isTabSwitch) {
+         setLoading(true);
+       }
 
-  const loadVotes = async () => {
-    try {
-      if (!chamaId || typeof chamaId !== 'string') {
-        Alert.alert('Error', 'Invalid chama access. Please try again.');
-        return;
-      }
+       // Load votes first — they are the primary content and should
+       // be displayed as soon as they arrive, without waiting for
+       // the secondary (non-essential) data to finish.
+       await loadPolls();
 
-      const [activeResponse, completedResponse] = await Promise.all([
-        ApiService.getActiveVotes(chamaId),
-        ApiService.getVoteResults(chamaId)
-      ]);
-      const allPolls = [];
-      const pollMap = new Map();
+       // Fire the remaining non-blocking requests in the background
+       // so the UI is not held up waiting for them.
+       Promise.all([
+         loadUserRole(),
+         loadChamaMembers(),
+         loadChamaDetails(),
+       ]).catch(() => {
+         // Non-critical data failures are silently ignored;
+         // the vote list is already rendered.
+       });
 
-      if (activeResponse.success && activeResponse.data) {
-        activeResponse.data.forEach(poll => pollMap.set(poll.id, poll));
-      }
+       if (!isTabSwitch) {
+         setInitialDataLoaded(true);
+       }
+     } catch (error) {
+       Alert.alert('Error', 'Failed to load data');
+     } finally {
+       if (!isTabSwitch) {
+         setLoading(false);
+         setInitialDataLoaded(true);
+       }
+     }
+   };
 
-      if (completedResponse.success && completedResponse.data) {
-        completedResponse.data.forEach(poll => pollMap.set(poll.id, poll));
-      }
+   // Ref to track if a vote refresh is already in flight, to prevent concurrent calls
+   const isRefreshingRef = useRef(false);
 
-      const response = { success: true, data: [...pollMap.values()] };
+   const loadVotes = useCallback(async () => {
+     // Prevent concurrent refresh calls
+     if (isRefreshingRef.current) {
+       return;
+     }
+     isRefreshingRef.current = true;
 
-      if (response.success) {
-        const validVotes = (response.data || []).filter(vote => {
-          if (!vote.id) {
-            return false;
-          }
-          return true;
-        });
+     try {
+       if (!chamaId || typeof chamaId !== 'string') {
+         Alert.alert('Error', 'Invalid chama access. Please try again.');
+         return;
+       }
 
-        const processedVotes = validVotes.map(vote => {
-          const totalVotesCast = getTotalVotesCast(vote);
-          const totalEligibleVoters = getTotalEligibleVoters(vote);
-          const isFullyVoted = totalVotesCast >= totalEligibleVoters;
+       const [activeResponse, completedResponse] = await Promise.all([
+         ApiService.getActiveVotes(chamaId),
+         ApiService.getVoteResults(chamaId)
+       ]);
+       const allPolls = [];
+       const pollMap = new Map();
 
-          if (isFullyVoted && vote.status === 'active') {
-            return {
-              ...vote,
-              status: 'completed',
-              result: 'completed_early',
-              endsAt: new Date().toISOString(),
-              isFullyVoted: true,
-              completionStatus: 'Completed (100% participation)'
-            };
-          }
+       if (activeResponse.success && activeResponse.data) {
+         activeResponse.data.forEach(poll => pollMap.set(poll.id, poll));
+       }
 
-          return {
-            ...vote,
-            isFullyVoted,
-            completionStatus: isFullyVoted ? 'All votes cast' : null
-          };
-        });
+       if (completedResponse.success && completedResponse.data) {
+         completedResponse.data.forEach(poll => pollMap.set(poll.id, poll));
+       }
 
-        const allCompletedPolls = processedVotes.filter(vote => vote.status === 'completed');
-        setCompletedPolls(allCompletedPolls);
+       const response = { success: true, data: [...pollMap.values()] };
 
-        let filteredVotes;
-        if (activeTab === 'active') {
-          filteredVotes = processedVotes.filter(vote => vote.status === 'active');
-        } else if (activeTab === 'completed') {
-          filteredVotes = processedVotes.filter(vote => vote.status === 'completed');
-        } else {
-          filteredVotes = processedVotes;
-        }
+       if (response.success) {
+         const validVotes = (response.data || []).filter(vote => {
+           if (!vote.id) {
+             return false;
+           }
+           return true;
+         });
 
-        setVotes(filteredVotes);
-        setPolls(filteredVotes);
-      } else {
-        setVotes([]);
-        setPolls([]);
+         const processedVotes = validVotes.map(vote => {
+           const isFullyVoted = isPollFullyVoted(vote);
 
-        if (response.error?.includes('Access denied') || response.error?.includes('not a member')) {
-          Alert.alert('Access Denied', 'You do not have permission to view votes for this chama.');
-        }
-      }
-    } catch (error) {
-      setPolls([]);
-      setVotes([]);
-    }
-  };
+           if (isFullyVoted && vote.status === 'active') {
+             return {
+               ...vote,
+               status: 'completed',
+               result: 'completed_early',
+               endsAt: new Date().toISOString(),
+               isFullyVoted: true,
+               completionStatus: 'Completed (100% participation)'
+             };
+           }
+
+           return {
+             ...vote,
+             isFullyVoted,
+             completionStatus: isFullyVoted ? 'All votes cast' : null
+           };
+         });
+
+         const allCompletedPolls = processedVotes.filter(vote => vote.status === 'completed');
+         setCompletedPolls(allCompletedPolls);
+
+         let filteredVotes;
+         if (activeTab === 'active') {
+           filteredVotes = processedVotes.filter(vote => vote.status === 'active');
+         } else if (activeTab === 'completed') {
+           filteredVotes = processedVotes.filter(vote => vote.status === 'completed');
+         } else {
+           filteredVotes = processedVotes;
+         }
+
+         setVotes(filteredVotes);
+         setPolls(filteredVotes);
+       } else {
+         // On non-error API responses (e.g. access denied), clear state
+         setVotes([]);
+         setPolls([]);
+
+         if (response.error?.includes('Access denied') || response.error?.includes('not a member')) {
+           Alert.alert('Access Denied', 'You do not have permission to view votes for this chama.');
+         }
+       }
+     } catch (error) {
+       // Do NOT clear polls/votes on network errors — keep existing data
+       // so the UI doesn't flicker. The next refresh cycle will retry.
+       console.warn('loadVotes error, keeping existing data:', error?.message || error);
+     } finally {
+       isRefreshingRef.current = false;
+     }
+   }, [chamaId, activeTab]);
 
   // Keep old function name for compatibility but redirect to new one
   const loadPolls = loadVotes;
@@ -759,11 +782,19 @@ const PollsVotingScreen = ({ route, navigation }) => {
     return poll.options.reduce((total, option) => total + (option.voteCount || 0), 0);
   };
 
-  const getTotalEligibleVoters = (poll) => {
-    // For now, use chama members count as eligible voters
-    // This could be refined to exclude members who can't vote
-    return chamaMembers.length;
-  };
+   const getTotalEligibleVoters = (poll) => {
+     // For now, use chama members count as eligible voters
+     // This could be refined to exclude members who can't vote
+     return chamaMembers.length;
+   };
+
+   const isPollFullyVoted = (poll) => {
+     const totalVotesCast = getTotalVotesCast(poll);
+     const totalEligibleVoters = getTotalEligibleVoters(poll);
+     // If we don't know the eligible voter count yet, don't assume it's fully voted
+     if (totalEligibleVoters === 0) return false;
+     return totalVotesCast >= totalEligibleVoters;
+   };
 
   const getStatusColor = (status, result) => {
     if (status === 'completed') {
@@ -1634,23 +1665,48 @@ const PollsVotingScreen = ({ route, navigation }) => {
             />
           }
           ListEmptyComponent={
-            <View style={[
-              styles.emptyContainer,
-              isDesktop && styles.emptyContainerDesktop
-            ]}>
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={isDesktop ? 80 : 64}
-                color={colors.textSecondary}
-              />
-              <Text style={[
-                styles.emptyText,
-                { color: colors.textSecondary },
-                isDesktop && styles.emptyTextDesktop
+            loading ? (
+              <View style={[
+                styles.emptyContainer,
+                isDesktop && styles.emptyContainerDesktop
               ]}>
-                No {activeTab} polls found
-              </Text>
-            </View>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[
+                  styles.emptyText,
+                  { color: colors.textSecondary, marginTop: 12 },
+                  isDesktop && styles.emptyTextDesktop
+                ]}>
+                  Loading polls...
+                </Text>
+              </View>
+            ) : (
+              <View style={[
+                styles.emptyContainer,
+                isDesktop && styles.emptyContainerDesktop
+              ]}>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={isDesktop ? 80 : 64}
+                  color={colors.textSecondary}
+                />
+                <Text style={[
+                  styles.emptyText,
+                  { color: colors.textSecondary },
+                  isDesktop && styles.emptyTextDesktop
+                ]}>
+                  No {activeTab} polls found
+                </Text>
+                <Text style={[
+                  styles.emptyText,
+                  { fontSize: 14, marginTop: 8 },
+                  isDesktop && styles.emptyTextDesktop
+                ]}>
+                  {activeTab === 'active'
+                    ? 'Active polls will appear here'
+                    : 'Completed polls will appear here'}
+                </Text>
+              </View>
+            )
           }
         />
       )}
