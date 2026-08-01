@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { LogBox } from 'react-native';
 import Toast from 'react-native-toast-message';
+import customToastConfig from './src/components/common/CustomToast';
 
 // Development helpers
 import DevHelper from './src/utils/DevHelper';
@@ -53,7 +54,7 @@ function AppContent() {
     <>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.background} />
       <RootNavigator />
-      <Toast />
+      <Toast config={customToastConfig} />
     </>
   );
 }
