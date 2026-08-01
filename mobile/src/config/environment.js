@@ -2,6 +2,7 @@
 // All values are retrieved from environment variables via process.env.
 // No hardcoded values — every setting is configurable externally.
 
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 /**
@@ -12,6 +13,12 @@ const env = (key, fallback = '') => {
   if (typeof process !== 'undefined' && process.env && process.env[key] !== undefined) {
     return process.env[key];
   }
+
+  const expoExtra = (Constants && (Constants.expoConfig?.extra || Constants.manifest?.extra)) || {};
+  if (expoExtra[key] !== undefined) {
+    return expoExtra[key];
+  }
+
   if (fallback !== '' && typeof fallback === 'string') {
     return fallback;
   }
@@ -83,6 +90,7 @@ const resolveApiBaseUrl = () => {
     env('BACKEND_API_URL'),
     env('REACT_APP_API_URL'),
     env('NEXT_PUBLIC_API_URL'),
+    env('EXPO_PUBLIC_API_URL'),
   ];
 
   for (const candidate of candidates) {

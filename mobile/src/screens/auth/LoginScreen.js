@@ -62,8 +62,10 @@ export default function LoginScreen({ navigation }) {
       await apiService.checkHealth();
 
       setNetworkStatus('online');
+      return 'online';
     } catch (error) {
       setNetworkStatus('offline');
+      return 'offline';
     }
   };
 
@@ -117,14 +119,14 @@ export default function LoginScreen({ navigation }) {
 
     try {
       // Check network status first
-      await checkNetworkStatus();
+      const currentNetworkStatus = await checkNetworkStatus();
 
       // Prepare login credentials based on backend format
       const credentials = {
         identifier: identifier.trim(),  // Fixed: backend expects lowercase "identifier"
         password: password,             // Fixed: backend expects lowercase "password"
       };
-      if (networkStatus === 'online') {
+      if (currentNetworkStatus === 'online') {
         // Online login - use AppContext login which handles sync
         const result = await login(credentials);
 
