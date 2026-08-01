@@ -31,25 +31,53 @@ func main() {
 	cfg := config.Load()
 
 	// Initialize database
-	db, err := database.Initialize(cfg.DatabaseURL)
+	db, err := database.Initialize(cfg.PrimaryDatabaseURL, cfg.ReplicaDatabaseURL)
 	if err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Failed to close database connections: %v", err)
+		}
+	}()
 
-	// Run database migrations
-	if err := database.Migrate(db); err != nil {
+	// Check primary/replica connectivity and log status
+	log.Println("Checking database connectivity...")
+	if db.Primary == nil {
+		log.Println("Primary DB object is nil — initialization failed earlier")
+	} else {
+		if err := db.Primary.Ping(); err != nil {
+			log.Printf("Primary DB not reachable: %v", err)
+		} else {
+			log.Println("Primary DB reachable")
+		}
+	}
+
+	if db.Replica == nil {
+		log.Println("Replica DB object is nil — reads will use primary")
+	} else if db.Replica == db.Primary {
+		log.Println("No separate replica configured; replica points to primary")
+	} else {
+		if err := db.Replica.Ping(); err != nil {
+			log.Printf("Replica DB not reachable: %v", err)
+		} else {
+			log.Println("Replica DB reachable")
+		}
+	}
+
+	// Run database migrations on the primary database
+	if err := database.Migrate(db.WriteDB()); err != nil {
 		log.Fatal("Failed to run migrations:", err)
 	}
 
-	// Run notification system migrations
-	migrationManager := database.NewMigrationManager(db)
+	// Run notification system migrations on the primary database
+	migrationManager := database.NewMigrationManager(db.WriteDB())
 	if err := migrationManager.RunMigrations(); err != nil {
 		log.Fatal("Failed to run notification system migrations:", err)
 	}
 
-	// Ensure loan_types table/indexes exist
-	if err := database.EnsureLoanTypesTable(db); err != nil {
+	// Ensure loan_types table/indexes exist on primary
+	if err := database.EnsureLoanTypesTable(db.WriteDB()); err != nil {
 		log.Fatalf("Failed to ensure loan types table: %v", err)
 	}
 
@@ -86,22 +114,23 @@ func main() {
 	})
 
 	// Initialize cache — uses Redis when REDIS_URL is configured,
-		// otherwise an in-memory LRU cache.
-		cache := services.NewCache(cfg.RedisURL)
-		defer cache.Close()
-		log.Printf("Cache initialized: %s", cfg.RedisURL)
+	// otherwise an in-memory LRU cache.
+	cache := services.NewCache(cfg.RedisURL)
+	defer cache.Close()
+	log.Printf("Cache initialized: %s", cfg.RedisURL)
 
-	// Initialize services
-	authService := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpiration)
+	// Initialize services using primary database for write-capable components.
+	primaryDB := db.WriteDB()
+	authService := services.NewAuthService(primaryDB, cfg.JWTSecret, cfg.JWTExpiration)
 
 	// Initialize email service
 	emailService := services.NewEmailService()
 
 	// Initialize device policy service for single-device enforcement
-	devicePolicyService := services.NewDevicePolicyService(db, authService, emailService)
+	devicePolicyService := services.NewDevicePolicyService(primaryDB, authService, emailService)
 
 	// Initialize password reset service
-	passwordResetService := services.NewPasswordResetService(db, emailService)
+	passwordResetService := services.NewPasswordResetService(primaryDB, emailService)
 
 	// Initialize password reset table
 	if err := passwordResetService.InitializePasswordResetTable(); err != nil {
@@ -109,7 +138,7 @@ func main() {
 	}
 
 	// Initialize email verification service
-	emailVerificationService := services.NewEmailVerificationService(db, emailService)
+	emailVerificationService := services.NewEmailVerificationService(primaryDB, emailService)
 
 	// Initialize email verification table
 	if err := emailVerificationService.InitializeEmailVerificationTable(); err != nil {
@@ -117,37 +146,37 @@ func main() {
 	}
 
 	// Initialize notification scheduler for reminders
-	notificationScheduler := services.NewNotificationScheduler(db)
+	notificationScheduler := services.NewNotificationScheduler(primaryDB)
 	notificationScheduler.Start()
 
 	// Start STK push reconciler to catch cancelled/failed payments that never got callbacks
 	cfgForReconciler := cfg
-	services.StartSTKReconciler(db, cfgForReconciler, 10*time.Minute, 15*time.Minute)
+	services.StartSTKReconciler(primaryDB, cfgForReconciler, 10*time.Minute, 15*time.Minute)
 
 	// Initialize scheduler service for meeting auto-unlock
-	authHandlers := api.NewAuthHandlers(db, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService)
-	reminderHandlers := api.NewReminderHandlers(db)
+	authHandlers := api.NewAuthHandlers(primaryDB, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService)
+	reminderHandlers := api.NewReminderHandlers(primaryDB)
 
-	pollsHandlers := api.NewPollsHandlers(db)
-	disbursementHandlers := api.NewDisbursementHandlers(db, cfg)
-	reportsHandlers := api.NewFinancialReportsHandlers(db)
-	userSearchHandlers := api.NewUserSearchHandlers(db)
-	receiptHandlers := api.NewReceiptHandlers(db)
-	accountHandlers := api.NewAccountHandlers(db)
-	subwalletHandlers := api.NewSubWalletHandlers(db, cfg)
-	disbursementService := services.NewDisbursementService(db, cfg)
+	pollsHandlers := api.NewPollsHandlers(primaryDB)
+	disbursementHandlers := api.NewDisbursementHandlers(primaryDB, cfg)
+	reportsHandlers := api.NewFinancialReportsHandlers(primaryDB)
+	userSearchHandlers := api.NewUserSearchHandlers(primaryDB)
+	receiptHandlers := api.NewReceiptHandlers(primaryDB)
+	accountHandlers := api.NewAccountHandlers(primaryDB)
+	subwalletHandlers := api.NewSubWalletHandlers(primaryDB, cfg)
+	disbursementService := services.NewDisbursementService(primaryDB, cfg)
 
 	// Initialize Test Data Generator (dev/test only)
 	var testDataGenerator *services.TestDataGenerator
 	if cfg.Environment != "production" || os.Getenv("ENABLE_TEST_DATA_GENERATOR") == "true" {
-		testDataGenerator = services.NewTestDataGenerator(db)
+		testDataGenerator = services.NewTestDataGenerator(primaryDB)
 		if os.Getenv("AUTO_START_TEST_DATA") == "true" {
 			testDataGenerator.Start(5 * time.Minute)
 		}
 	}
 
 	// Initialize meeting service for attendance endpoints
-	api.InitializeMeetingService(db, nil)
+	api.InitializeMeetingService(primaryDB, nil)
 
 	// Register routes and middleware
 	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService, devicePolicyService, cache)

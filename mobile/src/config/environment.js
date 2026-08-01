@@ -39,6 +39,41 @@ const envBool = (key, fallback = false) => {
   return lower === 'true' || lower === '1' || lower === 'yes';
 };
 
+const isLocalhostHost = (host) => {
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+};
+
+const isPrivateNetworkHost = (host) => {
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host);
+};
+
+const resolveWebBackendUrl = (backendUrl) => {
+  if (typeof window === 'undefined' || typeof window.location === 'undefined') {
+    return backendUrl;
+  }
+
+  try {
+    const url = new URL(backendUrl);
+    if (!isLocalhostHost(url.hostname)) {
+      return backendUrl;
+    }
+
+    const pageHost = window.location.hostname;
+    if (pageHost && isPrivateNetworkHost(pageHost)) {
+      return `${url.protocol}//${pageHost}${url.port ? `:${url.port}` : ''}${url.pathname}`.replace(/\/+$|\?$/, '');
+    }
+
+    const networkIp = env('NETWORK_IP');
+    if (networkIp && networkIp.trim() !== '') {
+      return `${url.protocol}//${networkIp.trim()}${url.port ? `:${url.port}` : ''}${url.pathname}`.replace(/\/+$|\?$/, '');
+    }
+  } catch (error) {
+    // Keep original backend URL if parsing fails.
+  }
+
+  return backendUrl;
+};
+
 /**
  * Resolve API base URL.
  * Priority: BACKEND_API_URL > REACT_APP_API_URL > NEXT_PUBLIC_API_URL > fallback
@@ -52,7 +87,8 @@ const resolveApiBaseUrl = () => {
 
   for (const candidate of candidates) {
     if (candidate && candidate.trim() !== '') {
-      return candidate.trim().replace(/\/+$/, '');
+      const normalized = candidate.trim().replace(/\/+$/, '');
+      return resolveWebBackendUrl(normalized);
     }
   }
 

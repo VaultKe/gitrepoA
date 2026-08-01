@@ -11,24 +11,26 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	Environment   string
-	Port          string
-	DatabaseURL   string
-	JWTSecret     string
-	JWTExpiration int
+	Environment        string
+	Port               string
+	DatabaseURL        string
+	PrimaryDatabaseURL string
+	ReplicaDatabaseURL string
+	JWTSecret          string
+	JWTExpiration      int
 
 	// M-Pesa Configuration
-	MpesaConsumerKey           string
-	MpesaConsumerSecret        string
-	MpesaPasskey               string
-	MpesaShortcode             string
-	MpesaCallbackURL           string
-	MpesaInitiatorName         string
-	MpesaInitiatorPassword     string
-	MpesaPublicKeyCertPath     string // Path to M-Pesa public key certificate for RSA-OAEP encryption
-	MpesaCallbackSecret        string // Shared secret for callback endpoint authentication
-	MpesaEnvironment           string // "sandbox" or "production" - controls M-Pesa API base URL
-	BaseURL                    string
+	MpesaConsumerKey       string
+	MpesaConsumerSecret    string
+	MpesaPasskey           string
+	MpesaShortcode         string
+	MpesaCallbackURL       string
+	MpesaInitiatorName     string
+	MpesaInitiatorPassword string
+	MpesaPublicKeyCertPath string // Path to M-Pesa public key certificate for RSA-OAEP encryption
+	MpesaCallbackSecret    string // Shared secret for callback endpoint authentication
+	MpesaEnvironment       string // "sandbox" or "production" - controls M-Pesa API base URL
+	BaseURL                string
 
 	// Centralized Paybill Configuration (for all chama payments)
 	SystemPaybillBusinessNumber string // Single paybill for all chama payments
@@ -108,11 +110,13 @@ type Config struct {
 // Load loads configuration from environment variables
 func Load() *Config {
 	return &Config{
-		Environment:   getEnv("ENVIRONMENT", "development"),
-		Port:          getEnv("PORT", "8085"),
-		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"),
-		JWTSecret:     getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
-		JWTExpiration: getEnvAsInt("JWT_EXPIRATION", 24*60*60), // 24 hours in seconds
+		Environment:        getEnv("ENVIRONMENT", "development"),
+		Port:               getEnv("PORT", "8085"),
+		DatabaseURL:        getEnv("DATABASE_URL", getEnv("DATABASE_URL_PRIMARY", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require")),
+		PrimaryDatabaseURL: getEnv("DATABASE_URL_PRIMARY", getEnv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require")),
+		ReplicaDatabaseURL: getEnv("DATABASE_URL_REPLICA", getEnv("DATABASE_URL_PRIMARY", getEnv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"))),
+		JWTSecret:          getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
+		JWTExpiration:      getEnvAsInt("JWT_EXPIRATION", 24*60*60), // 24 hours in seconds
 
 		// M-Pesa Configuration
 		MpesaConsumerKey:       getEnv("MPESA_CONSUMER_KEY", ""),
@@ -255,8 +259,8 @@ func (c *Config) Validate() error {
 	if c.JWTSecret == "" {
 		return fmt.Errorf("JWT secret is required")
 	}
-	if c.DatabaseURL == "" {
-		return fmt.Errorf("database URL is required")
+	if c.PrimaryDatabaseURL == "" {
+		return fmt.Errorf("primary database URL is required")
 	}
 	if c.Environment == "" {
 		return fmt.Errorf("environment is required")

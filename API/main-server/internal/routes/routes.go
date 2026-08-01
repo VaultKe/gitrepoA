@@ -2,7 +2,6 @@ package routes
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"net"
@@ -14,20 +13,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"vaultke-backend/config"
+	"vaultke-backend/database"
 	"vaultke-backend/internal/api"
 	"vaultke-backend/internal/middleware"
 	"vaultke-backend/internal/services"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 // SetupRoutes registers all route groups and middleware on the given Gin router.
 func SetupRoutes(
 	router *gin.Engine,
 	cfg *config.Config,
-	db *sql.DB,
+	db *database.Database,
 	authService *services.AuthService,
 	passwordResetService *services.PasswordResetService,
 	emailVerificationService *services.EmailVerificationService,
@@ -93,9 +94,14 @@ func SetupRoutes(
 	// Authentication middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
-	// Context injection middleware
+	// Context injection middleware selects replica for safe read-only requests
 	dbMiddleware := func(c *gin.Context) {
-		c.Set("db", db)
+		// Use replica for idempotent read requests when configured.
+		if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead {
+			c.Set("db", db.ReadDB())
+		} else {
+			c.Set("db", db.WriteDB())
+		}
 		c.Next()
 	}
 
@@ -559,10 +565,10 @@ func SetupRoutes(
 				loans.POST("/:id/approve/confirm", api.ConfirmLoanApproval)
 				loans.POST("/:id/reject", api.RejectLoan)
 				loans.POST("/:id/disburse", api.DisburseLoan)
-			loans.POST("/:id/payments", api.RecordLoanPayment)
-			loans.GET("/:id/guarantors", api.GetLoanGuarantors)
-			loans.GET("/:id/fines", api.GetLoanFines)
-			loans.POST("/:id/guarantor-response", api.RespondToGuarantorRequest)
+				loans.POST("/:id/payments", api.RecordLoanPayment)
+				loans.GET("/:id/guarantors", api.GetLoanGuarantors)
+				loans.GET("/:id/fines", api.GetLoanFines)
+				loans.POST("/:id/guarantor-response", api.RespondToGuarantorRequest)
 				loans.GET("/guarantor-requests", api.GetGuarantorRequests)
 				loans.POST("/guarantors/:guarantorId/respond", api.RespondToGuarantorRequest)
 

@@ -244,18 +244,37 @@ func addLoanApprovalStagesColumns(db *sql.DB) error {
 	}
 
 	// Add foreign keys for approval columns if they don't exist
-	fks := []string{
-		"FOREIGN KEY (secretary_approved_by) REFERENCES users(id)",
-		"FOREIGN KEY (treasurer_approved_by) REFERENCES users(id)",
-		"FOREIGN KEY (chairperson_approved_by) REFERENCES users(id)",
-		"FOREIGN KEY (rejected_by) REFERENCES users(id)",
+	approvalColumns := []string{
+		"secretary_approved_by",
+		"treasurer_approved_by",
+		"chairperson_approved_by",
+		"rejected_by",
 	}
-	for _, fk := range fks {
-		if _, err := db.Exec("ALTER TABLE loans ADD CONSTRAINT " + fk); err != nil {
-			// Ignore if constraint already exists
-			if !strings.Contains(err.Error(), "already exists") {
-				log.Printf("Note: could not add constraint %s: %v", fk, err)
+
+	for _, colName := range approvalColumns {
+		constraintName := fmt.Sprintf("fk_loans_%s_users", colName)
+		var exists bool
+		checkQuery := `SELECT EXISTS (
+			SELECT 1 FROM information_schema.table_constraints
+			WHERE table_name = 'loans' AND constraint_name = $1
+		)`
+		if err := db.QueryRow(checkQuery, constraintName).Scan(&exists); err != nil {
+			return fmt.Errorf("failed to check constraint %s: %w", constraintName, err)
+		}
+
+		if exists {
+			continue
+		}
+
+		query := fmt.Sprintf(
+			"ALTER TABLE loans ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES users(id)",
+			constraintName, colName,
+		)
+		if _, err := db.Exec(query); err != nil {
+			if strings.Contains(err.Error(), "already exists") {
+				continue
 			}
+			return fmt.Errorf("failed to add foreign key constraint %s: %w", constraintName, err)
 		}
 	}
 
