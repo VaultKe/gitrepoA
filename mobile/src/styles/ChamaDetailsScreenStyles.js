@@ -163,10 +163,7 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
   membershipDate: {
     fontSize: typography.fontSize.sm,
   },
-  membershipActions: {
-    gap: spacing.md,
-  },
-  membershipButton: {
+   membershipButton: {
     marginBottom: spacing.sm,
   },
   // New styles for comprehensive view

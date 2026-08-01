@@ -1316,36 +1316,53 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
               Members must maintain confidentiality of chama matters and member information
             </Text>
           </View>
-        </View>
+         </View>
+       </Card>
+     );
+   };
 
-        {/* Chairperson controls for the attached rules document */}
-        {userMembership?.role?.toLowerCase() === 'chairperson' && (
-          <View style={[styles.rulesFileActions, { marginTop: spacing.lg }]}>
-            <Button
-              title={rulesFilePath ? 'Replace Rules PDF' : 'Upload Rules PDF'}
-              variant="outline"
-              onPress={handleUploadRulesFile}
-              loading={uploadingRules}
-              icon={<Ionicons name="document-attach-outline" size={18} color={colors.primary} />}
-              style={styles.rulesFileActionButton}
-            />
-            {rulesFilePath && !uploadingRules && (
-              <TouchableOpacity
-                onPress={handleRemoveRulesFile}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.rulesFileRemoveButton}
-              >
-                <Text style={[styles.rulesFileRemoveText, { color: colors.error }]}>
-                  Remove
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </Card>
-    );
-  };
-  const renderGroupChat = () => {
+   const renderUploadRulesButton = () => {
+     const rawRulesFilePath = (chama?.rules_file_path && chama.rules_file_path.trim()) ||
+       (chama?.permissions && chama.permissions.rules_file_path);
+     const rulesFilePath = rawRulesFilePath ? rawRulesFilePath.trim() : null;
+
+     return (
+       <Card style={styles.section} variant="outlined">
+         <Text style={[styles.sectionTitle, { color: colors.text }]}>
+           Rules Document
+         </Text>
+         {userMembership?.role?.toLowerCase() === 'chairperson' ? (
+           <View style={styles.rulesFileActions}>
+             <Button
+               title={rulesFilePath ? 'Replace Rules PDF' : 'Upload Rules PDF'}
+               variant="outline"
+               onPress={handleUploadRulesFile}
+               loading={uploadingRules}
+               icon={<Ionicons name="document-attach-outline" size={18} color={colors.primary} />}
+               style={styles.rulesFileActionButton}
+             />
+             {rulesFilePath && !uploadingRules && (
+               <TouchableOpacity
+                 onPress={handleRemoveRulesFile}
+                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                 style={styles.rulesFileRemoveButton}
+               >
+                 <Text style={[styles.rulesFileRemoveText, { color: colors.error }]}>
+                   Remove
+                 </Text>
+               </TouchableOpacity>
+             )}
+           </View>
+         ) : (
+           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+             No rules document uploaded
+           </Text>
+         )}
+       </Card>
+     );
+    };
+
+   const renderGroupChat = () => {
     const existingChatRoomId = getExistingChatRoomId();
     const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
     const groupLabel = getGroupLabel();
@@ -1407,54 +1424,58 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     );
   };
 
-  const renderMembershipActions = () => {
-    if (!userMembership) {
-      return (
-        <Card style={styles.section} variant="outlined">
-          <Button
-            title="Join This Chama"
-            onPress={handleJoinChama}
-            disabled={chama?.current_members >= chama?.max_members}
-            icon={<Ionicons name="person-add" size={20} color={colors.white} />}
-          />
-        </Card>
-      );
-    }
+   const renderMembershipActions = () => {
+     if (!userMembership) {
+       return (
+         <Card style={styles.section} variant="outlined">
+           <Button
+             title="Join This Chama"
+             onPress={handleJoinChama}
+             disabled={chama?.current_members >= chama?.max_members}
+             icon={<Ionicons name="person-add" size={20} color={colors.white} />}
+           />
+         </Card>
+       );
+     }
 
-    return (
-      <Card style={styles.section} variant="outlined">
-        <View style={styles.membershipInfo}>
-          <Text style={[styles.membershipTitle, { color: colors.text }]}>
-            Your Membership
-          </Text>
-          <Text style={[styles.membershipRole, { color: colors.primary }]}>
-            {userMembership.role?.toUpperCase()}
-          </Text>
-          <Text style={[styles.membershipDate, { color: colors.textSecondary }]}>
-            Joined {new Date(userMembership.joined_at).toLocaleDateString()}
-          </Text>
-        </View>
-        
-        <View style={styles.membershipActions}>
-          <Button
-            title="Switch to Chama Dashboard"
-            onPress={() => {
-              switchToChamaDashboard(chama);
-            }}
-            style={styles.membershipButton}
-          />
+     return (
+       <View>
+         <Card style={styles.section} variant="outlined">
+           <View style={styles.membershipInfo}>
+             <Text style={[styles.membershipTitle, { color: colors.text }]}>
+               Your Membership
+             </Text>
+             <Text style={[styles.membershipRole, { color: colors.primary }]}>
+               {userMembership.role?.toUpperCase()}
+             </Text>
+             <Text style={[styles.membershipDate, { color: colors.textSecondary }]}>
+               Joined {new Date(userMembership.joined_at).toLocaleDateString()}
+             </Text>
+           </View>
+         </Card>
 
-          <Button
-            title="Leave Chama"
-            variant="outline"
-            onPress={handleLeaveChama}
-            style={[styles.membershipButton, { borderColor: colors.error }]}
-            textStyle={{ color: colors.error }}
-          />
-        </View>
-      </Card>
-    );
-  };
+         <Card style={[styles.section, { marginTop: spacing.md }]} variant="outlined">
+           <Button
+             title="Switch to Chama Dashboard"
+             onPress={() => {
+               switchToChamaDashboard(chama);
+             }}
+             style={styles.membershipButton}
+           />
+         </Card>
+
+         <Card style={[styles.section, { marginTop: spacing.md }]} variant="outlined">
+           <Button
+             title="Leave Chama"
+             variant="outline"
+             onPress={handleLeaveChama}
+             style={[styles.membershipButton, { borderColor: colors.error }]}
+             textStyle={{ color: colors.error }}
+           />
+         </Card>
+       </View>
+     );
+   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -1489,6 +1510,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
               {renderChamaRules()}
             </View>
             <View style={styles.desktopSideColumn}>
+              {renderUploadRulesButton()}
               {renderGroupChat()}
               {renderMembershipActions()}
             </View>
@@ -1496,6 +1518,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         ) : (
           <>
             {renderChamaRules()}
+            {renderUploadRulesButton()}
             {renderGroupChat()}
             {renderMembershipActions()}
           </>
