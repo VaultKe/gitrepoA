@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config holds all configuration for the application
@@ -85,6 +86,10 @@ type Config struct {
 	EnableMetrics bool
 	MetricsPort   string
 	EnableTracing bool
+
+	// Slow Query Logging
+	EnableSlowQueryLog bool
+	SlowQueryThreshold time.Duration // threshold for slow query logging
 
 	// Backup Configuration
 	BackupEnabled  bool
@@ -175,12 +180,16 @@ func Load() *Config {
 		LogFile:  getEnv("LOG_FILE", ""),
 
 		// Metrics and Monitoring Configuration
-		EnableMetrics: getEnvAsBool("ENABLE_METRICS", false),
+		EnableMetrics: getEnvAsBool("ENABLE_METRICS", true),
 		MetricsPort:   getEnv("METRICS_PORT", "9090"),
 		EnableTracing: getEnvAsBool("ENABLE_TRACING", false),
 
+		// Slow Query Logging
+		EnableSlowQueryLog: getEnvAsBool("ENABLE_SLOW_QUERY_LOG", true),
+		SlowQueryThreshold: time.Duration(getEnvAsInt("SLOW_QUERY_THRESHOLD_MS", 1000)) * time.Millisecond,
+
 		// Backup Configuration
-		BackupEnabled:  getEnvAsBool("BACKUP_ENABLED", false),
+		BackupEnabled:  getEnvAsBool("BACKUP_ENABLED", true),
 		BackupInterval: getEnvAsInt("BACKUP_INTERVAL", 24),
 		BackupPath:     getEnv("BACKUP_PATH", "./backups"),
 

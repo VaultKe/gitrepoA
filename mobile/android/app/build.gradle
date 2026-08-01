@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.somulos-team.vaultke'
+    namespace 'com.somulos.vaultke'
     defaultConfig {
-        applicationId 'com.somulos-team.vaultke'
+        applicationId 'com.somulos.vaultke'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

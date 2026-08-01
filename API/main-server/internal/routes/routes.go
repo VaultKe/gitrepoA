@@ -43,6 +43,7 @@ func SetupRoutes(
 	subwalletHandlers *api.SubWalletHandlers,
 	disbursementService *services.DisbursementService,
 	devicePolicyService *services.DevicePolicyService,
+	cache services.Cache,
 ) {
 	// HTML templates for OAuth pages
 	router.LoadHTMLGlob("templates/*")
@@ -66,6 +67,9 @@ func SetupRoutes(
 		}
 		c.Next()
 	})
+
+	// Cache middleware: cache GET responses for idempotent read endpoints
+	router.Use(middleware.CacheMiddleware(cache))
 
 	// Health check endpoints and static pages
 	router.GET("/health", func(c *gin.Context) {

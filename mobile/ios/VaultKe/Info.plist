@@ -27,7 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>com.somulos-team.vaultke</string>
+          <string>com.somulos.vaultke</string>
         </array>
       </dict>
       <dict>

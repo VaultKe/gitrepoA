@@ -104,6 +104,14 @@ const makeRequest = async (endpoint, options = {}) => {
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   const fetchConfig = { ...config, signal: controller.signal };
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.debug('[API] request', {
+      url: `${API_BASE_URL}${endpoint}`,
+      method: config.method,
+      headers: config.headers,
+      body: isFormData ? '[FormData]' : config.body,
+    });
+  }
   const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchConfig);
   clearTimeout(timeoutId);
 
@@ -233,10 +241,13 @@ const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {
 
 const checkBackendConnectivity = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 5000,
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.debug('[API] health connectivity check', `${API_BASE_URL}/health`);
+    }
+     const response = await fetch(`${API_BASE_URL}/health`, {
+       method: 'GET',
+       headers: { 'Content-Type': 'application/json' },
+       timeout: REQUEST_TIMEOUT,
     });
 
     if (response.ok) {
@@ -265,9 +276,12 @@ const checkBackendConnectivity = async () => {
 
 const checkHealth = async () => {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(`${API_BASE_URL}/health`, {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.debug('[API] health check', `${API_BASE_URL}/health`);
+    }
+     const controller = new AbortController();
+     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+     const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,

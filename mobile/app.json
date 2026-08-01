@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.somulos-team.vaultke"
+      "bundleIdentifier": "com.somulos.vaultke"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +23,7 @@
         "backgroundColor": "#0D1117"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.somulos-team.vaultke"
+      "package": "com.somulos.vaultke"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -43,6 +43,6 @@
         "projectId": "b78f8d8c-3775-40fc-a8cf-e8cc04359f42"
       }
     },
-    "owner": "somulos-team"
+    "owner": "com.somulos"
   }
 }

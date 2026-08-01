@@ -1,4 +1,4 @@
-package com.somulos-team.vaultke
+package com.somulos.vaultke
 
 import android.os.Build
 import android.os.Bundle

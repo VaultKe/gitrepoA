@@ -57,5 +57,11 @@ func MigrateAll(db *sql.DB) error {
 	if err := MigrateStatisticsIndexes(db); err != nil {
 		return fmt.Errorf("statistics_indexes: %w", err)
 	}
+	if err := MigrateMissingIndexes(db); err != nil {
+		return fmt.Errorf("missing_indexes: %w", err)
+	}
+	if err := MigrateJSONBConversions(db); err != nil {
+		return fmt.Errorf("jsonb_conversion: %w", err)
+	}
 	return nil
 }

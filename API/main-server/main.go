@@ -63,7 +63,11 @@ func main() {
 	// Disable trailing slash redirects to prevent CORS issues
 	router.RedirectTrailingSlash = false
 
-	// Add memory monitoring middleware
+	// Add memory and slow-request monitoring middleware
+	slowQueryThreshold := 5 * time.Second
+	if cfg.EnableSlowQueryLog {
+		slowQueryThreshold = cfg.SlowQueryThreshold
+	}
 	router.Use(func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
@@ -75,11 +79,17 @@ func main() {
 			return
 		}
 
-		// Log memory-intensive requests
-		if duration > 5*time.Second {
+		// Log slow requests
+		if duration > slowQueryThreshold {
 			log.Printf("🚨 SLOW REQUEST: %s %s took %v", c.Request.Method, c.Request.URL.Path, duration)
 		}
 	})
+
+	// Initialize cache — uses Redis when REDIS_URL is configured,
+		// otherwise an in-memory LRU cache.
+		cache := services.NewCache(cfg.RedisURL)
+		defer cache.Close()
+		log.Printf("Cache initialized: %s", cfg.RedisURL)
 
 	// Initialize services
 	authService := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpiration)
@@ -140,7 +150,7 @@ func main() {
 	api.InitializeMeetingService(db, nil)
 
 	// Register routes and middleware
-	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService, devicePolicyService)
+	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService, devicePolicyService, cache)
 
 	// Start server
 	port := os.Getenv("PORT")
