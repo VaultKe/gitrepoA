@@ -12,7 +12,8 @@ export const triggerAppLogout = async () => {
 
   isLoggingOut = true;
   try {
-    const AsyncStorage = await import('@react-native-async-storage/async-storage');
+    console.warn('triggerAppLogout invoked - clearing auth keys', new Error().stack);
+    const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
     const authKeys = ['authToken', 'token', 'user', 'userRole', 'userData'];
     await AsyncStorage.multiRemove(authKeys);
 

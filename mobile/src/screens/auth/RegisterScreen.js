@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, breakpoints } from '../../utils/theme';
 import apiService from '../../services/api';
-import MessageBanner from '../../components/MessageBanner';
+import MessageBanner from '../../components/common/MessageBanner';
 import FormField from '../../components/FormField';
 import LoadingButton from '../../components/LoadingButton';
 import LegalAgreementSection from '../../components/legal/LegalAgreementSection';
@@ -231,7 +231,7 @@ export default function RegisterScreen({ navigation }) {
           visible={message.visible}
           message={message.text}
           type={message.type}
-          onDismiss={() => setMessage(prev => ({ ...prev, visible: false }))}
+          onClose={() => setMessage(prev => ({ ...prev, visible: false }))}
         />
 
         <ScrollView

@@ -11,6 +11,7 @@ require (
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/lib/pq v1.11.2
 	github.com/mattn/go-sqlite3 v1.14.42
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/xuri/excelize/v2 v2.8.1
 	golang.org/x/crypto v0.45.0
 	golang.org/x/oauth2 v0.32.0
@@ -51,7 +52,6 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/redis/go-redis/v9 v9.7.0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

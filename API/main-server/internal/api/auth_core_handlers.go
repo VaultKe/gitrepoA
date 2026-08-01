@@ -376,15 +376,6 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.authService.GenerateToken(user)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, AuthResponse{
-			Success: false,
-			Error:   "Failed to generate token",
-		})
-		return
-	}
-
 	userAgent := c.GetHeader("User-Agent")
 	clientIP := c.ClientIP()
 
@@ -430,6 +421,26 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		} else if devicePolicyResult != nil && devicePolicyResult.PreviousDeviceLoggedOut {
 			fmt.Printf("SECURITY: previous device logged out for user %s. Old device: %s (UID: %s)\n",
 				user.ID, devicePolicyResult.PreviousDeviceName, devicePolicyResult.PreviousDeviceUID)
+		}
+
+		// Re-fetch user to get the updated token_version (may have been
+		// incremented by EnforceSingleDevicePolicy).
+		user, err = h.userService.GetUserByID(user.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, AuthResponse{
+				Success: false,
+				Error:   "Failed to re-fetch user after device policy enforcement",
+			})
+			return
+		}
+
+		token, err := h.authService.GenerateToken(user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, AuthResponse{
+				Success: false,
+				Error:   "Failed to generate token",
+			})
+			return
 		}
 
 		// Now issue the new refresh token, record the login session, and
@@ -512,6 +523,15 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		c.JSON(http.StatusOK, response)
 	} else {
 		fmt.Printf("Database not available in context for recording login session\n")
+
+		token, err := h.authService.GenerateToken(user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, AuthResponse{
+				Success: false,
+				Error:   "Failed to generate token",
+			})
+			return
+		}
 
 		refreshToken, _, err := h.authService.GenerateRefreshToken(user.ID, userAgent, clientIP)
 		if err != nil {

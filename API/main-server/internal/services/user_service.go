@@ -127,15 +127,15 @@ func (s *UserService) CreateUser(registration *models.UserRegistration) (*models
 		INSERT INTO users (
 			id, email, phone, first_name, last_name, password_hash, role, status,
 			is_email_verified, is_phone_verified, language, theme, gender, id_number, rating, total_ratings,
-			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+			token_version, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 
 	_, err = s.db.Exec(query,
 		user.ID, user.Email, user.Phone, user.FirstName, user.LastName,
 		user.PasswordHash, user.Role, user.Status, user.IsEmailVerified,
 		user.IsPhoneVerified, user.Language, user.Theme, user.Gender, user.IDNumber,
-		user.Rating, user.TotalRatings, user.CreatedAt, user.UpdatedAt,
+		user.Rating, user.TotalRatings, user.TokenVersion, user.CreatedAt, user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
@@ -198,7 +198,8 @@ func (s *UserService) GetUserByID(userID string) (*models.User, error) {
 		SELECT id, email, phone, first_name, last_name, avatar, role, status,
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, bio, occupation,
-			   date_of_birth, gender, id_number, rating, total_ratings, created_at, updated_at
+			   date_of_birth, gender, id_number, rating, total_ratings, token_version,
+			   created_at, updated_at
 		FROM users WHERE id = $1
 	`
 
@@ -209,7 +210,8 @@ func (s *UserService) GetUserByID(userID string) (*models.User, error) {
 		&user.IsPhoneVerified, &user.Language, &user.Theme, &user.County,
 		&user.Town, &user.Latitude, &user.Longitude, &user.BusinessType,
 		&user.BusinessDescription, &user.Bio, &user.Occupation, &user.DateOfBirth,
-		&user.Gender, &user.IDNumber, &user.Rating, &user.TotalRatings, &user.CreatedAt, &user.UpdatedAt,
+		&user.Gender, &user.IDNumber, &user.Rating, &user.TotalRatings,
+		&user.TokenVersion, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -251,7 +253,8 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 		SELECT id, email, phone, first_name, last_name, password_hash, avatar, role, status,
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, bio, occupation,
-			   date_of_birth, gender, id_number, rating, total_ratings, created_at, updated_at
+			   date_of_birth, gender, id_number, rating, total_ratings, token_version,
+			   created_at, updated_at
 		FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3
 	`
 
@@ -263,7 +266,7 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 		&user.County, &user.Town, &user.Latitude, &user.Longitude,
 		&user.BusinessType, &user.BusinessDescription, &user.Bio, &user.Occupation,
 		&user.DateOfBirth, &user.Gender, &user.IDNumber, &user.Rating, &user.TotalRatings,
-		&user.CreatedAt, &user.UpdatedAt,
+		&user.TokenVersion, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

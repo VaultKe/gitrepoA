@@ -10,10 +10,42 @@ const login = async (credentials) => {
 
   if (response.success && response.data?.token) {
     await storeUserData(response.data.user);
-    const { setAuthToken } = await import('./auth');
+    const { setAuthToken, getAuthToken } = await import('./auth');
     await setAuthToken(response.data.token);
+
+    // Verify token persisted; if not, attempt a direct AsyncStorage fallback write
+    try {
+      const persisted = await getAuthToken();
+      if (!persisted) {
+        const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+        try {
+          await AsyncStorage.setItem('authToken', response.data.token);
+          console.warn('Auth token fallback: wrote token directly to AsyncStorage');
+        } catch (e) {
+          console.warn('Auth token fallback write failed:', e?.message || e);
+        }
+      }
+    } catch (e) {
+      console.warn('Auth token verification failed:', e?.message || e);
+    }
     if (response.data.refreshToken) {
       await setRefreshToken(response.data.refreshToken);
+      // Verify refresh token persisted; fallback to direct AsyncStorage write if needed
+      try {
+        const { getRefreshToken } = await import('./auth');
+        const persistedRefresh = await getRefreshToken();
+        if (!persistedRefresh) {
+          const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+          try {
+            await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+            console.warn('Refresh token fallback: wrote refreshToken directly to AsyncStorage');
+          } catch (e) {
+            console.warn('Refresh token fallback write failed:', e?.message || e);
+          }
+        }
+      } catch (e) {
+        console.warn('Refresh token verification failed:', e?.message || e);
+      }
     }
   }
 
@@ -28,10 +60,42 @@ const register = async (userData) => {
 
   if (response.success && response.data?.token) {
     await storeUserData(response.data.user);
-    const { setAuthToken } = await import('./auth');
+    const { setAuthToken, getAuthToken } = await import('./auth');
     await setAuthToken(response.data.token);
+
+    // Verify token persisted; if not, attempt a direct AsyncStorage fallback write
+    try {
+      const persisted = await getAuthToken();
+      if (!persisted) {
+        const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+        try {
+          await AsyncStorage.setItem('authToken', response.data.token);
+          console.warn('Auth token fallback: wrote token directly to AsyncStorage');
+        } catch (e) {
+          console.warn('Auth token fallback write failed:', e?.message || e);
+        }
+      }
+    } catch (e) {
+      console.warn('Auth token verification failed:', e?.message || e);
+    }
     if (response.data.refreshToken) {
       await setRefreshToken(response.data.refreshToken);
+      // Verify refresh token persisted; fallback to direct AsyncStorage write if needed
+      try {
+        const { getRefreshToken } = await import('./auth');
+        const persistedRefresh = await getRefreshToken();
+        if (!persistedRefresh) {
+          const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+          try {
+            await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+            console.warn('Refresh token fallback: wrote refreshToken directly to AsyncStorage');
+          } catch (e) {
+            console.warn('Refresh token fallback write failed:', e?.message || e);
+          }
+        }
+      } catch (e) {
+        console.warn('Refresh token verification failed:', e?.message || e);
+      }
     }
   }
 

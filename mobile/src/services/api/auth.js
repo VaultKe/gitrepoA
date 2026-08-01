@@ -6,6 +6,7 @@ const getAuthToken = async () => {
   try {
     return await AsyncStorage.getItem('authToken');
   } catch (error) {
+    console.warn('getAuthToken failed:', error?.message || error);
     return null;
   }
 };
@@ -13,19 +14,24 @@ const getAuthToken = async () => {
 const setAuthToken = async (token) => {
   try {
     await AsyncStorage.setItem('authToken', token);
-  } catch (error) {}
+  } catch (error) {
+    console.warn('setAuthToken failed:', error?.message || error);
+  }
 };
 
 const removeAuthToken = async () => {
   try {
     await AsyncStorage.removeItem('authToken');
-  } catch (error) {}
+  } catch (error) {
+    console.warn('removeAuthToken failed:', error?.message || error);
+  }
 };
 
 const getRefreshToken = async () => {
   try {
     return await AsyncStorage.getItem('refreshToken');
   } catch (error) {
+    console.warn('getRefreshToken failed:', error?.message || error);
     return null;
   }
 };
@@ -33,13 +39,17 @@ const getRefreshToken = async () => {
 const setRefreshToken = async (token) => {
   try {
     await AsyncStorage.setItem('refreshToken', token);
-  } catch (error) {}
+  } catch (error) {
+    console.warn('setRefreshToken failed:', error?.message || error);
+  }
 };
 
 const removeRefreshToken = async () => {
   try {
     await AsyncStorage.removeItem('refreshToken');
-  } catch (error) {}
+  } catch (error) {
+    console.warn('removeRefreshToken failed:', error?.message || error);
+  }
 };
 
 const sanitizeHeaderValue = (value) => {

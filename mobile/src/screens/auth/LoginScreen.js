@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, breakpoints } from '../../utils/theme';
 import apiService from '../../services/api';
-import MessageBanner from '../../components/MessageBanner';
+import Toast from 'react-native-toast-message';
 import FormField from '../../components/FormField';
 import LoadingButton from '../../components/LoadingButton';
 import Card from '../../components/common/Card';
@@ -28,7 +28,6 @@ export default function LoginScreen({ navigation }) {
 
   // Enhanced error handling state
   const [errors, setErrors] = useState({});
-  const [message, setMessage] = useState({ visible: false, text: '', type: 'error' });
 
   const { login, isAuthenticated, userRole, theme } = useApp();
   const colors = getThemeColors(theme);
@@ -95,59 +94,67 @@ export default function LoginScreen({ navigation }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Enhanced message display function
-  const showMessage = (text, type = 'error', duration = 4000) => {
-    setMessage({ visible: true, text, type });
-    if (duration > 0) {
-      setTimeout(() => {
-        setMessage(prev => ({ ...prev, visible: false }));
-      }, duration);
-    }
+  const isCredentialError = (message) => {
+    return /invalid credentials|incorrect credentials|wrong email|wrong phone|wrong password|invalid email|invalid phone|invalid password|login failed/i.test(message);
+  };
+
+  const isNetworkError = (message) => {
+    return /network|connection|failed to fetch|timeout|offline|unreachable|ECONNREFUSED|ENOTFOUND|ERR_NETWORK|ERR_CONNECTION|server unreachable/i.test(message);
   };
 
   const handleLogin = async () => {
-    // Clear previous errors and messages
+    // Clear previous errors
     setErrors({});
-    setMessage({ visible: false, text: '', type: 'error' });
 
     if (!validateForm()) {
-      showMessage('Please fix the errors below', 'error');
+      Toast.show({
+        type: 'error',
+        text1: 'Please fix the errors below',
+      });
       return;
     }
 
     setIsLoading(true);
 
+    const credentials = {
+      identifier: identifier.trim(),
+      password: password,
+    };
+
     try {
-      // Check network status first
-      const currentNetworkStatus = await checkNetworkStatus();
+      const result = await login(credentials);
 
-      // Prepare login credentials based on backend format
-      const credentials = {
-        identifier: identifier.trim(),  // Fixed: backend expects lowercase "identifier"
-        password: password,             // Fixed: backend expects lowercase "password"
-      };
-      if (currentNetworkStatus === 'online') {
-        // Online login - use AppContext login which handles sync
-        const result = await login(credentials);
-
-        if (result.success) {
-          // Check if previous device was logged out due to single-device policy
-          if (result.previousDeviceLoggedOut) {
-            const deviceName = result.previousDeviceName || 'another device';
-            showMessage(
-              `Security: Your account was logged out from ${deviceName}. Only one device can be active at a time.`,
-              'warning',
-              6000
-            );
-          } else {
-            showMessage('Welcome back! Logging you in...', 'success', 2000);
-          }
-          // Navigation will be handled by useEffect when isAuthenticated changes
+      if (result.success) {
+        if (result.previousDeviceLoggedOut) {
+          const deviceName = result.previousDeviceName || 'another device';
+          Toast.show({
+            type: 'info',
+            text1: 'Security notice',
+            text2: `Your account was logged out from ${deviceName}. Only one device can be active at a time.`,
+          });
         } else {
-          throw new Error(result.error || 'Login failed');
+          Toast.show({
+            type: 'success',
+            text1: 'Welcome back!',
+            text2: 'Logging you in...',
+          });
         }
-      } else {
-        // Offline login fallback
+        return;
+      }
+
+      const message = result.error || 'Login failed';
+      if (isCredentialError(message)) {
+        Toast.show({
+          type: 'error',
+          text1: 'Incorrect credentials',
+          text2: 'Please check your email or phone number and password.',
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      if (isNetworkError(message)) {
         const storedUsers = await AsyncStorage.getItem('offlineUsers');
         if (storedUsers) {
           const users = JSON.parse(storedUsers);
@@ -156,10 +163,7 @@ export default function LoginScreen({ navigation }) {
           );
 
           if (user) {
-            // Store auth data for offline mode - use compressed data
             const { password: _, ...userWithoutPassword } = user;
-
-            // Compress user data to prevent storage quota issues
             const compressedUserData = {
               id: userWithoutPassword.id,
               firstName: userWithoutPassword.firstName,
@@ -171,14 +175,19 @@ export default function LoginScreen({ navigation }) {
               status: userWithoutPassword.status,
               isEmailVerified: userWithoutPassword.isEmailVerified,
               isPhoneVerified: userWithoutPassword.isPhoneVerified,
-              // Remove all other fields to prevent storage quota issues
             };
 
             await AsyncStorage.setItem('authToken', 'offline_token_' + user.id);
             await AsyncStorage.setItem('userData', JSON.stringify(compressedUserData));
             await AsyncStorage.setItem('userRole', user.role || 'user');
 
-            showMessage('Offline login successful! Data will sync when connection is restored.', 'success', 3000);
+            Toast.show({
+              type: 'success',
+              text1: 'Offline login successful',
+              text2: 'Data will sync when connection is restored.',
+              position: 'bottom',
+              visibilityTime: 3000,
+            });
             setTimeout(() => {
               if (user.role === 'admin') {
                 navigation.replace('MainTabs', { screen: 'Admin' });
@@ -190,30 +199,52 @@ export default function LoginScreen({ navigation }) {
           }
         }
 
-        showMessage('No internet connection.Please check your connection and try again.', 'warning', 0);
+        Toast.show({
+          type: 'error',
+          text1: 'Connection issue',
+          text2: 'Unable to reach the login server. Please check your internet connection and try again.',
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
+        return;
       }
 
+      Toast.show({
+        type: 'error',
+        text1: 'Login failed',
+        text2: message,
+        position: 'bottom',
+        visibilityTime: 3000,
+      });
     } catch (error) {
       console.error('Login error:', error);
 
-      // Enhanced error handling with specific messages
-      let errorMessage = 'Unable to login. Please try again.';
-
-      if (error.message.includes('Invalid credentials') || error.message.includes('invalid credentials')) {
-        errorMessage = 'invalid credentials';
-        setErrors({
-          identifier: 'invalid credentials',
-          password: 'invalid credentials'
+      const errorMessage = error?.message || 'Unable to login. Please try again.';
+      if (isCredentialError(errorMessage)) {
+        Toast.show({
+          type: 'error',
+          text1: 'Incorrect credentials',
+          text2: 'Please check your email or phone number and password.',
+          position: 'bottom',
+          visibilityTime: 3000,
         });
-      } else if (error.message.includes('Network') || error.message.includes('connection')) {
-        errorMessage = 'Network error. Please check your internet connection.';
-      } else if (error.message.includes('Rate limit') || error.message.includes('Too many')) {
-        errorMessage = 'Too many login attempts. Please wait a moment and try again.';
-      } else if (error.message.includes('validation')) {
-        errorMessage = 'Please check your input and try again.';
+      } else if (isNetworkError(errorMessage)) {
+        Toast.show({
+          type: 'error',
+          text1: 'Connection issue',
+          text2: 'Unable to reach the login server. Please check your internet connection and try again.',
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Login failed',
+          text2: errorMessage,
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
       }
-
-      showMessage(errorMessage, 'error', 0);
     } finally {
       setIsLoading(false);
     }
@@ -229,16 +260,6 @@ export default function LoginScreen({ navigation }) {
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Message Banner */}
-        <MessageBanner
-          visible={message.visible}
-          message={message.text}
-          type={message.type}
-          onDismiss={() => setMessage(prev => ({ ...prev, visible: false }))}
-          actionText={message.type === 'warning' ? 'Retry' : undefined}
-          onActionPress={message.type === 'warning' ? checkNetworkStatus : undefined}
-        />
-
         <ScrollView
           contentContainerStyle={[
             styles.scrollContainer,
@@ -306,7 +327,7 @@ export default function LoginScreen({ navigation }) {
                 icon="person-outline"
                 keyboardType="email-address"
                 autoCapitalize="none"
-                error={errors.identifier}
+                showError={false}
               />
 
               {/* Password Input */}
@@ -323,7 +344,7 @@ export default function LoginScreen({ navigation }) {
                 secureTextEntry={true}
                 showPassword={showPassword}
                 onTogglePassword={() => setShowPassword(!showPassword)}
-                error={errors.password}
+                showError={false}
               />
 
               {/* Forgot Password Card */}

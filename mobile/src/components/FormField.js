@@ -19,6 +19,7 @@ const FormField = ({
   showPassword,
   onTogglePassword,
   error,
+  showError = true,
   keyboardType = 'default',
   autoCapitalize = 'none',
   multiline = false,
@@ -29,7 +30,7 @@ const FormField = ({
   inputStyle,
   ...props
 }) => {
-  const hasError = !!error;
+  const hasError = !!error && showError;
 
   return (
     <View style={[styles.container, style]}>

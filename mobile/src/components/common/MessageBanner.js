@@ -4,9 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors } from '../../utils/theme';
 
 const MessageBanner = ({
+  visible = true,
   type = 'info',
   message,
   onClose,
+  onDismiss,
+  actionText,
+  onActionPress,
   style
 }) => {
   const colors = getThemeColors();
@@ -66,6 +70,19 @@ const MessageBanner = ({
     }
   };
 
+const handleClose = () => {
+    if (onClose) {
+      onClose();
+    }
+    if (onDismiss) {
+      onDismiss();
+    }
+  };
+
+  if (!visible || !message) {
+    return null;
+  }
+
   return (
     <View style={[styles.container, getBannerStyle(), style]}>
       <Ionicons
@@ -74,11 +91,16 @@ const MessageBanner = ({
         color={getIconColor()}
         style={styles.icon}
       />
-      <Text style={[styles.message, { color: colors.text }]}>
+      <Text style={[styles.message, { color: getIconColor() }]}> 
         {message}
       </Text>
-      {onClose && (
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+      {actionText && onActionPress && (
+        <TouchableOpacity onPress={onActionPress} style={styles.actionButton}>
+          <Text style={[styles.actionText, { color: getIconColor() }]}>{actionText}</Text>
+        </TouchableOpacity>
+      )}
+      {(onClose || onDismiss) && (
+        <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
           <Ionicons name="close" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       )}
@@ -101,6 +123,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
+  },
+  actionButton: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  actionText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   closeButton: {
     padding: 4,

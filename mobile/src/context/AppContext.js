@@ -205,6 +205,8 @@ const AppContext = createContext();
         AsyncStorage.getItem('language'),
       ]);
 
+      console.debug('[AppInit] authToken present?', !!authToken, 'userData present?', !!userData);
+
       // Set theme and language
       if (theme) {
         dispatch({ type: ActionTypes.SET_THEME, payload: theme });
