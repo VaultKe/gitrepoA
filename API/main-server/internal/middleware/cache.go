@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,12 @@ func (w *bodyCaptureResponseWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// isValidJSON checks if a byte slice is valid JSON.
+func isValidJSON(data []byte) bool {
+	var v interface{}
+	return json.Unmarshal(data, &v) == nil
+}
+
 // CacheMiddleware caches GET responses to reduce database load.
 // Only caches successful (2xx) responses for GET requests.
 // Cache entries expire after 60 seconds by default.
@@ -34,9 +41,15 @@ func CacheMiddleware(cache services.Cache) gin.HandlerFunc {
 
 		// Try to serve from cache
 		if cached, found := cache.Get(cacheKey); found {
-			c.Header("X-Cache", "HIT")
-			c.Data(200, "application/json", []byte(cached))
-			return
+			cachedBytes := []byte(cached)
+			// Only serve cached data if it is valid JSON
+			if isValidJSON(cachedBytes) {
+				c.Header("X-Cache", "HIT")
+				c.Data(200, "application/json", cachedBytes)
+				return
+			}
+			// Corrupted or non-JSON cache entry; skip cache and fall through
+			c.Header("X-Cache", "SKIP")
 		}
 
 		// Capture the response body by wrapping the ResponseWriter
@@ -58,6 +71,13 @@ func CacheMiddleware(cache services.Cache) gin.HandlerFunc {
 		// Get the captured body
 		body := capture.body.String()
 		if body == "" || body == "{}" || body == "null" {
+			c.Header("X-Cache", "SKIP")
+			return
+		}
+
+		// Only cache if the body is valid JSON
+		bodyBytes := []byte(body)
+		if !isValidJSON(bodyBytes) {
 			c.Header("X-Cache", "SKIP")
 			return
 		}

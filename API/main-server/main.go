@@ -87,6 +87,17 @@ func main() {
 	}
 
 	router := gin.New()
+	router.Use(gin.CustomRecoveryWithWriter(gin.DefaultErrorWriter, func(c *gin.Context, recovered interface{}) {
+		if c.Writer.Status() == 0 {
+			c.Status(http.StatusInternalServerError)
+		}
+		c.Header("Content-Type", "application/json")
+		log.Printf("[RECOVERY] panic recovered: %v", recovered)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Internal server error",
+		})
+	}))
 
 	// Disable trailing slash redirects to prevent CORS issues
 	router.RedirectTrailingSlash = false

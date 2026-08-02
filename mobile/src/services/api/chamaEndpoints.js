@@ -22,7 +22,11 @@ const getChamaStatistics = async (chamaId) => {
 };
 
 const getChamaMembers = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}/members`);
+  return await makeRequestWithRetry(`/chamas/${chamaId}/members`);
+};
+
+const getChamaMember = async (chamaId, memberId) => {
+  return await makeRequestWithRetry(`/chamas/${chamaId}/members/${memberId}`);
 };
 
 const exportChamaMembers = async (chamaId) => {
@@ -218,6 +222,7 @@ export {
   getChamaById,
   getChamaStatistics,
   getChamaMembers,
+  getChamaMember,
   exportChamaMembers,
   getChamaTransactions,
   getMerryGoRounds,

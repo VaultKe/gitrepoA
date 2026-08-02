@@ -154,12 +154,8 @@ func GetUnreadNotificationCount(c *gin.Context) {
 	}
 
 	// Get database from context
-	db, exists := c.Get("db")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Database connection not available",
-		})
+	db := dbFromContext(c)
+	if db == nil {
 		return
 	}
 
@@ -172,7 +168,7 @@ func GetUnreadNotificationCount(c *gin.Context) {
 	`
 
 	var count int
-	err := db.(*sql.DB).QueryRow(query, userID).Scan(&count)
+	err := db.QueryRow(query, userID).Scan(&count)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

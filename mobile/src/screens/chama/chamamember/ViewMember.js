@@ -21,7 +21,7 @@ import Card from '../../../components/common/Card';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
-import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment, removeMemberFromChama } from '../../../services/api/chamaEndpoints';
+import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment, removeMemberFromChama, getChamaMember } from '../../../services/api/chamaEndpoints';
 import Button from '../../../components/common/Button';
 import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
@@ -37,6 +37,7 @@ const ViewMember = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [memberData, setMemberData] = useState(null);
   const [memberStats, setMemberStats] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [serviceFeePayments, setServiceFeePayments] = useState([]);
   const [feePaymentsLoading, setFeePaymentsLoading] = useState(false);
@@ -92,19 +93,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
 
   const getPaymentTransactionId = (payment) => {
     if (!payment) return null;
-    return (
-      payment.transactionId ||
-      payment.transaction_id ||
-      payment.mpesaCode ||
-      payment.mpesa_code ||
-      payment.mPesaCode ||
-      payment.m_pesa_code ||
-      payment.mpesaReceiptNumber ||
-      payment.mpesa_receipt_number ||
-      payment.code ||
-      payment.reference ||
-      payment.ref
-    );
+    return payment.transactionId || payment.transaction_id;
   };
 
   const isPaymentVerifiedPaid = (payment) => {
@@ -177,20 +166,18 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   const loadMemberDetails = async (useBackgroundLoader = false) => {
     try {
       if (!useBackgroundLoader) setLoading(true);
+      setLoadError(null);
 
       let loadedMember = null;
       let loadedStats = null;
 
-      // Load member details
-      const memberResponse = await api.makeRequest(`/chamas/${chamaId}/members`);
+      // Load member details directly instead of fetching all members
+      const memberResponse = await getChamaMember(chamaId, memberId);
       if (memberResponse.success && memberResponse.data) {
-        const member = memberResponse.data.find(m => m.id === memberId || m.user_id === memberId);
-        if (member) {
-          loadedMember = member;
-          setMemberData(member);
-        } else {
-          throw new Error('Member not found');
-        }
+        loadedMember = memberResponse.data;
+        setMemberData(memberResponse.data);
+      } else {
+        throw new Error(memberResponse.error || 'Member not found');
       }
 
       // Load member statistics (contributions, loans, etc.)
@@ -209,14 +196,12 @@ const [receiptLoading, setReceiptLoading] = useState(false);
       }
     } catch (error) {
       console.error('Error loading member details:', error);
+      setLoadError(error.message || 'Failed to load member details');
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to load member details',
+        text2: error.message || 'Failed to load member details',
       });
-      if (!memberData) {
-        navigation.goBack();
-      }
     } finally {
       if (!useBackgroundLoader) setLoading(false);
     }
@@ -622,7 +607,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (isExpanded = false) => {
     const user = memberData?.user || {};
-    const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || memberData?.avatar_url || memberData?.avatar;
+    const avatarUrl = user?.avatar_url || memberData?.avatar_url;
     const firstName = user?.first_name || memberData?.first_name;
     const lastName = user?.last_name || memberData?.last_name;
 
@@ -774,16 +759,16 @@ const [receiptLoading, setReceiptLoading] = useState(false);
             </View>
           )}
 
-          {(memberData.user?.phone || memberData.phone_number) && (
+          {(memberData.user?.phone) && (
             <View style={styles.tableRowOdd}>
               <Text style={styles.tableLabel}>Phone</Text>
               <Text style={styles.tableValueText}>
-                {maskPhone(memberData.user?.phone || memberData.phone_number)}
+                {maskPhone(memberData.user?.phone)}
               </Text>
             </View>
           )}
 
-          {(memberData.user?.bio || memberData.user?.occupation) && (
+          {(memberData.user?.occupation || memberData.user?.bio) && (
             <View style={styles.tableRowEven}>
               <Text style={styles.tableLabel}>
                 {memberData.user?.occupation ? 'Occupation' : 'Bio'}
@@ -1082,14 +1067,28 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {!memberData ? (
-          <View style={styles.inlineLoadingContainer}>
+        {loading && !memberData && !loadError && (
+          <View style={styles.inlineTableLoading}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.inlineLoadingText, { color: colors.textSecondary }]}>
+            <Text style={[styles.inlineTableLoadingText, { color: colors.textSecondary }]}>
               Loading member details...
             </Text>
           </View>
-        ) : (
+        )}
+        {loadError && !memberData && !loading && (
+          <View style={styles.inlineTableLoading}>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
+            <Text style={[styles.inlineTableLoadingText, { color: colors.textSecondary }]}>
+              {loadError}
+            </Text>
+            <Button
+              title="Retry"
+              onPress={() => loadMemberDetails()}
+              style={{ marginTop: 12 }}
+            />
+          </View>
+        )}
+        {memberData && (
           <>
             {/* Member Profile Card */}
             <Card
@@ -1135,10 +1134,10 @@ const [receiptLoading, setReceiptLoading] = useState(false);
 
                   <View style={styles.profileInfo}>
                     <Text style={[styles.memberName, styles.memberNameText]}>
-                      {memberData.user?.first_name || memberData.first_name} {memberData.user?.last_name || memberData.last_name}
+                      {memberData.user?.first_name} {memberData.user?.last_name}
                     </Text>
                     <Text style={[styles.memberEmail, styles.memberEmailSecondary]}>
-                      {memberData.user?.email || memberData.email}
+                      {memberData.user?.email}
                     </Text>
                   </View>
                 </View>
@@ -1302,21 +1301,20 @@ const createStyles = (colors) => StyleSheet.create({
   content: {
     flex: 1,
   },
-  contentContainer: {
-    padding: 16,
-  },
-   inlineLoadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  inlineLoadingText: {
-    fontSize: 14,
-  },
-  profileCard: {
+   contentContainer: {
+     padding: 16,
+   },
+   inlineTableLoading: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     justifyContent: 'center',
+     gap: 8,
+     paddingVertical: 16,
+   },
+   inlineTableLoadingText: {
+     fontSize: 14,
+   },
+   profileCard: {
     padding: 20,
     borderRadius: 12,
     marginBottom: 16,

@@ -51,10 +51,37 @@ const refreshAccessToken = async () => {
     }
   })();
 
-  return refreshPromise;
-};
+   return refreshPromise;
+ };
 
-const makeRequest = async (endpoint, options = {}) => {
+  const safeJSONParse = (text) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      throw new Error('Empty response from server');
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (e) {
+      // Try to extract valid JSON from the response by finding
+      // the first { or [ and the matching closing } or ].
+      const startChar = trimmed.charAt(0);
+      if (startChar === '{' || startChar === '[') {
+        const endChar = startChar === '{' ? '}' : ']';
+        const startIdx = trimmed.indexOf(startChar);
+        const endIdx = trimmed.lastIndexOf(endChar);
+        if (startIdx !== -1 && endIdx > startIdx) {
+          try {
+            return JSON.parse(trimmed.substring(startIdx, endIdx + 1));
+          } catch (_) {
+            // Fall through to throw below
+          }
+        }
+      }
+      throw new Error(`Invalid JSON response from server`);
+    }
+  };
+
+ const makeRequest = async (endpoint, options = {}) => {
   if (endpoint === '/auth/refresh') {
     throw new Error('Use refreshAccessToken instead');
   }
@@ -124,7 +151,7 @@ const makeRequest = async (endpoint, options = {}) => {
       throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
     }
     if (contentType && contentType.includes('application/json')) {
-      data = JSON.parse(textResponse);
+      data = safeJSONParse(textResponse);
     } else {
       try {
         data = JSON.parse(textResponse);
@@ -133,6 +160,14 @@ const makeRequest = async (endpoint, options = {}) => {
       }
     }
   } catch (parseError) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.debug('[API] JSON parse failed', {
+        url: `${API_BASE_URL}${endpoint}`,
+        status: response.status,
+        contentType,
+        error: parseError.message,
+      });
+    }
     if (!response.ok) {
       throw new Error(`Server error: ${response.statusText}`);
     }
@@ -159,11 +194,15 @@ const makeRequest = async (endpoint, options = {}) => {
             retryConfig.body = JSON.stringify(retryConfig.body);
           }
 
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT);
+
           const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
             ...retryConfig,
-            signal: controller.signal,
+            signal: retryController.signal,
           });
 
+          clearTimeout(retryTimeoutId);
           const retryContentType = retryResponse.headers.get('content-type');
           let retryData;
           if (retryContentType && retryContentType.includes('application/json')) {
@@ -219,6 +258,17 @@ const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
       }
+      // Retry transient JSON parse / empty-response errors. These can occur
+      // when a backend panic is recovered as a non-JSON body or when a
+      // gateway returns a transient HTML error page for a 200-status cache
+      // hit. A short backoff avoids hammering a struggling backend.
+      const isTransientParseError = error.message.includes('Invalid JSON response from server') ||
+                                    error.message.includes('Empty response from server');
+      if (isTransientParseError && attempt < maxRetries) {
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt), 4000);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
       // Treat any TypeError from fetch as a transient network error.
       // fetch only throws TypeError for network-level failures (CORS, connection
       // drops, empty responses, DNS failures, aborted requests, etc.).
@@ -244,26 +294,29 @@ const checkBackendConnectivity = async () => {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.debug('[API] health connectivity check', `${API_BASE_URL}/health`);
     }
+     const controller = new AbortController();
+     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
      const response = await fetch(`${API_BASE_URL}/health`, {
        method: 'GET',
        headers: { 'Content-Type': 'application/json' },
-       timeout: REQUEST_TIMEOUT,
-    });
+       signal: controller.signal,
+     });
 
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        connected: true,
-        status: data.status || 'healthy',
-        message: data.message || 'Backend is running'
-      };
-    } else {
-      return {
-        connected: false,
-        status: 'error',
-        message: `Backend responded with status ${response.status}`
-      };
-    }
+     clearTimeout(timeoutId);
+     if (response.ok) {
+       const data = await response.json();
+       return {
+         connected: true,
+         status: data.status || 'healthy',
+         message: data.message || 'Backend is running'
+       };
+     } else {
+       return {
+         connected: false,
+         status: 'error',
+         message: `Backend responded with status ${response.status}`
+       };
+     }
   } catch (error) {
     return {
       connected: false,

@@ -25,15 +25,10 @@ func GetChamaMembers(c *gin.Context) {
 	}
 
 	// Get database connection
-	dbInterface, exists := c.Get("db")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Database connection not available",
-		})
+	db := dbFromContext(c)
+	if db == nil {
 		return
 	}
-	db := dbInterface.(*sql.DB)
 
 	// Simple, robust query for chama members
 	query := `
@@ -129,6 +124,15 @@ func GetChamaMembers(c *gin.Context) {
 		}
 	}
 
+	if err := rows.Err(); err != nil {
+		log.Printf("ERROR iterating chama members rows for chama %s: %v", chamaID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to process chama members: " + err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    members,
@@ -189,6 +193,97 @@ func GetMemberRole(c *gin.Context) {
 		"data": gin.H{
 			"role": role,
 		},
+	})
+}
+
+// GetChamaMember returns a single chama member with user details
+func GetChamaMember(c *gin.Context) {
+	chamaID := c.Param("id")
+	memberID := c.Param("memberId")
+
+	if chamaID == "" || memberID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID and Member ID are required",
+		})
+		return
+	}
+
+	// Get database connection
+	db := dbFromContext(c)
+	if db == nil {
+		return
+	}
+
+	query := `
+		SELECT
+			cm.id, cm.chama_id, cm.user_id, cm.role, cm.joined_at, cm.is_active,
+			cm.total_contributions, cm.last_contribution, cm.rating, cm.total_ratings,
+			u.first_name, u.last_name, u.email, u.phone, u.avatar, u.status,
+			u.is_email_verified, u.is_phone_verified, u.business_type, u.county, u.town,
+			u.bio, u.occupation, u.id_number, u.created_at as user_created_at,
+			COALESCE(w.balance, 0) as savings_balance
+		FROM chama_members cm
+		INNER JOIN users u ON cm.user_id = u.id
+		LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
+		WHERE cm.chama_id = $1 AND cm.user_id = $2
+		LIMIT 1
+	`
+
+	var (
+		id, chamaIDVal, userID, role, firstName, lastName, email, phone, userStatus string
+		joinedAt, userCreatedAt string
+		isActive, isEmailVerified, isPhoneVerified bool
+		totalContributions, rating, savingsBalance float64
+		totalRatings int
+		avatar, lastContribution, businessType, county, town, bio, occupation, idNumber *string
+	)
+
+	err := db.QueryRow(query, chamaID, memberID).Scan(
+		&id, &chamaIDVal, &userID, &role, &joinedAt, &isActive,
+		&totalContributions, &lastContribution, &rating, &totalRatings,
+		&firstName, &lastName, &email, &phone, &avatar, &userStatus,
+		&isEmailVerified, &isPhoneVerified, &businessType, &county, &town,
+		&bio, &occupation, &idNumber, &userCreatedAt,
+		&savingsBalance,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Member not found in this chama",
+			})
+			return
+		}
+		log.Printf("ERROR fetching chama member %s in chama %s: %v", memberID, chamaID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to fetch member: " + err.Error(),
+		})
+		return
+	}
+
+	member := map[string]interface{}{
+		"id": id, "chama_id": chamaIDVal, "user_id": userID, "role": role,
+		"joined_at": joinedAt, "is_active": isActive,
+		"total_contributions": totalContributions, "last_contribution": lastContribution,
+		"rating": rating, "total_ratings": totalRatings,
+		"user": map[string]interface{}{
+			"first_name": firstName, "last_name": lastName,
+			"email": email, "phone": phone, "avatar": avatar,
+			"status": userStatus,
+			"is_email_verified": isEmailVerified, "is_phone_verified": isPhoneVerified,
+			"business_type": businessType, "county": county, "town": town,
+			"bio": bio, "occupation": occupation, "id_number": idNumber,
+			"created_at": userCreatedAt,
+		},
+		"savings_balance": savingsBalance,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    member,
+		"message": "Chama member retrieved successfully",
 	})
 }
 
