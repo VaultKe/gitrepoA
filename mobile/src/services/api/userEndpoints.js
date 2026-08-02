@@ -8,7 +8,7 @@ const getProfile = async () => {
 
 const updateProfile = async (profileData) => {
   const imageField = profileData.profile_image || profileData.avatar;
-  if (imageField && (imageField.startsWith('file://') || imageField.startsWith('blob:') || imageField.includes('ImagePicker'))) {
+  if (imageField && (imageField.startsWith('file://') || imageField.startsWith('blob:') || imageField.startsWith('data:') || imageField.includes('ImagePicker'))) {
     return await updateProfileWithImage(profileData);
   }
   return await makeRequest('/users/profile', {
@@ -23,7 +23,25 @@ const updateProfileWithImage = async (profileData) => {
 
   if (imageUri) {
     if (imageUri instanceof File) {
-      formData.append('avatar', imageUri, imageUri.name);
+      formData.append('profile_image', imageUri, imageUri.name);
+    } else if (imageUri.startsWith('data:')) {
+      // Handle base64 data URIs (e.g. from Expo ImagePicker on web)
+      const mimeTypeMatch = imageUri.match(/^data:(image\/\w+);base64,/);
+      const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
+      const ext = mimeType.split('/')[1] || 'jpg';
+      const filename = `profile_${Date.now()}.${ext}`;
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        formData.append('profile_image', blob, filename);
+      } else {
+        formData.append('profile_image', {
+          uri: imageUri,
+          name: filename,
+          type: mimeType,
+        });
+      }
     } else {
       const filename = imageUri.split('/').pop() || 'profile.jpg';
       const match = /\.(\w+)$/.exec(filename);
@@ -62,6 +80,24 @@ const uploadAvatar = async (imageUri) => {
     if (imageUri) {
       if (imageUri instanceof File) {
         formData.append('avatar', imageUri, imageUri.name);
+      } else if (imageUri.startsWith('data:')) {
+        // Handle base64 data URIs
+        const mimeTypeMatch = imageUri.match(/^data:(image\/\w+);base64,/);
+        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
+        const ext = mimeType.split('/')[1] || 'jpg';
+        const filename = `avatar_${Date.now()}.${ext}`;
+
+        if (Platform.OS === 'web') {
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          formData.append('avatar', blob, filename);
+        } else {
+          formData.append('avatar', {
+            uri: imageUri,
+            name: filename,
+            type: mimeType,
+          });
+        }
       } else {
         const filename = imageUri.split('/').pop() || 'profile.jpg';
         const match = /\.(\w+)$/.exec(filename);

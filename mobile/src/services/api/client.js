@@ -277,6 +277,7 @@ const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {
                               error.message.includes('Failed to fetch') ||
                               error.message.includes('Network request failed') ||
                               error.message.includes('ERR_EMPTY_RESPONSE') ||
+                              error.message.includes('ERR_INCOMPLETE_CHUNKED_ENCODING') ||
                               error.message.includes('CORS') ||
                               error.message.includes('Unable to connect to server');
       if (isNetworkError && attempt < maxRetries) {

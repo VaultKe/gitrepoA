@@ -283,14 +283,16 @@ func UploadAvatar(c *gin.Context) {
 		log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tmpFilePath)
 	}
 
-	if err := os.Rename(tmpFilePath, dstPath); err != nil {
+	if err := copyFile(tmpFilePath, dstPath); err != nil {
 		os.Remove(tmpFilePath)
+		fmt.Printf("[DEBUG] UploadAvatar - userID: %s, failed to copy file: %v\n", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to move uploaded file",
 		})
 		return
 	}
+	os.Remove(tmpFilePath)
 
 	avatarURL := "/uploads/avatars/" + filename
 

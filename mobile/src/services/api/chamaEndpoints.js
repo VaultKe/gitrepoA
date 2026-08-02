@@ -10,7 +10,7 @@ const getAllChamasForAdmin = async (limit = 100, offset = 0) => {
 };
 
 const getUserChamas = async (limit = 20, offset = 0) => {
-  return await makeRequest(`/chamas/my?limit=${limit}&offset=${offset}`);
+  return await makeRequestWithRetry(`/chamas/my?limit=${limit}&offset=${offset}`);
 };
 
 const getChamaById = async (chamaId) => {

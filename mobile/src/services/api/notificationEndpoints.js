@@ -5,7 +5,7 @@ const getNotifications = async (limit = 20, offset = 0) => {
 };
 
 const getUnreadNotificationCount = async () => {
-  return await makeRequest('/notifications/unread-count');
+  return await makeRequestWithRetry('/notifications/unread-count');
 };
 
 const markNotificationAsRead = async (notificationId) => {

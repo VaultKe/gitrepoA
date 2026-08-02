@@ -47,9 +47,20 @@ const ProfileScreen = ({ navigation }) => {
     dateOfBirth: user?.dateOfBirth || '',
     gender: user?.gender || '',
   });
+  const resolveAvatarUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    if (url.startsWith('/')) {
+      const base = apiService.uploadBaseUrl || apiService.baseURL || '';
+      return `${base}${url}`;
+    }
+    const base = apiService.uploadBaseUrl || apiService.baseURL || '';
+    return `${base}/${url}`;
+  };
+
   const [profileImage, setProfileImage] = useState(
-    user?.profile_image && user?.profile_image !== 'avatar://cached-base64-image'
-      ? user?.profile_image
+    (user?.avatar && user?.avatar !== 'avatar://cached-base64-image')
+      ? resolveAvatarUrl(user?.avatar)
       : null
   );
   const [avatarData, setAvatarData] = useState(null);
@@ -59,17 +70,6 @@ const ProfileScreen = ({ navigation }) => {
   const filteredCounties = KENYA_COUNTIES.filter(county =>
     county.toLowerCase().includes(countySearch.toLowerCase())
   );
-
-  const resolveAvatarUrl = (url) => {
-    if (!url) return null;
-    if (url.startsWith('http') || url.startsWith('data:')) return url;
-    if (url.startsWith('/')) {
-      const base = apiService.baseURL || '';
-      const origin = base.replace(/\/+$/, '').replace(/\/api\/v\d+$/, '');
-      return `${origin}${url}`;
-    }
-    return `${apiService.baseURL}/${url}`;
-  };
 
   const selectCounty = (county) => {
     setProfileData(prev => ({
@@ -213,6 +213,13 @@ const ProfileScreen = ({ navigation }) => {
       gender: user?.gender || '',
     });
 
+    // Preserve existing profileImage if it's already a resolved URL.
+    // This avoids overwriting a freshly uploaded avatar when the
+    // user-context effect fires after save.
+    if (profileImage && (profileImage.startsWith('http') || profileImage.startsWith('data:'))) {
+      return;
+    }
+
     // Handle profile image URL - check user context first, then preserve existing component state
     const avatarUrl = user?.avatar || user?.profile_image;
     if (avatarUrl && avatarUrl !== 'avatar://cached-base64-image') {
@@ -260,6 +267,9 @@ const ProfileScreen = ({ navigation }) => {
 
       if (!result.canceled) {
         const selectedAsset = result.assets[0];
+        console.log('[ProfileScreen] Image picked - URI:', selectedAsset.uri);
+        console.log('[ProfileScreen] Image picked - type:', selectedAsset.type);
+        console.log('[ProfileScreen] Image picked - width:', selectedAsset.width, 'height:', selectedAsset.height);
 
         // Set profile image - validation happens at backend during upload
         setProfileImage(selectedAsset.uri);
@@ -277,24 +287,19 @@ const ProfileScreen = ({ navigation }) => {
       const hasImage = profileImage && (
         profileImage.startsWith('file://') ||
         profileImage.startsWith('blob:') ||
+        profileImage.startsWith('data:') ||
         profileImage.includes('ImagePicker')
       );
 
-      // Upload avatar first using dedicated endpoint if there's a new image
-      let avatarResponse = null;
-      if (hasImage) {
-        try {
-          avatarResponse = await apiService.uploadAvatar(profileImage);
-          if (!avatarResponse?.success) {
-            throw new Error(avatarResponse?.error || 'Failed to upload avatar');
-          }
-        } catch (avatarError) {
-          console.error('Avatar upload failed:', avatarError);
-          Alert.alert('Avatar Upload Failed', avatarError.message || 'Could not upload profile picture. Text fields will still be saved.');
-        }
-      }
+      console.log('[ProfileScreen] handleSave - hasImage:', hasImage);
+      console.log('[ProfileScreen] handleSave - profileImage:', profileImage);
+      console.log('[ProfileScreen] handleSave - profileImage startsWith file://:', profileImage?.startsWith('file://'));
+      console.log('[ProfileScreen] handleSave - profileImage startsWith blob:', profileImage?.startsWith('blob:'));
+      console.log('[ProfileScreen] handleSave - profileImage includes ImagePicker:', profileImage?.includes('ImagePicker'));
+      console.log('[ProfileScreen] handleSave - profileImage length:', profileImage?.length);
 
-      // Build update payload for text fields only
+      // Build update payload — include the local image URI so updateProfile
+      // handles the upload in a single request via its multipart path.
       const updateData = {
         firstName: profileData.firstName,
         lastName: profileData.lastName,
@@ -310,55 +315,43 @@ const ProfileScreen = ({ navigation }) => {
         ...(profileData.gender && profileData.gender.trim() !== '' && {
           gender: profileData.gender
         }),
+        ...(hasImage && { profile_image: profileImage }),
       };
 
+      console.log('[ProfileScreen] handleSave - updateData payload:', JSON.stringify(updateData));
+
       const response = await apiService.updateProfile(updateData);
+      console.log('[ProfileScreen] handleSave - updateProfile response:', JSON.stringify(response));
+
       if (response.success) {
         const userData = response.Data?.User || response.data?.User || response.data?.user || response.Data || response.data;
-        await updateUser(userData);
+        console.log('[ProfileScreen] handleSave - userData from response:', JSON.stringify(userData));
+        console.log('[ProfileScreen] handleSave - userData.avatar:', userData?.avatar);
+        console.log('[ProfileScreen] handleSave - userData.profile_image:', userData?.profile_image);
 
-        // Merge avatar upload response into user data if we uploaded separately
-        const finalUserData = avatarResponse?.data?.user || userData;
+        await updateUser(userData);
 
         setProfileData(prevData => ({
           ...prevData,
-          firstName: finalUserData.firstName || prevData.firstName,
-          lastName: finalUserData.lastName || prevData.lastName,
-          idNumber: finalUserData.idNumber || prevData.idNumber,
-          phone: finalUserData.phone || prevData.phone,
-          county: finalUserData.county || prevData.county,
-          town: finalUserData.town || prevData.town,
-          bio: finalUserData.bio || prevData.bio,
-          occupation: finalUserData.occupation || prevData.occupation,
-          dateOfBirth: finalUserData.dateOfBirth || prevData.dateOfBirth,
-          gender: finalUserData.gender || prevData.gender,
+          firstName: userData.firstName || prevData.firstName,
+          lastName: userData.lastName || prevData.lastName,
+          idNumber: userData.idNumber || prevData.idNumber,
+          phone: userData.phone || prevData.phone,
+          county: userData.county || prevData.county,
+          town: userData.town || prevData.town,
+          bio: userData.bio || prevData.bio,
+          occupation: userData.occupation || prevData.occupation,
+          dateOfBirth: userData.dateOfBirth || prevData.dateOfBirth,
+          gender: userData.gender || prevData.gender,
         }));
 
-        setTimeout(() => {
-          if (finalUserData) {
-            setProfileData(prevData => ({
-              ...prevData,
-              firstName: finalUserData.firstName || prevData.firstName,
-              lastName: finalUserData.lastName || prevData.lastName,
-              idNumber: finalUserData.idNumber || prevData.idNumber,
-              phone: finalUserData.phone || prevData.phone,
-              county: finalUserData.county || prevData.county,
-              town: finalUserData.town || prevData.town,
-              bio: finalUserData.bio || prevData.bio,
-              occupation: finalUserData.occupation || prevData.occupation,
-              dateOfBirth: finalUserData.dateOfBirth || prevData.dateOfBirth,
-              gender: finalUserData.gender || prevData.gender,
-            }));
-          }
-        }, 100);
-
-          const newAvatarUrl = finalUserData?.avatar || finalUserData?.profile_image;
-          if (newAvatarUrl) {
-            let fullAvatarUrl = resolveAvatarUrl(newAvatarUrl);
-            setProfileImage(fullAvatarUrl);
-          } else {
-            setProfileImage(null);
-          }
+        const newAvatarUrl = userData?.avatar || userData?.profile_image;
+        if (newAvatarUrl) {
+          let fullAvatarUrl = resolveAvatarUrl(newAvatarUrl);
+          setProfileImage(fullAvatarUrl);
+        } else {
+          setProfileImage(null);
+        }
 
         setEditing(false);
         Alert.alert('Success', 'Profile updated successfully');
@@ -847,8 +840,7 @@ const ProfileScreen = ({ navigation }) => {
                 style={styles.profileImage}
                 onError={(error) => {
                   setImageLoading(false);
-                  // Don't immediately set to null, let user manually refresh or try different image
-                  // setProfileImage(null); // Fallback to placeholder
+                  setProfileImage(null);
                 }}
                 onLoadStart={() => {
                   setImageLoading(true);

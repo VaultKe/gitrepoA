@@ -5,7 +5,7 @@ const getWalletBalance = async () => {
 };
 
 const getTransactions = async (limit = 20, offset = 0) => {
-  return await makeRequest(`/wallets/transactions?limit=${limit}&offset=${offset}`);
+  return await makeRequestWithRetry(`/wallets/transactions?limit=${limit}&offset=${offset}`);
 };
 
 const getSubWalletTransactions = async (chamaId, walletType) => {

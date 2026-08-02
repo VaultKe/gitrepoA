@@ -120,7 +120,7 @@ func main() {
 
 		// Log slow requests
 		if duration > slowQueryThreshold {
-			log.Printf("🚨 SLOW REQUEST: %s %s took %v", c.Request.Method, c.Request.URL.Path, duration)
+			// log.Printf("🚨 SLOW REQUEST: %s %s took %v", c.Request.Method, c.Request.URL.Path, duration)
 		}
 	})
 

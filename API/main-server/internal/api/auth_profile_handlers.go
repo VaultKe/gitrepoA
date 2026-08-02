@@ -282,14 +282,34 @@ func (h *AuthHandlers) handleMultipartProfileUpdate(c *gin.Context, req *models.
 			log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tmpFilePath)
 		}
 
-		if err := os.Rename(tmpFilePath, dstPath); err != nil {
+		if err := copyFile(tmpFilePath, dstPath); err != nil {
 			os.Remove(tmpFilePath)
+			fmt.Printf("[DEBUG] handleMultipartProfileUpdate - userID: %s, failed to copy file: %v\n", userID, err)
 			return fmt.Errorf("failed to move file to storage: %w", err)
 		}
+		os.Remove(tmpFilePath)
 
 		avatarURL := "/uploads/avatars/" + filename
 		req.Avatar = &avatarURL
 	}
 
 	return nil
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	from, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer from.Close()
+
+	to, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	defer to.Close()
+
+	_, err = io.Copy(to, from)
+	return err
 }
