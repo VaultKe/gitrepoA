@@ -14,7 +14,7 @@ const getUserChamas = async (limit = 20, offset = 0) => {
 };
 
 const getChamaById = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}`);
+  return await makeRequestWithRetry(`/chamas/${chamaId}`);
 };
 
 const getChamaStatistics = async (chamaId) => {
@@ -52,7 +52,7 @@ const getChamaTransactions = async (chamaId, limit = 20, offset = 0) => {
 };
 
 const getMerryGoRounds = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}/merry-go-rounds`);
+  return await makeRequestWithRetry(`/chamas/${chamaId}/merry-go-rounds`);
 };
 
 const getMerryGoRoundPayments = async (roundId) => {
@@ -61,7 +61,7 @@ const getMerryGoRoundPayments = async (roundId) => {
 
 const getMerryGoRoundContributionStatus = async (chamaId, roundId = null) => {
   const queryParams = roundId ? `?roundId=${roundId}` : '';
-  return await makeRequest(`/merry-go-rounds/contribution-status/${chamaId}${queryParams}`);
+  return await makeRequestWithRetry(`/merry-go-rounds/contribution-status/${chamaId}${queryParams}`);
 };
 
 const createMerryGoRound = async (data) => {
@@ -104,7 +104,7 @@ const leaveChama = async (chamaId) => {
 };
 
 const getMemberRole = async (chamaId, userId) => {
-  return await makeRequest(`/chamas/${chamaId}/members/${userId}/role`);
+  return await makeRequestWithRetry(`/chamas/${chamaId}/members/${userId}/role`);
 };
 
 const getActiveVotes = async (chamaId) => {

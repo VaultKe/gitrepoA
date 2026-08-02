@@ -607,7 +607,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (isExpanded = false) => {
     const user = memberData?.user || {};
-    const avatarUrl = user?.avatar_url || memberData?.avatar_url;
+    const avatarUrl = user?.avatar || memberData?.avatar;
     const firstName = user?.first_name || memberData?.first_name;
     const lastName = user?.last_name || memberData?.last_name;
 
@@ -621,7 +621,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
         fullAvatarUrl = avatarUrl;
       } else {
-        fullAvatarUrl = `${api.baseURL}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+        fullAvatarUrl = `${api.uploadBaseUrl}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
       }
 
       return (

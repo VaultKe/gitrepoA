@@ -8,6 +8,7 @@ import SmartBackButton from './SmartBackButton';
 import useSmartNavigation from '../../hooks/useSmartNavigation';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle';
+import apiService from '../../services/api';
 
 /**
  * Enhanced Smart Header Component
@@ -35,8 +36,23 @@ const SmartHeader = ({
   const colors = getThemeColors(theme);
   const { navigateTo, getCurrentContext } = useSmartNavigation();
   const [avatarData, setAvatarData] = useState(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   const headerBackgroundColor = backgroundColor || colors.surface;
+
+  // Resolve avatar URL — handle relative paths like /uploads/avatars/xxx.jpg
+  const resolveAvatarUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    if (url.startsWith('/')) {
+      const base = apiService.uploadBaseUrl || apiService.baseURL || '';
+      return `${base}${url}`;
+    }
+    const base = apiService.uploadBaseUrl || apiService.baseURL || '';
+    return `${base}/${url}`;
+  };
+
+  // Handle home navigation
 
   // Handle home navigation
   const handleHomePress = () => {
@@ -131,20 +147,20 @@ const SmartHeader = ({
                 />
               )}
 
-              {/* Profile Picture */}
+                  {/* Profile Picture */}
               {showProfilePic && (
                 <TouchableOpacity
                   style={styles.profileContainer}
                   onPress={handleProfilePress}
                   activeOpacity={0.8}
                 >
-                  {(user?.avatar && user.avatar !== 'avatar://cached-base64-image') || avatarData ? (
+                  {(!avatarError && (user?.avatar && user.avatar !== 'avatar://cached-base64-image')) || avatarData ? (
                     <Image
-                      source={{ uri: avatarData || user.avatar }}
+                      source={{ uri: avatarData || resolveAvatarUrl(user.avatar) }}
                       style={[styles.profilePic, { borderColor: colors.primary }]}
                       resizeMode="cover"
                       onError={() => {
-                        setAvatarData(null);
+                        setAvatarError(true);
                       }}
                     />
                   ) : (

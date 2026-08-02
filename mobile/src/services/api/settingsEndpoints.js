@@ -145,7 +145,7 @@ const sendSystemNotification = async (notificationData) => {
 };
 
 const getMemberRole = async (chamaId, memberId) => {
-  return await makeRequest(`/chamas/${chamaId}/members/${memberId}/role`);
+  return await makeRequestWithRetry(`/chamas/${chamaId}/members/${memberId}/role`);
 };
 
 const createChamaShares = async (chamaId, shareData) => {

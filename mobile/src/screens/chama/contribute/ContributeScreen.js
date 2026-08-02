@@ -205,7 +205,7 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
     try {
       // For merry-go-round contributions, load members from the merry-go-round circle
       if (contributionType === 'merry-go-round' && roundId) {
-        const response = await ApiService.makeRequest(`/merry-go-rounds/${roundId}`);
+        const response = await ApiService.makeRequestWithRetry(`/merry-go-rounds/${roundId}`);
 
         if (response.success && response.data) {
           const merryGoRound = response.data;
@@ -236,7 +236,7 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
       }
 
       // For regular contributions, load all chama members (treasurer only)
-      const response = await ApiService.makeRequest(`/contributions/chamas/${chamaId}/members`);
+      const response = await ApiService.makeRequestWithRetry(`/contributions/chamas/${chamaId}/members`);
       if (response.success) {
         setChamaMembers(response.data);
       }
@@ -256,7 +256,7 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
   // Check user role in the chama
   const checkUserRole = async () => {
     try {
-      const response = await ApiService.makeRequest(`/chamas/${chamaId}/members/${user.id}/role`);
+      const response = await ApiService.getMemberRole(chamaId, user.id);
       if (response.success) {
         setUserRole(response.data.role);
         // Load members if user is treasurer or chairperson
@@ -273,11 +273,8 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
   const loadCurrentRecipient = async () => {
     try {
       // Use the contribution status endpoint which provides current recipient info
-      // Include roundId as query parameter if available for specific round targeting
-      const queryParams = roundId ? `?roundId=${roundId}` : '';
-      const apiUrl = `/merry-go-rounds/contribution-status/${chamaId}${queryParams}`;
+      const response = await ApiService.getMerryGoRoundContributionStatus(chamaId, roundId);
 
-      const response = await ApiService.makeRequest(apiUrl);
       if (response.success && response.data) {
         const statusData = response.data;
 
@@ -336,8 +333,7 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
 
     try {
       // Include roundId as query parameter if available for specific round targeting
-      const queryParams = roundId ? `?roundId=${roundId}` : '';
-      const response = await ApiService.makeRequest(`/merry-go-rounds/contribution-status/${chamaId}${queryParams}`);
+      const response = await ApiService.getMerryGoRoundContributionStatus(chamaId, roundId);
 
       if (response.success && response.data) {
         const statusData = response.data;

@@ -1,8 +1,8 @@
-import { makeRequest } from './client';
+import { makeRequest, makeRequestWithRetry } from './client';
 
 const getWelfareRequests = async (chamaId, limit = 100, offset = 0) => {
   const q = `?chamaId=${encodeURIComponent(chamaId)}&limit=${limit}&offset=${offset}`;
-  return await makeRequest(`/welfare/${q}`);
+  return await makeRequestWithRetry(`/welfare/${q}`);
 };
 
 const getWelfareContributions = async (welfareId, limit = 100, offset = 0) => {
