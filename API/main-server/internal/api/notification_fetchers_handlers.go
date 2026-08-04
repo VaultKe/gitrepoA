@@ -33,7 +33,7 @@ func getSystemNotifications(db *sql.DB, userID string) ([]map[string]interface{}
 			Title     string         `json:"title"`
 			Message   string         `json:"message"`
 			Type      string         `json:"type"`
-			Data      sql.NullString `json:"data"`
+			Data      []byte         `json:"data"`
 			IsRead    bool           `json:"isRead"`
 			CreatedAt string         `json:"createdAt"`
 		}
@@ -63,8 +63,8 @@ func getSystemNotifications(db *sql.DB, userID string) ([]map[string]interface{}
 			"source":    "system",
 		}
 
-		if notification.Data.Valid {
-			notificationMap["data"] = notification.Data.String
+		if len(notification.Data) > 0 {
+			notificationMap["data"] = string(notification.Data)
 		}
 
 		notifications = append(notifications, notificationMap)

@@ -140,7 +140,8 @@ func GetUserTransactions(c *gin.Context) {
 		for contribTxnRows.Next() {
 			var id, type_, status, currency, initiatedBy, recipientID sql.NullString
 			var amount float64
-			var description, reference, paymentMethod, metadataJSON, fees sql.NullString
+			var description, reference, paymentMethod, fees sql.NullString
+			var metadataJSON []byte
 			var createdAt, updatedAt sql.NullTime
 			var chamaID sql.NullString
 
@@ -155,8 +156,8 @@ func GetUserTransactions(c *gin.Context) {
 			}
 
 			meta := make(map[string]interface{})
-			if metadataJSON.Valid && metadataJSON.String != "" {
-				_ = json.Unmarshal([]byte(metadataJSON.String), &meta)
+			if len(metadataJSON) > 0 {
+				_ = json.Unmarshal(metadataJSON, &meta)
 			}
 
 			chamaId := chamaID.String
@@ -272,7 +273,7 @@ func GetUserTransactions(c *gin.Context) {
 				"createdAt":        createdAt.Time.Format(time.RFC3339),
 				"updatedAt":        updatedAt.Time.Format(time.RFC3339),
 				"chamaId":          chamaID.String,
-				"metadata":         metadataJSON.String,
+				"metadata":         string(metadataJSON),
 				"chamaName":        chamaName,
 				"contributionType": contribType,
 			}

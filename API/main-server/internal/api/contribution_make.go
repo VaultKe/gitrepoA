@@ -37,12 +37,13 @@ func MakeContribution(c *gin.Context) {
 		"special":        true,
 		"merry-go-round": true,
 		"savings":        true,
+		"welfare":        true,
 		"":               true,
 	}
 	if !validTypes[req.Type] {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Invalid contribution type. Must be 'regular', 'penalty', 'special', or 'merry-go-round'",
+			"error":   "Invalid contribution type. Must be 'regular', 'penalty', 'special', 'merry-go-round', 'savings', or 'welfare'",
 		})
 		return
 	}

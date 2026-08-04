@@ -590,7 +590,7 @@ func GetMerryGoRoundPayments(c *gin.Context) {
 			Status               string
 			TransactionID        sql.NullString
 			Description          sql.NullString
-			MetadataJSON         sql.NullString
+			MetadataJSON         []byte
 			CreatedAt            time.Time
 			UpdatedAt            time.Time
 			PayerFirstName       sql.NullString
@@ -619,8 +619,8 @@ func GetMerryGoRoundPayments(c *gin.Context) {
 
 		// Parse metadata
 		metadata := map[string]interface{}{}
-		if p.MetadataJSON.Valid && p.MetadataJSON.String != "" {
-			json.Unmarshal([]byte(p.MetadataJSON.String), &metadata)
+		if len(p.MetadataJSON) > 0 {
+			json.Unmarshal(p.MetadataJSON, &metadata)
 		}
 
 		payment := map[string]interface{}{

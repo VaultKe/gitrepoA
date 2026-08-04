@@ -322,7 +322,8 @@ func (s *WalletService) GetTransactionByID(transactionID string) (*models.Transa
 	`
 
 	transaction := &models.Transaction{}
-	var metadataJSON sql.NullString
+	var metadataJSON []byte
+	var metadataValid bool
 	err := s.db.QueryRow(query, transactionID).Scan(
 		&transaction.ID, &transaction.FromWalletID, &transaction.ToWalletID,
 		&transaction.Type, &transaction.Status, &transaction.Amount, &transaction.Currency,
@@ -340,8 +341,8 @@ func (s *WalletService) GetTransactionByID(transactionID string) (*models.Transa
 
 	// Parse metadata
 	metadataStr := "{}"
-	if metadataJSON.Valid {
-		metadataStr = metadataJSON.String
+	if metadataValid && len(metadataJSON) > 0 {
+		metadataStr = string(metadataJSON)
 	}
 	if err = transaction.SetMetadataFromJSON(metadataStr); err != nil {
 		return nil, fmt.Errorf("failed to parse metadata: %w", err)
@@ -371,7 +372,7 @@ func (s *WalletService) GetWalletTransactions(walletID string, limit, offset int
 	var transactions []*models.Transaction
 	for rows.Next() {
 		transaction := &models.Transaction{}
-		var metadataJSON sql.NullString
+		var metadataJSON []byte
 		err := rows.Scan(
 			&transaction.ID, &transaction.FromWalletID, &transaction.ToWalletID,
 			&transaction.Type, &transaction.Status, &transaction.Amount, &transaction.Currency,
@@ -386,8 +387,8 @@ func (s *WalletService) GetWalletTransactions(walletID string, limit, offset int
 
 		// Parse metadata
 		metadataStr := "{}"
-		if metadataJSON.Valid {
-			metadataStr = metadataJSON.String
+		if len(metadataJSON) > 0 {
+			metadataStr = string(metadataJSON)
 		}
 		if err = transaction.SetMetadataFromJSON(metadataStr); err != nil {
 			return nil, fmt.Errorf("failed to parse metadata: %w", err)

@@ -31,7 +31,8 @@ import PhoneNumberDisplay from './components/PhoneNumberDisplay';
 
 const ContributeScreen = ({ route, navigation }) => {
   // Extract all parameters - handle both direct chamaId and nested params
-  const chamaId = route.params?.chamaId || route.params?.id;
+  const rawChamaId = route.params?.chamaId || route.params?.id;
+  const chamaId = typeof rawChamaId === 'string' ? rawChamaId : rawChamaId?.chamaId || rawChamaId?.id;
   const initialContributionType = route.params?.contributionType || 'regular';
   const roundId = route.params?.roundId;
   const roundName = route.params?.roundName;
@@ -106,9 +107,16 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
     };
     
     initializeContribution();
-  }, [chamaId]); // Run once on mount
+   }, [chamaId]); // Run once on mount
 
-  // Load merry-go-rounds and welfare contributions for the chama
+   // Load members when user switches to "Pay for Someone" and we haven't loaded them yet
+   useEffect(() => {
+     if (paymentMethod === 'pay_for' && chamaMembers.length === 0) {
+       loadChamaMembers();
+     }
+   }, [paymentMethod, chamaMembers.length]);
+
+   // Load merry-go-rounds and welfare contributions for the chama
   const loadContributionOptions = async () => {
     try {
       setLoadingContributionOptions(true);
@@ -253,21 +261,25 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
     }
   };
 
-  // Check user role in the chama
-  const checkUserRole = async () => {
-    try {
-      const response = await ApiService.getMemberRole(chamaId, user.id);
-      if (response.success) {
-        setUserRole(response.data.role);
-        // Load members if user is treasurer or chairperson
-        if (response.data.role === 'treasurer' || response.data.role === 'chairperson') {
-          loadChamaMembers();
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check user role:', error);
-    }
-  };
+   // Check user role in the chama
+   const checkUserRole = async () => {
+     try {
+       const response = await ApiService.getMemberRole(chamaId, user.id);
+       if (response.success) {
+         setUserRole(response.data?.role || null);
+         // Load members if user is treasurer or chairperson
+         if (response.data?.role === 'treasurer' || response.data?.role === 'chairperson') {
+           loadChamaMembers();
+         }
+       }
+     } catch (error) {
+       console.error('Failed to check user role:', error);
+       // If role check fails, still attempt to load members.
+       // The backend will enforce authorization, but this allows
+       // the UI to populate when the role endpoint is unreachable.
+       loadChamaMembers();
+     }
+   };
 
   // Load current recipient for merry-go-round contributions
   const loadCurrentRecipient = async () => {
@@ -436,7 +448,7 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
         setChama(chamaData);
         // Only set amount for regular contributions, not for merry-go-round
         if (contributionType !== 'merry-go-round') {
-          setAmount(chamaData.contribution_amount?.toString() || '');
+          setAmount((chamaData.contributionAmount || chamaData.contribution_amount || 0).toString());
         }
       } else {
         throw new Error('No chama data received');
@@ -473,11 +485,6 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
 
     if (!amount || parseFloat(amount) <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid contribution amount');
-      return;
-    }
-
-    if (!chama) {
-      Alert.alert('Error', 'Chama details not loaded. Please try again.');
       return;
     }
 
@@ -620,15 +627,12 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
       setLoading(true);
       setShowPaymentModal(false);
 
-      // Ensure chamaId is a string, not an object
-      const cleanChamaId = typeof chamaId === 'string' ? chamaId : chamaId?.chamaId || chamaId?.id;
-
-      if (!cleanChamaId) {
+      if (!chamaId) {
         throw new Error('Invalid chama ID');
       }
 
       if (paymentMethod === 'mpesa') {
-        await handleMpesaContribution(cleanChamaId);
+        await handleMpesaContribution(chamaId);
       } else if (paymentMethod === 'pay_for') {
         if (!selectedContributor) {
           Alert.alert(
@@ -638,9 +642,9 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
           );
           return;
         }
-        await handlePayForContribution(cleanChamaId);
+        await handlePayForContribution(chamaId);
       } else {
-        await handleWalletContribution(cleanChamaId);
+        await handleWalletContribution(chamaId);
       }
       } catch (error) {
         console.error('Contribution failed:', error);
@@ -1023,7 +1027,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
       const shortfall = contributionAmount - walletBalance;
       Alert.alert(
         'Insufficient Wallet Balance',
-        `Your VaultKe wallet balance is KES ${formatCurrency(walletBalance)}.\n\nYou need KES ${formatCurrency(shortfall)} more to pay KES ${formatCurrency(contributionAmount)} for ${selectedContributor.fullName}.`,
+        `Your VaultKe wallet balance is KES ${formatCurrency(walletBalance)}.\n\nYou need KES ${formatCurrency(shortfall)} more to pay KES ${formatCurrency(contributionAmount)} for ${getMemberName(selectedContributor)}.`,
         [
           {
             text: 'Deposit Money',
@@ -1079,7 +1083,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
         } catch {}
       }, 1500);
 
-      const contributorName = selectedContributor.fullName;
+      const contributorName = getMemberName(selectedContributor);
 
       Toast.show({
         type: 'success',
@@ -1616,6 +1620,7 @@ const handleMpesaContribution = async (cleanChamaId) => {
             disabled={
               !amount ||
               parseFloat(amount) <= 0 ||
+              (paymentMethod === 'pay_for' && !selectedContributor) ||
               (contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for') ||
               (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
               (contributionType === 'welfare' && !selectedWelfare)

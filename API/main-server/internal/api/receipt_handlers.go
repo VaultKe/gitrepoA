@@ -233,7 +233,7 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 	var transaction models.Transaction
 	var fromWalletID, toWalletID, approvedBy sql.NullString
 	var approvalDeadline sql.NullTime
-	var metadataJSON string
+	var metadataJSON []byte
 
 	err := h.db.QueryRow(query, resolvedTransactionID).Scan(
 		&transaction.ID,
@@ -263,8 +263,8 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 
 	// Parse metadata FIRST - needed for authorization check
 	transaction.Metadata = make(map[string]interface{})
-	if metadataJSON != "" {
-		json.Unmarshal([]byte(metadataJSON), &transaction.Metadata)
+	if len(metadataJSON) > 0 {
+		json.Unmarshal(metadataJSON, &transaction.Metadata)
 	}
 
 	// Authorize: direct initiator/approver OR chama admin

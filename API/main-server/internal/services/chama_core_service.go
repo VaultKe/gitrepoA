@@ -275,7 +275,7 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 	`
 
 	chama := &models.Chama{}
-	var rulesJSON, permissionsJSON string
+	var rulesJSON, permissionsJSON []byte
 	var meetingFreq, meetingTime *string
 	var chatRoomID *string
 	var meetingDayOfWeek, meetingDayOfMonth *int
@@ -298,14 +298,14 @@ func (s *ChamaService) GetChamaByID(chamaID string) (*models.Chama, error) {
 	}
 
 	// Parse JSON fields
-	if err = chama.SetRulesFromJSON(rulesJSON); err != nil {
+	if err = chama.SetRulesFromJSON(string(rulesJSON)); err != nil {
 		return nil, fmt.Errorf("failed to parse rules: %w", err)
 	}
 
 	// Parse permissions JSON
-	if permissionsJSON != "" {
+	if len(permissionsJSON) > 0 {
 		var permissions map[string]interface{}
-		if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err == nil {
+		if err := json.Unmarshal(permissionsJSON, &permissions); err == nil {
 			chama.Permissions = permissions
 		}
 	}
@@ -357,7 +357,7 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 	var chamas []*models.Chama
 	for rows.Next() {
 		chama := &models.Chama{}
-		var rulesJSON, permissionsJSON string
+		var rulesJSON, permissionsJSON []byte
 		var meetingFreq, meetingTime *string
 		var meetingDayOfWeek, meetingDayOfMonth *int
 
@@ -375,14 +375,14 @@ func (s *ChamaService) GetChamas(limit, offset int) ([]*models.Chama, error) {
 		}
 
 		// Parse JSON fields
-		if err = chama.SetRulesFromJSON(rulesJSON); err != nil {
+		if err = chama.SetRulesFromJSON(string(rulesJSON)); err != nil {
 			return nil, fmt.Errorf("failed to parse rules: %w", err)
 		}
 
 		// Parse permissions JSON
-		if permissionsJSON != "" {
+		if len(permissionsJSON) > 0 {
 			var permissions map[string]interface{}
-			if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err == nil {
+			if err := json.Unmarshal(permissionsJSON, &permissions); err == nil {
 				chama.Permissions = permissions
 			}
 		}
@@ -434,7 +434,7 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 	var chamas []*models.Chama
 	for rows.Next() {
 		chama := &models.Chama{}
-		var rulesJSON, permissionsJSON string
+		var rulesJSON, permissionsJSON []byte
 		var meetingFreq, meetingTime *string
 		var meetingDayOfWeek, meetingDayOfMonth *int
 
@@ -452,14 +452,14 @@ func (s *ChamaService) GetAllChamasForAdmin(limit, offset int) ([]*models.Chama,
 		}
 
 		// Parse JSON fields
-		if err = chama.SetRulesFromJSON(rulesJSON); err != nil {
+		if err = chama.SetRulesFromJSON(string(rulesJSON)); err != nil {
 			return nil, fmt.Errorf("failed to parse rules: %w", err)
 		}
 
 		// Parse permissions JSON
-		if permissionsJSON != "" {
+		if len(permissionsJSON) > 0 {
 			var permissions map[string]interface{}
-			if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err == nil {
+			if err := json.Unmarshal(permissionsJSON, &permissions); err == nil {
 				chama.Permissions = permissions
 			}
 		}
@@ -515,7 +515,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 	var chamas []*models.Chama
 	for rows.Next() {
 		chama := &models.Chama{}
-		var rulesJSON, permissionsJSON string
+		var rulesJSON, permissionsJSON []byte
 		var meetingFreq, meetingTime *string
 		var meetingDayOfWeek, meetingDayOfMonth *int
 		var role string
@@ -538,14 +538,14 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 		}
 
 		// Parse JSON fields
-		if err = chama.SetRulesFromJSON(rulesJSON); err != nil {
+		if err = chama.SetRulesFromJSON(string(rulesJSON)); err != nil {
 			return nil, fmt.Errorf("failed to parse rules: %w", err)
 		}
 
 		// Parse permissions JSON
-		if permissionsJSON != "" {
+		if len(permissionsJSON) > 0 {
 			var permissions map[string]interface{}
-			if err := json.Unmarshal([]byte(permissionsJSON), &permissions); err == nil {
+			if err := json.Unmarshal(permissionsJSON, &permissions); err == nil {
 				chama.Permissions = permissions
 			}
 		}
@@ -1131,7 +1131,7 @@ func (s *ChamaService) GetChamaTransactions(chamaID string, limit, offset int) (
 	for rows.Next() {
 		transaction := &models.Transaction{}
 		var userFirstName, userLastName, userEmail, userPhone sql.NullString
-		var metadataJSON sql.NullString
+		var metadataJSON []byte
 		var recipientID sql.NullString
 
 		err := rows.Scan(
@@ -1169,8 +1169,8 @@ func (s *ChamaService) GetChamaTransactions(chamaID string, limit, offset int) (
 		}
 
 		// Set metadata from JSON
-		if metadataJSON.Valid && metadataJSON.String != "" {
-			_ = transaction.SetMetadataFromJSON(metadataJSON.String)
+		if len(metadataJSON) > 0 {
+			_ = transaction.SetMetadataFromJSON(string(metadataJSON))
 		}
 
 		// Add user information if available

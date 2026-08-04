@@ -329,7 +329,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 		`
 		var transactionID string
 		var toWalletID sql.NullString
-		var metadataJSON sql.NullString
+		var metadataJSON []byte
 		var initiatedBy string
 		var originalAmount float64
 		err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID, &toWalletID, &metadataJSON, &initiatedBy, &originalAmount)
@@ -353,8 +353,8 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 
 		// Update the transaction with receipt and phone metadata
 		metadata := make(map[string]interface{})
-		if metadataJSON.Valid && metadataJSON.String != "" {
-			if err := json.Unmarshal([]byte(metadataJSON.String), &metadata); err != nil {
+		if len(metadataJSON) > 0 {
+			if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
 				log.Printf("Warning: failed to parse existing metadata for transaction %s: %v", transactionID, err)
 				metadata = make(map[string]interface{})
 			}
@@ -480,7 +480,7 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 	`
 	var transactionID string
 	var toWalletID sql.NullString
-	var metadataJSON sql.NullString
+	var metadataJSON []byte
 	var originalAmount float64
 	err = tx.QueryRow(findQuery, callback.CheckoutRequestID, models.TransactionStatusPending, models.PaymentMethodMpesa).Scan(&transactionID, &toWalletID, &metadataJSON, &originalAmount)
 	if err != nil {
@@ -498,8 +498,8 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 
 	// Build failure metadata
 	failureMetadata := make(map[string]interface{})
-	if metadataJSON.Valid && metadataJSON.String != "" {
-		if err := json.Unmarshal([]byte(metadataJSON.String), &failureMetadata); err != nil {
+	if len(metadataJSON) > 0 {
+		if err := json.Unmarshal(metadataJSON, &failureMetadata); err != nil {
 			failureMetadata = make(map[string]interface{})
 		}
 	}
@@ -652,7 +652,7 @@ func (s *MpesaService) ReconcilePendingSTKTransactions(maxAge time.Duration) (in
 		toWalletID    sql.NullString
 		amount        float64
 		reference     string
-		metadataJSON  sql.NullString
+		metadataJSON  []byte
 		initiatedBy   string
 	}
 	var pendings []pendingTxn
@@ -683,8 +683,8 @@ func (s *MpesaService) ReconcilePendingSTKTransactions(maxAge time.Duration) (in
 		case "completed":
 			// Credit the wallet and mark as completed — same logic as the success callback
 			metadata := make(map[string]interface{})
-			if p.metadataJSON.Valid && p.metadataJSON.String != "" {
-				json.Unmarshal([]byte(p.metadataJSON.String), &metadata)
+			if len(p.metadataJSON) > 0 {
+				json.Unmarshal(p.metadataJSON, &metadata)
 			}
 			metadata["reconciled"] = true
 			metadata["reconciled_at"] = time.Now().Format(time.RFC3339)
@@ -728,8 +728,8 @@ func (s *MpesaService) ReconcilePendingSTKTransactions(maxAge time.Duration) (in
 
 		case "failed":
 			metadata := make(map[string]interface{})
-			if p.metadataJSON.Valid && p.metadataJSON.String != "" {
-				json.Unmarshal([]byte(p.metadataJSON.String), &metadata)
+			if len(p.metadataJSON) > 0 {
+				json.Unmarshal(p.metadataJSON, &metadata)
 			}
 			metadata["reconciled"] = true
 			metadata["reconciled_at"] = time.Now().Format(time.RFC3339)
@@ -965,7 +965,7 @@ func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) er
 	var transactionID string
 	var fromWalletID sql.NullString
 	var b2cAmount float64
-	var existingMetadataJSON sql.NullString
+	var existingMetadataJSON []byte
 	err = tx.QueryRow(findQuery, "%"+conversationID+"%", models.TransactionStatusProcessing, "mpesa").Scan(&transactionID, &fromWalletID, &b2cAmount, &existingMetadataJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -977,8 +977,8 @@ func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) er
 
 	// Build updated metadata with B2C callback codes
 	metadata := make(map[string]interface{})
-	if existingMetadataJSON.Valid && existingMetadataJSON.String != "" {
-		if err := json.Unmarshal([]byte(existingMetadataJSON.String), &metadata); err != nil {
+	if len(existingMetadataJSON) > 0 {
+		if err := json.Unmarshal(existingMetadataJSON, &metadata); err != nil {
 			metadata = make(map[string]interface{})
 		}
 	}
@@ -1097,7 +1097,7 @@ func (s *MpesaService) HandleB2CTimeout(callbackData map[string]interface{}) err
 	var transactionID string
 	var fromWalletID sql.NullString
 	var b2cAmount float64
-	var existingMetadataJSON sql.NullString
+	var existingMetadataJSON []byte
 	err = tx.QueryRow(findQuery, "%"+conversationID+"%", models.TransactionStatusProcessing, "mpesa").Scan(&transactionID, &fromWalletID, &b2cAmount, &existingMetadataJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1109,8 +1109,8 @@ func (s *MpesaService) HandleB2CTimeout(callbackData map[string]interface{}) err
 
 	// Build timeout metadata
 	metadata := make(map[string]interface{})
-	if existingMetadataJSON.Valid && existingMetadataJSON.String != "" {
-		if err := json.Unmarshal([]byte(existingMetadataJSON.String), &metadata); err != nil {
+	if len(existingMetadataJSON) > 0 {
+		if err := json.Unmarshal(existingMetadataJSON, &metadata); err != nil {
 			metadata = make(map[string]interface{})
 		}
 	}

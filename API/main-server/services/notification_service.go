@@ -419,7 +419,7 @@ func (ns *NotificationService) GetUserNotifications(userID string, filters map[s
 	var notifications []models.Notification
 	for rows.Next() {
 		var n models.Notification
-		var dataStr sql.NullString
+		var dataStr []byte
 
 		err := rows.Scan(
 			&n.ID, &n.UserID, &n.Title, &n.Message, &n.Type, &n.Priority,
@@ -432,8 +432,8 @@ func (ns *NotificationService) GetUserNotifications(userID string, filters map[s
 		}
 
 		// Parse JSON data
-		if dataStr.Valid && dataStr.String != "" {
-			json.Unmarshal([]byte(dataStr.String), &n.Data)
+		if len(dataStr) > 0 {
+			json.Unmarshal(dataStr, &n.Data)
 		}
 
 		notifications = append(notifications, n)
@@ -462,7 +462,7 @@ func (ns *NotificationService) GetNotificationByID(id int) (*models.Notification
 	`
 
 	var n models.Notification
-	var dataStr sql.NullString
+	var dataStr []byte
 	err := ns.db.QueryRow(query, id).Scan(
 		&n.ID, &n.UserID, &n.Title, &n.Message, &n.Type, &n.Priority,
 		&n.Category, &n.ReferenceType, &n.ReferenceID, &n.Status,
@@ -477,8 +477,8 @@ func (ns *NotificationService) GetNotificationByID(id int) (*models.Notification
 	}
 
 	// Parse JSON data
-	if dataStr.Valid && dataStr.String != "" {
-		json.Unmarshal([]byte(dataStr.String), &n.Data)
+	if len(dataStr) > 0 {
+		json.Unmarshal(dataStr, &n.Data)
 	}
 
 	return &n, nil

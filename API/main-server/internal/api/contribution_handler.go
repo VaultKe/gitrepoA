@@ -59,10 +59,10 @@ func GetContributions(c *gin.Context) {
 			PaymentMethod string
 			ChamaID       string
 			InitiatedBy   string
-			RecipientID   sql.NullString
-			MetadataJSON  sql.NullString
-			CreatedAt     time.Time
-			UpdatedAt     time.Time
+		RecipientID   sql.NullString
+		MetadataJSON  []byte
+		CreatedAt     time.Time
+		UpdatedAt     time.Time
 			FirstName     sql.NullString
 			LastName      sql.NullString
 			Email         sql.NullString
@@ -79,8 +79,8 @@ func GetContributions(c *gin.Context) {
 
 		// Parse metadata
 		metadata := map[string]interface{}{}
-		if tx.MetadataJSON.Valid && tx.MetadataJSON.String != "" {
-			json.Unmarshal([]byte(tx.MetadataJSON.String), &metadata)
+		if len(tx.MetadataJSON) > 0 {
+			json.Unmarshal(tx.MetadataJSON, &metadata)
 		}
 
 		contribution := map[string]interface{}{

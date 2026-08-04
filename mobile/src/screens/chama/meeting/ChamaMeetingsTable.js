@@ -33,9 +33,9 @@ const ChamaMeetingsTable = ({
     return (
       <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
         <View style={[styles.tableCell, styles.titleCell]}>
-<Text style={[styles.tableCellText, styles.tableCellTextDefault]} numberOfLines={2}>
-             {item.title.length > 30 ? `${item.title.substring(0, 30)}..` : item.title}
-           </Text>
+          <Text style={[styles.tableCellText, styles.tableCellTextDefault]} numberOfLines={2}>
+            {item.title.length > 30 ? `${item.title.substring(0, 30)}..` : item.title}
+          </Text>
         </View>
         <View style={[styles.tableCell, styles.dateCell]}>
           <Text style={[styles.tableCellText, styles.tableCellTextDefault]}>
