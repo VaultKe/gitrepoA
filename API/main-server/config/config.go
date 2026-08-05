@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,9 @@ type Config struct {
 	AllowedFileTypes []string
 	UploadPath       string
 
+	// Resolved absolute upload path (set during Load)
+	uploadPathAbs string
+
 	// Google OAuth Configuration
 	GoogleClientID     string
 	GoogleClientSecret string
@@ -109,7 +113,7 @@ type Config struct {
 
 // Load loads configuration from environment variables
 func Load() *Config {
-	return &Config{
+	c := &Config{
 		Environment:        getEnv("ENVIRONMENT", "development"),
 		Port:               getEnv("PORT", "8085"),
 		DatabaseURL:        getEnv("DATABASE_URL", ""),
@@ -205,6 +209,30 @@ func Load() *Config {
 		MeetingServiceURL: getEnv("MEETING_SERVICE_URL", "https://livemeeting-service.onrender.com"),
 		ChatServiceURL:    getEnv("CHAT_SERVICE_URL", "https://chat-services-l1a6.onrender.com"),
 	}
+
+	// Resolve UploadPath to an absolute path so that uploads and static file
+	// serving remain consistent regardless of the process's working directory.
+	if !filepath.IsAbs(c.UploadPath) {
+		absPath, err := filepath.Abs(c.UploadPath)
+		if err == nil {
+			c.uploadPathAbs = absPath
+		} else {
+			c.uploadPathAbs = c.UploadPath
+		}
+	} else {
+		c.uploadPathAbs = c.UploadPath
+	}
+
+	return c
+}
+
+// GetUploadPath returns the absolute path for file uploads,
+// ensuring consistency regardless of the process's working directory.
+func (c *Config) GetUploadPath() string {
+	if c.uploadPathAbs != "" {
+		return c.uploadPathAbs
+	}
+	return c.UploadPath
 }
 
 // Helper functions

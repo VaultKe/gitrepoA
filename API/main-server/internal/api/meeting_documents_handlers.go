@@ -17,7 +17,7 @@ import (
 )
 
 // UploadMeetingDocument handles document uploads for meetings
-func UploadMeetingDocument(c *gin.Context) {
+func UploadMeetingDocument(c *gin.Context, uploadPath string) {
 
 	meetingID := c.Param("id")
 	if meetingID == "" {
@@ -69,8 +69,8 @@ func UploadMeetingDocument(c *gin.Context) {
 	}
 
 	// Create uploads directory
-	uploadsDir := "./uploads/meetings"
-	tempDir := "./uploads/temp"
+	uploadsDir := filepath.Join(uploadPath, "meetings")
+	tempDir := filepath.Join(uploadPath, "temp")
 	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

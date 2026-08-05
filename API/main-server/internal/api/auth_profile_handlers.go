@@ -238,7 +238,7 @@ func (h *AuthHandlers) handleMultipartProfileUpdate(c *gin.Context, req *models.
 			return fmt.Errorf("invalid file extension. Only .jpg and .png are allowed")
 		}
 
-		uploadDir := "./uploads/avatars"
+		uploadDir := filepath.Join(h.uploadPath, "avatars")
 		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create upload directory: %w", err)
 		}

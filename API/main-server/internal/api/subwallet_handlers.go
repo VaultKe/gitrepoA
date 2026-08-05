@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"vaultke-backend/config"
@@ -293,12 +294,19 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 	// Handle M-Pesa payment method (existing logic)
 	var phoneNumber string
 	if req.PhoneNumber != "" {
-		phoneNumber = strings.TrimSpace(req.PhoneNumber)
-		if strings.HasPrefix(phoneNumber, "0") {
+		phoneNumber = regexp.MustCompile(`\D`).ReplaceAllString(req.PhoneNumber, "")
+		if phoneNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid phone number format. Use format: 254XXXXXXXXX",
+			})
+			return
+		}
+		if strings.HasPrefix(phoneNumber, "07") || strings.HasPrefix(phoneNumber, "01") {
 			phoneNumber = "254" + phoneNumber[1:]
-		} else if strings.HasPrefix(phoneNumber, "+254") {
-			phoneNumber = phoneNumber[1:]
-		} else if !strings.HasPrefix(phoneNumber, "254") {
+		} else if strings.HasPrefix(phoneNumber, "254") {
+			phoneNumber = phoneNumber
+		} else {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
 				"error":   "Invalid phone number format. Use format: 254XXXXXXXXX",
@@ -315,13 +323,20 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 			})
 			return
 		}
-		// Format phone number
-		phoneNumber = strings.TrimSpace(phoneNumber)
-		if strings.HasPrefix(phoneNumber, "0") {
+		// Clean and normalize phone number
+		phoneNumber = regexp.MustCompile(`\D`).ReplaceAllString(phoneNumber, "")
+		if phoneNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid phone number format. Use format: 254XXXXXXXXX",
+			})
+			return
+		}
+		if strings.HasPrefix(phoneNumber, "07") || strings.HasPrefix(phoneNumber, "01") {
 			phoneNumber = "254" + phoneNumber[1:]
-		} else if strings.HasPrefix(phoneNumber, "+254") {
-			phoneNumber = phoneNumber[1:]
-		} else if !strings.HasPrefix(phoneNumber, "254") {
+		} else if strings.HasPrefix(phoneNumber, "254") {
+			phoneNumber = phoneNumber
+		} else {
 			phoneNumber = "254" + phoneNumber
 		}
 	}

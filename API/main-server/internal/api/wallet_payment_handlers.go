@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -114,8 +115,8 @@ func InitiateRegistrationPayment(c *gin.Context) {
 	}
 
 	// Initiate real M-Pesa STK push
-	phoneNumber := req.PhoneNumber
-	if strings.HasPrefix(phoneNumber, "07") {
+	phoneNumber := regexp.MustCompile(`\D`).ReplaceAllString(req.PhoneNumber, "")
+	if strings.HasPrefix(phoneNumber, "07") || strings.HasPrefix(phoneNumber, "01") {
 		phoneNumber = "254" + phoneNumber[1:]
 	} else if strings.HasPrefix(phoneNumber, "+254") {
 		phoneNumber = phoneNumber[1:]

@@ -88,7 +88,7 @@ func SetupRoutes(
 		c.HTML(http.StatusOK, "terms-of-service.html", nil)
 	})
 
-	router.Static("/uploads", "./uploads")
+	router.Static("/uploads", cfg.GetUploadPath())
 	router.Static("/notification_sound", "./notification_sound")
 
 	// Authentication middleware
@@ -276,7 +276,9 @@ func SetupRoutes(
 				users.GET("/preferences", api.GetUserPreferences)
 				users.PUT("/preferences", api.UpdateUserPreferences)
 
-				users.POST("/avatar", api.UploadAvatar)
+				users.POST("/avatar", func(c *gin.Context) {
+				api.UploadAvatar(c, cfg.GetUploadPath())
+			})
 				users.GET("/search-by-credentials", api.SearchUserByCredentials)
 				users.PUT("/:id/role", api.AdminUpdateUserRole)
 				users.PUT("/:id/status", api.UpdateUserStatus)
@@ -290,10 +292,14 @@ func SetupRoutes(
 			{
 				chamas.GET("/", api.GetChamas)
 				chamas.GET("/admin/all", api.GetAllChamasForAdmin)
-				chamas.POST("/", api.CreateChama)
+				chamas.POST("/", func(c *gin.Context) {
+					api.CreateChama(c, cfg.GetUploadPath())
+				})
 				chamas.GET("/my", api.GetUserChamas)
 				chamas.GET("/:id", api.GetChama)
-				chamas.PUT("/:id", api.UpdateChama)
+				chamas.PUT("/:id", func(c *gin.Context) {
+					api.UpdateChama(c, cfg.GetUploadPath())
+				})
 				chamas.DELETE("/:id", api.DeleteChama)
 				chamas.POST("/:id/leave", api.LeaveChama)
 			chamas.GET("/:id/members", api.GetChamaMembers)
@@ -501,7 +507,9 @@ func SetupRoutes(
 				meetings.POST("/:id/join", api.JoinMeeting)
 				meetings.POST("/:id/attendance", api.MarkAttendance)
 				meetings.GET("/:id/attendance", api.GetMeetingAttendance)
-				meetings.POST("/:id/documents", api.UploadMeetingDocument)
+				meetings.POST("/:id/documents", func(c *gin.Context) {
+					api.UploadMeetingDocument(c, cfg.GetUploadPath())
+				})
 				meetings.GET("/:id/documents", api.GetMeetingDocuments)
 				meetings.DELETE("/:id/documents/:docId", api.DeleteMeetingDocument)
 				meetings.POST("/:id/minutes", api.SaveMeetingMinutes)

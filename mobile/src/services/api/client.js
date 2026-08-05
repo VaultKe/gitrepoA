@@ -132,12 +132,6 @@ const refreshAccessToken = async () => {
 
   const fetchConfig = { ...config, signal: controller.signal };
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    console.debug('[API] request', {
-      url: `${API_BASE_URL}${endpoint}`,
-      method: config.method,
-      headers: config.headers,
-      body: isFormData ? '[FormData]' : config.body,
-    });
   }
   const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchConfig);
   clearTimeout(timeoutId);
@@ -160,15 +154,7 @@ const refreshAccessToken = async () => {
       }
     }
   } catch (parseError) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.debug('[API] JSON parse failed', {
-        url: `${API_BASE_URL}${endpoint}`,
-        status: response.status,
-        contentType,
-        error: parseError.message,
-      });
-    }
-    if (!response.ok) {
+      if (!response.ok) {
       throw new Error(`Server error: ${response.statusText}`);
     }
     throw parseError;
@@ -292,9 +278,6 @@ const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {
 
 const checkBackendConnectivity = async () => {
   try {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.debug('[API] health connectivity check', `${API_BASE_URL}/health`);
-    }
      const controller = new AbortController();
      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
      const response = await fetch(`${API_BASE_URL}/health`, {
@@ -330,9 +313,6 @@ const checkBackendConnectivity = async () => {
 
 const checkHealth = async () => {
   try {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.debug('[API] health check', `${API_BASE_URL}/health`);
-    }
      const controller = new AbortController();
      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
      const response = await fetch(`${API_BASE_URL}/health`, {

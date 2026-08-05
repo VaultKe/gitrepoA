@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -420,8 +421,8 @@ func WithdrawMoney(c *gin.Context) {
 		mpesaService := services.NewMpesaService(db.(*sql.DB), cfg.(*config.Config))
 
 		// Format phone number
-		phoneNumber := req.PhoneNumber
-		if strings.HasPrefix(phoneNumber, "07") {
+		phoneNumber := regexp.MustCompile(`\D`).ReplaceAllString(req.PhoneNumber, "")
+		if strings.HasPrefix(phoneNumber, "07") || strings.HasPrefix(phoneNumber, "01") {
 			phoneNumber = "254" + phoneNumber[1:]
 		} else if strings.HasPrefix(phoneNumber, "+254") {
 			phoneNumber = phoneNumber[1:]

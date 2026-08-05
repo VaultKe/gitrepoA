@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -48,9 +49,16 @@ func InitiateMpesaSTK(c *gin.Context) {
 		return
 	}
 
-	// Validate phone number format (Kenyan format)
-	phoneNumber := strings.TrimSpace(req.PhoneNumber)
-	if strings.HasPrefix(phoneNumber, "0") {
+	// Validate and normalize phone number format (Kenyan format)
+	phoneNumber := regexp.MustCompile(`\D`).ReplaceAllString(req.PhoneNumber, "")
+	if phoneNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid phone number format. Use format: 254XXXXXXXXX",
+		})
+		return
+	}
+	if strings.HasPrefix(phoneNumber, "07") || strings.HasPrefix(phoneNumber, "01") {
 		phoneNumber = "254" + phoneNumber[1:]
 	} else if strings.HasPrefix(phoneNumber, "+254") {
 		phoneNumber = phoneNumber[1:]

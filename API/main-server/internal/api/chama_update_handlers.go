@@ -32,7 +32,7 @@ type UpdateChamaRequest struct {
 	Status                *string                 `json:"status,omitempty"`
 }
 
-func UpdateChama(c *gin.Context) {
+func UpdateChama(c *gin.Context, uploadPath string) {
 	chamaID, ok := requireParam(c, "id", "Chama ID is required")
 	if !ok {
 		return
@@ -75,7 +75,7 @@ func UpdateChama(c *gin.Context) {
 			log.Printf("Failed to parse multipart form for chama %s: %v", chamaID, perr)
 		}
 		if file, ferr := c.FormFile("rules_file"); ferr == nil && file != nil {
-			uploadDir := "./uploads/chamas/rules"
+			uploadDir := filepath.Join(uploadPath, "chamas", "rules")
 			if mkErr := os.MkdirAll(uploadDir, 0o755); mkErr == nil {
 				cleanName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(file.Filename)
 				fileName := fmt.Sprintf("%s_%s", chamaID, cleanName)

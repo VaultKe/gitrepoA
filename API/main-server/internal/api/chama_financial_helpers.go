@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"vaultke-backend/internal/models"
@@ -31,16 +32,17 @@ func getDisbursementSourceWalletID(db *sql.DB, chamaID, category string) (string
 }
 
 // normalizePhoneNumber converts a local phone number to the 254... format
-// expected by M-Pesa B2C disbursements.
+// expected by M-Pesa B2C disbursements. It first strips any non-digit characters.
 func normalizePhoneNumber(phone string) (string, error) {
-	if strings.HasPrefix(phone, "07") {
-		return "254" + phone[1:], nil
+	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
+	if cleaned == "" {
+		return "", fmt.Errorf("invalid phone number format. must start with 254 or 07")
 	}
-	if strings.HasPrefix(phone, "+254") {
-		return phone[1:], nil
+	if strings.HasPrefix(cleaned, "07") || strings.HasPrefix(cleaned, "01") {
+		return "254" + cleaned[1:], nil
 	}
-	if strings.HasPrefix(phone, "254") {
-		return phone, nil
+	if strings.HasPrefix(cleaned, "254") {
+		return cleaned, nil
 	}
 	return "", fmt.Errorf("invalid phone number format. must start with 254 or 07")
 }

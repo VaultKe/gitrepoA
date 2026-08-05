@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -75,8 +76,8 @@ func DepositMoney(c *gin.Context) {
 		}
 
 		// Convert phone number to M-Pesa format
-		phoneNumber := userPhone
-		if strings.HasPrefix(phoneNumber, "07") {
+		phoneNumber := regexp.MustCompile(`\D`).ReplaceAllString(userPhone, "")
+		if strings.HasPrefix(phoneNumber, "07") || strings.HasPrefix(phoneNumber, "01") {
 			phoneNumber = "254" + phoneNumber[1:]
 		} else if strings.HasPrefix(phoneNumber, "+254") {
 			phoneNumber = phoneNumber[1:]

@@ -165,7 +165,7 @@ func main() {
 	services.StartSTKReconciler(primaryDB, cfgForReconciler, 10*time.Minute, 15*time.Minute)
 
 	// Initialize scheduler service for meeting auto-unlock
-	authHandlers := api.NewAuthHandlers(primaryDB, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService)
+	authHandlers := api.NewAuthHandlers(primaryDB, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService, cfg.GetUploadPath())
 	reminderHandlers := api.NewReminderHandlers(primaryDB)
 
 	pollsHandlers := api.NewPollsHandlers(primaryDB)

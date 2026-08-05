@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -99,13 +100,17 @@ func getStringValue(s *string) string {
 }
 
 // normalizeMpesaPhone converts a local phone number to the 254... format used
-// by M-Pesa STK push / B2C.
+// by M-Pesa STK push / B2C. It first strips any non-digit characters.
 func normalizeMpesaPhone(phone string) string {
-	switch {
-	case strings.HasPrefix(phone, "+"):
-		return phone[1:]
-	case strings.HasPrefix(phone, "0"):
-		return "254" + phone[1:]
+	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
+	if cleaned == "" {
+		return ""
 	}
-	return phone
+	switch {
+	case strings.HasPrefix(cleaned, "07"), strings.HasPrefix(cleaned, "01"):
+		return "254" + cleaned[1:]
+	case strings.HasPrefix(cleaned, "254"):
+		return cleaned
+	}
+	return cleaned
 }

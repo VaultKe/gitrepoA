@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,6 +37,13 @@ const SmartHeader = ({
   const { navigateTo, getCurrentContext } = useSmartNavigation();
   const [avatarData, setAvatarData] = useState(null);
   const [avatarError, setAvatarError] = useState(false);
+  const failedAvatarUrl = useRef(null);
+
+  // Reset avatarError when the avatar URL changes so that a newly
+  // uploaded avatar is attempted again instead of permanently falling back.
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatar]);
 
   const headerBackgroundColor = backgroundColor || colors.surface;
 
@@ -154,12 +161,13 @@ const SmartHeader = ({
                   onPress={handleProfilePress}
                   activeOpacity={0.8}
                 >
-                  {(!avatarError && (user?.avatar && user.avatar !== 'avatar://cached-base64-image')) || avatarData ? (
+                  {(!avatarError && (user?.avatar && user.avatar !== 'avatar://cached-base64-image') && user.avatar !== failedAvatarUrl.current) || avatarData ? (
                     <Image
                       source={{ uri: avatarData || resolveAvatarUrl(user.avatar) }}
                       style={[styles.profilePic, { borderColor: colors.primary }]}
                       resizeMode="cover"
                       onError={() => {
+                        failedAvatarUrl.current = user?.avatar || null;
                         setAvatarError(true);
                       }}
                     />

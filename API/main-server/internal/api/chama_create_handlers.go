@@ -47,7 +47,7 @@ type CreateChamaRequest struct {
 	} `json:"members,omitempty"`
 }
 
-func CreateChama(c *gin.Context) {
+func CreateChama(c *gin.Context, uploadPath string) {
 	userID, ok := requireUserID(c)
 	if !ok {
 		return
@@ -282,7 +282,7 @@ func CreateChama(c *gin.Context) {
 	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
 		file, err := c.FormFile("rules_file")
 		if err == nil && file != nil {
-			uploadDir := "./uploads/chamas/rules"
+			uploadDir := filepath.Join(uploadPath, "chamas", "rules")
 			if err := os.MkdirAll(uploadDir, 0o755); err == nil {
 				cleanName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_").Replace(file.Filename)
 				fileName := fmt.Sprintf("%s_%s", chama.ID, cleanName)

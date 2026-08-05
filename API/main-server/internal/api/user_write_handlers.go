@@ -142,7 +142,7 @@ func UpdateProfile(c *gin.Context) {
 	GetProfile(c)
 }
 
-func UploadAvatar(c *gin.Context) {
+func UploadAvatar(c *gin.Context, uploadPath string) {
 	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -219,7 +219,7 @@ func UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	uploadDir := "./uploads/avatars"
+	uploadDir := filepath.Join(uploadPath, "avatars")
 	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
