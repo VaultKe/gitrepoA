@@ -112,9 +112,9 @@ func Load() *Config {
 	return &Config{
 		Environment:        getEnv("ENVIRONMENT", "development"),
 		Port:               getEnv("PORT", "8085"),
-		DatabaseURL:        getEnv("DATABASE_URL", getEnv("DATABASE_URL_PRIMARY", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require")),
-		PrimaryDatabaseURL: getEnv("DATABASE_URL_PRIMARY", getEnv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require")),
-		ReplicaDatabaseURL: getEnv("DATABASE_URL_REPLICA", getEnv("DATABASE_URL_PRIMARY", getEnv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"))),
+		DatabaseURL:        getEnv("DATABASE_URL", ""),
+		PrimaryDatabaseURL: getEnv("DATABASE_URL_PRIMARY", getEnv("DATABASE_URL", "")),
+		ReplicaDatabaseURL: getEnv("DATABASE_URL_REPLICA", ""),
 		JWTSecret:          getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
 		JWTExpiration:      getEnvAsInt("JWT_EXPIRATION", 24*60*60), // 24 hours in seconds
 
@@ -326,9 +326,6 @@ func (c *Config) ValidateRequired() error {
 func (c *Config) SetDefaults() {
 	if c.JWTSecret == "" {
 		c.JWTSecret = "your-super-secret-jwt-key-change-in-production"
-	}
-	if c.DatabaseURL == "" {
-		c.DatabaseURL = "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 	}
 	if c.Environment == "" {
 		c.Environment = "development"

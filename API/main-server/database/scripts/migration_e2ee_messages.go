@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	_ "github.com/lib/pq"
 )
@@ -86,7 +87,12 @@ func main() {
 	// This is a standalone migration script
 	// In production, this would be integrated into your migration system
 
-	db, err := sql.Open("postgres", "postgresql://localhost/vaultke?sslmode=disable")
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
+	}
+
+	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Failed to open database:", err)
 	}

@@ -43,7 +43,9 @@ func main1() {
 	log.Println("🚀 Starting comprehensive database seeding...")
 
 	// Load .env from project root (backend directory)
-	_ = os.Setenv("DATABASE_URL", "postgresql://neondb_owner:npg_s7xp0QkXtVUA@ep-autumn-dew-asta5qs7.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require")
+	if os.Getenv("DATABASE_URL") == "" {
+		log.Fatal("DATABASE_URL environment variable is required for seeding")
+	}
 
 	// Connect DB
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))

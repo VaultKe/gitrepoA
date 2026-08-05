@@ -71,12 +71,15 @@ func getDBPath() string {
 		return dbURL
 	}
 
+	if dbURL := os.Getenv("DATABASE_URL_PRIMARY"); dbURL != "" {
+		return dbURL
+	}
+
 	if dbURL := os.Getenv("DB_PATH"); dbURL != "" {
 		return dbURL
 	}
 
-	// Default PostgreSQL connection string
-	return "postgresql://localhost/vaultke?sslmode=disable"
+	return ""
 }
 
 // initializeDatabase creates and configures the database connection
