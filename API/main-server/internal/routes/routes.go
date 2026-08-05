@@ -94,14 +94,11 @@ func SetupRoutes(
 	// Authentication middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
-	// Context injection middleware selects replica for safe read-only requests
+	// Context injection middleware uses primary for all requests to avoid
+	// read-replica lag issues that cause "relation does not exist" errors
+	// on freshly-migrated databases.
 	dbMiddleware := func(c *gin.Context) {
-		// Use replica for idempotent read requests when configured.
-		if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead {
-			c.Set("db", db.ReadDB())
-		} else {
-			c.Set("db", db.WriteDB())
-		}
+		c.Set("db", db.WriteDB())
 		c.Next()
 	}
 
