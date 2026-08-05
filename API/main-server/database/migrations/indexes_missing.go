@@ -22,10 +22,20 @@ func MigrateMissingIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_chamas_category ON chamas(category)",
 		"CREATE INDEX IF NOT EXISTS idx_chamas_type ON chamas(type)",
 		"CREATE INDEX IF NOT EXISTS idx_chamas_created_by ON chamas(created_by)",
+		"CREATE INDEX IF NOT EXISTS idx_chamas_is_public ON chamas(is_public)",
+		"CREATE INDEX IF NOT EXISTS idx_chamas_created_at ON chamas(created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_chamas_status_public_created ON chamas(status, is_public, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_chamas_creator_status_created ON chamas(created_by, status, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_chamas_current_members ON chamas(current_members)",
+		"CREATE INDEX IF NOT EXISTS idx_chamas_total_funds ON chamas(total_funds)",
+		"CREATE INDEX IF NOT EXISTS idx_chamas_active_public_partial ON chamas(status, is_public, created_at DESC) WHERE status = 'active' AND is_public = true",
 
 		// ── chama_members table ──
 		"CREATE INDEX IF NOT EXISTS idx_chama_members_role ON chama_members(role)",
 		"CREATE INDEX IF NOT EXISTS idx_chama_members_is_active ON chama_members(is_active)",
+		"CREATE INDEX IF NOT EXISTS idx_chama_members_chama_active_role ON chama_members(chama_id, is_active, role)",
+		"CREATE INDEX IF NOT EXISTS idx_chama_members_user_active ON chama_members(user_id, is_active)",
+		"CREATE INDEX IF NOT EXISTS idx_chama_members_chama_user_active ON chama_members(chama_id, user_id, is_active)",
 
 		// ── transactions table ──
 		"CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)",

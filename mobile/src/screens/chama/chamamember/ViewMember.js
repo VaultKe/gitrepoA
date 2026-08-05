@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Modal,
   Dimensions,
   Platform,
 } from 'react-native';
@@ -22,6 +23,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment, removeMemberFromChama, getChamaMember } from '../../../services/api/chamaEndpoints';
+import { getMemberName } from './chamaMembersUtils';
 import Button from '../../../components/common/Button';
 import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
@@ -39,6 +41,7 @@ const ViewMember = ({ route, navigation }) => {
   const [memberStats, setMemberStats] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [imageExpanded, setImageExpanded] = useState(false);
+  const [failedAvatars, setFailedAvatars] = useState(new Set());
   const [serviceFeePayments, setServiceFeePayments] = useState([]);
   const [feePaymentsLoading, setFeePaymentsLoading] = useState(false);
   const [payingFee, setPayingFee] = useState(null);
@@ -46,6 +49,8 @@ const ViewMember = ({ route, navigation }) => {
   const [cooldownActive, setCooldownActive] = useState(false);
 const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [serviceFeePaid, setServiceFeePaid] = useState(false);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const PAY_COOLDOWN_MS = 30000;
 
   // Cache-first loader (mirrors MyChamasScreen): show cached member data instantly, then refresh.
@@ -221,6 +226,14 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   };
 
   const handleRemoveMember = () => {
+    console.log('[ViewMember] handleRemoveMember called', {
+      userRole,
+      memberId,
+      chamaId,
+      memberData,
+      currentUserId: user?.id,
+    });
+
     if (userRole !== 'chairperson') {
       Toast.show({
         type: 'error',
@@ -239,35 +252,45 @@ const [receiptLoading, setReceiptLoading] = useState(false);
       return;
     }
 
-    Alert.alert(
-      'Remove Member',
-      `Are you sure you want to remove ${memberData?.first_name} ${memberData?.last_name} from the chama?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: confirmRemoveMember },
-      ]
-    );
+    setShowRemoveConfirm(true);
   };
 
   const confirmRemoveMember = async () => {
     try {
+      if (!chamaId || !memberId) {
+        Alert.alert('Error', 'Missing chama ID or member ID');
+        return;
+      }
+      setRemoveLoading(true);
       const response = await removeMemberFromChama(chamaId, memberId);
-      if (response.success) {
+      console.log('[ViewMember] removeMemberFromChama response', response);
+      if (response && response.success) {
         Toast.show({
           type: 'success',
           text1: 'Member Removed',
-          text2: `${memberData?.first_name} ${memberData?.last_name} has been removed from the chama`,
+          text2: response.message || `${getMemberName(memberData)} has been removed from the chama`,
         });
-        navigation.goBack();
+        setTimeout(() => {
+          navigation.goBack();
+        }, 1200);
       } else {
-        throw new Error(response.error || 'Failed to remove member');
+        const errorMsg = response?.error || 'Failed to remove member';
+        Toast.show({
+          type: 'error',
+          text1: 'Remove Failed',
+          text2: errorMsg,
+        });
       }
     } catch (error) {
+      console.error('[ViewMember] confirmRemoveMember error', error);
       Toast.show({
         type: 'error',
         text1: 'Remove Failed',
         text2: error.message || 'Failed to remove member from chama',
       });
+    } finally {
+      setRemoveLoading(false);
+      setShowRemoveConfirm(false);
     }
   };
 
@@ -607,7 +630,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
   // Helper function to render member avatar with real profile photo
   const renderMemberAvatar = (isExpanded = false) => {
     const user = memberData?.user || {};
-    const avatarUrl = user?.avatar || memberData?.avatar;
+    const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || memberData?.avatar;
     const firstName = user?.first_name || memberData?.first_name;
     const lastName = user?.last_name || memberData?.last_name;
 
@@ -615,7 +638,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
     const placeholderStyle = isExpanded ? styles.expandedAvatarPlaceholder : styles.avatarPlaceholder;
     const textStyle = isExpanded ? styles.expandedAvatarText : styles.avatarText;
 
-    if (avatarUrl) {
+    if (avatarUrl && !failedAvatars.has(avatarUrl)) {
       // Process avatar URL similar to ProfileScreen
       let fullAvatarUrl;
       if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
@@ -627,8 +650,10 @@ const [receiptLoading, setReceiptLoading] = useState(false);
       return (
         <Image
           source={{ uri: fullAvatarUrl }}
-          style={avatarStyle}
-          onError={(error) => {
+          style={[avatarStyle, { backgroundColor: colors.surface }]}
+          resizeMode="cover"
+          onError={() => {
+            setFailedAvatars(prev => new Set([...prev, avatarUrl]));
           }}
         />
       );
@@ -800,39 +825,41 @@ const [receiptLoading, setReceiptLoading] = useState(false);
                 <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Action</Text>
               )}
             </View>
-            <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
-                {formatDate(memberData.joined_at)}
-              </Text>
-              <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
-                KES 50
-              </Text>
-              <View style={styles.feeStatusCell}>
-                <Ionicons name="time" size={14} color={colors.warning} />
-                <Text style={[styles.feeStatusText, { color: colors.warning }]}>
-                  Pending
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feeTableHorizontalContent}>
+              <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
+                  {formatDate(memberData.joined_at)}
                 </Text>
+                <Text style={[styles.feeTableCell, { color: colors.text, flex: 1 }]}>
+                  KES 50
+                </Text>
+                <View style={styles.feeStatusCell}>
+                  <Ionicons name="time" size={14} color={colors.warning} />
+                  <Text style={[styles.feeStatusText, { color: colors.warning }]}>
+                    Pending
+                  </Text>
+                </View>
+                {(userRole === 'chairperson' || userRole === 'treasurer') && (
+                  <TouchableOpacity
+                    style={[styles.feePayButton, { backgroundColor: colors.primary }]}
+                    onPress={() => handlePayMemberServiceFee()}
+                    disabled={payingFee === 'pending' || cooldownActive}
+                  >
+                    {payingFee === 'pending' ? (
+                      <ActivityIndicator size="small" color={colors.white} />
+                    ) : cooldownActive ? (
+                      <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                        Wait {cooldownRemaining}s
+                      </Text>
+                    ) : (
+                      <Text style={[styles.feePayButtonText, { color: colors.white }]}>
+                        Pay
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
-              {(userRole === 'chairperson' || userRole === 'treasurer') && (
-                <TouchableOpacity
-                  style={[styles.feePayButton, { backgroundColor: colors.primary }]}
-                  onPress={() => handlePayMemberServiceFee()}
-                  disabled={payingFee === 'pending' || cooldownActive}
-                >
-                  {payingFee === 'pending' ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : cooldownActive ? (
-                    <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                      Wait {cooldownRemaining}s
-                    </Text>
-                  ) : (
-                    <Text style={[styles.feePayButtonText, { color: colors.white }]}>
-                      Pay
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
+            </ScrollView>
           </View>
         ) : serviceFeePayments.length === 0 && hasPaidServiceFee ? (
           <View style={styles.feeTableWrapper}>
@@ -842,6 +869,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
               <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
               <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1, minWidth: 60, textAlign: "center" }]}>Receipt</Text>
             </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feeTableHorizontalContent}>
               <View style={[styles.feeTableRow, { backgroundColor: colors.surface }]}>
                 <Text style={[styles.feeTableCell, { color: colors.text, flex: 1.5 }]}>
                   {formatDate(memberData.service_fee_paid_at || memberData.joined_at)}
@@ -855,12 +883,22 @@ const [receiptLoading, setReceiptLoading] = useState(false);
                     Paid
                   </Text>
                 </View>
+                <TouchableOpacity
+                  style={[styles.feeReceiptButton, { backgroundColor: colors.success + '20', borderColor: colors.success }]}
+                  onPress={() => handleDownloadReceipt(memberData, { id: 'service-fee', transactionId: memberData.service_fee_transaction_id })}
+                >
+                  <Text style={[styles.feeReceiptButtonText, { color: colors.success }]}>
+                    ETR Receipt
+                  </Text>
+                </TouchableOpacity>
               </View>
+            </ScrollView>
           </View>
         ) : (
           <ScrollView style={styles.feeTableScroll} nestedScrollEnabled>
-            <View style={styles.feeTable}>
-              <View style={styles.feeTableHeader}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feeTableHorizontalContent}>
+              <View style={styles.feeTable}>
+                <View style={styles.feeTableHeader}>
                 <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Date</Text>
                 <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1 }]}>Amount</Text>
                 <Text style={[styles.feeTableHeaderText, { color: colors.primary, flex: 1.5 }]}>Status</Text>
@@ -930,6 +968,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
               })}
             </View>
           </ScrollView>
+        </ScrollView>
         )}
       </View>
     </Card>
@@ -1227,7 +1266,7 @@ const [receiptLoading, setReceiptLoading] = useState(false);
             {renderServiceFeeSection()}
 
             {/* Actions */}
-            {userRole === 'chairperson' && memberData.user_id !== user.id && (
+            {userRole === 'chairperson' && memberData.user_id !== user.id && memberData?.is_active !== false && (
               <Card variant="outlined" padding="none" style={styles.actionsCard}>
                 <View style={styles.actionsCardContent}>
                   <Text style={[styles.sectionTitle, styles.sectionTitleText]}>
@@ -1237,11 +1276,18 @@ const [receiptLoading, setReceiptLoading] = useState(false);
                   <TouchableOpacity
                     style={[styles.actionButton, styles.removeButton, styles.removeButtonOutline]}
                     onPress={handleRemoveMember}
+                    disabled={removeLoading}
                   >
-                    <Ionicons name="person-remove" size={20} color={colors.error} />
-                    <Text style={[styles.actionButtonText, styles.actionButtonTextError]}>
-                      Remove from Chama
-                    </Text>
+                    {removeLoading ? (
+                      <ActivityIndicator size="small" color={colors.error} />
+                    ) : (
+                      <>
+                        <Ionicons name="person-remove" size={20} color={colors.error} />
+                        <Text style={[styles.actionButtonText, styles.actionButtonTextError]}>
+                          Remove from Chama
+                        </Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 </View>
               </Card>
@@ -1264,6 +1310,29 @@ const [receiptLoading, setReceiptLoading] = useState(false);
         loading={otpLoading}
         itemType={selectedApprovalItem?.type}
       />
+      
+      <Modal visible={showRemoveConfirm} transparent animationType="fade">
+        <TouchableOpacity style={styles.removeConfirmOverlay} activeOpacity={1} onPress={() => setShowRemoveConfirm(false)}>
+          <View style={styles.removeConfirmCard}>
+            <Text style={styles.removeConfirmTitle}>Remove Member</Text>
+            <Text style={styles.removeConfirmMessage}>
+              Are you sure you want to remove {getMemberName(memberData)} from the chama? This action cannot be undone.
+            </Text>
+            <View style={styles.removeConfirmActions}>
+              <TouchableOpacity style={[styles.removeConfirmBtn, styles.removeConfirmCancel]} onPress={() => setShowRemoveConfirm(false)} disabled={removeLoading}>
+                <Text style={styles.removeConfirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.removeConfirmBtn, styles.removeConfirmDestructive]} onPress={confirmRemoveMember} disabled={removeLoading}>
+                {removeLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.removeConfirmDestructiveText}>Remove</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1335,6 +1404,7 @@ const createStyles = (colors) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
+    backgroundColor: colors.surface,
   },
   avatarPlaceholder: {
     width: 80,
@@ -1342,6 +1412,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.primary,
   },
   avatarPlaceholderPrimary: {
     backgroundColor: colors.primary,
@@ -1386,6 +1457,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderTopRightRadius: 20,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+    backgroundColor: colors.surface,
   },
   expandedAvatarPlaceholder: {
     width: '100%',
@@ -1396,6 +1468,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderBottomRightRadius: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.primary,
   },
   expandedAvatarText: {
     fontSize: 120,
@@ -1745,6 +1818,9 @@ const createStyles = (colors) => StyleSheet.create({
   feeTableScroll: {
     maxHeight: 300,
   },
+  feeTableHorizontalContent: {
+    flexGrow: 1,
+  },
   feeTable: {
     minWidth: 380,
   },
@@ -1889,6 +1965,64 @@ const createStyles = (colors) => StyleSheet.create({
   approvalViewText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  removeConfirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  removeConfirmCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    width: '100%',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: colors.error + '40',
+  },
+  removeConfirmTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.error,
+    marginBottom: 8,
+  },
+  removeConfirmMessage: {
+    fontSize: 14,
+    color: colors.text,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  removeConfirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  removeConfirmBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeConfirmCancel: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  removeConfirmCancelText: {
+    color: colors.text,
+    fontWeight: '600',
+  },
+  removeConfirmDestructive: {
+    backgroundColor: colors.error,
+  },
+  removeConfirmDestructiveText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });
 

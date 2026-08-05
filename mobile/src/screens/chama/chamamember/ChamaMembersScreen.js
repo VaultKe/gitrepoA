@@ -6,6 +6,8 @@ import {
   Alert,
   ScrollView,
   RefreshControl,
+  Modal,
+  ActivityIndicator,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +43,9 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const [sentInvitations, setSentInvitations] = useState([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const [removing, setRemoving] = useState(false);
 
   const refreshIntervalRef = useRef(null);
 
@@ -123,7 +128,7 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
     try {
       if (!silent) setLoading(true);
 
-      const response = await ApiService.getChamaMembers(chamaId);
+      const response = await ApiService.getChamaMembers(chamaId, { include_inactive: 'true' });
       if (response.success) {
         const membersData = response.data || [];
         const uniqueMembers = Array.from(
@@ -197,25 +202,39 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   };
 
   const handleRemoveMember = (member) => {
-    Alert.alert(
-      'Remove Member',
-      `Are you sure you want to remove ${member.user?.first_name} ${member.user?.last_name} from the chama?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => confirmRemoveMember(member.id) },
-      ]
-    );
+    console.log('[ChamaMembersScreen] handleRemoveMember called', { member, userRole });
+    if (!member) {
+      Alert.alert('Error', 'Member data is missing');
+      return;
+    }
+
+    setRemoveTarget(member);
+    setShowRemoveConfirm(true);
   };
 
-  const confirmRemoveMember = async (memberId) => {
+  const confirmRemoveMember = async () => {
     try {
-      const response = await ApiService.removeChamaMember(chamaId, memberId);
+      if (!chamaId || !removeTarget?.user_id) {
+        Alert.alert('Error', 'Missing chama ID or member ID');
+        return;
+      }
+      setRemoving(true);
+      const memberId = removeTarget.user_id;
+      const response = await ApiService.removeMemberFromChama(chamaId, memberId);
+      console.log('[ChamaMembersScreen] removeMemberFromChama response', response);
       if (response.success) {
-        Alert.alert('Success', 'Member removed successfully');
+        Alert.alert('Success', response.message || 'Member removed successfully');
         await loadMembers();
+      } else {
+        Alert.alert('Error', response.error || 'Failed to remove member');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to remove member');
+      console.error('[ChamaMembersScreen] confirmRemoveMember error', error);
+      Alert.alert('Error', error.message || 'Failed to remove member');
+    } finally {
+      setRemoving(false);
+      setShowRemoveConfirm(false);
+      setRemoveTarget(null);
     }
   };
 
@@ -435,6 +454,29 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
         <View style={{ height: 60 }} />
       </ScrollView>
+
+      <Modal visible={showRemoveConfirm} transparent animationType="fade">
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }} activeOpacity={1} onPress={() => setShowRemoveConfirm(false)}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 24, width: '100%', maxWidth: 360, borderWidth: 1, borderColor: colors.error + '40' }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.error, marginBottom: 8 }}>Remove Member</Text>
+            <Text style={{ fontSize: 14, color: colors.text, marginBottom: 20, lineHeight: 20 }}>
+              Are you sure you want to remove {removeTarget?.user?.first_name} {removeTarget?.user?.last_name} from the chama? This action cannot be undone.
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+              <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, minWidth: 80, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border }} onPress={() => setShowRemoveConfirm(false)} disabled={removing}>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, minWidth: 80, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.error }} onPress={confirmRemoveMember} disabled={removing}>
+                {removing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Remove</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <ChamaMemberRoleModal
         visible={showRoleModal}

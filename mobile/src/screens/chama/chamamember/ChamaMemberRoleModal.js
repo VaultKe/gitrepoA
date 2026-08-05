@@ -75,18 +75,20 @@ const ChamaMemberRoleModal = ({
                 </View>
               )}
 
-              <View style={styles.actionSection}>
-                <Button
-                  title="Remove from Chama"
-                  variant="outline"
-                  onPress={() => {
-                    onClose();
-                    onRemoveMember(selectedMember);
-                  }}
-                  style={[styles.removeButton, styles.removeButtonError]}
-                  textStyle={styles.errorButtonText}
-                />
-              </View>
+              {selectedMember?.is_active !== false && (
+                <View style={styles.actionSection}>
+                  <Button
+                    title="Remove from Chama"
+                    variant="outline"
+                    onPress={() => {
+                      onClose();
+                      onRemoveMember(selectedMember);
+                    }}
+                    style={[styles.removeButton, styles.removeButtonError]}
+                    textStyle={styles.errorButtonText}
+                  />
+                </View>
+              )}
             </View>
           )}
         </View>

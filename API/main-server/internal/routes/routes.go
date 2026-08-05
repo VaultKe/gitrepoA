@@ -301,6 +301,7 @@ func SetupRoutes(
 				chamas.POST("/:id/leave", api.LeaveChama)
 			chamas.GET("/:id/members", api.GetChamaMembers)
 			chamas.GET("/:id/members/:memberId", api.GetChamaMember)
+			chamas.DELETE("/:id/members/:memberId", api.RemoveMember)
 			chamas.GET("/:id/members/:memberId/role", api.GetMemberRole)
 			chamas.GET("/:id/members/:memberId/stats", api.GetChamaMemberStatistics)
 			chamas.GET("/:id/members/export", api.ExportChamaMembers)

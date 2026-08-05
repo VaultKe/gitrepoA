@@ -107,8 +107,8 @@ func (s *ChamaService) UpdateMemberRole(chamaID, userID string, newRole models.C
 
 func (s *ChamaService) UpdateMemberRoleSimple(chamaID, userID, newRole string) error {
 	// Update role directly with string
-	query := "UPDATE chama_members SET role = $1, updated_at = $2 WHERE chama_id = $3 AND user_id = $4"
-	_, err := s.db.Exec(query, newRole, time.Now(), chamaID, userID)
+	query := "UPDATE chama_members SET role = $1 WHERE chama_id = $2 AND user_id = $3"
+	_, err := s.db.Exec(query, newRole, chamaID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update member role: %w", err)
 	}
@@ -131,8 +131,8 @@ func (s *ChamaService) UpdateMemberStatus(chamaID, userID, status string) error 
 
 	// Update status by setting is_active based on status
 	isActive := status == "active"
-	query := "UPDATE chama_members SET is_active = $1, updated_at = $1$2 WHERE chama_id = $1$3 AND user_id = $2$4"
-	_, err := s.db.Exec(query, isActive, time.Now(), chamaID, userID)
+	query := "UPDATE chama_members SET is_active = $1 WHERE chama_id = $2 AND user_id = $3"
+	_, err := s.db.Exec(query, isActive, chamaID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update member status: %w", err)
 	}
@@ -230,7 +230,7 @@ func (s *ChamaService) RemoveUserFromChama(chamaID, userID string) error {
 	}
 
 	// Mark member as inactive instead of deleting (for audit trail)
-	_, err = tx.Exec("UPDATE chama_members SET is_active = false, updated_at = $3 WHERE chama_id = $1 AND user_id = $2", chamaID, userID, time.Now())
+	_, err = tx.Exec("UPDATE chama_members SET is_active = false WHERE chama_id = $1 AND user_id = $2", chamaID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to remove user from chama: %w", err)
 	}

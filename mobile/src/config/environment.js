@@ -96,17 +96,48 @@ const resolveApiBaseUrl = () => {
   for (const candidate of candidates) {
     if (candidate && candidate.trim() !== '') {
       const normalized = candidate.trim().replace(/\/+$/, '');
-      return resolveWebBackendUrl(normalized);
+      if (Platform.OS === 'web') {
+        return resolveWebBackendUrl(normalized);
+      }
+      return resolveNativeBackendUrl(normalized);
     }
   }
 
   // Final fallback from env (no hardcoded URL)
   const fallback = env('API_BASE_URL');
   if (fallback && fallback.trim() !== '') {
-    return fallback.trim().replace(/\/+$/, '');
+    if (Platform.OS === 'web') {
+      return resolveWebBackendUrl(fallback.trim().replace(/\/+$/, ''));
+    }
+    return resolveNativeBackendUrl(fallback.trim().replace(/\/+$/, ''));
   }
 
   return '';
+};
+
+const resolveNativeBackendUrl = (backendUrl) => {
+  if (typeof window !== 'undefined' && typeof window.location !== 'undefined') {
+    // If running in a webview or similar, use web resolution
+    return resolveWebBackendUrl(backendUrl);
+  }
+
+  try {
+    const url = new URL(backendUrl);
+    if (!isLocalhostHost(url.hostname)) {
+      return backendUrl;
+    }
+
+    // On native devices, localhost refers to the device itself.
+    // Use NETWORK_IP env var to point to the development machine.
+    const networkIp = env('NETWORK_IP');
+    if (networkIp && networkIp.trim() !== '') {
+      return `${url.protocol}//${networkIp.trim()}${url.port ? `:${url.port}` : ''}${url.pathname}`.replace(/\/+$|\?$/, '');
+    }
+  } catch (error) {
+    // Keep original backend URL if parsing fails.
+  }
+
+  return backendUrl;
 };
 
 const resolvedApiBaseUrl = resolveApiBaseUrl();

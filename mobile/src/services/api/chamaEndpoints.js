@@ -21,8 +21,10 @@ const getChamaStatistics = async (chamaId) => {
   return await makeRequestWithRetry(`/chamas/${chamaId}/statistics`);
 };
 
-const getChamaMembers = async (chamaId) => {
-  return await makeRequestWithRetry(`/chamas/${chamaId}/members`);
+const getChamaMembers = async (chamaId, queryParams = {}) => {
+  const queryString = new URLSearchParams(queryParams).toString();
+  const endpoint = `/chamas/${chamaId}/members${queryString ? `?${queryString}` : ''}`;
+  return await makeRequestWithRetry(endpoint);
 };
 
 const getChamaMember = async (chamaId, memberId) => {

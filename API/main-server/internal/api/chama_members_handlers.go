@@ -30,7 +30,8 @@ func GetChamaMembers(c *gin.Context) {
 		return
 	}
 
-	// Simple, robust query for chama members
+	includeInactive := c.DefaultQuery("include_inactive", "false") == "true"
+
 	query := `
 		SELECT
 			cm.id, cm.chama_id, cm.user_id, cm.role, cm.joined_at, cm.is_active,
@@ -42,8 +43,13 @@ func GetChamaMembers(c *gin.Context) {
 		FROM chama_members cm
 		INNER JOIN users u ON cm.user_id = u.id
 		LEFT JOIN wallets w ON u.id = w.owner_id AND w.type = 'personal'
-		WHERE cm.chama_id = $1 AND cm.is_active = true
-		ORDER BY cm.joined_at ASC
+		WHERE cm.chama_id = $1
+	`
+	if !includeInactive {
+		query += ` AND cm.is_active = true`
+	}
+	query += `
+		ORDER BY cm.is_active DESC, cm.joined_at ASC
 	`
 
 	rows, err := db.Query(query, chamaID)
@@ -90,6 +96,7 @@ func GetChamaMembers(c *gin.Context) {
 			"chama_id":                chamaID,
 			"role":                    role,
 			"joined_at":               joinedAt,
+			"is_active":               isActive,
 			"status":                  userStatus,
 			"total_contributions":     totalContributions,
 			"last_contribution_date":  lastContribution,
@@ -667,5 +674,101 @@ func GetChamaTransactions(c *gin.Context) {
 		"success": true,
 		"data":    transactions,
 		"count":   len(transactions),
+	})
+}
+
+// RemoveMember deactivates a chama member (sets status to left).
+// Only the chairperson can remove members.
+func RemoveMember(c *gin.Context) {
+	chamaID := c.Param("id")
+	memberID := c.Param("memberId")
+	if chamaID == "" || memberID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID and Member ID are required",
+		})
+		return
+	}
+
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+
+	db := dbFromContext(c)
+	if db == nil {
+		return
+	}
+
+	// Verify the authenticated user is the chairperson of this chama
+	var chairpersonRole string
+	if err := db.QueryRow(`
+		SELECT role FROM chama_members
+		WHERE chama_id = $1 AND user_id = $2 AND is_active = true
+	`, chamaID, userID).Scan(&chairpersonRole); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "You are not an active member of this chama",
+		})
+		return
+	}
+
+	if chairpersonRole != "chairperson" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Only the chairperson can remove members from the chama",
+		})
+		return
+	}
+
+	// Prevent removing self
+	if memberID == userID {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "You cannot remove yourself from the chama. Use the leave chama option instead.",
+		})
+		return
+	}
+
+	// Verify the target member exists and is active
+	var targetMemberExists bool
+	if err := db.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND is_active = true)
+	`, chamaID, memberID).Scan(&targetMemberExists); err != nil || !targetMemberExists {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Member not found or already inactive",
+		})
+		return
+	}
+
+	// Deactivate the member (soft delete with left status)
+	_, err := db.Exec(`
+		UPDATE chama_members
+		SET is_active = false
+		WHERE chama_id = $1 AND user_id = $2
+	`, chamaID, memberID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to remove member: " + err.Error(),
+		})
+		return
+	}
+
+	// Update chama member count
+	_, err = db.Exec(`
+		UPDATE chamas
+		SET current_members = current_members - 1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1
+	`, chamaID)
+	if err != nil {
+		// Log but don't fail the request
+		fmt.Printf("Warning: Failed to update chama member count: %v\n", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Member removed successfully. Their status is now left.",
 	})
 }
