@@ -206,7 +206,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       const chamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
       currentChamaIdRef.current = chamaId;
       loadChamaFeatures();
-      loadChamaStatistics();
     } else {
       currentChamaIdRef.current = null;
     }
@@ -336,7 +335,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   const loadChamaFeatures = async () => {
     try {
       if (!selectedChama) {
-
         return;
       }
 
@@ -347,7 +345,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       } else if (selectedChama && selectedChama.id) {
         chamaId = selectedChama.id;
       } else {
-
         return;
       }
 
@@ -365,9 +362,10 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           allowWelfare: permissions.allowWelfare ?? true,
           activeWalletTypes,
         });
+        // Refresh selected chama with latest data from this single source of truth
+        setSelectedChama(chama);
       }
     } catch (error) {
-
       // Keep default features on error
     }
   };
@@ -376,7 +374,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     // Use provided chamaId or extract from selectedChama
     const currentChama = selectedChama;
     if (!currentChama && !targetChamaId) {
-
       return;
     }
 
@@ -396,10 +393,9 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           throw new Error('Invalid chama ID format');
         }
       }
-      // Get comprehensive chama statistics
-      const [statsResponse, chamaResponse] = await Promise.all([
+      // Get comprehensive chama statistics only; chama details are refreshed via loadChamaFeatures
+      const [statsResponse] = await Promise.all([
         ApiService.getChamaStatistics(chamaId),
-        ApiService.getChamaById(chamaId)
       ]);
 
       // Check if the chama is still the same (prevent race conditions)
@@ -442,19 +438,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           chamaStats: statsResponse.data,
           chamaFeatures: chamaFeatures // Use current features or fetch fresh ones
         });
-      }
-
-      // Update selected chama with fresh data if available (only if data actually changed)
-      if (chamaResponse.success && chamaResponse.data) {
-        const newChamaData = chamaResponse.data;
-        // Only update if the chama data has actually changed to prevent infinite loops
-        if (!selectedChama ||
-            selectedChama.id !== newChamaData.id ||
-            selectedChama.name !== newChamaData.name ||
-            selectedChama.total_funds !== newChamaData.total_funds ||
-            selectedChama.current_members !== newChamaData.current_members) {
-          setSelectedChama(newChamaData);
-        }
       }
 
     } catch (error) {

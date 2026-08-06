@@ -117,6 +117,10 @@ const getVoteResults = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/votes/results`);
 };
 
+const getChamaVotes = async (chamaId, limit = 50, offset = 0) => {
+  return await makeRequest(`/chamas/${chamaId}/votes?limit=${limit}&offset=${offset}`);
+};
+
 const createVote = async (chamaId, data) => {
   return await makeRequest(`/chamas/${chamaId}/votes`, {
     method: 'POST',
@@ -236,6 +240,7 @@ export {
   getMemberRole,
   getActiveVotes,
   getVoteResults,
+  getChamaVotes,
   createVote,
   castVote,
   createRoleEscalationPoll,

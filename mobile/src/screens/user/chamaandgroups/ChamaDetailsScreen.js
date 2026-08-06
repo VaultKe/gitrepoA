@@ -344,36 +344,31 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
           setTransactions([]);
         }),
 
-        // Load polls — fetch active and completed in parallel, merge results
-        Promise.all([
-          ApiService.getActiveVotes(targetChamaId).catch(() => null),
-          ApiService.getVoteResults(targetChamaId).catch(() => null),
-        ]).then(([activeResponse, completedResponse]) => {
-          const allPolls = [];
-          const pollMap = new Map();
+        // Load all polls (active and past) up to 10 total
+        ApiService.getChamaVotes(targetChamaId, 10, 0).then(response => {
+          if (response.success && Array.isArray(response.data)) {
+            const allPolls = response.data || [];
 
-          if (activeResponse?.success && Array.isArray(activeResponse.data)) {
-            activeResponse.data.forEach(poll => pollMap.set(poll.id, poll));
-          }
+            // Normalize user_voted field (backend returns 0/1 integer)
+            const normalized = allPolls.map(poll => ({
+              ...poll,
+              userVoted: poll.user_voted === 1 || poll.user_voted === true,
+              user_has_voted: poll.user_voted === 1 || poll.user_voted === true,
+            }));
 
-          if (completedResponse?.success && Array.isArray(completedResponse.data)) {
-            completedResponse.data.forEach(poll => {
-              if (!pollMap.has(poll.id)) {
-                pollMap.set(poll.id, poll);
-              }
+            // Sort: active first, then by date descending
+            const sorted = normalized.sort((a, b) => {
+              const aActive = a.status === 'active' && (!a.ends_at || new Date(a.ends_at) > new Date());
+              const bActive = b.status === 'active' && (!b.ends_at || new Date(b.ends_at) > new Date());
+              if (aActive && !bActive) return -1;
+              if (!aActive && bActive) return 1;
+              return new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0);
             });
+
+            setPolls(sorted);
+          } else {
+            setPolls([]);
           }
-
-          allPolls.push(...pollMap.values());
-
-          // Prioritize active polls first, then completed
-          const sorted = allPolls.sort((a, b) => {
-            if (a.status === 'active' && b.status !== 'active') return -1;
-            if (a.status !== 'active' && b.status === 'active') return 1;
-            return 0;
-          });
-
-          setPolls(sorted.slice(0, 5));
         }).catch(() => {
           setPolls([]);
         }).finally(() => {
@@ -1051,95 +1046,99 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   );
 
    const renderActivePolls = () => {
+      const getPollStatus = (poll) => {
+        const pollStatus = (poll.status || '').toLowerCase();
+        const endDate = poll.endDate || poll.end_date || poll.endsAt;
+        const hasEnded = endDate && new Date(endDate) < new Date();
+        const isActive = (pollStatus === 'active') && !hasEnded;
+        return { isActive, hasEnded };
+      };
 
-     // Count of new polls user hasn't acted on
-     const newPollsCount = polls.filter(poll => !(poll.userVoted || poll.user_has_voted)).length;
+      const activePolls = polls.filter(p => getPollStatus(p).isActive).slice(0, 5);
+      const pastPolls = polls.filter(p => !getPollStatus(p).isActive).slice(0, 5);
+      const totalDisplayed = activePolls.length + pastPolls.length;
 
-     return (
-       <Card style={styles.section} variant="outlined">
-         <View style={styles.sectionHeader}>
-           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-             Polls & Voting
-           </Text>
-           <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
-             <Text style={[styles.viewMoreText, { color: colors.primary }]}>
-               View All
-             </Text>
-           </TouchableOpacity>
-         </View>
+      const newPollsCount = activePolls.filter(poll => !(poll.userVoted || poll.user_has_voted)).length;
 
-         {pollsLoading ? (
-           <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-             <ActivityIndicator size="small" color={colors.primary} />
-             <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: spacing.sm }]}>
-               Loading polls...
-             </Text>
-           </View>
-         ) : polls.length === 0 ? (
-           <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-             <Ionicons name="bar-chart" size={48} color={colors.primary} />
-             <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
-               No polls & vote available
-             </Text>
-           </View>
-         ) : (
-           <View>
-             {/* Notification for new polls */}
-             {newPollsCount > 0 && (
-               <View style={[styles.newPollsNotification, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
-                 <Ionicons name="notifications" size={20} color={colors.warning} />
-                 <Text style={[styles.newPollsText, { color: colors.warning }]}>
-                   You have {newPollsCount} new poll{newPollsCount !== 1 ? 's' : ''} waiting for your vote!
-                 </Text>
-               </View>
-             )}
+      return (
+        <Card style={styles.section} variant="outlined">
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Polls & Voting
+            </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
+              <Text style={[styles.viewMoreText, { color: colors.primary }]}>
+                View All
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-             {/* Table Header */}
-             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-               <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Title</Text>
-               <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
-               <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
-             </View>
+          {pollsLoading ? (
+            <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: spacing.sm }]}>
+                Loading polls...
+              </Text>
+            </View>
+          ) : totalDisplayed === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+              <Ionicons name="bar-chart" size={48} color={colors.primary} />
+              <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
+                No polls & vote available
+              </Text>
+            </View>
+          ) : (
+            <View>
+              {newPollsCount > 0 && (
+                <View style={[styles.newPollsNotification, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
+                  <Ionicons name="notifications" size={20} color={colors.warning} />
+                  <Text style={[styles.newPollsText, { color: colors.warning }]}>
+                    You have {newPollsCount} new poll{newPollsCount !== 1 ? 's' : ''} waiting for your vote!
+                  </Text>
+                </View>
+              )}
 
-             {/* Table Rows - active polls first, max 5 */}
-             {(() => {
-               const getPollStatus = (poll) => {
-                 const pollStatus = poll.status || 'active';
-                 const endDate = poll.endDate || poll.end_date || poll.endsAt;
-                 const hasEnded = endDate && new Date(endDate) < new Date();
-                 const isActive = pollStatus === 'active' && !hasEnded;
-                 return { isActive, hasEnded, pollStatus };
-               };
-
-               // Show active polls first, then completed (already sorted by loadChamaDetails)
-               const displayPolls = polls.slice(0, 5);
-
-               return displayPolls.map((poll, index) => {
-                 const hasUserVoted = poll.userVoted || poll.user_has_voted;
-                 const { isActive, hasEnded } = getPollStatus(poll);
-
-                 return (
-                    <View key={`poll-${poll.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                      <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons
-                          name={hasUserVoted ? "checkmark-circle" : "close-circle"}
-                          size={16}
-                          color={hasUserVoted ? colors.success : colors.error}
-                        />
-                      </View>
-                      <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isActive ? colors.success : colors.textSecondary, textAlign: 'center' }}>
-                        {isActive ? 'Active' : 'Closed'}
-                      </Text>
+              {/* Active Polls */}
+              {activePolls.map((poll, index) => {
+                const hasUserVoted = poll.userVoted || poll.user_has_voted;
+                return (
+                  <View key={'active-poll-' + (poll.id || index)} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+                    <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name={hasUserVoted ? 'checkmark-circle' : 'close-circle'} size={16} color={hasUserVoted ? colors.success : colors.error} />
                     </View>
-                  );
-               });
-             })()}
-           </View>
-         )}
-       </Card>
-     );
-   };
+                    <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.success, textAlign: 'center', fontWeight: '600' }}>Active</Text>
+                  </View>
+                );
+              })}
+
+              {/* Past Polls */}
+              {pastPolls.length > 0 && (
+                <View>
+                  <View style={{ flexDirection: 'row', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, backgroundColor: colors.textSecondary + '10' }}>
+                    <Text style={{ flex: 2, fontSize: getResponsiveTextSize(12), fontWeight: typography.fontWeight.bold, color: colors.textSecondary, textTransform: 'uppercase' }}>Past Polls</Text>
+                    <Text style={{ flex: 1, fontSize: getResponsiveTextSize(12), fontWeight: typography.fontWeight.bold, color: colors.textSecondary, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
+                    <Text style={{ flex: 1, fontSize: getResponsiveTextSize(12), fontWeight: typography.fontWeight.bold, color: colors.textSecondary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+                  </View>
+                  {pastPolls.map((poll, index) => {
+                    const hasUserVoted = poll.userVoted || poll.user_has_voted;
+                    return (
+                      <View key={'past-poll-' + (poll.id || index)} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
+                        <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.textSecondary }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name={hasUserVoted ? 'checkmark-circle' : 'close-circle'} size={16} color={hasUserVoted ? colors.success : colors.error} />
+                        </View>
+                        <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>Closed</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+        </Card>
+      );
+    };
 
   const renderChamaRules = () => {
     const rawRulesFilePath = (chama?.rules_file_path && chama.rules_file_path.trim()) ||
