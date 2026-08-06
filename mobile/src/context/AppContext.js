@@ -121,7 +121,8 @@ function appReducer(state, action) {
       return { ...state, wallets: action.payload };
 
     case ActionTypes.SET_CHAMAS:
-      return { ...state, chamas: action.payload };
+      // Filter out chamas where the user has left (membership is inactive)
+      return { ...state, chamas: (action.payload || []).filter(c => c.membershipIsActive !== false) };
 
     case ActionTypes.SET_TRANSACTIONS:
       return { ...state, transactions: action.payload };
@@ -145,6 +146,10 @@ function appReducer(state, action) {
       return { ...state, currentDashboard: action.payload };
 
     case ActionTypes.SET_SELECTED_CHAMA:
+      // Prevent setting a chama where the user has left
+      if (action.payload && action.payload.membershipIsActive === false) {
+        return { ...state, selectedChama: null };
+      }
       return { ...state, selectedChama: action.payload };
 
     case ActionTypes.SET_PENDING_USER_ROUTE:

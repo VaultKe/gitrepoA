@@ -41,6 +41,8 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     totalMeetings: 0,
     lastUpdated: null,
   });
+  const [userRole, setUserRole] = useState('member');
+  const [userLeft, setUserLeft] = useState(false);
 
   // Ref to track current chama ID to prevent race conditions
   const currentChamaIdRef = useRef(null);
@@ -68,7 +70,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   // Fast chama switching function
   const switchToChama = (chama) => {
     // Prevent switching to a chama where the user has left
-    if (chama.membershipIsActive === false) {
+    if (chama.membershipIsActive === false || userLeft) {
       Alert.alert(
         'Not a Member',
         `You have left "${chama.name}". You can no longer access this chama.`,
@@ -197,6 +199,10 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
   useEffect(() => {
     if (selectedChama) {
+      if (userLeft) {
+        setSelectedChama(null);
+        return;
+      }
       const chamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
       currentChamaIdRef.current = chamaId;
       loadChamaFeatures();
@@ -243,46 +249,89 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     }, [selectedChama?.id || selectedChama?.chamaId || selectedChama])
   );
 
-   const loadUserChamas = async () => {
+
+  const loadMemberRole = async (targetChamaId) => {
+    const chamaId = targetChamaId || selectedChama?.id || selectedChama?.chamaId || selectedChama;
+    if (!chamaId || !user?.id) return;
     try {
-      setLoading(true);
-      const response = await ApiService.getUserChamas(20, 0);
+      const response = await ApiService.getMemberRole(chamaId, user.id);
       if (response.success) {
-        const userChamasData = (response.data || []).filter(chama => chama.membershipIsActive !== false);
-        setUserChamas(userChamasData);
-
-        // If no chama is currently selected and we have chamas, select the first one
-        if (userChamasData.length > 0 && !selectedChama) {
-          setSelectedChama(userChamasData[0]);
-        }
-
-        // If we have a selected chama, make sure it's still in the list (in case it was deleted or user left)
-        if (selectedChama && !userChamasData.find(c => c.id === selectedChama.id)) {
-          setSelectedChama(null);
-          // If the user left the selected chama, alert them
-          const leftChama = (response.data || []).find(c => c.id === selectedChama.id && c.membershipIsActive === false);
-          if (leftChama) {
-            Alert.alert(
-              'Membership Expired',
-              `You have left "${leftChama.name}". It has been removed from your chamas.`,
-              [{ text: 'OK' }]
-            );
-          }
-        }
-
-        // Preload data for other chamas in the background for faster switching
-        setTimeout(() => {
-          preloadChamaData(userChamasData);
-        }, 2000); // Wait 2 seconds after initial load
+        setUserRole(response.data?.role || 'member');
+        setUserLeft(false);
+      } else {
+        setUserRole('left');
+        setUserLeft(true);
       }
     } catch (error) {
-
-      // Set empty array on error to show empty state
-      setUserChamas([]);
-    } finally {
-      setLoading(false);
+      setUserRole('left');
+      setUserLeft(true);
     }
   };
+
+   const loadUserChamas = async () => {
+     try {
+       setLoading(true);
+       const response = await ApiService.getUserChamas(20, 0);
+       if (response.success) {
+         const userChamasData = (response.data || []).filter(chama => chama.membershipIsActive !== false);
+         setUserChamas(userChamasData);
+
+         // Verify current user membership for the selected chama
+         if (selectedChama) {
+           const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
+           const stillActive = userChamasData.find(c => c.id === currentChamaId);
+           if (!stillActive) {
+             const leftChama = (response.data || []).find(c => c.id === currentChamaId && c.membershipIsActive === false);
+             if (leftChama) {
+               setUserLeft(true);
+               setUserRole('left');
+               Alert.alert(
+                 'Membership Expired',
+                 `You have left "${leftChama.name}". It has been removed from your chamas.`,
+                 [{ text: 'OK' }]
+               );
+             }
+             setSelectedChama(null);
+           } else {
+             setUserLeft(false);
+             await loadMemberRole(currentChamaId);
+           }
+         }
+
+         // If no chama is currently selected and we have chamas, select the first one
+         if (userChamasData.length > 0 && !selectedChama) {
+           const first = userChamasData[0];
+           setSelectedChama(first);
+           await loadMemberRole(first.id);
+         }
+
+         // If we have a selected chama, make sure it's still in the list (in case it was deleted or user left)
+         if (selectedChama && !userChamasData.find(c => c.id === selectedChama.id)) {
+           setSelectedChama(null);
+           // If the user left the selected chama, alert them
+           const leftChama = (response.data || []).find(c => c.id === selectedChama.id && c.membershipIsActive === false);
+           if (leftChama) {
+             Alert.alert(
+               'Membership Expired',
+               `You have left "${leftChama.name}". It has been removed from your chamas.`,
+               [{ text: 'OK' }]
+             );
+           }
+         }
+
+         // Preload data for other chamas in the background for faster switching
+         setTimeout(() => {
+           preloadChamaData(userChamasData);
+         }, 2000); // Wait 2 seconds after initial load
+       }
+     } catch (error) {
+
+       // Set empty array on error to show empty state
+       setUserChamas([]);
+     } finally {
+       setLoading(false);
+     }
+   };
 
   const loadChamaFeatures = async () => {
     try {
@@ -524,6 +573,22 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
   const renderQuickStats = () => {
     if (!selectedChama) return null;
+
+    if (userLeft) {
+      return (
+        <Card style={styles.statsCard} variant="outlined">
+          <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.lg, alignItems: 'center' }}>
+            <Ionicons name="lock-closed" size={48} color={colors.error} />
+            <Text style={[styles.cardTitle, { color: colors.error, marginTop: spacing.md, textAlign: 'center' }]}>
+              Membership Expired
+            </Text>
+            <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
+              You are no longer a member of "{selectedChama.name}" and cannot access dashboard data.
+            </Text>
+          </View>
+        </Card>
+      );
+    }
 
     const StatTile = ({ icon, label, value, color }) => (
       <View style={{ flex: 1, marginHorizontal: spacing.xs, marginBottom: spacing.sm }}>
@@ -895,20 +960,32 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
     const mainActions = filteredActions;
 
+    const isDisabled = !selectedChama || userLeft;
+
     return (
       <Card style={[styles.actionsCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginVertical: spacing.xs }]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>
-          Quick Actions
+          {userLeft ? 'Access Restricted' : 'Quick Actions'}
         </Text>
 
         <View style={styles.actionsGrid}>
           {mainActions.map((action) => (
             <TouchableOpacity
               key={action.id}
-              style={styles.actionItem}
-              onPress={action.onPress}
-              disabled={!selectedChama}
-              activeOpacity={0.7}
+              style={[styles.actionItem, isDisabled && { opacity: 0.4 }]}
+              onPress={() => {
+                if (userLeft) {
+                  Alert.alert(
+                    'Access Denied',
+                    'You are no longer a member of this chama and cannot access this feature.',
+                    [{ text: 'OK' }]
+                  );
+                  return;
+                }
+                action.onPress();
+              }}
+              disabled={isDisabled}
+              activeOpacity={isDisabled ? 1 : 0.7}
             >
               <View style={[styles.actionIcon, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
                 <Ionicons name={action.icon} size={24} color={action.color} />

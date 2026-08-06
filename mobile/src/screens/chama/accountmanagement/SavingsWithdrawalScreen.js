@@ -278,10 +278,16 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      await Promise.all([
-        loadUserRole(),
-        loadSavingsAccounts(),
-      ]);
+      await loadUserRole();
+      if (userRole === 'left') {
+        Alert.alert(
+          'Access Denied',
+          'You are no longer a member of this chama. You cannot access savings withdrawal features.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
+      await loadSavingsAccounts();
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {
@@ -294,10 +300,12 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
       const response = await ApiService.getMemberRole(currentChamaId, user.id);
       if (response.success) {
         setUserRole(response.data?.role || 'member');
+      } else {
+        setUserRole('left');
       }
     } catch (error) {
       console.error('Error loading user role:', error);
-      setUserRole('member');
+      setUserRole('left');
     }
   };
 
@@ -394,6 +402,10 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
   };
 
   const handleWithdraw = (account) => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot process savings withdrawals.');
+      return;
+    }
     if (!canWithdrawSavings()) {
       Alert.alert('Access Denied', 'You do not have permission to process savings withdrawals.');
       return;
@@ -408,6 +420,10 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
   };
 
   const handleBulkWithdraw = () => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot process savings withdrawals.');
+      return;
+    }
     if (!canWithdrawSavings()) {
       Alert.alert('Access Denied', 'You do not have permission to process savings withdrawals.');
       return;
@@ -498,14 +514,20 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
   };
 
   const canWithdrawSavings = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const canApproveSavings = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const handleInitiateApprove = (account) => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot approve savings withdrawals.');
+      return;
+    }
     if (!canApproveSavings()) {
       Alert.alert('Access Denied', 'You do not have permission to approve savings withdrawals.');
       return;

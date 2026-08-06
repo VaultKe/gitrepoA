@@ -419,7 +419,7 @@ const onRefresh = async () => {
     );
   };
 
-  const StatTile = ({ icon, label, value, color, subtext }) => (
+  const StatTile = ({ icon, label, value, color, subtext, textColor, crossedOut }) => (
     <View style={{ flex: 1, marginHorizontal: spacing.xs }}>
       <View style={{ padding: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
@@ -428,7 +428,7 @@ const onRefresh = async () => {
           </View>
           <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary, flex: 1 }}>{label}</Text>
         </View>
-        <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'bold', color: colors.text }}>{value}</Text>
+        <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'bold', color: textColor || colors.text, textDecorationLine: crossedOut ? 'line-through' : 'none' }}>{value}</Text>
         {subtext && <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }}>{subtext}</Text>}
       </View>
     </View>
@@ -476,6 +476,8 @@ const onRefresh = async () => {
               value={getMemberShortName(currentMember)}
               color={currentMemberLeft ? colors.error : colors.warning}
               subtext={currentMemberLeft ? 'Left' : undefined}
+              textColor={currentMemberLeft ? colors.error : colors.text}
+              crossedOut={currentMemberLeft}
             />
           </View>
         </View>

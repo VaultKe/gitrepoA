@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,19 +7,55 @@ import {
   ScrollView,
   TouchableOpacity,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
+import ApiService from '../../../services/api';
+
+const isMemberLeft = (member) => {
+  if (!member) return false;
+  const isActive = member?.is_active;
+  return isActive === false || isActive === 0 || isActive === '0' || isActive === 'false';
+};
 
 const AccountManagementScreen = ({ route, navigation }) => {
   const { chamaId } = route.params;
   const { width } = useWindowDimensions();
-  const { theme } = useApp();
-  const { selectedChama } = useChamaContext();
+  const { theme, user } = useApp();
+  const { selectedChama, currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
+  const resolvedChamaId = chamaId || currentChamaId;
+
+  const [userMembership, setUserMembership] = useState(null);
+  const [membershipLoading, setMembershipLoading] = useState(true);
+
+  // Check if the current user is still an active member
+  useEffect(() => {
+    const checkMembership = async () => {
+      try {
+        const response = await ApiService.getChamaMember(resolvedChamaId, user?.id);
+        if (response.success) {
+          setUserMembership(response.data);
+        } else {
+          setUserMembership(null);
+        }
+      } catch (error) {
+        setUserMembership(null);
+      } finally {
+        setMembershipLoading(false);
+      }
+    };
+
+    if (resolvedChamaId && user?.id) {
+      checkMembership();
+    }
+  }, [resolvedChamaId, user?.id]);
+
+  const currentUserLeft = userMembership ? isMemberLeft(userMembership) : false;
 
   const activeWalletTypes = Array.isArray(selectedChama?.permissions?.activeWalletTypes)
     ? selectedChama.permissions.activeWalletTypes
@@ -84,6 +120,34 @@ const AccountManagementScreen = ({ route, navigation }) => {
       walletType: 'dividends',
     },
   ];
+
+  useEffect(() => {
+    if (!membershipLoading && currentUserLeft) {
+      Alert.alert(
+        'Access Denied',
+        'You are no longer a member of this chama. You cannot access account management features.',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  }, [membershipLoading, currentUserLeft, navigation]);
+
+  const handleModulePress = (mod) => {
+    if (currentUserLeft) {
+      Alert.alert(
+        'Access Denied',
+        'You can no longer make or receive disbursements because you have left this chama.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    mod.onPress();
+  };
 
   const visibleModules = modules.filter(mod => {
     if (!mod.walletType) return true;
@@ -157,33 +221,47 @@ const AccountManagementScreen = ({ route, navigation }) => {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Management Modules</Text>
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-            {mainModules.map((mod) => (
-              <TouchableOpacity
-                key={mod.title}
-                style={{ width: `${100 / itemsPerRow - 2}%`, alignItems: 'center', marginBottom: spacing.md }}
-                onPress={mod.onPress}
-              >
-                <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }}>
-                  <Ionicons name={mod.icon} size={24} color={mod.color} />
-                </View>
-                <Text style={{ fontSize: typography.fontSize.sm, color: colors.text, textAlign: 'center' }}>
-                  {mod.title}
-                </Text>
-              </TouchableOpacity>
-            ))}
+             {mainModules.map((mod) => (
+               <TouchableOpacity
+                 key={mod.title}
+                 style={{ width: `${100 / itemsPerRow - 2}%`, alignItems: 'center', marginBottom: spacing.md }}
+                 onPress={() => handleModulePress(mod)}
+                 disabled={currentUserLeft}
+                 activeOpacity={currentUserLeft ? 1 : 0.7}
+               >
+                 <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: currentUserLeft ? colors.error : colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm, opacity: currentUserLeft ? 0.5 : 1 }}>
+                   <Ionicons name={mod.icon} size={24} color={currentUserLeft ? colors.error : mod.color} />
+                 </View>
+                 <Text style={{
+                   fontSize: typography.fontSize.sm,
+                   color: currentUserLeft ? colors.error : colors.text,
+                   textAlign: 'center',
+                   textDecorationLine: currentUserLeft ? 'line-through' : 'none',
+                 }}>
+                   {mod.title}
+                 </Text>
+               </TouchableOpacity>
+             ))}
           </View>
           <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
             <TouchableOpacity
-              onPress={lastModule.onPress}
-              style={{ alignItems: 'center' }}
-            >
-              <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }}>
-                <Ionicons name={lastModule.icon} size={24} color={lastModule.color} />
-              </View>
-              <Text style={{ fontSize: typography.fontSize.sm, color: colors.text, textAlign: 'center' }}>
-                {lastModule.title}
-              </Text>
-            </TouchableOpacity>
+               onPress={() => handleModulePress(lastModule)}
+               style={{ alignItems: 'center' }}
+               disabled={currentUserLeft}
+               activeOpacity={currentUserLeft ? 1 : 0.7}
+             >
+               <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: currentUserLeft ? colors.error : colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm, opacity: currentUserLeft ? 0.5 : 1 }}>
+                 <Ionicons name={lastModule.icon} size={24} color={currentUserLeft ? colors.error : lastModule.color} />
+               </View>
+               <Text style={{
+                 fontSize: typography.fontSize.sm,
+                 color: currentUserLeft ? colors.error : colors.text,
+                 textAlign: 'center',
+                 textDecorationLine: currentUserLeft ? 'line-through' : 'none',
+               }}>
+                 {lastModule.title}
+               </Text>
+             </TouchableOpacity>
           </View>
         </Card>
       </ScrollView>

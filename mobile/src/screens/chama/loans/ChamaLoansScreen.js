@@ -108,22 +108,27 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
         const role = response.data?.role || 'member';
         setUserRole(role);
       } else {
-        setUserRole('member'); // Default to member for security
+        setUserRole('left'); // User is not an active member
       }
     } catch (error) {
-      console.error('🔐 Error loading user role:', error);
-      setUserRole('member'); // Default to member for security
+      const isNoisyError = /Invalid JSON response|Empty response/.test(error?.message || '');
+      if (!isNoisyError) {
+        console.error('🔐 Error loading user role:', error);
+      }
+      setUserRole('left'); // Default to left for security
     }
   };
 
   // Check if user can view all loans (leadership roles)
   const canViewAllLoans = () => {
+    if (userRole === 'left') return false;
     const leadershipRoles = ['chairperson', 'secretary', 'treasurer'];
     return leadershipRoles.includes(userRole.toLowerCase());
   };
 
   // Check if user can approve/reject loans
   const canManageLoans = () => {
+    if (userRole === 'left') return false;
     const managementRoles = ['chairperson', 'secretary', 'treasurer'];
     return managementRoles.includes(userRole.toLowerCase());
   };
@@ -158,8 +163,13 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
         setFilteredLoans([]);
       }
     } catch (error) {
-      console.error('❌ Failed to load loans:', error);
+      // Suppress noisy non-JSON/backend errors from loan endpoints that may not be configured
+      const isNoisyLoanError = /Invalid JSON response|Empty response|Server returned HTML/.test(error?.message || '');
+      if (!isNoisyLoanError) {
+        console.error('❌ Failed to load loans:', error);
+      }
       setLoans([]); // Set empty array for security
+      setFilteredLoans([]);
     } finally {
       setLoading(false);
     }

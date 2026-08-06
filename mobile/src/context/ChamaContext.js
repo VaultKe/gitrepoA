@@ -21,6 +21,11 @@ export const ChamaProvider = ({ children, chamaId, chama }) => {
 
   // Set the selected chama from props when the provider is initialized
   useEffect(() => {
+    // Prevent setting a chama where the user has left
+    if (chama?.membershipIsActive === false) {
+      setSelectedChama(null);
+      return;
+    }
     if (chama) {
       setSelectedChama(chama);
     } else if (chamaId && !selectedChama) {
@@ -82,6 +87,10 @@ export const ChamaProvider = ({ children, chamaId, chama }) => {
   };
 
   const switchChama = async (chama) => {
+    // Prevent switching to a chama where the user has left
+    if (chama?.membershipIsActive === false) {
+      return;
+    }
     setSelectedChama(chama);
   };
 

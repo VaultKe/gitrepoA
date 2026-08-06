@@ -48,9 +48,12 @@ const DividendsManagementScreen = ({ route, navigation }) => {
       const response = await ApiService.getMemberRole(chamaId, user.id);
       if (response.success) {
         setUserRole(response.data?.role || 'member');
+      } else {
+        setUserRole('left');
       }
     } catch (error) {
       console.error('Error loading user role:', error);
+      setUserRole('left');
     }
   };
 
@@ -71,10 +74,21 @@ const DividendsManagementScreen = ({ route, navigation }) => {
     }
   }, [chamaId]);
 
-  useEffect(() => {
-    fetchData();
-    loadUserRole();
-  }, [fetchData]);
+   useEffect(() => {
+     fetchData();
+     loadUserRole();
+   }, [fetchData]);
+
+   // Redirect if user has left the chama
+   useEffect(() => {
+     if (userRole === 'left') {
+       Alert.alert(
+         'Access Denied',
+         'You are no longer a member of this chama. You cannot access dividend management features.',
+         [{ text: 'OK', onPress: () => navigation.goBack() }]
+       );
+     }
+   }, [userRole, navigation]);
 
   const handleDeclareDividends = async () => {
     if (!form.dividendPerShare || !form.totalAmount) {
@@ -128,11 +142,16 @@ const DividendsManagementScreen = ({ route, navigation }) => {
   };
 
   const canApproveDividends = () => {
+    if (userRole === 'left') return false;
     const normalizedUserRole = (userRole || '').toLowerCase();
     return ['chairperson', 'secretary', 'treasurer'].includes(normalizedUserRole);
   };
 
   const handleInitiateApprove = (declaration) => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot approve dividends.');
+      return;
+    }
     if (!canApproveDividends()) {
       Alert.alert('Access Denied', 'You do not have permission to approve dividends.');
       return;

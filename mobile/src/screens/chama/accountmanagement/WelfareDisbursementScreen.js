@@ -288,6 +288,14 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
     try {
       setLoading(true);
       await loadUserRole();
+      if (userRole === 'left') {
+        Alert.alert(
+          'Access Denied',
+          'You are no longer a member of this chama. You cannot access welfare disbursement features.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
       await loadWelfareFundsAll();
     } catch (error) {
       Alert.alert('Error', 'Failed to load initial data. Please try again.');
@@ -301,9 +309,13 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
       const response = await ApiService.getMemberRole(currentChamaId, user.id);
       if (response.success) {
         setUserRole(response.data?.role || 'member');
+      } else {
+        // User is not an active member (has left the chama)
+        setUserRole('left');
       }
     } catch (error) {
-      setUserRole('member');
+      // API returns error if user is not an active member
+      setUserRole('left');
     }
   };
 
@@ -453,6 +465,10 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
   };
 
   const handleDisburse = (fund) => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot disburse welfare funds.');
+      return;
+    }
     if (!canDisburseWelfare()) {
       Alert.alert('Access Denied', 'You do not have permission to disburse welfare funds.');
       return;
@@ -471,6 +487,10 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
   };
 
   const handleBulkDisburse = () => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot disburse welfare funds.');
+      return;
+    }
     if (!canDisburseWelfare()) {
       Alert.alert('Access Denied', 'You do not have permission to disburse welfare funds.');
       return;
@@ -554,14 +574,20 @@ const WelfareDisbursementScreen = ({ route, navigation }) => {
   };
 
   const canDisburseWelfare = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const canApproveWelfare = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const handleInitiateApprove = (fund) => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot approve disbursements.');
+      return;
+    }
     if (!canApproveWelfare()) {
       Alert.alert('Access Denied', 'You do not have permission to approve welfare funds.');
       return;

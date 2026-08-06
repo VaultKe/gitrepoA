@@ -313,10 +313,15 @@ const LoanManagementScreen = ({ route, navigation }) => {
       const response = await ApiService.getMemberRole(currentChamaId, user.id);
       if (response.success) {
         setUserRole(response.data?.role || 'member');
+      } else {
+        setUserRole('left');
       }
     } catch (error) {
-      console.error('Error loading user role:', error);
-      setUserRole('member');
+      const isNoisyRoleError = /Invalid JSON response|Empty response/.test(error?.message || '');
+      if (!isNoisyRoleError) {
+        console.error('Error loading user role:', error);
+      }
+      setUserRole('left');
     }
   };
 
@@ -347,14 +352,18 @@ const LoanManagementScreen = ({ route, navigation }) => {
           setTotalPages(Math.ceil((response.totalCount || loansData.length) / pageSize));
         }
       } else {
-        console.error('Failed to load loans:', response.error);
+        // Silently handle loan API failures (e.g., backend not configured for loans)
         setLoans([]);
         setAllLoans([]);
         setTotalItems(0);
         setTotalPages(1);
       }
     } catch (error) {
-      console.error('Error loading loans:', error);
+      // Suppress noisy non-JSON/backend errors from loan endpoints that may not be configured
+      const isNoisyLoanError = /Invalid JSON response|Empty response|Server returned HTML/.test(error?.message || '');
+      if (!isNoisyLoanError) {
+        console.error('Error loading loans:', error);
+      }
       setLoans([]);
       setAllLoans([]);
       setTotalItems(0);
@@ -598,22 +607,25 @@ const LoanManagementScreen = ({ route, navigation }) => {
   };
 
   const canDisburseLoans = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const canCollectPayments = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const canUpdateStatus = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson', 'auditor'].includes(userRole.toLowerCase());
   };
 
-  const renderTableRow = ({ item, index }) => {
+  const renderTableRow = ({ item, index, key }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
     return (
-      <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
+      <View key={key} style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
         {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
@@ -814,14 +826,14 @@ const LoanManagementScreen = ({ route, navigation }) => {
                          <Text style={{ fontSize: 13, fontWeight: 'semibold', color: colors.primary }}>Actions</Text>
                        </View>
                      </View>
-                     {loans.length === 0 && !loading ? (
-                       <View style={{ alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm }}>
-                         <Ionicons name="card-outline" size={36} color={colors.textTertiary} />
-                         <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.sm }}>No loans found</Text>
-                       </View>
-                     ) : (
-                       loans.map((item, index) => renderTableRow({ item, index }))
-                     )}
+                      {loans.length === 0 && !loading ? (
+                        <View style={{ alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm }}>
+                          <Ionicons name="card-outline" size={36} color={colors.textTertiary} />
+                          <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.sm }}>No loans found</Text>
+                        </View>
+                      ) : (
+                        loans.map((item, index) => renderTableRow({ item, index, key: item.id || `loan-${index}` }))
+                      )}
                    </View>
                  </View>
                </ScrollView>
@@ -1088,6 +1100,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
         }]}>
           {filters.map((filter) => (
             <TouchableOpacity
+              key={filter.id}
               key={filter.id}
               style={[
                 headerStyles.dropdownItem,

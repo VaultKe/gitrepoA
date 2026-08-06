@@ -279,10 +279,16 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      await Promise.all([
-        loadUserRole(),
-        loadMaryGoRoundCycles(),
-      ]);
+      await loadUserRole();
+      if (userRole === 'left') {
+        Alert.alert(
+          'Access Denied',
+          'You are no longer a member of this chama. You cannot access merry-go-round disbursement features.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
+      await loadMaryGoRoundCycles();
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {
@@ -295,10 +301,12 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
       const response = await ApiService.getMemberRole(currentChamaId, user.id);
       if (response.success) {
         setUserRole(response.data?.role || 'member');
+      } else {
+        setUserRole('left');
       }
     } catch (error) {
       console.error('Error loading user role:', error);
-      setUserRole('member');
+      setUserRole('left');
     }
   };
 
@@ -536,6 +544,10 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   };
 
   const handleDisburse = (cycle) => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot disburse merry-go-round funds.');
+      return;
+    }
     if (!canDisburseMaryGoRound()) {
       Alert.alert('Access Denied', 'You do not have permission to disburse merry go round funds.');
       return;
@@ -550,6 +562,10 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   };
 
   const handleBulkDisburse = () => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot disburse merry-go-round funds.');
+      return;
+    }
     if (!canDisburseMaryGoRound()) {
       Alert.alert('Access Denied', 'You do not have permission to disburse merry go round funds.');
       return;
@@ -632,14 +648,20 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   };
 
   const canDisburseMaryGoRound = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const canApproveMaryGoRound = () => {
+    if (userRole === 'left') return false;
     return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
   };
 
   const handleInitiateApprove = (cycle) => {
+    if (userRole === 'left') {
+      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot approve disbursements.');
+      return;
+    }
     if (!canApproveMaryGoRound()) {
       Alert.alert('Access Denied', 'You do not have permission to approve merry go round disbursements.');
       return;
