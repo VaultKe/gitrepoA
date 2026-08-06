@@ -160,6 +160,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   const [chatRoomLoading, setChatRoomLoading] = useState(false);
   const [uploadingRules, setUploadingRules] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [userLeft, setUserLeft] = useState(false);
 
   // Guard against concurrent / repeated loads (focus + param changes can fire rapidly)
   const loadingRef = useRef(false);
@@ -211,6 +212,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
       // Load basic chama data and members first (critical for page display)
       // Use independent calls so a failure on one doesn't block the other
+      let memberIsLeft = false;
       let chamaResponse;
       let membersResponse;
       try {
@@ -220,7 +222,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
 
       try {
-        membersResponse = await ApiService.getChamaMembers(targetChamaId);
+        membersResponse = await ApiService.getChamaMembers(targetChamaId, { include_inactive: 'true' });
       } catch (membersError) {
         membersResponse = { success: false, data: [] };
       }
@@ -232,6 +234,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
       // Determine membership through multiple fallbacks
       let membership = null;
+      let currentUserIsLeft = false;
 
       // Fallback 1: Try to find user in chama members list
       if (membersResponse.success) {
@@ -239,7 +242,14 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         const uniqueMembers = Array.from(
           new Map(membersData.map((m) => [m.id, m])).values()
         );
-        setMembers(uniqueMembers);
+
+        // Filter out inactive members from display
+        const activeMembers = uniqueMembers.filter(member => {
+          const isActive = member?.is_active;
+          return isActive !== false && isActive !== 0 && isActive !== '0' && isActive !== 'false';
+        });
+        setMembers(activeMembers);
+
         const currentUserId = String(user?.id);
 
         membership = uniqueMembers.find(member => {
@@ -255,6 +265,14 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
                }
           return matches;
         });
+
+        // Check if current user has left the chama
+        if (membership) {
+          const memberIsActive = membership?.is_active;
+          if (memberIsActive === false || memberIsActive === 0 || memberIsActive === '0' || memberIsActive === 'false') {
+            currentUserIsLeft = true;
+          }
+        }
       } else {
         setMembers([]);
       }
@@ -296,6 +314,14 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
       }
 
        setUserMembership(membership);
+       setUserLeft(currentUserIsLeft);
+       if (currentUserIsLeft) {
+         Alert.alert(
+           'Membership Expired',
+           'You have left this chama. You can no longer access its details.',
+           [{ text: 'OK', onPress: () => navigation.goBack() }]
+         );
+       }
        // Load additional data in background (non-blocking)
        setPollsLoading(true);
        Promise.all([
