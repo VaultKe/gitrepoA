@@ -825,8 +825,9 @@ const getRowData = () => {
   const renderActions = () => {
     if (!selectedRound) return null;
     const userMembership = selectedRound.members?.find(m => m.user_id === user?.id);
-    const canContribute = userMembership && !userMembership.has_contributed_this_cycle;
-    const isCurrentRecipient = selectedRound.current_position === selectedRound.members?.findIndex(m => m.user_id === user?.id);
+    const userLeft = userMembership ? isMemberLeft(userMembership) : false;
+    const canContribute = !userLeft && userMembership && !userMembership.has_contributed_this_cycle;
+    const isCurrentRecipient = !userLeft && selectedRound.current_position === selectedRound.members?.findIndex(m => m.user_id === user?.id);
 
     return (
       <Card style={styles.statsCard} variant="outlined">
