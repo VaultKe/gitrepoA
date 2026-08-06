@@ -88,7 +88,6 @@ func SetupRoutes(
 		c.HTML(http.StatusOK, "terms-of-service.html", nil)
 	})
 
-	router.Static("/uploads", cfg.GetUploadPath())
 	router.Static("/notification_sound", "./notification_sound")
 
 	// Authentication middleware
@@ -277,7 +276,7 @@ func SetupRoutes(
 				users.PUT("/preferences", api.UpdateUserPreferences)
 
 				users.POST("/avatar", func(c *gin.Context) {
-				api.UploadAvatar(c, cfg.GetUploadPath())
+				authHandlers.UploadAvatar(c)
 			})
 				users.GET("/search-by-credentials", api.SearchUserByCredentials)
 				users.PUT("/:id/role", api.AdminUpdateUserRole)

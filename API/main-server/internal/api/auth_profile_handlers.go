@@ -232,65 +232,99 @@ func (h *AuthHandlers) handleMultipartProfileUpdate(c *gin.Context, req *models.
 			return fmt.Errorf("file too large. Maximum size is 5MB")
 		}
 
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-		allowedExtensions := map[string]bool{".jpg": true, ".jpeg": true, ".png": true}
-		if !allowedExtensions[ext] {
-			return fmt.Errorf("invalid file extension. Only .jpg and .png are allowed")
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	allowedExtensions := map[string]bool{".jpg": true, ".jpeg": true, ".png": true}
+	if !allowedExtensions[ext] {
+		return fmt.Errorf("invalid file extension. Only .jpg and .png are allowed")
+	}
+
+	// Delete old avatar file if exists
+	if err := deleteOldAvatar(c, userID); err != nil {
+		log.Printf("[WARN] Failed to delete old avatar for user %s: %v", userID, err)
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open uploaded file: %w", err)
+	}
+	defer src.Close()
+
+	tmpFile, err := os.CreateTemp("", "profile_upload_*"+ext)
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpFilePath := tmpFile.Name()
+
+	if _, err := io.Copy(tmpFile, src); err != nil {
+		os.Remove(tmpFilePath)
+		return fmt.Errorf("failed to copy file for scanning: %w", err)
+	}
+	tmpFile.Close()
+
+	scanResult := services.ScanFileWithClamAV(tmpFilePath)
+	if services.IsClamAVAvailable() {
+		if scanResult.ScanError != nil {
+			os.Remove(tmpFilePath)
+			return fmt.Errorf("virus scan failed: %w", scanResult.ScanError)
+		}
+		if scanResult.Infected || !scanResult.IsClean {
+			os.Remove(tmpFilePath)
+			reason := "malware detected"
+			if scanResult.ScanError != nil {
+				reason = scanResult.ScanError.Error()
+			}
+			return fmt.Errorf("file rejected by security policy: %s", reason)
+		}
+	} else {
+		log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tmpFilePath)
+	}
+
+	filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), userID, ext)
+	objectKey := "avatars/" + filename
+
+	if h.storage != nil {
+		f, err := os.Open(tmpFilePath)
+		if err != nil {
+			os.Remove(tmpFilePath)
+			return fmt.Errorf("failed to open temp file for upload: %w", err)
+		}
+		info, err := f.Stat()
+		if err != nil {
+			f.Close()
+			os.Remove(tmpFilePath)
+			return fmt.Errorf("failed to stat temp file: %w", err)
 		}
 
+		contentType := "image/png"
+		if strings.ToLower(ext) == ".jpg" || strings.ToLower(ext) == ".jpeg" {
+			contentType = "image/jpeg"
+		}
+
+		if err := h.storage.UploadObject(c.Request.Context(), objectKey, f, info.Size(), contentType); err != nil {
+			f.Close()
+			os.Remove(tmpFilePath)
+			log.Printf("[STORAGE][ERROR] Failed to upload avatar to MinIO %s: %v", objectKey, err)
+			return fmt.Errorf("failed to upload avatar to storage: %w", err)
+		}
+		f.Close()
+		os.Remove(tmpFilePath)
+		log.Printf("[STORAGE][OK] Avatar uploaded to MinIO: %s", objectKey)
+	} else {
+		os.Remove(tmpFilePath)
+		log.Printf("[STORAGE][WARN] MinIO not connected; avatar %s saved to local disk instead of object storage", filename)
 		uploadDir := filepath.Join(h.uploadPath, "avatars")
 		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create upload directory: %w", err)
 		}
-
-		filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), userID, ext)
 		dstPath := filepath.Join(uploadDir, filename)
-
-		src, err := file.Open()
-		if err != nil {
-			return fmt.Errorf("failed to open uploaded file: %w", err)
-		}
-		defer src.Close()
-
-		tmpFile, err := os.CreateTemp("", "profile_upload_*"+ext)
-		if err != nil {
-			return fmt.Errorf("failed to create temp file: %w", err)
-		}
-		tmpFilePath := tmpFile.Name()
-
-		if _, err := io.Copy(tmpFile, src); err != nil {
-			os.Remove(tmpFilePath)
-			return fmt.Errorf("failed to copy file for scanning: %w", err)
-		}
-		tmpFile.Close()
-
-		scanResult := services.ScanFileWithClamAV(tmpFilePath)
-		if services.IsClamAVAvailable() {
-			if scanResult.ScanError != nil {
-				os.Remove(tmpFilePath)
-				return fmt.Errorf("virus scan failed: %w", scanResult.ScanError)
-			}
-			if scanResult.Infected || !scanResult.IsClean {
-				os.Remove(tmpFilePath)
-				reason := "malware detected"
-				if scanResult.ScanError != nil {
-					reason = scanResult.ScanError.Error()
-				}
-				return fmt.Errorf("file rejected by security policy: %s", reason)
-			}
-		} else {
-			log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tmpFilePath)
-		}
-
 		if err := copyFile(tmpFilePath, dstPath); err != nil {
 			os.Remove(tmpFilePath)
-			fmt.Printf("[DEBUG] handleMultipartProfileUpdate - userID: %s, failed to copy file: %v\n", userID, err)
 			return fmt.Errorf("failed to move file to storage: %w", err)
 		}
-		os.Remove(tmpFilePath)
+	}
 
-		avatarURL := "/uploads/avatars/" + filename
-		req.Avatar = &avatarURL
+	avatarURL := "/uploads/avatars/" + filename
+	req.Avatar = &avatarURL
 	}
 
 	return nil

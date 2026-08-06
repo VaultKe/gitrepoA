@@ -63,6 +63,13 @@ type Config struct {
 	ATAPIKey   string
 	ATSender   string
 
+	// MinIO Configuration
+	MinioEndpoint  string
+	MinioAccessKey string
+	MinioSecretKey string
+	MinioBucket    string
+	MinioUseSSL    bool
+
 	// File Upload Configuration
 	MaxFileSize      int64
 	AllowedFileTypes []string
@@ -165,8 +172,15 @@ func Load() *Config {
 		ATAPIKey:   getEnv("AT_API_KEY", ""),
 		ATSender:   getEnv("AT_SENDER", "VaultKe"),
 
+		// MinIO Configuration
+		MinioEndpoint:  getEnv("MINIO_ENDPOINT", "localhost:9001"),
+		MinioAccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+		MinioSecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin123"),
+		MinioBucket:    getEnv("MINIO_BUCKET", "documents"),
+		MinioUseSSL:    getEnvAsBool("MINIO_USE_SSL", false),
+
 		// File Upload Configuration
-		MaxFileSize:      getEnvAsInt64("MAX_FILE_SIZE", 5*1024*1024), // 5MB
+		MaxFileSize:      getEnvAsInt64("MAX_FILE_SIZE", 5*1024*1024),
 		AllowedFileTypes: []string{"image/jpeg", "image/png", "image/webp"},
 		UploadPath:       getEnv("UPLOAD_PATH", "./uploads"),
 

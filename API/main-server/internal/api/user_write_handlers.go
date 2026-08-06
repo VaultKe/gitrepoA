@@ -142,7 +142,8 @@ func UpdateProfile(c *gin.Context) {
 	GetProfile(c)
 }
 
-func UploadAvatar(c *gin.Context, uploadPath string) {
+// UploadAvatar uploads an avatar to MinIO storage.
+func (h *AuthHandlers) UploadAvatar(c *gin.Context) {
 	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -219,18 +220,14 @@ func UploadAvatar(c *gin.Context, uploadPath string) {
 		return
 	}
 
-	uploadDir := filepath.Join(uploadPath, "avatars")
-	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to create upload directory",
-		})
-		return
+	// Delete old avatar file if it exists
+	if h.storage != nil {
+		if err := h.storage.DeleteAvatar("avatars/" + userID + ext); err != nil {
+			log.Printf("[WARN] Failed to delete old avatar for user %s: %v", userID, err)
+		}
 	}
 
-	filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), userID, ext)
-	dstPath := filepath.Join(uploadDir, filename)
-
+	// Open and scan the file
 	src, err := fileHeader.Open()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -283,18 +280,41 @@ func UploadAvatar(c *gin.Context, uploadPath string) {
 		log.Printf("⚠️ ClamAV not installed; skipping scan for %s", tmpFilePath)
 	}
 
-	if err := copyFile(tmpFilePath, dstPath); err != nil {
+	// Upload to MinIO
+	objectKey := fmt.Sprintf("avatars/%d_%s%s", time.Now().Unix(), userID, ext)
+	file, err := os.Open(tmpFilePath)
+	if err != nil {
 		os.Remove(tmpFilePath)
-		fmt.Printf("[DEBUG] UploadAvatar - userID: %s, failed to copy file: %v\n", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to move uploaded file",
+			"error":   "Failed to open temp file for upload",
 		})
 		return
 	}
+	defer file.Close()
+
+	fileInfo, _ := file.Stat()
+	if h.storage != nil {
+		err = h.storage.UploadObject(c.Request.Context(), objectKey, file, fileInfo.Size(), fileType)
+	} else {
+		// Fallback to local storage if MinIO is not configured
+		log.Printf("[STORAGE][WARN] MinIO not connected; avatar %s saved to local disk instead of object storage", objectKey)
+		uploadDir := filepath.Join(h.uploadPath, "avatars")
+		os.MkdirAll(uploadDir, 0o755)
+		dstPath := filepath.Join(uploadDir, filepath.Base(objectKey))
+		err = copyFile(tmpFilePath, dstPath)
+	}
 	os.Remove(tmpFilePath)
 
-	avatarURL := "/uploads/avatars/" + filename
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to upload avatar: " + err.Error(),
+		})
+		return
+	}
+
+	avatarURL := "/uploads/avatars/" + filepath.Base(objectKey)
 
 	var db interface{}
 	if val, exists := c.Get("db"); exists {
@@ -302,7 +322,6 @@ func UploadAvatar(c *gin.Context, uploadPath string) {
 	}
 
 	if db == nil {
-		os.Remove(dstPath)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Database connection not available",
@@ -312,7 +331,6 @@ func UploadAvatar(c *gin.Context, uploadPath string) {
 
 	database, ok := db.(*sql.DB)
 	if !ok {
-		os.Remove(dstPath)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Invalid database connection",
@@ -325,7 +343,6 @@ func UploadAvatar(c *gin.Context, uploadPath string) {
 		avatarURL, userID,
 	)
 	if err != nil {
-		os.Remove(dstPath)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to update avatar in database: " + err.Error(),
@@ -526,4 +543,48 @@ func generateRandomPassword() string {
 		b[i] = charset[int(time.Now().UnixNano())%len(charset)]
 	}
 	return string(b)
+}
+
+// deleteOldAvatar removes the user's previous avatar file from disk
+// before uploading a new one, preventing orphaned files from accumulating.
+func deleteOldAvatar(c *gin.Context, userID string) error {
+	db, exists := c.Get("db")
+	if !exists {
+		return nil
+	}
+
+	database, ok := db.(*sql.DB)
+	if !ok {
+		return nil
+	}
+
+	var currentAvatar *string
+	err := database.QueryRow(
+		"SELECT avatar FROM users WHERE id = $1", userID,
+	).Scan(&currentAvatar)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
+	if currentAvatar == nil || *currentAvatar == "" {
+		return nil
+	}
+
+	// Extract the filename from the avatar URL (e.g., "/uploads/avatars/12345_uuid.png" -> "12345_uuid.png")
+	avatarURL := *currentAvatar
+	filename := filepath.Base(avatarURL)
+	if filename == "" || filename == "." {
+		return nil
+	}
+
+	uploadDir := filepath.Join(".", "uploads", "avatars")
+	oldFilePath := filepath.Join(uploadDir, filename)
+	if err := os.Remove(oldFilePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	return nil
 }

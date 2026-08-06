@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"vaultke-backend/internal/api"
 	"vaultke-backend/internal/routes"
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/storage"
 )
 
 func main() {
@@ -29,6 +31,21 @@ func main() {
 
 	// Initialize configuration
 	cfg := config.Load()
+
+	// Validate upload directory exists and is writable
+	uploadDir := cfg.GetUploadPath()
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		log.Printf("[WARN] Failed to create upload directory %s: %v", uploadDir, err)
+	} else {
+		testFile := filepath.Join(uploadDir, ".write_test")
+		if f, err := os.Create(testFile); err == nil {
+			f.Close()
+			os.Remove(testFile)
+			log.Printf("[INFO] Upload directory validated: %s", uploadDir)
+		} else {
+			log.Printf("[WARN] Upload directory %s is not writable: %v", uploadDir, err)
+		}
+	}
 
 	// Initialize database
 	db, err := database.Initialize(cfg.PrimaryDatabaseURL, cfg.ReplicaDatabaseURL)
@@ -164,8 +181,24 @@ func main() {
 	cfgForReconciler := cfg
 	services.StartSTKReconciler(primaryDB, cfgForReconciler, 10*time.Minute, 15*time.Minute)
 
+	// Initialize MinIO storage client
+	var storageService *services.StorageService
+	if cfg.MinioEndpoint != "" {
+		log.Printf("[STORAGE] Initializing MinIO storage at %s (bucket=%s, ssl=%v)", cfg.MinioEndpoint, cfg.MinioBucket, cfg.MinioUseSSL)
+		storageClient, err := storage.NewClient(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, cfg.MinioUseSSL)
+		if err != nil {
+			log.Printf("[STORAGE][ERROR] Failed to initialize MinIO storage at %s: %v", cfg.MinioEndpoint, err)
+			log.Println("[STORAGE][WARN] File uploads will fall back to local disk. Check MinIO endpoint, credentials, and Docker port mapping.")
+		} else {
+			storageService = services.NewStorageService(storageClient)
+			log.Printf("[STORAGE][OK] MinIO storage initialized: endpoint=%s bucket=%s", cfg.MinioEndpoint, cfg.MinioBucket)
+		}
+	} else {
+		log.Println("[STORAGE][WARN] MinIO endpoint not configured, skipping storage initialization")
+	}
+
 	// Initialize scheduler service for meeting auto-unlock
-	authHandlers := api.NewAuthHandlers(primaryDB, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService, cfg.GetUploadPath())
+	authHandlers := api.NewAuthHandlers(primaryDB, cfg.JWTSecret, cfg.JWTExpiration, devicePolicyService, cfg.GetUploadPath(), storageService)
 	reminderHandlers := api.NewReminderHandlers(primaryDB)
 
 	pollsHandlers := api.NewPollsHandlers(primaryDB)
@@ -188,6 +221,29 @@ func main() {
 
 	// Initialize meeting service for attendance endpoints
 	api.InitializeMeetingService(primaryDB, nil)
+
+	// Register custom uploads handler BEFORE routes.SetupRoutes to avoid Gin wildcard conflicts.
+	// This handles:
+	// - /uploads/avatars/* -> MinIO presigned redirect or local disk fallback
+	// - /uploads/* -> local disk static files
+	router.GET("/uploads/*filepath", func(c *gin.Context) {
+		requestedPath := c.Param("filepath")
+
+		// Handle avatars through MinIO when available
+		if strings.HasPrefix(requestedPath, "/avatars/") && storageService != nil {
+			filename := filepath.Base(requestedPath)
+			storageService.ServeAvatarByFilename(c, filename)
+			return
+		}
+
+		// Serve all other uploads from local disk
+		localPath := filepath.Join(cfg.GetUploadPath(), requestedPath)
+		if _, err := os.Stat(localPath); err == nil {
+			c.File(localPath)
+			return
+		}
+		c.Status(http.StatusNotFound)
+	})
 
 	// Register routes and middleware
 	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService, devicePolicyService, cache)
@@ -220,6 +276,18 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	// Startup summary
+	log.Println("========================================")
+	log.Println("VaultKe API Server")
+	log.Printf("Environment: %s", cfg.Environment)
+	log.Printf("Port: %s", port)
+	if storageService != nil {
+		log.Printf("[STORAGE] MinIO: CONNECTED (%s, bucket=%s)", cfg.MinioEndpoint, cfg.MinioBucket)
+	} else {
+		log.Printf("[STORAGE] MinIO: NOT CONNECTED (endpoint=%s). Uploads will use local disk.", cfg.MinioEndpoint)
+	}
+	log.Println("========================================")
 
 	log.Printf("VaultKe API server starting on port %s", port)
 

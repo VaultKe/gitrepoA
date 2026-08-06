@@ -254,16 +254,18 @@ type AuthHandlers struct {
 	devicePolicyService *services.DevicePolicyService
 	db                  *sql.DB
 	uploadPath          string
+	storage             *services.StorageService
 }
 
 // NewAuthHandlers creates new auth handlers
-func NewAuthHandlers(db *sql.DB, jwtSecret string, jwtExpiration int, devicePolicyService *services.DevicePolicyService, uploadPath string) *AuthHandlers {
+func NewAuthHandlers(db *sql.DB, jwtSecret string, jwtExpiration int, devicePolicyService *services.DevicePolicyService, uploadPath string, storage *services.StorageService) *AuthHandlers {
 	return &AuthHandlers{
 		userService:         services.NewUserService(db),
 		authService:         services.NewAuthService(db, jwtSecret, jwtExpiration),
 		devicePolicyService: devicePolicyService,
 		db:                  db,
 		uploadPath:          uploadPath,
+		storage:             storage,
 	}
 }
 
