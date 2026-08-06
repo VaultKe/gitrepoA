@@ -224,6 +224,19 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   useFocusEffect(
     React.useCallback(() => {
       if (selectedChama) {
+        // Verify selected chama membership is still active
+        if (userChamas.length > 0) {
+          const stillMember = userChamas.find(c => c.id === selectedChama.id);
+          if (!stillMember || stillMember.membershipIsActive === false) {
+            setSelectedChama(null);
+            Alert.alert(
+              'Membership Expired',
+              `You are no longer a member of "${selectedChama.name}".`,
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+        }
         const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
         loadChamaStatistics(currentChamaId);
       }

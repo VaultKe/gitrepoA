@@ -53,7 +53,7 @@ const CreateMerryGoRound = ({ route, navigation }) => {
   const loadChamaMembers = async () => {
     try {
       setLoadingMembers(true);
-      const response = await ApiService.getChamaMembers(chamaId);
+      const response = await ApiService.getChamaMembers(chamaId, { include_inactive: 'true' });
       if (response.success) {
         setChamaMembers(response.data || []);
       }
@@ -64,11 +64,21 @@ const CreateMerryGoRound = ({ route, navigation }) => {
     }
   };
 
+  // Helper to check if a member has left the chama (same pattern as ChamaMemberRow)
+  const isMemberLeft = (member) => {
+    const isActive = member?.is_active;
+    return isActive === false || isActive === 0 || isActive === '0' || isActive === 'false';
+  };
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const toggleParticipant = (member) => {
+    // Prevent selecting members who have left the chama
+    if (isMemberLeft(member)) {
+      return;
+    }
     setSelectedParticipants(prev => {
       const memberId = member.user_id || member.id;
       const isSelected = prev.find(p => (p.user_id || p.id) === memberId);
@@ -102,25 +112,31 @@ const CreateMerryGoRound = ({ route, navigation }) => {
     return selectedParticipants; // manual order
   };
 
-  const validateForm = () => {
-    if (!formData.name.trim()) {
-      Alert.alert('Validation Error', 'Please enter a name for the merry-go-round');
-      return false;
-    }
-    if (!formData.amountPerRound || parseFloat(formData.amountPerRound) <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid amount per round');
-      return false;
-    }
-    if (selectedParticipants.length < 2) {
-      Alert.alert('Validation Error', 'Please select at least 2 participants');
-      return false;
-    }
-    if (!formData.startDate.trim()) {
-      Alert.alert('Validation Error', 'Please enter a start date');
-      return false;
-    }
-    return true;
-  };
+   const validateForm = () => {
+     if (!formData.name.trim()) {
+       Alert.alert('Validation Error', 'Please enter a name for the merry-go-round');
+       return false;
+     }
+     if (!formData.amountPerRound || parseFloat(formData.amountPerRound) <= 0) {
+       Alert.alert('Validation Error', 'Please enter a valid amount per round');
+       return false;
+     }
+     // Filter out participants who have left the chama
+     const activeParticipants = selectedParticipants.filter(p => !isMemberLeft(p));
+     if (activeParticipants.length !== selectedParticipants.length) {
+       Alert.alert('Validation Error', 'Some selected participants have left the chama and were removed.');
+       return false;
+     }
+     if (selectedParticipants.length < 2) {
+       Alert.alert('Validation Error', 'Please select at least 2 participants');
+       return false;
+     }
+     if (!formData.startDate.trim()) {
+       Alert.alert('Validation Error', 'Please enter a start date');
+       return false;
+     }
+     return true;
+   };
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
@@ -143,15 +159,15 @@ const CreateMerryGoRound = ({ route, navigation }) => {
         return;
       }
 
-      // Get ordered participants
-      const orderedParticipants = getOrderedParticipants();
+      // Get ordered participants, excluding any who have left the chama (defensive filter)
+      const orderedParticipants = getOrderedParticipants().filter(p => !isMemberLeft(p));
 
       const merryGoRoundData = {
         chamaId,
         name: formData.name.trim(),
         description: formData.description.trim(),
         amountPerRound: parseFloat(formData.amountPerRound),
-        totalParticipants: selectedParticipants.length,
+        totalParticipants: orderedParticipants.length,
         frequency: formData.frequency,
         startDate: formattedStartDate,
         participants: orderedParticipants.map((participant, index) => ({
@@ -288,40 +304,52 @@ const CreateMerryGoRound = ({ route, navigation }) => {
               <ScrollView style={styles.membersScrollContainer} showsVerticalScrollIndicator={false}>
                 <View style={styles.membersGrid}>
                   {chamaMembers.map((member) => {
-                    const memberId = member.user_id || member.id;
-                    const isSelected = selectedParticipants.find(p => (p.user_id || p.id) === memberId);
-                    return (
-                      <TouchableOpacity
-                        key={member.id}
-                        style={[
-                          styles.memberOption,
-                          {
-                            backgroundColor: isSelected ? colors.primary + '20' : colors.background,
-                            borderColor: isSelected ? colors.primary : colors.border,
-                          }
-                        ]}
-                        onPress={() => toggleParticipant(member)}
-                      >
-                        <View style={styles.memberInfo}>
-                          <Text style={[
-                            styles.memberName,
-                            { color: isSelected ? colors.primary : colors.text }
-                          ]}>
-                            {member.user?.first_name || member.first_name} {member.user?.last_name || member.last_name}
-                          </Text>
-                          <Text style={[
-                            styles.memberUsername,
-                            { color: isSelected ? colors.primary : colors.textSecondary }
-                          ]}>
-                            @{member.user?.username || member.username || member.user?.email?.split('@')[0] || member.email?.split('@')[0] || 'user'}
-                          </Text>
-                        </View>
-                        {isSelected && (
-                          <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
+                     const memberId = member.user_id || member.id;
+                     const isSelected = selectedParticipants.find(p => (p.user_id || p.id) === memberId);
+                     const memberLeft = isMemberLeft(member);
+                     return (
+                       <TouchableOpacity
+                         key={member.id}
+                         style={[
+                           styles.memberOption,
+                           {
+                             backgroundColor: isSelected ? colors.primary + '20' : memberLeft ? colors.error + '10' : colors.background,
+                             borderColor: isSelected ? colors.primary : memberLeft ? colors.error : colors.border,
+                           }
+                         ]}
+                         onPress={() => toggleParticipant(member)}
+                         disabled={memberLeft}
+                         activeOpacity={memberLeft ? 1 : 0.7}
+                       >
+                         <View style={styles.memberInfo}>
+                           <Text style={[
+                             styles.memberName,
+                             { color: isSelected ? colors.primary : memberLeft ? colors.error : colors.text },
+                             memberLeft && { textDecorationLine: 'line-through' }
+                           ]}>
+                             {member.user?.first_name || member.first_name} {member.user?.last_name || member.last_name}
+                           </Text>
+                           <Text style={[
+                             styles.memberUsername,
+                             { color: isSelected ? colors.primary : memberLeft ? colors.error : colors.textSecondary }
+                           ]}>
+                             @{member.user?.username || member.username || member.user?.email?.split('@')[0] || member.email?.split('@')[0] || 'user'}
+                           </Text>
+                           {memberLeft && (
+                             <Text style={{ fontSize: 10, color: colors.error, fontWeight: 'bold', marginTop: 2 }}>
+                               Left
+                             </Text>
+                           )}
+                         </View>
+                         {isSelected && (
+                           <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                         )}
+                         {memberLeft && (
+                           <Ionicons name="close-circle" size={24} color={colors.error} />
+                         )}
+                       </TouchableOpacity>
+                     );
+                   })}
                 </View>
               </ScrollView>
             )}
