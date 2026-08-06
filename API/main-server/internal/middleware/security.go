@@ -338,6 +338,13 @@ func AuthRateLimitMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Skip rate limiting for logout endpoints — logout is idempotent and
+		// rate-limiting it can be used as a DoS vector against legitimate users.
+		if strings.Contains(c.Request.URL.Path, "/logout") {
+			c.Next()
+			return
+		}
+
 		clientIP := c.ClientIP()
 
 		limiter, exists := authLimiters[clientIP]

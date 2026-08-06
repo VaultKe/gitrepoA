@@ -103,6 +103,7 @@ type Chama struct {
 	MemberRole            ChamaRole              `json:"memberRole" db:"role"`
 	ServiceFeePaid        bool                   `json:"serviceFeePaid" db:"service_fee_paid"`
 	ServiceFeeStatus      string                 `json:"serviceFeeStatus" db:"service_fee_status"`
+	MembershipIsActive    bool                   `json:"membershipIsActive" db:"is_active"`
 }
 
 // ChamaMember represents a member of a chama

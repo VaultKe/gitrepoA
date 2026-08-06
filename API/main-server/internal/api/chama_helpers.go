@@ -111,6 +111,9 @@ func normalizeMpesaPhone(phone string) string {
 		return "254" + cleaned[1:]
 	case strings.HasPrefix(cleaned, "254"):
 		return cleaned
+	case strings.HasPrefix(cleaned, "7") && len(cleaned) >= 9:
+		// Numbers like 7XXXXXXXX (without leading 0)
+		return "254" + cleaned
 	}
 	return cleaned
 }

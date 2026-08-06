@@ -168,12 +168,14 @@ func GetMerryGoRounds(c *gin.Context) {
 		participantRows, err := db.(*sql.DB).Query(`
 			SELECT
 				mgrp.user_id, mgrp.position, mgrp.has_received,
+				COALESCE(cm.is_active, true) as is_active,
 				u.first_name, u.last_name, u.email
 			FROM merry_go_round_participants mgrp
 			JOIN users u ON mgrp.user_id = u.id
+			LEFT JOIN chama_members cm ON cm.user_id = mgrp.user_id AND cm.chama_id = $2
 			WHERE mgrp.merry_go_round_id = $1
 			ORDER BY mgrp.position ASC
-		`, mgr.ID)
+		`, mgr.ID, mgr.ChamaID)
 
 		var participants []map[string]interface{}
 		if err == nil {
@@ -183,12 +185,13 @@ func GetMerryGoRounds(c *gin.Context) {
 					UserID      string `json:"userId"`
 					Position    int    `json:"position"`
 					HasReceived bool   `json:"hasReceived"`
+					IsActive    bool   `json:"is_active"`
 					FirstName   string `json:"firstName"`
 					LastName    string `json:"lastName"`
 					Email       string `json:"email"`
 				}
 
-				err := participantRows.Scan(&p.UserID, &p.Position, &p.HasReceived, &p.FirstName, &p.LastName, &p.Email)
+				err := participantRows.Scan(&p.UserID, &p.Position, &p.HasReceived, &p.IsActive, &p.FirstName, &p.LastName, &p.Email)
 				if err == nil {
 					// Determine status based on position, current round, and contribution count
 					var status string
@@ -207,12 +210,13 @@ func GetMerryGoRounds(c *gin.Context) {
 					}
 
 					participant := map[string]interface{}{
-						"id":           fmt.Sprintf("%s-%d", mgr.ID, p.Position), // Unique participant ID
-						"user_id":      p.UserID,
-						"position":     p.Position,
-						"status":       status,
-						"has_received": p.HasReceived,
-						"user": map[string]interface{}{
+					"id":                         fmt.Sprintf("%s-%d", mgr.ID, p.Position), // Unique participant ID
+					"user_id":                    p.UserID,
+					"position":                   p.Position,
+					"status":                     status,
+					"has_received":               p.HasReceived,
+					"is_active":                  p.IsActive,
+					"user": map[string]interface{}{
 							"id":         p.UserID,
 							"first_name": p.FirstName,
 							"last_name":  p.LastName,
@@ -383,12 +387,14 @@ func GetMerryGoRound(c *gin.Context) {
 	participantRows, err := db.(*sql.DB).Query(`
 		SELECT
 			mgrp.user_id, mgrp.position, mgrp.has_received,
+			COALESCE(cm.is_active, true) as is_active,
 			u.first_name, u.last_name, u.email
 		FROM merry_go_round_participants mgrp
 		JOIN users u ON mgrp.user_id = u.id
+		LEFT JOIN chama_members cm ON cm.user_id = mgrp.user_id AND cm.chama_id = $2
 		WHERE mgrp.merry_go_round_id = $1
 		ORDER BY mgrp.position ASC
-	`, mgr.ID)
+	`, mgr.ID, mgr.ChamaID)
 
 	var participants []map[string]interface{}
 	if err == nil {
@@ -398,20 +404,22 @@ func GetMerryGoRound(c *gin.Context) {
 				UserID      string `json:"userId"`
 				Position    int    `json:"position"`
 				HasReceived bool   `json:"hasReceived"`
+				IsActive    bool   `json:"is_active"`
 				FirstName   string `json:"firstName"`
 				LastName    string `json:"lastName"`
 				Email       string `json:"email"`
 			}
 
-			err := participantRows.Scan(&p.UserID, &p.Position, &p.HasReceived, &p.FirstName, &p.LastName, &p.Email)
+			err := participantRows.Scan(&p.UserID, &p.Position, &p.HasReceived, &p.IsActive, &p.FirstName, &p.LastName, &p.Email)
 			if err == nil {
-				participant := map[string]interface{}{
-					"id":                         fmt.Sprintf("%s-%d", mgr.ID, p.Position),
-					"user_id":                    p.UserID,
-					"position":                   p.Position,
-					"status":                     "pending",
-					"has_received":               p.HasReceived,
-					"has_contributed_this_cycle": false,
+			participant := map[string]interface{}{
+				"id":                         fmt.Sprintf("%s-%d", mgr.ID, p.Position),
+				"user_id":                    p.UserID,
+				"position":                   p.Position,
+				"status":                     "pending",
+				"has_received":               p.HasReceived,
+				"is_active":                  p.IsActive,
+				"has_contributed_this_cycle": false,
 					"user": map[string]interface{}{
 						"id":         p.UserID,
 						"first_name": p.FirstName,

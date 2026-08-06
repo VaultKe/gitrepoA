@@ -498,7 +498,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			   c.rules, c.meeting_frequency, c.meeting_day_of_week, c.meeting_day_of_month,
 		   c.meeting_time, c.permissions, c.created_by, c.created_at, c.updated_at,
 		   c.rules_file_path, c.rules_file_name,
-		   cm.role, cm.service_fee_paid, cm.service_fee_status, cm.id as member_id
+ 		   cm.role, cm.service_fee_paid, cm.service_fee_status, cm.id as member_id, cm.is_active
 		FROM chamas c
 		INNER JOIN chama_members cm ON c.id = cm.chama_id
 		WHERE cm.user_id = $1 AND cm.is_active = $2
@@ -522,6 +522,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 		var serviceFeePaid bool
 		var serviceFeeStatus string
 		var memberID string
+		var membershipIsActive bool
 
 		err := rows.Scan(
 			&chama.ID, &chama.Name, &chama.Description, &chama.Category, &chama.Type, &chama.Status,
@@ -531,7 +532,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 			&rulesJSON, &meetingFreq, &meetingDayOfWeek, &meetingDayOfMonth, &meetingTime,
 			&permissionsJSON, &chama.CreatedBy, &chama.CreatedAt, &chama.UpdatedAt,
 			&chama.RulesFilePath, &chama.RulesFileName,
-			&role, &serviceFeePaid, &serviceFeeStatus, &memberID,
+			&role, &serviceFeePaid, &serviceFeeStatus, &memberID, &membershipIsActive,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chama: %w", err)
@@ -575,6 +576,7 @@ func (s *ChamaService) GetChamasByUser(userID string, limit, offset int) ([]*mod
 		chama.ServiceFeePaid = serviceFeePaid
 		chama.ServiceFeeStatus = serviceFeeStatus
 		chama.MemberID = memberID
+		chama.MembershipIsActive = membershipIsActive
 
 		chamas = append(chamas, chama)
 	}

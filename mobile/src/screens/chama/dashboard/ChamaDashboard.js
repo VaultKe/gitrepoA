@@ -67,6 +67,16 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
   // Fast chama switching function
   const switchToChama = (chama) => {
+    // Prevent switching to a chama where the user has left
+    if (chama.membershipIsActive === false) {
+      Alert.alert(
+        'Not a Member',
+        `You have left "${chama.name}". You can no longer access this chama.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     // Immediately update the selected chama for instant UI response
     setSelectedChama(chama);
 
@@ -166,7 +176,12 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   useEffect(() => {
     if (route?.params?.chamaId && route?.params?.chama) {
       const chamaFromParams = route.params.chama;
-      setSelectedChama(chamaFromParams);
+      // Prevent selecting a chama where the user has left
+      if (chamaFromParams.membershipIsActive === false) {
+        setSelectedChama(null);
+      } else {
+        setSelectedChama(chamaFromParams);
+      }
     } else if (route?.params?.chamaId && !selectedChama) {
       // If we have chamaId but no chama object, try to find it in userChamas
       const foundChama = userChamas.find(c => c.id === route.params.chamaId);
@@ -215,12 +230,12 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     }, [selectedChama?.id || selectedChama?.chamaId || selectedChama])
   );
 
-  const loadUserChamas = async () => {
+   const loadUserChamas = async () => {
     try {
       setLoading(true);
       const response = await ApiService.getUserChamas(20, 0);
       if (response.success) {
-        const userChamasData = response.data || [];
+        const userChamasData = (response.data || []).filter(chama => chama.membershipIsActive !== false);
         setUserChamas(userChamasData);
 
         // If no chama is currently selected and we have chamas, select the first one
@@ -228,9 +243,18 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           setSelectedChama(userChamasData[0]);
         }
 
-        // If we have a selected chama, make sure it's still in the list (in case it was deleted)
+        // If we have a selected chama, make sure it's still in the list (in case it was deleted or user left)
         if (selectedChama && !userChamasData.find(c => c.id === selectedChama.id)) {
           setSelectedChama(null);
+          // If the user left the selected chama, alert them
+          const leftChama = (response.data || []).find(c => c.id === selectedChama.id && c.membershipIsActive === false);
+          if (leftChama) {
+            Alert.alert(
+              'Membership Expired',
+              `You have left "${leftChama.name}". It has been removed from your chamas.`,
+              [{ text: 'OK' }]
+            );
+          }
         }
 
         // Preload data for other chamas in the background for faster switching
@@ -440,32 +464,46 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           Select Chama
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {userChamas.map((chama) => (
-            <TouchableOpacity
-              key={chama.id}
-              style={[
-                styles.chamaChip,
-                {
-                  backgroundColor: selectedChama?.id === chama.id ? colors.primary : colors.surface,
-                  borderColor: selectedChama?.id === chama.id ? colors.primary : colors.border,
-                }
-              ]}
-              onPress={() => {
-                switchToChama(chama);
-              }}
-            >
-              <Text
-                style={[
-                  styles.chamaChipText,
-                  {
-                    color: selectedChama?.id === chama.id ? colors.white : colors.text,
-                  }
-                ]}
-              >
-                {chama.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+           {userChamas.map((chama) => {
+             const chamaLeft = chama.membershipIsActive === false;
+             return (
+             <TouchableOpacity
+               key={chama.id}
+               style={[
+                 styles.chamaChip,
+                 {
+                   backgroundColor: selectedChama?.id === chama.id ? colors.primary : chamaLeft ? colors.error + '10' : colors.surface,
+                   borderColor: selectedChama?.id === chama.id ? colors.primary : chamaLeft ? colors.error : colors.border,
+                 }
+               ]}
+               onPress={() => {
+                 if (chamaLeft) {
+                   Alert.alert(
+                     'Not a Member',
+                     `You have left "${chama.name}". You can no longer access this chama.`,
+                     [{ text: 'OK' }]
+                   );
+                   return;
+                 }
+                 switchToChama(chama);
+               }}
+               disabled={chamaLeft}
+               activeOpacity={chamaLeft ? 1 : 0.7}
+             >
+               <Text
+                 style={[
+                   styles.chamaChipText,
+                   {
+                     color: selectedChama?.id === chama.id ? colors.white : chamaLeft ? colors.error : colors.text,
+                     textDecorationLine: chamaLeft ? 'line-through' : 'none',
+                   }
+                 ]}
+               >
+                 {chama.name}
+               </Text>
+             </TouchableOpacity>
+           );
+         })}
         </ScrollView>
       </Card>
     );

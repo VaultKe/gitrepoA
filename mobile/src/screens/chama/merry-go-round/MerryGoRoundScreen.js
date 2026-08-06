@@ -34,6 +34,13 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
 
   const chamaId = routeChamaId || currentChamaId;
 
+  // Helper to check if a participant/member has left the chama
+  const isMemberLeft = (participant) => {
+    if (!participant) return false;
+    const isActive = participant?.is_active;
+    return isActive === false || isActive === 0 || isActive === '0' || isActive === 'false';
+  };
+
   // Cache-first loader (mirrors MyChamasScreen): show cached merry-go-rounds instantly, then refresh.
   const MGR_CACHE_KEY = `cached_merry_gorounds_${chamaId}`;
   const MGR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -262,29 +269,32 @@ const onRefresh = async () => {
         <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ maxHeight: 260 }}>
           <View style={styles.memberOrderList}>
             {participants.map((participant, index) => {
-              const position = index + 1;
-              const participantStatus = participant.status || 'pending';
-              const isCurrent = participantStatus === 'current';
-              const isCompleted = participantStatus === 'completed';
-              const isPending = participantStatus === 'pending';
+               const position = index + 1;
+               const participantStatus = participant.status || 'pending';
+               const isCurrent = participantStatus === 'current';
+               const isCompleted = participantStatus === 'completed';
+               const isPending = participantStatus === 'pending';
+               const memberLeft = isMemberLeft(participant);
 
-              const member = participant.user || participant;
-              const firstName = member.first_name || member.firstName || '';
-              const lastName = member.last_name || member.lastName || '';
-              const fullName = `${firstName} ${lastName}`.trim() || `Member ${position}`;
-              const initials = `${firstName[0] || 'M'}${lastName[0] || position}`.toUpperCase();
+               const member = participant.user || participant;
+               const firstName = member.first_name || member.firstName || '';
+               const lastName = member.last_name || member.lastName || '';
+               const fullName = `${firstName} ${lastName}`.trim() || `Member ${position}`;
+               const initials = `${firstName[0] || 'M'}${lastName[0] || position}`.toUpperCase();
 
-              const isSelectedRecipient = selectedRecipientPosition === position;
+               const isSelectedRecipient = selectedRecipientPosition === position;
 
               return (
                 <TouchableOpacity
                   key={participant.id || index}
-                  activeOpacity={0.7}
+                  activeOpacity={memberLeft ? 1 : 0.7}
                   onPress={() => {
+                    if (memberLeft) return;
                     setSelectedRecipientPosition(isSelectedRecipient ? null : position);
                     setContributorFilter('all');
                     setContributorSearch('');
                   }}
+                  disabled={memberLeft}
                   style={[
                     styles.memberOrderItem,
                     isSelectedRecipient && {
@@ -302,23 +312,26 @@ const onRefresh = async () => {
                         ]} />
                       )}
 
-                      <View style={[
-                        styles.memberAvatar,
-                        {
-                          backgroundColor: isCurrent ? colors.primary :
-                                         isCompleted ? colors.success : colors.backgroundSecondary,
-                          borderColor: isSelectedRecipient ? colors.primary :
-                                       isCurrent ? colors.primary :
-                                       isCompleted ? colors.success : colors.border,
-                        }
-                      ]}>
-                        <Text style={[
-                          styles.avatarText,
-                          { color: isCurrent || isCompleted ? colors.white : colors.textSecondary }
-                        ]}>
-                          {initials}
-                        </Text>
-                      </View>
+                       <View style={[
+                         styles.memberAvatar,
+                         {
+                           backgroundColor: memberLeft ? colors.error + '20' :
+                                          isCurrent ? colors.primary :
+                                          isCompleted ? colors.success : colors.backgroundSecondary,
+                           borderColor: memberLeft ? colors.error :
+                                        isSelectedRecipient ? colors.primary :
+                                        isCurrent ? colors.primary :
+                                        isCompleted ? colors.success : colors.border,
+                         }
+                       ]}>
+                         <Text style={[
+                           styles.avatarText,
+                           { color: memberLeft ? colors.error :
+                                 isCurrent || isCompleted ? colors.white : colors.textSecondary }
+                         ]}>
+                           {initials}
+                         </Text>
+                       </View>
 
                       {index < participants.length - 1 && (
                         <View style={[
@@ -340,22 +353,32 @@ const onRefresh = async () => {
                       </View>
                     </View>
 
-                    <View style={styles.memberInfo}>
-                      <Text style={[
-                        styles.memberName,
-                        {
-                          color: isCurrent ? colors.primary : colors.text,
-                          fontWeight: isCurrent ? 'bold' : 'normal'
-                        }
-                      ]}>
-                        {fullName}
-                      </Text>
-                      <Text style={[styles.memberPosition, { color: colors.textSecondary }]}>
-                        Position {position}
-                      </Text>
-                    </View>
+                     <View style={styles.memberInfo}>
+                       <Text style={[
+                         styles.memberName,
+                         {
+                           color: memberLeft ? colors.error : isCurrent ? colors.primary : colors.text,
+                           fontWeight: isCurrent ? 'bold' : 'normal',
+                           textDecorationLine: memberLeft ? 'line-through' : 'none',
+                         }
+                       ]}>
+                         {fullName}
+                       </Text>
+                       <Text style={[styles.memberPosition, { color: colors.textSecondary }]}>
+                         Position {position}
+                       </Text>
+                     </View>
 
-                    {isSelectedRecipient ? (
+                     {memberLeft && !isSelectedRecipient && (
+                       <View style={[styles.statusBadge, { backgroundColor: colors.error + '20' }]}>
+                         <Ionicons name="close" size={12} color={colors.error} />
+                         <Text style={[styles.statusBadgeText, { color: colors.error }]}>
+                           Left
+                         </Text>
+                       </View>
+                     )}
+
+                     {!memberLeft && isSelectedRecipient ? (
                       <View style={[styles.statusBadge, { backgroundColor: colors.primary }]}>
                         <Ionicons name="eye" size={12} color={colors.white} />
                         <Text style={[styles.statusBadgeText, { color: colors.white }]}>
@@ -420,6 +443,7 @@ const onRefresh = async () => {
     // Find the actual current recipient from participant statuses, matching Member Order logic
     const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
     const currentMember = currentParticipant ? (currentParticipant.user || currentParticipant) : participants[0];
+    const currentMemberLeft = currentParticipant ? isMemberLeft(currentParticipant) : false;
 
     return (
       <Card style={styles.statsCard} variant="outlined">
@@ -446,7 +470,13 @@ const onRefresh = async () => {
           </View>
           <View style={{ flexDirection: 'row' }}>
             <StatTile icon="wallet" label="Total Payout" value={formatCurrency(totalPayoutPerPerson)} color={colors.success} />
-            <StatTile icon="person" label="Current Recipient" value={getMemberShortName(currentMember)} color={colors.warning} />
+            <StatTile
+              icon="person"
+              label="Current Recipient"
+              value={getMemberShortName(currentMember)}
+              color={currentMemberLeft ? colors.error : colors.warning}
+              subtext={currentMemberLeft ? 'Left' : undefined}
+            />
           </View>
         </View>
       </Card>
@@ -550,6 +580,7 @@ const getRowData = () => {
       const member = p.user || p;
       const userId = p.user_id || (p.user && p.user.id);
       const hasReceivedDisbursement = p.has_received === true || p.hasReceived === true;
+      const memberLeft = isMemberLeft(p);
 
       // hasContributed: either flagged by backend OR found in actual contributions, OR already passed their turn
       const hasContributed = p.has_contributed_this_cycle ||
@@ -588,6 +619,7 @@ const getRowData = () => {
         hasReceivedDisbursement,
         hasBeenPaidOut,
         recipientDisplay,
+        memberLeft,
       };
     });
   };
@@ -672,30 +704,36 @@ const getRowData = () => {
                       <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1.5 }]}>Payout Date</Text>
                       <Text style={[styles.tableHeaderText, { color: colors.primary, textAlign: 'right' }, { flex: 1 }]}>Receive</Text>
                     </View>
-                 {rows.map(row => {
-                    const paidStatus = isRecipientView ? row.paidToRecipient : row.contributed;
-                    const statusAmount = isRecipientView ? (row.paidToRecipient ? amountPerRound : 0) : row.amount;
-                    return (
-                    <View key={row.id} style={styles.tableRow}>
-                      <Text style={[styles.tableCell, { color: colors.text, textAlign: 'center', flex: 0.8 }]}>{row.position}</Text>
-                      <Text style={[styles.tableCell, { color: colors.text, flex: 2.5 }]} numberOfLines={1}>{row.name}</Text>
-                      <View style={[
-                        styles.statusBadgeCell,
-                        { backgroundColor: paidStatus ? colors.success + '20' : colors.warning + '20', flex: 1.8 }
-                      ]}>
-                        <Ionicons
-                          name={paidStatus ? 'checkmark-circle' : 'time'}
-                          size={10}
-                          color={paidStatus ? colors.success : colors.warning}
-                        />
-                        <Text style={{
-                          fontSize: 11,
-                          fontWeight: '600',
-                          color: paidStatus ? colors.success : colors.warning,
-                        }}>
-                          {paidStatus ? 'Paid' : 'Pending'}
-                        </Text>
-                      </View>
+                    {rows.map(row => {
+                     const paidStatus = isRecipientView ? row.paidToRecipient : row.contributed;
+                     const statusAmount = isRecipientView ? (row.paidToRecipient ? amountPerRound : 0) : row.amount;
+                     return (
+                     <View key={row.id} style={styles.tableRow}>
+                       <Text style={[styles.tableCell, { color: colors.text, textAlign: 'center', flex: 0.8 }]}>{row.position}</Text>
+                       <Text style={[
+                         styles.tableCell,
+                         { color: row.memberLeft ? colors.error : colors.text, flex: 2.5 },
+                         row.memberLeft && { textDecorationLine: 'line-through' }
+                       ]} numberOfLines={1}>
+                         {row.name}
+                       </Text>
+                       <View style={[
+                         styles.statusBadgeCell,
+                         { backgroundColor: row.memberLeft ? colors.error + '20' : paidStatus ? colors.success + '20' : colors.warning + '20', flex: 1.8 }
+                       ]}>
+                         <Ionicons
+                           name={row.memberLeft ? 'close-circle' : (paidStatus ? 'checkmark-circle' : 'time')}
+                           size={10}
+                           color={row.memberLeft ? colors.error : (paidStatus ? colors.success : colors.warning)}
+                         />
+                         <Text style={{
+                           fontSize: 11,
+                           fontWeight: '600',
+                           color: row.memberLeft ? colors.error : (paidStatus ? colors.success : colors.warning),
+                         }}>
+                           {row.memberLeft ? 'Left' : (paidStatus ? 'Paid' : 'Pending')}
+                         </Text>
+                       </View>
                       <Text style={[styles.tableCell, { color: colors.text, textAlign: 'right', flex: 1.2 }]}>{formatCurrency(statusAmount)}</Text>
                       <Text style={[styles.tableCell, { color: colors.textSecondary, textAlign: 'right', flex: 2 }]} numberOfLines={1}>{row.recipientDisplay || '-'}</Text>
                       <Text style={[styles.tableCell, { color: colors.textSecondary, textAlign: 'right', flex: 1.5 }]}>{getPayoutDate(row)}</Text>

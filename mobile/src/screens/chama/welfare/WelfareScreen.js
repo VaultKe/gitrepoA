@@ -186,12 +186,12 @@ const WelfareScreen = ({ route, navigation }) => {
      }
    }, [chamaId]);
 
-  // Load chama members when create modal opens
-  useEffect(() => {
-    if (showCreateModal) {
-      loadChamaMembers();
-    }
-  }, [showCreateModal]);
+   // Load chama members when create modal opens or on mount for cross-referencing
+   useEffect(() => {
+     if (showCreateModal || chamaMembers.length === 0) {
+       loadChamaMembers();
+     }
+   }, [showCreateModal]);
 
    // Re-fetch welfare contributions whenever the Contributions tab becomes active
    useFocusEffect(
@@ -247,7 +247,7 @@ const WelfareScreen = ({ route, navigation }) => {
   const loadChamaMembers = async () => {
     try {
       setLoadingMembers(true);
-      const response = await ApiService.getChamaMembers(chamaId);
+      const response = await ApiService.getChamaMembers(chamaId, { include_inactive: 'true' });
 
       if (response.success) {
         const members = response.data || [];
@@ -308,7 +308,23 @@ const WelfareScreen = ({ route, navigation }) => {
     setFilteredMembers(filtered);
   };
 
+  const isMemberLeft = (member) => {
+    const isActive = member?.is_active;
+    return isActive === false || isActive === 0 || isActive === '0' || isActive === 'false';
+  };
+
+  const isUserIdLeft = (userId) => {
+    if (!userId) return false;
+    const member = chamaMembers.find(m => (m.user_id || m.id || m.user?.id) === userId);
+    if (!member) return false;
+    return isMemberLeft(member);
+  };
+
   const toggleBeneficiary = (member) => {
+    // Prevent selecting members who have left the chama
+    if (isMemberLeft(member)) {
+      return;
+    }
     setNewRequest(prev => {
       const isSelected = prev.beneficiaryIds.includes(member.id);
       if (isSelected) {
@@ -397,9 +413,12 @@ const WelfareScreen = ({ route, navigation }) => {
     if (newRequest.beneficiaryIds.length === 0) {
       // This is valid (self-request), no error
     } else {
-      // Validate that selected beneficiaries still exist in the member list
+      // Validate that selected beneficiaries still exist in the member list and are still active
       const invalidBeneficiaries = newRequest.beneficiaryIds.filter(
-        id => !chamaMembers.find(member => (member.user_id || member.id) === id)
+        id => !chamaMembers.find(member => {
+          const memberUserId = member.user_id || member.id;
+          return memberUserId === id && !isMemberLeft(member);
+        })
       );
       if (invalidBeneficiaries.length > 0) {
         errors.beneficiaries = 'Some selected beneficiaries are no longer available. Please reselect.';
@@ -824,12 +843,15 @@ const WelfareScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Requester Column */}
-        <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-          <Text style={tableStyles.tableCellText} numberOfLines={1}>
-            {getRequesterDisplayName(item)}
-          </Text>
-        </View>
+         {/* Requester Column */}
+         <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
+           <Text style={[
+             tableStyles.tableCellText,
+             isUserIdLeft(item.requesterId) && { textDecorationLine: 'line-through', color: colors.error }
+           ]} numberOfLines={1}>
+             {getRequesterDisplayName(item)}
+           </Text>
+         </View>
 
         {/* Date Column */}
         <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
@@ -884,7 +906,10 @@ const WelfareScreen = ({ route, navigation }) => {
 
         {/* Beneficiary Column */}
         <View style={[tableStyles.tableCell, { flex: 2 }]}> 
-          <Text style={tableStyles.tableCellText} numberOfLines={1}>
+          <Text style={[
+            tableStyles.tableCellText,
+            isUserIdLeft(item.beneficiaryId) && { textDecorationLine: 'line-through', color: colors.error }
+          ]} numberOfLines={1}>
             {getBeneficiaryDisplayName(item)}
           </Text>
         </View>
@@ -1039,9 +1064,12 @@ const WelfareScreen = ({ route, navigation }) => {
                 color={getCategoryColor(item.category)}
               />
             </View>
-            <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-              {getBeneficiaryDisplayName(item)}
-            </Text>
+             <Text style={[
+               tableStyles.tableCellText, tableStyles.nameText,
+               isUserIdLeft(item.beneficiaryId) && { textDecorationLine: 'line-through', color: colors.error }
+             ]} numberOfLines={1}>
+               {getBeneficiaryDisplayName(item)}
+             </Text>
           </View>
         </View>
 
@@ -1128,7 +1156,11 @@ const WelfareScreen = ({ route, navigation }) => {
             <Text style={[styles.beneficiaryLabel, { color: colors.textSecondary }]}>
               Support for:
             </Text>
-            <Text style={[styles.beneficiaryName, { color: colors.text }]}>
+            <Text style={[
+              styles.beneficiaryName,
+              { color: isUserIdLeft(request.beneficiaryId) ? colors.error : colors.text },
+              isUserIdLeft(request.beneficiaryId) && { textDecorationLine: 'line-through' }
+            ]}>
               {getBeneficiaryDisplayName(request)}
             </Text>
           </View>
@@ -1291,9 +1323,13 @@ const WelfareScreen = ({ route, navigation }) => {
           <Text style={[styles.requesterLabel, { color: colors.textSecondary }]}>
             Requested by:
           </Text>
-          <Text style={[styles.requesterName, { color: colors.text }]}>
-            {getRequesterDisplayName(request)}
-          </Text>
+           <Text style={[
+             styles.requesterName,
+             { color: isUserIdLeft(request.requesterId) ? colors.error : colors.text },
+             isUserIdLeft(request.requesterId) && { textDecorationLine: 'line-through' }
+           ]}>
+             {getRequesterDisplayName(request)}
+           </Text>
         </View>
 
         {/* Always show beneficiary information */}
@@ -1301,9 +1337,13 @@ const WelfareScreen = ({ route, navigation }) => {
           <Text style={[styles.beneficiaryLabel, { color: colors.textSecondary }]}>
             Support for:
           </Text>
-          <Text style={[styles.beneficiaryName, { color: colors.primary }]}>
-            {getBeneficiaryDisplayName(request)}
-          </Text>
+           <Text style={[
+             styles.beneficiaryName,
+             { color: isUserIdLeft(request.beneficiaryId) ? colors.error : colors.primary },
+             isUserIdLeft(request.beneficiaryId) && { textDecorationLine: 'line-through' }
+           ]}>
+             {getBeneficiaryDisplayName(request)}
+           </Text>
         </View>
       </View>
 
@@ -1937,35 +1977,55 @@ const WelfareScreen = ({ route, navigation }) => {
               ) : (
                 filteredMembers.map(member => {
                   const isSelected = newRequest.beneficiaryIds.includes(member.id);
+                  const memberLeft = isMemberLeft(member);
                   return (
                     <TouchableOpacity
                       key={member.id}
                       style={[
                         styles.memberOption,
-                        isSelected && { backgroundColor: colors.primary + '10' }
+                        isSelected && { backgroundColor: colors.primary + '10' },
+                        memberLeft && { backgroundColor: colors.error + '10' }
                       ]}
                       onPress={() => toggleBeneficiary(member)}
+                      disabled={memberLeft}
+                      activeOpacity={memberLeft ? 1 : 0.7}
                     >
                       <View style={styles.memberInfo}>
-                        <View style={[styles.memberAvatar, { backgroundColor: isSelected ? colors.primary : colors.surface }]}>
-                          <Text style={[styles.memberAvatarText, { color: isSelected ? colors.white : colors.text }]}>
+                        <View style={[styles.memberAvatar, { backgroundColor: isSelected ? colors.primary : memberLeft ? colors.error : colors.surface }]}>
+                          <Text style={[styles.memberAvatarText, { color: isSelected ? colors.white : memberLeft ? colors.error : colors.text }]}>
                             {member.first_name?.charAt(0) || member.name?.charAt(0) || '?'}
                           </Text>
                         </View>
                         <View style={styles.memberDetails}>
-                          <Text style={[styles.memberName, { color: colors.text }]}>
+                          <Text style={[
+                            styles.memberName,
+                            { color: memberLeft ? colors.error : colors.text },
+                            memberLeft && { textDecorationLine: 'line-through' }
+                          ]}>
                             {member.first_name} {member.last_name}
                           </Text>
-                          <Text style={[styles.memberEmail, { color: colors.textSecondary }]}>
-                            {member.email}
-                          </Text>
-                          <Text style={[styles.memberRole, { color: colors.textSecondary }]}>
-                            {member.role || 'Member'}
-                          </Text>
+                          {memberLeft && (
+                            <Text style={[styles.memberRole, { color: colors.error, fontWeight: 'bold' }]}>
+                              Left
+                            </Text>
+                          )}
+                          {!memberLeft && (
+                            <Text style={[styles.memberEmail, { color: colors.textSecondary }]}>
+                              {member.email}
+                            </Text>
+                          )}
+                          {!memberLeft && (
+                            <Text style={[styles.memberRole, { color: colors.textSecondary }]}>
+                              {member.role || 'Member'}
+                            </Text>
+                          )}
                         </View>
                       </View>
-                      {isSelected && (
+                      {isSelected && !memberLeft && (
                         <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                      )}
+                      {memberLeft && (
+                        <Ionicons name="close-circle" size={24} color={colors.error} />
                       )}
                     </TouchableOpacity>
                   );
@@ -2065,7 +2125,11 @@ const WelfareScreen = ({ route, navigation }) => {
                         <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
                           Requester
                         </Text>
-                        <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+<Text style={[
+                          styles.viewModalSectionContent,
+                          { color: isUserIdLeft(viewModalItem?.requesterId) ? colors.error : colors.textSecondary },
+                          isUserIdLeft(viewModalItem?.requesterId) && { textDecorationLine: 'line-through' }
+                        ]}>
                           {getRequesterDisplayName(viewModalItem)}
                         </Text>
                       </View>
@@ -2104,7 +2168,11 @@ const WelfareScreen = ({ route, navigation }) => {
                         <Text style={[styles.viewModalSectionTitle, { color: colors.text }]}>
                           Beneficiary
                         </Text>
-                        <Text style={[styles.viewModalSectionContent, { color: colors.textSecondary }]}>
+                        <Text style={[
+                          styles.viewModalSectionContent,
+                          { color: isUserIdLeft(viewModalItem?.beneficiaryId) ? colors.error : colors.textSecondary },
+                          isUserIdLeft(viewModalItem?.beneficiaryId) && { textDecorationLine: 'line-through' }
+                        ]}>
                           {getBeneficiaryDisplayName(viewModalItem)}
                         </Text>
                       </View>
