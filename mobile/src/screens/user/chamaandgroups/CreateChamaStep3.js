@@ -132,7 +132,22 @@ useEffect(() => {
     fetchUserProfile();
   }, [user?.id]);
 
-  const searchUser = async () => {
+  // The backend now returns unmasked phone and national ID for these
+  // onboarding search endpoints (email stays masked for privacy).  No merge
+  // with form values is needed — we use the database records directly so
+  // that "same ID different phone" scenarios always resolve to the existing
+  // account's canonical data.
+  const buildFoundUser = (backendUser) => {
+    if (!backendUser) return null;
+    return {
+      ...backendUser,
+      // Normalise field names so downstream code can use either convention.
+      phoneNumber: backendUser.phoneNumber || backendUser.phone,
+      idNumber: backendUser.nationalId || backendUser.idNumber,
+    };
+  };
+
+   const searchUser = async () => {
     if (!phoneNumber && !nationalId) {
       Toast.show({ type: 'error', text1: 'Enter phone number and national ID to search' });
       return;
@@ -143,43 +158,125 @@ useEffect(() => {
       return;
     }
 
+    // --- Step 1: Table-level duplicate check ---
+    // Before even hitting the database, verify the member isn't already in
+    // the onboarded members table.  This covers the scenario where the second
+    // member is being added and the system needs to confirm the table state.
+    const existingInTable = onboardedMembers.find(m =>
+      m.phone === phoneNumber ||
+      m.phoneNumber === phoneNumber ||
+      (m.nationalId || m.idNumber || m.national_id) === nationalId
+    );
+
+    if (existingInTable) {
+      Toast.show({
+        type: 'warning',
+        text1: 'Member Already Added',
+        text2: `${existingInTable.firstName || ''} ${existingInTable.lastName || ''}`.trim() +
+          ' is already in the onboarded members list. Their details will be pre-filled for review.',
+        visibilityTime: 5000,
+      });
+      // Set foundUser with the existing table member so that onboardMember
+      // reuses their ID and does NOT create a duplicate backend user.
+      setFoundUser(buildFoundUser(existingInTable));
+      // Pre-fill the form with the existing member's data from the table
+      setUserForm({
+        firstName: existingInTable.firstName || '',
+        lastName: existingInTable.lastName || '',
+        email: existingInTable.email || '',
+        phone: phoneNumber,
+        idNumber: nationalId,
+        gender: existingInTable.gender || '',
+      });
+      setShowUserForm(true);
+      setOnboardingPhase('new_user');
+      setSearchLoading(false);
+      return;
+    }
+
     setSearchLoading(true);
     setFoundUser(null);
     setShowUserForm(false);
 
     try {
-      const response = await ApiService.searchUserByCredentials(phoneNumber, nationalId);
-      if (response.success && response.data && response.match) {
-        setFoundUser(response.data);
+      // Check national ID (primary) and phone (secondary) independently.
+      // National ID is the key identifier because users may keep changing
+      // phone numbers while the ID stays constant — this prevents the
+      // creation of duplicate user accounts.
+      const [idResponse, phoneResponse] = await Promise.allSettled([
+        ApiService.searchUserByIdNumber(nationalId),
+        ApiService.searchUserByPhone(phoneNumber),
+      ]);
+
+      const idUser =
+        idResponse.status === 'fulfilled' &&
+        idResponse.value?.success &&
+        idResponse.value?.data
+          ? idResponse.value.data
+          : null;
+
+      const phoneUser =
+        phoneResponse.status === 'fulfilled' &&
+        phoneResponse.value?.success &&
+        phoneResponse.value?.data
+          ? phoneResponse.value.data
+          : null;
+
+      // Case 1: Both credentials match the same user — confirmed match.
+      if (idUser && phoneUser && idUser.id === phoneUser.id) {
+        setFoundUser(buildFoundUser(idUser));
         setOnboardingPhase('confirm');
         return;
       }
 
-      if (response.success === false && response.error) {
-        if (response.error.includes('Credential mismatch')) {
-          Toast.show({
-            type: 'error',
-            text1: 'Credential Mismatch',
-            text2: 'Phone number and National ID do not belong to the same user. This may indicate credential sharing.',
-            visibilityTime: 5000,
-          });
-        } else if (response.error.includes('not found')) {
-          Toast.show({
-            type: 'error',
-            text1: 'Incomplete Credentials',
-            text2: response.error,
-            visibilityTime: 4000,
-          });
-        } else {
-          Toast.show({
-            type: 'error',
-            text1: 'Not Found',
-            text2: response.error,
-            visibilityTime: 4000,
-          });
-        }
+      // Case 2: Credential mismatch — both exist but as different users.
+      // "ID is so important" — prioritise the national-ID user so we never
+      // end up with the same ID paired with a different phone number.
+      if (idUser && phoneUser && idUser.id !== phoneUser.id) {
+        Toast.show({
+          type: 'warning',
+          text1: 'User Already Exists',
+          text2: 'A user with this National ID already exists in the system. Their phone number differs from the one entered. Using existing records to avoid duplicates.',
+          visibilityTime: 6000,
+        });
+        setFoundUser(buildFoundUser(idUser));
+        setOnboardingPhase('confirm');
+        return;
       }
 
+      // Case 3: Found by national ID only (phone not registered or user changed numbers).
+      if (idUser) {
+        Toast.show({
+          type: 'warning',
+          text1: 'User Already Exists',
+          text2: 'A user with this National ID already exists in the system. Using existing records.',
+          visibilityTime: 5000,
+        });
+        setFoundUser(buildFoundUser(idUser));
+        setOnboardingPhase('confirm');
+        return;
+      }
+
+      // Case 4: Found by phone only (national ID not registered).
+      if (phoneUser) {
+        Toast.show({
+          type: 'warning',
+          text1: 'User Already Exists',
+          text2: 'A user with this phone number already exists in the system. Using existing records.',
+          visibilityTime: 5000,
+        });
+        setFoundUser(buildFoundUser(phoneUser));
+        setOnboardingPhase('confirm');
+        return;
+      }
+
+      // Case 5: No user found — proceed to create a new user account.
+      Toast.show({
+        type: 'info',
+        text1: 'No existing user found',
+        text2: 'This user does not exist and can be created.',
+        visibilityTime: 3000,
+      });
       setShowUserForm(true);
       setOnboardingPhase('new_user');
       setUserForm(prev => ({
@@ -242,7 +339,7 @@ useEffect(() => {
   };
 
   const sendTOTP = async () => {
-    const phone = foundUser?.phoneNumber || foundUser?.phone || userForm.phone;
+    const phone = userForm.phone || foundUser?.phoneNumber || foundUser?.phone;
     const userId = foundUser?.id || 'new';
     setTotpLoading(true);
     try {
@@ -280,7 +377,18 @@ useEffect(() => {
   };
 
   const confirmExistingUser = () => {
-    setOnboardingPhase('totp');
+     // Pre-fill the form with the **database** record's values so we never
+     // end up with the same national ID paired with a different phone number.
+     // The user can still edit fields if needed before proceeding.
+     setUserForm(prev => ({
+       ...prev,
+       firstName: foundUser?.firstName || '',
+       lastName: foundUser?.lastName || '',
+       email: foundUser?.email || '',
+       phone: foundUser?.phone || foundUser?.phoneNumber || '',
+       idNumber: foundUser?.nationalId || foundUser?.idNumber || '',
+     }));
+    setOnboardingPhase('new_user');
   };
 
   useEffect(() => {
@@ -296,7 +404,7 @@ useEffect(() => {
     }
     setTotpLoading(true);
     try {
-      const phone = foundUser?.phoneNumber || foundUser?.phone || userForm.phone;
+      const phone = userForm.phone || foundUser?.phoneNumber || foundUser?.phone;
       const userId = foundUser?.id || 'new';
       const response = await ApiService.verifyOnboardingTOTP(totpCode, userId);
       if (response.success) {
@@ -314,19 +422,25 @@ useEffect(() => {
   };
 
   const onboardMember = async (role = 'member') => {
-    if (!foundUser && !validateUserForm()) return;
+    if (!validateUserForm()) return;
 
     setOnboardLoading(true);
     try {
+      // Always build memberData from the form (pre-filled with existing user
+      // data when a user was found, or filled in by the user for new accounts).
       const memberData = {
-        ...(foundUser || userForm),
+        ...userForm,
         role,
         phoneVerified: totpVerified,
         serviceFeeStatus: 'pending',
         onboardedAt: new Date().toISOString(),
       };
 
-      if (!foundUser) {
+      if (foundUser) {
+        // Existing user — reuse their ID so no duplicate account is created.
+        memberData.id = foundUser.id;
+      } else {
+        // New user — create the account on the backend.
         const createResponse = await ApiService.onboardUser({
           ...userForm,
           password: null,
@@ -334,8 +448,6 @@ useEffect(() => {
         if (createResponse.success && createResponse.data) {
           memberData.id = createResponse.data.id;
         }
-      } else {
-        memberData.id = foundUser.id;
       }
 
       onAddMember(memberData);
@@ -594,7 +706,7 @@ useEffect(() => {
   const renderTOTPStep = () => (
     <Card style={styles.section} variant="outlined">
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => setOnboardingPhase(foundUser ? 'confirm' : 'new_user')} style={styles.backButton}>
+        <TouchableOpacity onPress={() => setOnboardingPhase('new_user')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={20} color={colors.primary} />
           <Text style={[styles.backText, { color: colors.primary }]}>Back</Text>
         </TouchableOpacity>
@@ -604,7 +716,7 @@ useEffect(() => {
       </View>
 
       <Text style={[styles.stepDescription, { color: colors.textSecondary, marginBottom: spacing.lg }]}>
-        A 6-digit code has been sent to {foundUser?.email || userForm.email}. Enter it below to verify the phone number.
+        A 6-digit code has been sent to {foundUser?.phone || foundUser?.phoneNumber || userForm.phone}. Enter it below to verify the phone number.
       </Text>
 
       <Input

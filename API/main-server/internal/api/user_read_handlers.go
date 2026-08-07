@@ -637,3 +637,129 @@ func SearchUserByCredentials(c *gin.Context) {
 		"error":   "No user found with these credentials",
 	})
 }
+
+// SearchUserByIdNumber searches for a user by national ID alone.
+// This is used to prevent duplicate accounts when a user changes their phone
+// number but keeps the same national ID.
+func SearchUserByIdNumber(c *gin.Context) {
+	nationalId := c.Query("nationalId")
+
+	if nationalId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "National ID is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	row := database.QueryRow(
+		"SELECT id, email, phone, first_name, last_name, id_number FROM users WHERE id_number = $1",
+		nationalId,
+	)
+	var id, email, phone, firstName, lastName, idNumber sql.NullString
+	err := row.Scan(&id, &email, &phone, &firstName, &lastName, &idNumber)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"error":   "No user found with this National ID",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to search user",
+		})
+		return
+	}
+
+	userData := map[string]interface{}{
+		"id":         id.String,
+		"email":      utils.MaskEmail(email.String),
+		"phone":      phone.String,
+		"firstName":  firstName.String,
+		"lastName":   lastName.String,
+		"nationalId": idNumber.String,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"data":      userData,
+		"match":     true,
+		"matchedBy": "nationalId",
+	})
+}
+
+// SearchUserByPhone searches for a user by phone number alone.
+// This is used as a secondary check to prevent duplicate accounts
+// when a phone number is already registered to a different user.
+func SearchUserByPhone(c *gin.Context) {
+	phone := c.Query("phone")
+
+	if phone == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Phone number is required",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Database connection not available",
+		})
+		return
+	}
+	database := db.(*sql.DB)
+
+	row := database.QueryRow(
+		"SELECT id, email, phone, first_name, last_name, id_number FROM users WHERE phone = $1",
+		phone,
+	)
+	var id, email, phoneNum, firstName, lastName, idNumber sql.NullString
+	err := row.Scan(&id, &email, &phoneNum, &firstName, &lastName, &idNumber)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"error":   "No user found with this phone number",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to search user",
+		})
+		return
+	}
+
+	userData := map[string]interface{}{
+		"id":         id.String,
+		"email":      utils.MaskEmail(email.String),
+		"phone":      phoneNum.String,
+		"firstName":  firstName.String,
+		"lastName":   lastName.String,
+		"nationalId": idNumber.String,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"data":      userData,
+		"match":     true,
+		"matchedBy": "phone",
+	})
+}

@@ -624,6 +624,21 @@ const CreateChamaScreen = ({ navigation }) => {
     }
   };
 
+  // Checks whether a newly added member duplicates an existing one in the
+  // onboarded table.  Matching is done by user ID, phone number, or national
+  // ID — any of these being equal means it is the same person.
+  const isDuplicateMember = (existing, incoming) => {
+    if (!existing || !incoming) return false;
+    const sameId = existing.id && incoming.id && existing.id === incoming.id;
+    const samePhone = existing.phone && incoming.phone && existing.phone === incoming.phone;
+    const sameNatId =
+      (existing.nationalId || existing.idNumber || existing.national_id) &&
+      (incoming.nationalId || incoming.idNumber || incoming.national_id) &&
+      (existing.nationalId || existing.idNumber || existing.national_id) ===
+        (incoming.nationalId || incoming.idNumber || incoming.national_id);
+    return sameId || samePhone || sameNatId;
+  };
+
   const handleMemberAdded = (memberData) => {
     if (memberData._complete) {
       setCurrentStep(4);
@@ -634,9 +649,17 @@ const CreateChamaScreen = ({ navigation }) => {
       return;
     }
     setOnboardedMembers(prev => {
-      const exists = prev.find(m => (m.id || m.phone) === (memberData.id || memberData.phone));
-      if (exists) {
-        return prev.map(m => (m.id || m.phone) === (memberData.id || memberData.phone) ? memberData : m);
+      const existingIndex = prev.findIndex(m => isDuplicateMember(m, memberData));
+      if (existingIndex !== -1) {
+        // Update the existing member with fresh data instead of creating a duplicate.
+        Toast.show({
+          type: 'info',
+          text1: 'Member Updated',
+          text2: `${memberData.firstName} ${memberData.lastName} details updated in the list.`,
+        });
+        const updated = [...prev];
+        updated[existingIndex] = { ...updated[existingIndex], ...memberData };
+        return updated;
       }
       return [...prev, memberData];
     });
@@ -797,6 +820,21 @@ const CreateChamaScreen = ({ navigation }) => {
           paymentValidation: paymentValidation.map((v, i) => ({ index: i, passed: v })),
         });
         throw new Error('Data validation failed. Please check your inputs for correctness and security.');
+      }
+
+      // Final duplicate check: ensure no two members in the table share
+      // the same national ID, phone number, or user ID.
+      const duplicate = onboardedMembers.find((m, i) =>
+        onboardedMembers.slice(i + 1).some(m2 => isDuplicateMember(m, m2))
+      );
+      if (duplicate) {
+        Toast.show({
+          type: 'error',
+          text1: 'Duplicate Member Detected',
+          text2: `${duplicate.firstName} ${duplicate.lastName} appears more than once. Remove the duplicate before creating the chama.`,
+          visibilityTime: 5000,
+        });
+        throw new Error('Duplicate member detected in onboarded members list.');
       }
 
       let requestPayload;

@@ -139,6 +139,14 @@ const searchUserByCredentials = async (phone, nationalId) => {
   return await makeRequest(`/users/search-by-credentials?phone=${encodeURIComponent(phone)}&nationalId=${encodeURIComponent(nationalId)}`);
 };
 
+const searchUserByIdNumber = async (nationalId) => {
+  return await makeRequest(`/users/search-by-national-id?nationalId=${encodeURIComponent(nationalId)}`);
+};
+
+const searchUserByPhone = async (phone) => {
+  return await makeRequest(`/users/search-by-phone?phone=${encodeURIComponent(phone)}`);
+};
+
 const searchUsers = async (query) => {
   return await makeRequest(`/users/search?q=${encodeURIComponent(query)}`);
 };
@@ -363,6 +371,8 @@ export {
   getUsers,
   searchUsers,
   searchUserByCredentials,
+  searchUserByIdNumber,
+  searchUserByPhone,
   getAllUsersForAdmin,
   getAllUsersComplete,
   getUserStatistics,

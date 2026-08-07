@@ -278,8 +278,10 @@ func SetupRoutes(
 				users.POST("/avatar", func(c *gin.Context) {
 				authHandlers.UploadAvatar(c)
 			})
-				users.GET("/search-by-credentials", api.SearchUserByCredentials)
-				users.PUT("/:id/role", api.AdminUpdateUserRole)
+			users.GET("/search-by-credentials", api.SearchUserByCredentials)
+			users.GET("/search-by-national-id", api.SearchUserByIdNumber)
+			users.GET("/search-by-phone", api.SearchUserByPhone)
+			users.PUT("/:id/role", api.AdminUpdateUserRole)
 				users.PUT("/:id/status", api.UpdateUserStatus)
 				users.DELETE("/:id", api.DeleteUser)
 				users.POST("/onboard", api.OnboardUser)
