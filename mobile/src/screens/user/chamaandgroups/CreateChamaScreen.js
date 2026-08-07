@@ -1073,9 +1073,33 @@ const CreateChamaScreen = ({ navigation }) => {
     }
   };
 
+  // Pure validation check — calls validateStep with showErrors=false so no
+  // state side-effects occur during render.  Returns the first invalid step
+  // number (or 0 if all valid).
+  const getFirstInvalidStep = () => {
+    for (let step = 1; step <= 4; step++) {
+      if (!validateStep(step, false)) return step;
+    }
+    return 0;
+  };
+
   const renderNavigationButtons = () => {
     const totalSteps = getTotalSteps();
     const isLastStep = currentStep >= totalSteps;
+    const firstInvalidStep = getFirstInvalidStep();
+    const canSubmit = firstInvalidStep === 0;
+
+    const getDisableReason = () => {
+      if (!isLastStep) return null;
+      const stepLabels = {
+        1: 'chama details',
+        2: 'location and finances',
+        3: 'member onboarding',
+        4: 'wallet types and settings',
+      };
+      return `Complete ${stepLabels[firstInvalidStep] || 'all fields'} to enable creation.`;
+    };
+
     return (
       <View style={[styles.navigationButtons, { backgroundColor: colors.surface }]}>
         {currentStep > 1 && (
@@ -1094,12 +1118,20 @@ const CreateChamaScreen = ({ navigation }) => {
             style={styles.navButton}
           />
         ) : (
-          <Button
-            title={`Create ${chamaData.group_type === 'contribution' ? 'Contribution Group' : 'Chama'}`}
-            onPress={handleSubmit}
-            loading={loading}
-            style={styles.navButton}
-          />
+          <View style={styles.navButtonContainer}>
+            {!canSubmit && (
+              <Text style={[styles.navHelperText, { color: colors.textSecondary }]}>
+                {getDisableReason()}
+              </Text>
+            )}
+            <Button
+              title={`Create ${chamaData.group_type === 'contribution' ? 'Contribution Group' : 'Chama'}`}
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={!canSubmit}
+              style={styles.navButton}
+            />
+          </View>
         )}
       </View>
     );
@@ -1170,6 +1202,16 @@ const styles = StyleSheet.create({
   },
   navButton: {
     flex: 1,
+  },
+  navButtonContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  navHelperText: {
+    fontSize: typography.fontSize.xs,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+    fontStyle: 'italic',
   },
 });
 
