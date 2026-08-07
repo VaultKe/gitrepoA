@@ -69,8 +69,10 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
   // Fast chama switching function
   const switchToChama = (chama) => {
-    // Prevent switching to a chama where the user has left
-    if (chama.membershipIsActive === false || userLeft) {
+    // Prevent switching to a chama where the user has left — check only
+    // the per-chama membership flag, not a global userLeft state that could
+    // be stale or erroneously set.
+    if (chama.membershipIsActive === false) {
       Alert.alert(
         'Not a Member',
         `You have left "${chama.name}". You can no longer access this chama.`,
@@ -112,6 +114,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     // Always fetch fresh data in the background (but don't block UI)
     setTimeout(() => {
       loadChamaStatistics(chama.id);
+      loadChamaFeatures();
     }, 100); // Small delay to allow UI to update first
   };
 
@@ -197,20 +200,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     loadUserChamas();
   }, []);
 
-  useEffect(() => {
-    if (selectedChama) {
-      if (userLeft) {
-        setSelectedChama(null);
-        return;
-      }
-      const chamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
-      currentChamaIdRef.current = chamaId;
-      loadChamaFeatures();
-    } else {
-      currentChamaIdRef.current = null;
-    }
-  }, [selectedChama]);
-
   // Auto-refresh statistics every 30 seconds when screen is active
   useEffect(() => {
     if (!selectedChama) return;
@@ -257,13 +246,12 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       if (response.success) {
         setUserRole(response.data?.role || 'member');
         setUserLeft(false);
-      } else {
-        setUserRole('left');
-        setUserLeft(true);
       }
+      // If response.success is false or the API errors out, do NOT set userLeft to true.
+      // Membership status is already determined by the membershipIsActive flag
+      // which is checked in loadUserChamas. A failed role fetch does not mean
+      // the user has left the chama.
     } catch (error) {
-      setUserRole('left');
-      setUserLeft(true);
     }
   };
 
@@ -297,12 +285,15 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
            }
          }
 
-         // If no chama is currently selected and we have chamas, select the first one
-         if (userChamasData.length > 0 && !selectedChama) {
-           const first = userChamasData[0];
-           setSelectedChama(first);
-           await loadMemberRole(first.id);
-         }
+          // If no chama is currently selected and we have chamas, select the first one
+          if (userChamasData.length > 0 && !selectedChama) {
+            const first = userChamasData[0];
+            setSelectedChama(first);
+            await Promise.all([
+              loadMemberRole(first.id),
+              loadChamaFeatures(),
+            ]);
+          }
 
          // If we have a selected chama, make sure it's still in the list (in case it was deleted or user left)
          if (selectedChama && !userChamasData.find(c => c.id === selectedChama.id)) {
@@ -556,22 +547,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
   const renderQuickStats = () => {
     if (!selectedChama) return null;
-
-    if (userLeft) {
-      return (
-        <Card style={styles.statsCard} variant="outlined">
-          <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.lg, alignItems: 'center' }}>
-            <Ionicons name="lock-closed" size={48} color={colors.error} />
-            <Text style={[styles.cardTitle, { color: colors.error, marginTop: spacing.md, textAlign: 'center' }]}>
-              Membership Expired
-            </Text>
-            <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }}>
-              You are no longer a member of "{selectedChama.name}" and cannot access dashboard data.
-            </Text>
-          </View>
-        </Card>
-      );
-    }
 
     const StatTile = ({ icon, label, value, color }) => (
       <View style={{ flex: 1, marginHorizontal: spacing.xs, marginBottom: spacing.sm }}>
@@ -943,12 +918,12 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
     const mainActions = filteredActions;
 
-    const isDisabled = !selectedChama || userLeft;
+    const isDisabled = !selectedChama;
 
     return (
       <Card style={[styles.actionsCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginVertical: spacing.xs }]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>
-          {userLeft ? 'Access Restricted' : 'Quick Actions'}
+          Quick Actions
         </Text>
 
         <View style={styles.actionsGrid}>
@@ -957,14 +932,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
               key={action.id}
               style={[styles.actionItem, isDisabled && { opacity: 0.4 }]}
               onPress={() => {
-                if (userLeft) {
-                  Alert.alert(
-                    'Access Denied',
-                    'You are no longer a member of this chama and cannot access this feature.',
-                    [{ text: 'OK' }]
-                  );
-                  return;
-                }
                 action.onPress();
               }}
               disabled={isDisabled}
