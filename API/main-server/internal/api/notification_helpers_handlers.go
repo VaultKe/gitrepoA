@@ -404,6 +404,7 @@ func AcceptChamaInvitation(c *gin.Context) {
 		"success": true,
 		"message": "Invitation accepted successfully",
 	})
+		c.Abort()
 }
 
 // RejectChamaInvitation handles rejecting a chama invitation
@@ -474,4 +475,5 @@ func RejectChamaInvitation(c *gin.Context) {
 		"success": true,
 		"message": "Invitation rejected successfully",
 	})
+		c.Abort()
 }

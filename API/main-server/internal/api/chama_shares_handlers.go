@@ -145,6 +145,7 @@ func GetChamaShareOfferingsList(c *gin.Context) {
 		"success": true,
 		"data":    offerings,
 	})
+		c.Abort()
 }
 
 // DeclareChamaDividends creates a dividend declaration for a chama.
@@ -305,4 +306,5 @@ func GetChamaDividendDeclarations(c *gin.Context) {
 		"success": true,
 		"data":    declarations,
 	})
+		c.Abort()
 }

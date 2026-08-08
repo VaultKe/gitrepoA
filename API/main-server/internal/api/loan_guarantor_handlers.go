@@ -112,4 +112,5 @@ func GetGuarantorRequests(c *gin.Context) {
 		"data":    guarantorRequests,
 		"count":   len(guarantorRequests),
 	})
+		c.Abort()
 }

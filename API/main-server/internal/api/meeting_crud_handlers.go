@@ -160,6 +160,7 @@ func GetMeetings(c *gin.Context) {
 			"chamaId": chamaID,
 		},
 	})
+		c.Abort()
 }
 
 // GetUserMeetings gets all meetings for the current user across all chamas they belong to
@@ -334,6 +335,7 @@ func GetUserMeetings(c *gin.Context) {
 			"chamas": len(chamaCount),
 		},
 	})
+		c.Abort()
 }
 
 func CreateMeeting(c *gin.Context) {
@@ -481,6 +483,7 @@ func GetMeeting(c *gin.Context) {
 		"success": true,
 		"message": "Get meeting endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 func UpdateMeeting(c *gin.Context) {
@@ -573,6 +576,7 @@ func UpdateMeeting(c *gin.Context) {
 		"success": true,
 		"message": "Meeting updated successfully",
 	})
+		c.Abort()
 }
 
 func DeleteMeeting(c *gin.Context) {
@@ -580,6 +584,7 @@ func DeleteMeeting(c *gin.Context) {
 		"success": true,
 		"message": "Delete meeting endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 // Join meeting endpoint - fully functional for production

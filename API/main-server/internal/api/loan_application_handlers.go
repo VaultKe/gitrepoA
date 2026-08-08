@@ -237,6 +237,7 @@ func GetLoanApplications(c *gin.Context) {
 			"chamaId": chamaID,
 		},
 	})
+		c.Abort()
 }
 
 func CreateLoanApplication(c *gin.Context) {
@@ -520,6 +521,7 @@ func GetLoanApplication(c *gin.Context) {
 			},
 		},
 	})
+		c.Abort()
 }
 
 // GetLoanRepaymentHistory returns disbursement info, installment schedule,
@@ -673,6 +675,7 @@ func GetLoanRepaymentHistory(c *gin.Context) {
 		"payments":     payments,
 	},
 	})
+		c.Abort()
 }
 
 // RecordLoanPayment records a manual repayment for an active loan.
@@ -765,6 +768,7 @@ func GetLoanGuarantors(c *gin.Context) {
 		"success": true,
 		"data":    guarantors,
 	})
+		c.Abort()
 }
 
 // GetLoanFines returns fines for a loan
@@ -800,6 +804,7 @@ func GetLoanFines(c *gin.Context) {
 		"success": true,
 		"data":    fines,
 	})
+		c.Abort()
 }
 
 func UpdateLoanApplication(c *gin.Context) {
@@ -807,6 +812,7 @@ func UpdateLoanApplication(c *gin.Context) {
 		"success": true,
 		"message": "Update loan application endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 func DeleteLoanApplication(c *gin.Context) {
@@ -814,4 +820,5 @@ func DeleteLoanApplication(c *gin.Context) {
 		"success": true,
 		"message": "Delete loan application endpoint - coming soon",
 	})
+		c.Abort()
 }

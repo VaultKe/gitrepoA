@@ -92,6 +92,7 @@ func GetMemberServiceFeePayments(c *gin.Context) {
 		"success": true,
 		"data":    scanServiceFeeRows(rows),
 	})
+		c.Abort()
 }
 
 // GetChamaServiceFeePayments gets service fee payments for members of a chama.
@@ -130,6 +131,7 @@ func GetChamaServiceFeePayments(c *gin.Context) {
 		"success": true,
 		"data":    scanServiceFeeRows(rows),
 	})
+		c.Abort()
 }
 
 // PayServiceFeePayment initiates an STK push payment for a member's registration fee.
@@ -264,6 +266,7 @@ func PayServiceFeePayment(c *gin.Context) {
 			"customerMessage":   stkResponse.CustomerMessage,
 		},
 	})
+		c.Abort()
 }
 
 // PayMemberServiceFee creates a service fee record and initiates STK push for a member.
@@ -391,4 +394,5 @@ func PayMemberServiceFee(c *gin.Context) {
 			"customerMessage":   stkResponse.CustomerMessage,
 		},
 	})
+		c.Abort()
 }

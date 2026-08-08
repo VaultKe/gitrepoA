@@ -36,6 +36,7 @@ func (h *AuthHandlers) VerifyEmail(c *gin.Context) {
 		Success: true,
 		Message: "Email verified successfully",
 	})
+	c.Abort()
 }
 
 // VerifyPhone handles phone verification
@@ -62,6 +63,7 @@ func (h *AuthHandlers) VerifyPhone(c *gin.Context) {
 		Success: true,
 		Message: "Phone verified successfully",
 	})
+	c.Abort()
 }
 
 // CheckTokenStatus checks the status of a password reset token for countdown display
@@ -110,6 +112,7 @@ func (h *AuthHandlers) CheckTokenStatus(c *gin.Context) {
 		"success": true,
 		"data":    status,
 	})
+		c.Abort()
 }
 
 // SendEmailVerification sends an email verification code to the user
@@ -188,6 +191,7 @@ func (h *AuthHandlers) SendEmailVerification(c *gin.Context) {
 		Success: true,
 		Message: "Verification email sent successfully",
 	})
+	c.Abort()
 }
 
 // VerifyEmailCode verifies a user's email using the verification code
@@ -245,6 +249,7 @@ func (h *AuthHandlers) VerifyEmailCode(c *gin.Context) {
 		Message: "Email verified successfully",
 		Data:    nil,
 	})
+	c.Abort()
 }
 
 // CheckEmailVerificationStatus checks the status of an email verification token
@@ -301,6 +306,7 @@ func (h *AuthHandlers) CheckEmailVerificationStatus(c *gin.Context) {
 		"success": true,
 		"data":    status,
 	})
+		c.Abort()
 }
 
 // ResendVerification handles resending verification email/SMS
@@ -369,6 +375,8 @@ func (h *AuthHandlers) ResendVerification(c *gin.Context) {
 			Success: true,
 			Message: "Verification email sent successfully",
 		})
+		c.Abort()
+
 
 	case "phone":
 		if user.IsPhoneVerified {
@@ -383,6 +391,7 @@ func (h *AuthHandlers) ResendVerification(c *gin.Context) {
 			Success: true,
 			Message: "Phone verification SMS sent successfully",
 		})
+		c.Abort()
 
 	default:
 		c.JSON(http.StatusBadRequest, AuthResponse{
@@ -425,6 +434,7 @@ func (h *AuthHandlers) SendOnboardingTOTP(c *gin.Context) {
 			"phone":   req.Phone,
 		},
 	})
+		c.Abort()
 }
 
 // VerifyOnboardingTOTP verifies a 6-digit TOTP for member onboarding
@@ -455,4 +465,5 @@ func (h *AuthHandlers) VerifyOnboardingTOTP(c *gin.Context) {
 		Success: true,
 		Message: "Onboarding TOTP verified successfully",
 	})
+	c.Abort()
 }

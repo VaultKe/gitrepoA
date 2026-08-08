@@ -144,6 +144,7 @@ func GetAllUsersForAdmin(c *gin.Context) {
 		"data":    users,
 		"count":   len(users),
 	})
+		c.Abort()
 }
 
 // GetAdminStatistics returns comprehensive system-wide statistics for admin dashboard
@@ -181,6 +182,7 @@ func GetAdminStatistics(c *gin.Context) {
 		"success": true,
 		"data":    stats,
 	})
+		c.Abort()
 }
 
 // GetSystemAnalytics returns comprehensive system analytics for admin dashboard
@@ -220,6 +222,7 @@ func GetSystemAnalytics(c *gin.Context) {
 		"success": true,
 		"data":    analytics,
 	})
+		c.Abort()
 }
 
 // AdminUpdateUserRole - Admin endpoint to update user role (temporary for setup)
@@ -289,6 +292,7 @@ func AdminUpdateUserRole(c *gin.Context) {
 			"role":   request.Role,
 		},
 	})
+		c.Abort()
 }
 
 // UpdateUserRole - Admin endpoint to update user role
@@ -367,6 +371,7 @@ func UpdateUserRole(c *gin.Context) {
 			"role":   request.Role,
 		},
 	})
+		c.Abort()
 }
 
 // UpdateUserStatus - Admin endpoint to update user status
@@ -453,6 +458,7 @@ func UpdateUserStatus(c *gin.Context) {
 			"status": request.Status,
 		},
 	})
+		c.Abort()
 }
 
 // DeleteUser - Admin endpoint to delete a user
@@ -545,6 +551,7 @@ func DeleteUser(c *gin.Context) {
 			"id": userID,
 		},
 	})
+		c.Abort()
 }
 
 // UpdateUserPhoneVerified updates a user's phone verification status
@@ -612,6 +619,7 @@ func UpdateUserPhoneVerified(c *gin.Context) {
 		"success": true,
 		"message": "Phone verification status updated",
 	})
+		c.Abort()
 }
 
 // UpdateUserPaymentStatus updates a user's registration payment status
@@ -679,4 +687,5 @@ func UpdateUserPaymentStatus(c *gin.Context) {
 		"success": true,
 		"message": "Payment status updated",
 	})
+		c.Abort()
 }

@@ -90,6 +90,7 @@ func GetNotificationPreferences(c *gin.Context) {
 			"available_sounds": sounds,
 		},
 	})
+		c.Abort()
 }
 
 // UpdateNotificationPreferences updates user notification preferences
@@ -144,6 +145,7 @@ func UpdateNotificationPreferences(c *gin.Context) {
 			"preferences": updatedPreferences,
 		},
 	})
+		c.Abort()
 }
 
 // GetAvailableNotificationSounds gets all available notification sounds
@@ -177,6 +179,7 @@ func GetAvailableNotificationSounds(c *gin.Context) {
 			"sounds": sounds,
 		},
 	})
+		c.Abort()
 }
 
 // TestNotificationSound tests a notification sound
@@ -246,6 +249,7 @@ func TestNotificationSound(c *gin.Context) {
 			"notification_id": notification.ID,
 		},
 	})
+		c.Abort()
 }
 
 // GetNotificationSettings gets comprehensive notification settings (legacy compatibility)
@@ -310,6 +314,7 @@ func GetNotificationSettings(c *gin.Context) {
 			"settings": settings,
 		},
 	})
+		c.Abort()
 }
 
 // UpdateNotificationSettings updates notification settings (legacy compatibility)
@@ -412,4 +417,5 @@ func UpdateNotificationSettings(c *gin.Context) {
 			"preferences": updatedPreferences,
 		},
 	})
+		c.Abort()
 }

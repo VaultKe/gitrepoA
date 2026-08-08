@@ -120,6 +120,7 @@ func ChangePassword(c *gin.Context) {
 		"success": true,
 		"message": "Password changed successfully",
 	})
+		c.Abort()
 }
 
 // GetLoginHistory retrieves user login history
@@ -306,6 +307,7 @@ func GetLoginHistory(c *gin.Context) {
 			"offset": offset,
 		},
 	})
+		c.Abort()
 }
 
 // LogoutAllDevices logs out user from all other devices
@@ -352,6 +354,7 @@ func LogoutAllDevices(c *gin.Context) {
 		"success": true,
 		"message": fmt.Sprintf("Logged out from %d other devices", rowsAffected),
 	})
+		c.Abort()
 }
 
 // LogoutSpecificDevice logs out user from a specific device
@@ -415,6 +418,7 @@ func LogoutSpecificDevice(c *gin.Context) {
 		"success": true,
 		"message": "Logged out from device successfully",
 	})
+		c.Abort()
 }
 
 // RecordLoginSession records a new login session
@@ -570,4 +574,5 @@ func ScanFile(c *gin.Context) {
 		"success": true,
 		"data":    response,
 	})
+		c.Abort()
 }

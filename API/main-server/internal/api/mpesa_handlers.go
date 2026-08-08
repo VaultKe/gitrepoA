@@ -177,6 +177,7 @@ func InitiateMpesaSTK(c *gin.Context) {
 			"businessNumber":    partyB,
 		},
 	})
+		c.Abort()
 }
 
 func HandleMpesaCallback(c *gin.Context) {
@@ -226,6 +227,7 @@ func HandleMpesaCallback(c *gin.Context) {
 		"ResultCode": 0,
 		"ResultDesc": "Success",
 	})
+		c.Abort()
 }
 
 func GetMpesaTransactionStatus(c *gin.Context) {
@@ -274,6 +276,7 @@ func GetMpesaTransactionStatus(c *gin.Context) {
 			"status":            status,
 		},
 	})
+		c.Abort()
 }
 
 func HandleMpesaB2CCallback(c *gin.Context) {
@@ -323,6 +326,7 @@ func HandleMpesaB2CCallback(c *gin.Context) {
 		"ResultCode": 0,
 		"ResultDesc": "Success",
 	})
+		c.Abort()
 }
 
 func HandleMpesaB2CTimeout(c *gin.Context) {
@@ -372,6 +376,7 @@ func HandleMpesaB2CTimeout(c *gin.Context) {
 		"ResultCode": 0,
 		"ResultDesc": "Success",
 	})
+		c.Abort()
 }
 
 func getPaymentPrefix(paymentType string) string {

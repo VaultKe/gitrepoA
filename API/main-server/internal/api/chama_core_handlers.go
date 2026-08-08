@@ -30,6 +30,7 @@ func GetChamas(c *gin.Context) {
 		"data":    chamas,
 		"count":   len(chamas),
 	})
+	c.Abort()
 }
 
 // GetAllChamasForAdmin - Admin endpoint to get all chamas (no filters).
@@ -63,6 +64,7 @@ func GetAllChamasForAdmin(c *gin.Context) {
 		"data":    chamas,
 		"count":   len(chamas),
 	})
+	c.Abort()
 }
 
 // GetUserChamas returns the chamas the authenticated user belongs to.
@@ -172,6 +174,7 @@ func DeleteChama(c *gin.Context) {
 		"success": true,
 		"message": "Chama deleted successfully",
 	})
+	c.Abort()
 }
 
 // LeaveChama removes the authenticated user from a chama (chairperson must transfer first).
@@ -220,4 +223,5 @@ func LeaveChama(c *gin.Context) {
 		"success": true,
 		"message": "Successfully left the chama",
 	})
+	c.Abort()
 }

@@ -283,6 +283,7 @@ func GetMerryGoRounds(c *gin.Context) {
 			"chamaId": chamaID,
 		},
 	})
+		c.Abort()
 }
 
 // GetMerryGoRound returns a single merry-go-round by ID with its participants
@@ -484,6 +485,7 @@ func GetMerryGoRound(c *gin.Context) {
 		"data":    mgrMap,
 		"message": "Merry-go-round found",
 	})
+		c.Abort()
 }
 
 // GetMerryGoRoundPayments returns payments for a specific merry-go-round
@@ -680,6 +682,7 @@ func GetMerryGoRoundPayments(c *gin.Context) {
 		"count":   len(payments),
 		"message": fmt.Sprintf("Found %d payments", len(payments)),
 	})
+		c.Abort()
 }
 
 func CreateMerryGoRound(c *gin.Context) {
@@ -687,6 +690,7 @@ func CreateMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Create merry-go-round endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 func UpdateMerryGoRound(c *gin.Context) {
@@ -694,6 +698,7 @@ func UpdateMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Update merry-go-round endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 func DeleteMerryGoRound(c *gin.Context) {
@@ -701,4 +706,5 @@ func DeleteMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Delete merry-go-round endpoint - coming soon",
 	})
+		c.Abort()
 }

@@ -55,4 +55,5 @@ func (h *AuthHandlers) TestEmail(c *gin.Context) {
 		Success: true,
 		Message: "Test email sent successfully",
 	})
+	c.Abort()
 }

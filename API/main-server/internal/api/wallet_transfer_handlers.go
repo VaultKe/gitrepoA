@@ -220,6 +220,7 @@ func TransferMoney(c *gin.Context) {
 			"timestamp":      processedTransaction.CreatedAt,
 		},
 	})
+		c.Abort()
 }
 
 func WithdrawMoney(c *gin.Context) {
@@ -480,4 +481,5 @@ func WithdrawMoney(c *gin.Context) {
 			"timestamp":        processedTransaction.CreatedAt,
 		},
 	})
+		c.Abort()
 }

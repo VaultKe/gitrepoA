@@ -217,4 +217,5 @@ func UpdateChama(c *gin.Context, uploadPath string) {
 		"data":    updatedChama,
 		"message": "Chama settings updated successfully",
 	})
+		c.Abort()
 }

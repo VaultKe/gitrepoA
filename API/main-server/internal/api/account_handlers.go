@@ -105,6 +105,7 @@ func (h *AccountHandlers) GetEligibleWelfareMembers(c *gin.Context) {
 		"data":    members,
 		"count":   len(members),
 	})
+	c.Abort()
 }
 
 // GetTransparencyFeed returns transparency feed for a chama
@@ -203,6 +204,7 @@ func (h *AccountHandlers) GetTransparencyFeed(c *gin.Context) {
 			"totalAmount":       totalAmount,
 		},
 	})
+	c.Abort()
 }
 
 // GetAccountNotifications returns account-specific notifications
@@ -264,6 +266,7 @@ func (h *AccountHandlers) GetAccountNotifications(c *gin.Context) {
 		"success": true,
 		"data":    notifications,
 	})
+	c.Abort()
 }
 
 // ValidateSystemSecurity performs security validation
@@ -294,6 +297,7 @@ func (h *AccountHandlers) ValidateSystemSecurity(c *gin.Context) {
 			"status":          "secure",
 		},
 	})
+	c.Abort()
 }
 
 // LogSecurityEvent logs security events
@@ -328,4 +332,5 @@ func (h *AccountHandlers) LogSecurityEvent(c *gin.Context) {
 			"timestamp": time.Now().Format(time.RFC3339),
 		},
 	})
+	c.Abort()
 }

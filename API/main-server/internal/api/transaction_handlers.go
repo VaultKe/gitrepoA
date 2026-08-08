@@ -369,4 +369,5 @@ func GetUserTransactions(c *gin.Context) {
 			"count":  total,
 		},
 	})
+		c.Abort()
 }

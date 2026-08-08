@@ -340,6 +340,7 @@ func GetSupportRequests(c *gin.Context) {
 			"offset": offset,
 		},
 	})
+		c.Abort()
 }
 
 // UpdateSupportRequest updates a support request (admin only)
@@ -483,6 +484,7 @@ func UpdateSupportRequest(c *gin.Context) {
 		"success": true,
 		"message": "Support request updated successfully",
 	})
+		c.Abort()
 }
 
 // CreateTestSupportRequest creates a test support request for debugging

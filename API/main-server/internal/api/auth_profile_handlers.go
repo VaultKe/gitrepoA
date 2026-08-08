@@ -60,6 +60,7 @@ func (h *AuthHandlers) GetProfile(c *gin.Context) {
 			User: user,
 		},
 	})
+	c.Abort()
 }
 
 // GetUserByID handles getting a user profile by ID (for loan enrichment)
@@ -105,6 +106,7 @@ func (h *AuthHandlers) GetUserByID(c *gin.Context) {
 			User: user,
 		},
 	})
+	c.Abort()
 }
 
 // UpdateProfile handles updating user profile (supports both JSON and multipart form data)
@@ -152,6 +154,7 @@ func (h *AuthHandlers) UpdateProfile(c *gin.Context) {
 			User: user,
 		},
 	})
+	c.Abort()
 }
 
 // handleMultipartProfileUpdate processes multipart form data for profile updates

@@ -51,6 +51,7 @@ func GetWallets(c *gin.Context) {
 		"success": true,
 		"data":    wallets,
 	})
+		c.Abort()
 }
 
 func GetWalletBalance(c *gin.Context) {
@@ -122,6 +123,7 @@ func GetWalletBalance(c *gin.Context) {
 			"walletId": wallet.ID,
 		},
 	})
+		c.Abort()
 }
 
 func GetWallet(c *gin.Context) {
@@ -181,6 +183,7 @@ func GetWallet(c *gin.Context) {
 		"success": true,
 		"data":    wallet,
 	})
+		c.Abort()
 }
 
 func GetWalletTransactions(c *gin.Context) {
@@ -269,4 +272,5 @@ func GetWalletTransactions(c *gin.Context) {
 			"count":  len(transactions),
 		},
 	})
+		c.Abort()
 }

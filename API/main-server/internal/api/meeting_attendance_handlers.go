@@ -67,6 +67,7 @@ func MarkAttendance(c *gin.Context) {
 		"success": true,
 		"message": "Attendance marked successfully",
 	})
+		c.Abort()
 }
 
 // GetMeetingAttendance retrieves attendance records for a meeting
@@ -93,4 +94,5 @@ func GetMeetingAttendance(c *gin.Context) {
 		"success": true,
 		"data":    attendances,
 	})
+		c.Abort()
 }

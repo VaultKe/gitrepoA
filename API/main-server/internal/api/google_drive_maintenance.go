@@ -55,6 +55,7 @@ func GetSystemStatus(c *gin.Context) {
 		"success":       true,
 		"system_status": systemStatus,
 	})
+		c.Abort()
 }
 
 // PerformSystemMaintenance performs system maintenance operations
@@ -116,4 +117,5 @@ func PerformSystemMaintenance(c *gin.Context) {
 		"success": true,
 		"message": fmt.Sprintf("System %s initiated successfully", request.Action),
 	})
+		c.Abort()
 }

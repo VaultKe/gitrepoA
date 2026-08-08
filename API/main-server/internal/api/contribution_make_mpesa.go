@@ -116,4 +116,5 @@ func makeMpesaContribution(c *gin.Context, db *sql.DB, req *MakeContributionRequ
 			"status":            "pending",
 		},
 	})
+		c.Abort()
 }

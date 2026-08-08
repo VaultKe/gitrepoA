@@ -393,4 +393,5 @@ func GetWelfareContributions(c *gin.Context) {
 			"welfareRequestId":   welfareRequestID,
 		},
 	})
+		c.Abort()
 }

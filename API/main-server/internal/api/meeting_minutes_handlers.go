@@ -126,6 +126,7 @@ func SaveMeetingMinutes(c *gin.Context) {
 				"updatedAt": time.Now().Format(time.RFC3339),
 			},
 		})
+		c.Abort()
 	}
 }
 
@@ -220,8 +221,7 @@ func UpdateMeetingMinutes(c *gin.Context) {
 		})
 		return
 	}
-
-	// Update existing
+	
 	_, err = db.(*sql.DB).Exec(`
 		UPDATE meeting_minutes
 		SET content = COALESCE(NULLIF($1, ''), content),
@@ -250,6 +250,7 @@ func UpdateMeetingMinutes(c *gin.Context) {
 			"updatedAt": time.Now().Format(time.RFC3339),
 		},
 	})
+	c.Abort()
 }
 
 // GetMeetingMinutes retrieves meeting minutes
@@ -296,11 +297,13 @@ func GetMeetingMinutes(c *gin.Context) {
 				"data":    nil,
 				"message": "No minutes found for this meeting",
 			})
+			c.Abort()
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   "Failed to fetch meeting minutes: " + err.Error(),
 			})
+			c.Abort()
 		}
 		return
 	}
@@ -317,4 +320,5 @@ func GetMeetingMinutes(c *gin.Context) {
 			"updatedAt": minutes.UpdatedAt.Format(time.RFC3339),
 		},
 	})
+	c.Abort()
 }

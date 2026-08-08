@@ -525,6 +525,7 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		}
 
 		c.JSON(http.StatusOK, response)
+		c.Abort()
 	} else {
 		fmt.Printf("Database not available in context for recording login session\n")
 
@@ -543,6 +544,7 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 		}
 
 		c.JSON(http.StatusOK, AuthResponse{
+		
 			Success: true,
 			Message: "Login successful",
 			Data: &AuthData{
@@ -550,8 +552,10 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 				Token:        token,
 				RefreshToken: refreshToken,
 			},
+			
 		})
 	}
+	c.Abort()
 }
 
 // Logout handles user logout
@@ -578,6 +582,7 @@ func (h *AuthHandlers) Logout(c *gin.Context) {
 		Success: true,
 		Message: "Logout successful",
 	})
+	c.Abort()
 }
 
 // RefreshToken handles token refresh using stored refresh token
@@ -622,4 +627,5 @@ func (h *AuthHandlers) RefreshToken(c *gin.Context) {
 			RefreshToken: newRefreshToken,
 		},
 	})
+ c.Abort()
 }

@@ -7,6 +7,52 @@ let isRefreshing = false;
 let refreshPromise = null;
 
 /**
+ * Global request deduplication and short-lived GET cache.
+ *
+ * - Concurrent identical GET requests share a single in-flight promise.
+ * - Successful GET responses are cached for a short TTL so repeated
+ *   navigations / focus events do not hammer the backend.
+ * - Mutations (POST/PUT/PATCH/DELETE) invalidate related cache entries
+ *   so subsequent reads eventually see fresh data.
+ */
+const inFlightRequests = new Map();
+const responseCache = new Map();
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
+const getCacheKey = (endpoint, options = {}) => {
+  const method = options.method || 'GET';
+  const body = options.body ? JSON.stringify(options.body) : '';
+  return `${method}:${endpoint}:${body}`;
+};
+
+const getCachedResponse = (cacheKey) => {
+  const entry = responseCache.get(cacheKey);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    responseCache.delete(cacheKey);
+    return null;
+  }
+  return entry.data;
+};
+
+const setCachedResponse = (cacheKey, data) => {
+  responseCache.set(cacheKey, { data, timestamp: Date.now() });
+};
+
+const invalidateCache = (pattern) => {
+  for (const key of responseCache.keys()) {
+    if (key.includes(pattern)) {
+      responseCache.delete(key);
+    }
+  }
+  for (const key of inFlightRequests.keys()) {
+    if (key.includes(pattern)) {
+      inFlightRequests.delete(key);
+    }
+  }
+};
+
+/**
  * Endpoints that never return PII and should bypass the expensive
  * maskSensitiveData deep-clone in makeRequest.  Matching is done with
  * String.prototype.includes so a single prefix like "/chamas" covers
@@ -128,158 +174,314 @@ const refreshAccessToken = async () => {
       throw new Error('Use refreshAccessToken instead');
     }
 
-  const token = await getAuthToken();
-  const isFormData = !!(options.body &&
-    typeof options.body === 'object' &&
-    !Array.isArray(options.body) &&
-    ((typeof FormData !== 'undefined' && options.body instanceof FormData) ||
-      typeof options.body.append === 'function' ||
-      typeof options.body.getParts === 'function' ||
-      (Array.isArray(options.body._parts)) ||
-      (options.body.constructor && options.body.constructor.name === 'FormData')));
-  const deviceInfo = await getDeviceInfo();
+    const method = (options.method || 'GET').toUpperCase();
+    const cacheKey = getCacheKey(endpoint, options);
 
-  const isAuthEndpoint = endpoint.startsWith('/auth/') || endpoint.startsWith('/auth/refresh');
+    // For GET-like requests, serve from cache or in-flight promise when possible.
+    if (method === 'GET') {
+      const cached = getCachedResponse(cacheKey);
+      if (cached) {
+        return cached;
+      }
 
-  const config = {
-    method: 'GET',
-    headers: {
-      ...(!isFormData && { 'Content-Type': 'application/json' }),
-      ...(token && { Authorization: `Bearer ${token}` }),
-      'X-Timezone': sanitizeHeaderValue(deviceInfo.timezone),
-      'X-Language': sanitizeHeaderValue(deviceInfo.language),
-      'X-Locale': sanitizeHeaderValue(deviceInfo.locale),
-      'X-Device-Id': sanitizeHeaderValue(deviceInfo.deviceId),
-      'X-Device-Type': sanitizeHeaderValue(deviceInfo.deviceType),
-      'X-Device-Name': sanitizeHeaderValue(deviceInfo.deviceName),
-      'X-Browser-Name': sanitizeHeaderValue(deviceInfo.browserName),
-      'X-OS-Name': sanitizeHeaderValue(deviceInfo.osName),
-      'X-OS-Version': sanitizeHeaderValue(deviceInfo.osVersion),
-      'X-App-Version': sanitizeHeaderValue(deviceInfo.appVersion),
-      'X-Manufacturer': sanitizeHeaderValue(deviceInfo.manufacturer),
-      'X-Model': sanitizeHeaderValue(deviceInfo.model),
-      ...(deviceInfo.screenResolution && { 'X-Screen-Resolution': sanitizeHeaderValue(deviceInfo.screenResolution) }),
-      ...(deviceInfo.connectionType && { 'X-Connection-Type': sanitizeHeaderValue(deviceInfo.connectionType) }),
-      ...options.headers,
-    },
-    ...options,
+      const inFlight = inFlightRequests.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
+    const token = await getAuthToken();
+    const isFormData = !!(options.body &&
+      typeof options.body === 'object' &&
+      !Array.isArray(options.body) &&
+      ((typeof FormData !== 'undefined' && options.body instanceof FormData) ||
+        typeof options.body.append === 'function' ||
+        typeof options.body.getParts === 'function' ||
+        (Array.isArray(options.body._parts)) ||
+        (options.body.constructor && options.body.constructor.name === 'FormData')));
+    const deviceInfo = await getDeviceInfo();
+
+    const isAuthEndpoint = endpoint.startsWith('/auth/') || endpoint.startsWith('/auth/refresh');
+
+    const config = {
+      method: 'GET',
+      headers: {
+        ...(!isFormData && { 'Content-Type': 'application/json' }),
+        ...(token && { Authorization: `Bearer ${token}` }),
+        'X-Timezone': sanitizeHeaderValue(deviceInfo.timezone),
+        'X-Language': sanitizeHeaderValue(deviceInfo.language),
+        'X-Locale': sanitizeHeaderValue(deviceInfo.locale),
+        'X-Device-Id': sanitizeHeaderValue(deviceInfo.deviceId),
+        'X-Device-Type': sanitizeHeaderValue(deviceInfo.deviceType),
+        'X-Device-Name': sanitizeHeaderValue(deviceInfo.deviceName),
+        'X-Browser-Name': sanitizeHeaderValue(deviceInfo.browserName),
+        'X-OS-Name': sanitizeHeaderValue(deviceInfo.osName),
+        'X-OS-Version': sanitizeHeaderValue(deviceInfo.osVersion),
+        'X-App-Version': sanitizeHeaderValue(deviceInfo.appVersion),
+        'X-Manufacturer': sanitizeHeaderValue(deviceInfo.manufacturer),
+        'X-Model': sanitizeHeaderValue(deviceInfo.model),
+        ...(deviceInfo.screenResolution && { 'X-Screen-Resolution': sanitizeHeaderValue(deviceInfo.screenResolution) }),
+        ...(deviceInfo.connectionType && { 'X-Connection-Type': sanitizeHeaderValue(deviceInfo.connectionType) }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    if (config.body && typeof config.body === 'object' && !isFormData) {
+      config.body = JSON.stringify(config.body);
+    }
+
+    // For GET requests, share a single in-flight promise across callers.
+    let requestPromise = null;
+    if (method === 'GET') {
+      requestPromise = inFlightRequests.get(cacheKey);
+      if (!requestPromise) {
+        requestPromise = (async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+          const fetchConfig = { ...config, signal: controller.signal };
+          if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          }
+          const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchConfig);
+          clearTimeout(timeoutId);
+
+          const contentType = response.headers.get('content-type');
+          let data;
+
+          try {
+            const textResponse = await response.text();
+            if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
+              throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
+            }
+            if (contentType && contentType.includes('application/json')) {
+              data = safeJSONParse(textResponse);
+            } else {
+              try {
+                data = JSON.parse(textResponse);
+              } catch (jsonError) {
+                throw new Error(`Invalid JSON response from server. Status: ${response.status}`);
+              }
+            }
+          } catch (parseError) {
+              if (!response.ok) {
+              throw new Error(`Server error: ${response.statusText}`);
+            }
+            throw parseError;
+          }
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
+              if (isAuthEndpoint) {
+                if (!getLoggingOut()) {
+                  await triggerAppLogout();
+                }
+                throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+              }
+
+              try {
+                const newToken = await refreshAccessToken();
+                if (newToken) {
+                  const retryHeaders = {
+                    ...config.headers,
+                    Authorization: `Bearer ${newToken}`,
+                  };
+                  const retryConfig = { ...config, headers: retryHeaders };
+                  if (retryConfig.body && typeof retryConfig.body === 'object' && !isFormData) {
+                    retryConfig.body = JSON.stringify(retryConfig.body);
+                  }
+
+                  const retryController = new AbortController();
+                  const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT);
+
+                  const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    ...retryConfig,
+                    signal: retryController.signal,
+                  });
+
+                  clearTimeout(retryTimeoutId);
+                  const retryContentType = retryResponse.headers.get('content-type');
+                  let retryData;
+                  if (retryContentType && retryContentType.includes('application/json')) {
+                    retryData = await retryResponse.json();
+                  } else {
+                    retryData = await retryResponse.text();
+                  }
+
+                  if (!retryResponse.ok) {
+                    throw new Error(retryData?.error || retryResponse.statusText || 'Request failed after token refresh');
+                  }
+
+                  const result = retryData?.success !== undefined ? retryData : { success: true, data: retryData };
+                  setCachedResponse(cacheKey, result);
+                  inFlightRequests.delete(cacheKey);
+                  return result;
+                }
+              } catch (refreshError) {
+                if (!getLoggingOut()) {
+                  await triggerAppLogout();
+                }
+                throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+              }
+            }
+            if (response.status === 429) {
+              throw new Error('Too many requests. Please wait a moment and try again.');
+            }
+            if (response.status >= 500) {
+              throw new Error('Server error occurred. Please try again later.');
+            }
+            if (response.status >= 400 && response.status < 500) {
+              throw new Error(data.error || `Request failed: ${response.statusText}`);
+            }
+            throw new Error(data.error || `HTTP error! status: ${response.status}`);
+          }
+
+          const result = data?.success !== undefined ? data : { success: true, data };
+
+          // maskSensitiveData deep-clones and recursively processes every field in the
+          // response — extremely expensive for large payloads (e.g. chama listings with
+          // 50+ items).  Only apply it to endpoints that may return PII.  Everything
+          // else returns the original parsed object, avoiding the memory/CPU overhead
+          // of a full deep clone.
+          if (isAuthEndpoint) {
+            inFlightRequests.delete(cacheKey);
+            return result;
+          }
+
+          const shouldMask = !isUnmaskedEndpoint(endpoint);
+          const finalResult = shouldMask ? maskSensitiveData(result) : result;
+          setCachedResponse(cacheKey, finalResult);
+          inFlightRequests.delete(cacheKey);
+          return finalResult;
+        })();
+
+        inFlightRequests.set(cacheKey, requestPromise);
+      }
+
+      try {
+        return await requestPromise;
+      } finally {
+        inFlightRequests.delete(cacheKey);
+      }
+    }
+
+    // Non-GET requests bypass the in-flight cache but still invalidate related GET cache entries.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+    const fetchConfig = { ...config, signal: controller.signal };
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    }
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchConfig);
+    clearTimeout(timeoutId);
+
+    const contentType = response.headers.get('content-type');
+    let data;
+
+    try {
+      const textResponse = await response.text();
+      if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
+        throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
+      }
+      if (contentType && contentType.includes('application/json')) {
+        data = safeJSONParse(textResponse);
+      } else {
+        try {
+          data = JSON.parse(textResponse);
+        } catch (jsonError) {
+          throw new Error(`Invalid JSON response from server. Status: ${response.status}`);
+        }
+      }
+    } catch (parseError) {
+        if (!response.ok) {
+        throw new Error(`Server error: ${response.statusText}`);
+      }
+      throw parseError;
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
+        if (isAuthEndpoint) {
+          if (!getLoggingOut()) {
+            await triggerAppLogout();
+          }
+          throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+        }
+
+        try {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
+            const retryHeaders = {
+              ...config.headers,
+              Authorization: `Bearer ${newToken}`,
+            };
+            const retryConfig = { ...config, headers: retryHeaders };
+            if (retryConfig.body && typeof retryConfig.body === 'object' && !isFormData) {
+              retryConfig.body = JSON.stringify(retryConfig.body);
+            }
+
+            const retryController = new AbortController();
+            const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT);
+
+            const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+              ...retryConfig,
+              signal: retryController.signal,
+            });
+
+            clearTimeout(retryTimeoutId);
+            const retryContentType = retryResponse.headers.get('content-type');
+            let retryData;
+            if (retryContentType && retryContentType.includes('application/json')) {
+              retryData = await retryResponse.json();
+            } else {
+              retryData = await retryResponse.text();
+            }
+
+            if (!retryResponse.ok) {
+              throw new Error(retryData?.error || retryResponse.statusText || 'Request failed after token refresh');
+            }
+
+            return maskSensitiveData(retryData?.success !== undefined ? retryData : { success: true, data: retryData });
+          }
+        } catch (refreshError) {
+          if (!getLoggingOut()) {
+            await triggerAppLogout();
+          }
+          throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+        }
+      }
+      if (response.status === 429) {
+        throw new Error('Too many requests. Please wait a moment and try again.');
+      }
+      if (response.status >= 500) {
+        throw new Error('Server error occurred. Please try again later.');
+      }
+      if (response.status >= 400 && response.status < 500) {
+        throw new Error(data.error || `Request failed: ${response.statusText}`);
+      }
+      throw new Error(data.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = data?.success !== undefined ? data : { success: true, data };
+
+    if (isAuthEndpoint) {
+      return result;
+    }
+
+    const shouldMask = !isUnmaskedEndpoint(endpoint);
+    const finalResult = shouldMask ? maskSensitiveData(result) : result;
+
+    // Invalidate related GET cache entries after mutations so stale data
+    // is not served from cache on the next read.
+    if (method !== 'GET') {
+      const path = endpoint.split('?')[0];
+      invalidateCache(path);
+    }
+
+    return finalResult;
   };
-
-  if (config.body && typeof config.body === 'object' && !isFormData) {
-    config.body = JSON.stringify(config.body);
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-
-  const fetchConfig = { ...config, signal: controller.signal };
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-  }
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchConfig);
-  clearTimeout(timeoutId);
-
-  const contentType = response.headers.get('content-type');
-  let data;
-
-  try {
-    const textResponse = await response.text();
-    if (textResponse.trim().startsWith('<!DOCTYPE') || textResponse.trim().startsWith('<html')) {
-      throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
-    }
-    if (contentType && contentType.includes('application/json')) {
-      data = safeJSONParse(textResponse);
-    } else {
-      try {
-        data = JSON.parse(textResponse);
-      } catch (jsonError) {
-        throw new Error(`Invalid JSON response from server. Status: ${response.status}`);
-      }
-    }
-  } catch (parseError) {
-      if (!response.ok) {
-      throw new Error(`Server error: ${response.statusText}`);
-    }
-    throw parseError;
-  }
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
-      if (isAuthEndpoint) {
-        if (!getLoggingOut()) {
-          await triggerAppLogout();
-        }
-        throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
-      }
-
-      try {
-        const newToken = await refreshAccessToken();
-        if (newToken) {
-          const retryHeaders = {
-            ...config.headers,
-            Authorization: `Bearer ${newToken}`,
-          };
-          const retryConfig = { ...config, headers: retryHeaders };
-          if (retryConfig.body && typeof retryConfig.body === 'object' && !isFormData) {
-            retryConfig.body = JSON.stringify(retryConfig.body);
-          }
-
-          const retryController = new AbortController();
-          const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT);
-
-          const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...retryConfig,
-            signal: retryController.signal,
-          });
-
-          clearTimeout(retryTimeoutId);
-          const retryContentType = retryResponse.headers.get('content-type');
-          let retryData;
-          if (retryContentType && retryContentType.includes('application/json')) {
-            retryData = await retryResponse.json();
-          } else {
-            retryData = await retryResponse.text();
-          }
-
-          if (!retryResponse.ok) {
-            throw new Error(retryData?.error || retryResponse.statusText || 'Request failed after token refresh');
-          }
-
-          return maskSensitiveData(retryData?.success !== undefined ? retryData : { success: true, data: retryData });
-        }
-      } catch (refreshError) {
-        if (!getLoggingOut()) {
-          await triggerAppLogout();
-        }
-        throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
-      }
-    }
-    if (response.status === 429) {
-      throw new Error('Too many requests. Please wait a moment and try again.');
-    }
-    if (response.status >= 500) {
-      throw new Error('Server error occurred. Please try again later.');
-    }
-    if (response.status >= 400 && response.status < 500) {
-      throw new Error(data.error || `Request failed: ${response.statusText}`);
-    }
-    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-  }
-
-  const result = data?.success !== undefined ? data : { success: true, data };
-
-  // maskSensitiveData deep-clones and recursively processes every field in the
-  // response — extremely expensive for large payloads (e.g. chama listings with
-  // 50+ items).  Only apply it to endpoints that may return PII.  Everything
-  // else returns the original parsed object, avoiding the memory/CPU overhead
-  // of a full deep clone.
-  if (isAuthEndpoint) {
-    return result;
-  }
-
-  const shouldMask = !isUnmaskedEndpoint(endpoint);
-  return shouldMask ? maskSensitiveData(result) : result;
-};
 
 const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {
   let lastError;
@@ -394,6 +596,7 @@ export {
   makeRequestWithRetry,
   checkBackendConnectivity,
   checkHealth,
+  invalidateCache,
   API_BASE_URL,
   REQUEST_TIMEOUT,
 };

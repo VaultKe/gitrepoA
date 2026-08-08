@@ -204,6 +204,7 @@ func RespondToGuarantorRequest(c *gin.Context) {
 			"action":       req.Action,
 		},
 	})
+		c.Abort()
 }
 
 // checkAndUpdateLoanStatus checks if all guarantors have responded and updates loan status
@@ -361,6 +362,7 @@ func InitiateLoanApproval(c *gin.Context) {
 			"role":  role,
 		},
 	})
+		c.Abort()
 }
 
 func ConfirmLoanApproval(c *gin.Context) {
@@ -452,6 +454,7 @@ func ConfirmLoanApproval(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+		c.Abort()
 }
 
 func RejectLoan(c *gin.Context) {
@@ -595,6 +598,7 @@ func RejectLoan(c *gin.Context) {
 			"reason":  req.Reason,
 		},
 	})
+		c.Abort()
 }
 
 func DisburseLoan(c *gin.Context) {
@@ -647,4 +651,5 @@ func DisburseLoan(c *gin.Context) {
 		"success": true,
 		"message": "Loan disbursed successfully",
 	})
+		c.Abort()
 }

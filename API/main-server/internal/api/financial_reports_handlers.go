@@ -143,6 +143,7 @@ func (h *FinancialReportsHandlers) GetFinancialReports(c *gin.Context) {
 		"data":    reports,
 		"count":   len(reports),
 	})
+		c.Abort()
 }
 
 // GenerateFinancialReport generates a new financial report
@@ -247,6 +248,7 @@ func (h *FinancialReportsHandlers) GenerateFinancialReport(c *gin.Context) {
 		},
 		"message": "Report generation started",
 	})
+		c.Abort()
 }
 
 // DownloadFinancialReport downloads a financial report
@@ -301,4 +303,5 @@ func (h *FinancialReportsHandlers) DownloadFinancialReport(c *gin.Context) {
 			"downloadUrl": "/api/v1/reports/" + reportID + "/download",
 		},
 	})
+		c.Abort()
 }

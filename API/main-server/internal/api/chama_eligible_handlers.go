@@ -81,6 +81,7 @@ func GetEligibleLoanMembers(c *gin.Context) {
 		"success": true,
 		"data":    members,
 	})
+	c.Abort()
 }
 
 // GetEligibleWelfareMembers retrieves members eligible for welfare disbursements
@@ -157,6 +158,7 @@ func GetEligibleWelfareMembers(c *gin.Context) {
 		"success": true,
 		"data":    members,
 	})
+		c.Abort()
 }
 
 // GetEligibleDividendMembers retrieves members eligible for dividend disbursements
@@ -229,6 +231,7 @@ func GetEligibleDividendMembers(c *gin.Context) {
 		"success": true,
 		"data":    members,
 	})
+		c.Abort()
 }
 
 // GetEligibleSavingsMembers retrieves members eligible for savings withdrawals
@@ -315,6 +318,7 @@ func GetEligibleSavingsMembers(c *gin.Context) {
 		"success": true,
 		"data":    members,
 	})
+		c.Abort()
 }
 
 // GetEligibleOtherMembers retrieves members eligible for other disbursements
@@ -392,6 +396,7 @@ func GetEligibleOtherMembers(c *gin.Context) {
 		"success": true,
 		"data":    members,
 	})
+		c.Abort()
 }
 
 // GetChamaSharesOfferings retrieves share holdings for a chama
@@ -459,4 +464,5 @@ func GetChamaSharesOfferings(c *gin.Context) {
 		"success": true,
 		"data":    holdings,
 	})
+		c.Abort()
 }

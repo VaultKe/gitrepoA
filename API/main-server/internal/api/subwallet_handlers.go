@@ -59,6 +59,7 @@ func (h *SubWalletHandlers) GetChamaSubWallets(c *gin.Context) {
 		"data":    wallets,
 		"count":   len(wallets),
 	})
+		c.Abort()
 }
 
 func (h *SubWalletHandlers) GetSubWalletTransactions(c *gin.Context) {
@@ -96,6 +97,7 @@ func (h *SubWalletHandlers) GetSubWalletTransactions(c *gin.Context) {
 		"data":    transactions,
 		"count":   len(transactions),
 	})
+		c.Abort()
 }
 
 func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
@@ -399,6 +401,7 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 			"reference":         reference,
 		},
 	})
+		c.Abort()
 }
 
 func (h *SubWalletHandlers) WithdrawFromSubWallet(c *gin.Context) {
@@ -484,4 +487,5 @@ func (h *SubWalletHandlers) WithdrawFromSubWallet(c *gin.Context) {
 			"status":         transaction.Status,
 		},
 	})
+		c.Abort()
 }

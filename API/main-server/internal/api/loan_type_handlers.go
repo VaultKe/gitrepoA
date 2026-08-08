@@ -41,6 +41,7 @@ func CreateLoanType(c *gin.Context) {
 		"data":    loanType,
 		"message": "Loan type created successfully",
 	})
+		c.Abort()
 }
 
 func GetChamaLoanTypes(c *gin.Context) {
@@ -64,6 +65,7 @@ func GetChamaLoanTypes(c *gin.Context) {
 		"data":    types,
 		"count":   len(types),
 	})
+		c.Abort()
 }
 
 func GetLoanType(c *gin.Context) {
@@ -84,6 +86,7 @@ func GetLoanType(c *gin.Context) {
 		"success": true,
 		"data":    lt,
 	})
+		c.Abort()
 }
 
 func UpdateLoanType(c *gin.Context) {
@@ -117,6 +120,7 @@ func UpdateLoanType(c *gin.Context) {
 		"data":    loanType,
 		"message": "Loan type updated successfully",
 	})
+		c.Abort()
 }
 
 func DeleteLoanType(c *gin.Context) {
@@ -142,6 +146,7 @@ func DeleteLoanType(c *gin.Context) {
 		"success": true,
 		"message": "Loan type deleted successfully",
 	})
+		c.Abort()
 }
 
 func containsRole(role string, roles ...string) bool {

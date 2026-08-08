@@ -96,6 +96,7 @@ func GetPrivacySettings(c *gin.Context) {
 		"success": true,
 		"data":    settings,
 	})
+		c.Abort()
 }
 
 // UpdatePrivacySettings updates user privacy settings
@@ -161,6 +162,7 @@ func UpdatePrivacySettings(c *gin.Context) {
 		"success": true,
 		"message": "Privacy settings updated successfully",
 	})
+		c.Abort()
 }
 
 // GetSecuritySettings retrieves user security settings
@@ -235,6 +237,7 @@ func GetSecuritySettings(c *gin.Context) {
 		"success": true,
 		"data":    settings,
 	})
+		c.Abort()
 }
 
 // UpdateSecuritySettings updates user security settings
@@ -305,6 +308,7 @@ func UpdateSecuritySettings(c *gin.Context) {
 		"success": true,
 		"message": "Security settings updated successfully",
 	})
+		c.Abort()
 }
 
 // GetUserPreferences retrieves user preferences
@@ -372,6 +376,7 @@ func GetUserPreferences(c *gin.Context) {
 		"success": true,
 		"data":    preferences,
 	})
+		c.Abort()
 }
 
 // UpdateUserPreferences updates user preferences
@@ -437,6 +442,7 @@ func UpdateUserPreferences(c *gin.Context) {
 		"success": true,
 		"message": "User preferences updated successfully",
 	})
+		c.Abort()
 }
 
 // Table creation helper functions

@@ -115,6 +115,7 @@ func (h *ReceiptHandlers) GetTransactionReceipt(c *gin.Context) {
 			"success": true,
 			"data":    receiptData,
 		})
+		c.Abort()
 	case "html":
 		html := h.generateReceiptHTML(receiptData)
 		c.Header("Content-Type", "text/html")

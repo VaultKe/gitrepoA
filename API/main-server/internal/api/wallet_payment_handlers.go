@@ -168,4 +168,5 @@ func InitiateRegistrationPayment(c *gin.Context) {
 			"customerMessage":   stkResponse.CustomerMessage,
 		},
 	})
+		c.Abort()
 }

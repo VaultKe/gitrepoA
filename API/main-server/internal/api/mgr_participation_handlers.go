@@ -122,6 +122,7 @@ func JoinMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Join merry-go-round endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 // CheckUserContributionStatus checks if a user has already contributed to the current round
@@ -355,6 +356,7 @@ func CheckUserContributionStatus(c *gin.Context) {
 			"roundComplete": totalContributions >= totalParticipants && totalParticipants > 0,
 		},
 	})
+		c.Abort()
 }
 
 // CheckAndAdvanceRound checks if all members have contributed to the current recipient
@@ -517,6 +519,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 				"totalRounds":    totalParticipants,
 			},
 		})
+		c.Abort()
 	} else if updatedCurrentRound > currentRound {
 		// Round was advanced
 		var nextPayoutDate time.Time
@@ -535,6 +538,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 				"totalRounds":    totalParticipants,
 			},
 		})
+		c.Abort()
 	} else {
 		// Round not yet complete
 		totalContributionsNeeded := totalParticipants - 1
@@ -551,6 +555,7 @@ func CheckAndAdvanceRound(c *gin.Context) {
 				"progressPercentage":       (contributionCount * 100) / totalContributionsNeeded,
 			},
 		})
+		c.Abort()
 	}
 }
 
@@ -644,6 +649,7 @@ func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 			"url": template + "?" + params.Encode(),
 		},
 	})
+		c.Abort()
 }
 
 // CreateMerryGoRoundCalendarEvent creates the event in the user's Google Calendar

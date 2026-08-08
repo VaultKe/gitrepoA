@@ -192,7 +192,23 @@ func GetChamaVotes(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var votes []map[string]interface{}
+	var voteIDs []string
+	var voteMap []struct {
+		ID          string
+		Title       string
+		Description string
+		Type        string
+		Status      string
+		StartsAt    string
+		EndsAt      string
+		CreatedBy   string
+		CreatedAt   string
+		FirstName   string
+		LastName    string
+		UserVoted   int
+		CreatedByName string
+	}
+
 	for rows.Next() {
 		var vote struct {
 			ID          string
@@ -216,50 +232,93 @@ func GetChamaVotes(c *gin.Context) {
 			continue
 		}
 
-		// Get vote options
-		optionRows, err := db.(*sql.DB).Query(`
-			SELECT id, option_text, vote_count
-			FROM vote_options
-			WHERE vote_id = $1
-			ORDER BY id
-		`, vote.ID)
-		if err != nil {
-			continue
-		}
-
-		var options []map[string]interface{}
-		totalVotes := 0
-		for optionRows.Next() {
-			var option struct {
-				ID        string
-				Text      string
-				VoteCount int
-			}
-			if err := optionRows.Scan(&option.ID, &option.Text, &option.VoteCount); err == nil {
-			options = append(options, map[string]interface{}{
-				"id":          option.ID,
-				"option_text": option.Text,
-				"vote_count":  option.VoteCount,
-			})
-				totalVotes += option.VoteCount
-			}
-		}
-		optionRows.Close()
-
 		createdByName := "Unknown"
 		if vote.FirstName.Valid && vote.LastName.Valid {
 			createdByName = vote.FirstName.String + " " + vote.LastName.String
 		}
 
+		voteIDs = append(voteIDs, vote.ID)
+		voteMap = append(voteMap, struct {
+			ID          string
+			Title       string
+			Description string
+			Type        string
+			Status      string
+			StartsAt    string
+			EndsAt      string
+			CreatedBy   string
+			CreatedAt   string
+			FirstName   string
+			LastName    string
+			UserVoted   int
+			CreatedByName string
+		}{
+			ID:          vote.ID,
+			Title:       vote.Title,
+			Description: vote.Description.String,
+			Type:        vote.Type,
+			Status:      vote.Status,
+			StartsAt:    vote.StartsAt,
+			EndsAt:      vote.EndsAt,
+			CreatedBy:   vote.CreatedBy,
+			CreatedAt:   vote.CreatedAt,
+			FirstName:   vote.FirstName.String,
+			LastName:    vote.LastName.String,
+			UserVoted:   vote.UserVoted,
+			CreatedByName: createdByName,
+		})
+	}
+
+	// Preload all vote options in a single query to avoid N+1
+	optionsByVoteID := map[string][]map[string]interface{}{}
+	if len(voteIDs) > 0 {
+		optionRows, err := db.(*sql.DB).Query(`
+			SELECT vote_id, id, option_text, vote_count
+			FROM vote_options
+			WHERE vote_id = ANY($1)
+			ORDER BY vote_id, id
+		`, voteIDs)
+		if err == nil {
+			for optionRows.Next() {
+				var voteID, optionID, optionText string
+				var voteCount int
+				if err := optionRows.Scan(&voteID, &optionID, &optionText, &voteCount); err == nil {
+					if optionsByVoteID[voteID] == nil {
+						optionsByVoteID[voteID] = []map[string]interface{}{}
+					}
+					optionsByVoteID[voteID] = append(optionsByVoteID[voteID], map[string]interface{}{
+						"id":          optionID,
+						"option_text": optionText,
+						"vote_count":  voteCount,
+					})
+				}
+			}
+			optionRows.Close()
+		}
+	}
+
+	var votes []map[string]interface{}
+	for _, vote := range voteMap {
+		options := optionsByVoteID[vote.ID]
+		if options == nil {
+			options = []map[string]interface{}{}
+		}
+		totalVotes := 0
+		for _, opt := range options {
+			if vc, ok := opt["vote_count"].(int); ok {
+				totalVotes += vc
+			}
+		}
+
 		votes = append(votes, map[string]interface{}{
 			"id":           vote.ID,
 			"title":        vote.Title,
-			"description":  vote.Description.String,
+			"description":  vote.Description,
 			"type":         vote.Type,
 			"status":       vote.Status,
 			"starts_at":    vote.StartsAt,
 			"ends_at":      vote.EndsAt,
-			"created_by":   createdByName,
+			"created_by":   vote.CreatedByName,
 			"created_at":   vote.CreatedAt,
 			"options":      options,
 			"total_votes":  totalVotes,
@@ -326,7 +385,23 @@ func GetActiveVotes(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var votes []map[string]interface{}
+	var voteIDs []string
+	var voteMap []struct {
+		ID          string
+		Title       string
+		Description string
+		Type        string
+		Status      string
+		StartsAt    string
+		EndsAt      string
+		CreatedBy   string
+		CreatedAt   string
+		FirstName   string
+		LastName    string
+		UserVoted   int
+		CreatedByName string
+	}
+
 	for rows.Next() {
 		var vote struct {
 			ID          string
@@ -350,50 +425,93 @@ func GetActiveVotes(c *gin.Context) {
 			continue
 		}
 
-		// Get vote options
-		optionRows, err := db.(*sql.DB).Query(`
-			SELECT id, option_text, vote_count
-			FROM vote_options
-			WHERE vote_id = $1
-			ORDER BY id
-		`, vote.ID)
-		if err != nil {
-			continue
-		}
-
-		var options []map[string]interface{}
-		totalVotes := 0
-		for optionRows.Next() {
-			var option struct {
-				ID        string
-				Text      string
-				VoteCount int
-			}
-			if err := optionRows.Scan(&option.ID, &option.Text, &option.VoteCount); err == nil {
-			options = append(options, map[string]interface{}{
-				"id":          option.ID,
-				"option_text": option.Text,
-				"vote_count":  option.VoteCount,
-			})
-				totalVotes += option.VoteCount
-			}
-		}
-		optionRows.Close()
-
 		createdByName := "Unknown"
 		if vote.FirstName.Valid && vote.LastName.Valid {
 			createdByName = vote.FirstName.String + " " + vote.LastName.String
 		}
 
+		voteIDs = append(voteIDs, vote.ID)
+		voteMap = append(voteMap, struct {
+			ID          string
+			Title       string
+			Description string
+			Type        string
+			Status      string
+			StartsAt    string
+			EndsAt      string
+			CreatedBy   string
+			CreatedAt   string
+			FirstName   string
+			LastName    string
+			UserVoted   int
+			CreatedByName string
+		}{
+			ID:          vote.ID,
+			Title:       vote.Title,
+			Description: vote.Description.String,
+			Type:        vote.Type,
+			Status:      vote.Status,
+			StartsAt:    vote.StartsAt,
+			EndsAt:      vote.EndsAt,
+			CreatedBy:   vote.CreatedBy,
+			CreatedAt:   vote.CreatedAt,
+			FirstName:   vote.FirstName.String,
+			LastName:    vote.LastName.String,
+			UserVoted:   vote.UserVoted,
+			CreatedByName: createdByName,
+		})
+	}
+
+	// Preload all vote options in a single query to avoid N+1
+	optionsByVoteID := map[string][]map[string]interface{}{}
+	if len(voteIDs) > 0 {
+		optionRows, err := db.(*sql.DB).Query(`
+			SELECT vote_id, id, option_text, vote_count
+			FROM vote_options
+			WHERE vote_id = ANY($1)
+			ORDER BY vote_id, id
+		`, voteIDs)
+		if err == nil {
+			for optionRows.Next() {
+				var voteID, optionID, optionText string
+				var voteCount int
+				if err := optionRows.Scan(&voteID, &optionID, &optionText, &voteCount); err == nil {
+					if optionsByVoteID[voteID] == nil {
+						optionsByVoteID[voteID] = []map[string]interface{}{}
+					}
+					optionsByVoteID[voteID] = append(optionsByVoteID[voteID], map[string]interface{}{
+						"id":          optionID,
+						"option_text": optionText,
+						"vote_count":  voteCount,
+					})
+				}
+			}
+			optionRows.Close()
+		}
+	}
+
+	var votes []map[string]interface{}
+	for _, vote := range voteMap {
+		options := optionsByVoteID[vote.ID]
+		if options == nil {
+			options = []map[string]interface{}{}
+		}
+		totalVotes := 0
+		for _, opt := range options {
+			if vc, ok := opt["vote_count"].(int); ok {
+				totalVotes += vc
+			}
+		}
+
 		votes = append(votes, map[string]interface{}{
 			"id":           vote.ID,
 			"title":        vote.Title,
-			"description":  vote.Description.String,
+			"description":  vote.Description,
 			"type":         vote.Type,
 			"status":       vote.Status,
 			"starts_at":    vote.StartsAt,
 			"ends_at":      vote.EndsAt,
-			"created_by":   createdByName,
+			"created_by":   vote.CreatedByName,
 			"created_at":   vote.CreatedAt,
 			"options":      options,
 			"total_votes":  totalVotes,
@@ -460,7 +578,23 @@ func GetVoteResults(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var votes []map[string]interface{}
+	var voteIDs []string
+	var voteMap []struct {
+		ID          string
+		Title       string
+		Description string
+		Type        string
+		Status      string
+		StartsAt    string
+		EndsAt      string
+		CreatedBy   string
+		CreatedAt   string
+		FirstName   string
+		LastName    string
+		UserVoted   int
+		CreatedByName string
+	}
+
 	for rows.Next() {
 		var vote struct {
 			ID          string
@@ -484,47 +618,89 @@ func GetVoteResults(c *gin.Context) {
 			continue
 		}
 
-		// Get vote options with results
-		optionRows, err := db.(*sql.DB).Query(`
-			SELECT id, option_text, vote_count
-			FROM vote_options
-			WHERE vote_id = $1
-			ORDER BY vote_count DESC, id
-		`, vote.ID)
-		if err != nil {
-			continue
-		}
-
-		var options []map[string]interface{}
-		totalVotes := 0
-		for optionRows.Next() {
-			var option struct {
-				ID        string
-				Text      string
-				VoteCount int
-			}
-			if err := optionRows.Scan(&option.ID, &option.Text, &option.VoteCount); err == nil {
-			options = append(options, map[string]interface{}{
-				"id":          option.ID,
-				"option_text": option.Text,
-				"vote_count":  option.VoteCount,
-			})
-				totalVotes += option.VoteCount
-			}
-		}
-		optionRows.Close()
-
 		createdByName := "Unknown"
 		if vote.FirstName.Valid && vote.LastName.Valid {
 			createdByName = vote.FirstName.String + " " + vote.LastName.String
 		}
 
+		voteIDs = append(voteIDs, vote.ID)
+		voteMap = append(voteMap, struct {
+			ID          string
+			Title       string
+			Description string
+			Type        string
+			Status      string
+			StartsAt    string
+			EndsAt      string
+			CreatedBy   string
+			CreatedAt   string
+			FirstName   string
+			LastName    string
+			UserVoted   int
+			CreatedByName string
+		}{
+			ID:          vote.ID,
+			Title:       vote.Title,
+			Description: vote.Description.String,
+			Type:        vote.Type,
+			Status:      vote.Status,
+			StartsAt:    vote.StartsAt,
+			EndsAt:      vote.EndsAt,
+			CreatedBy:   vote.CreatedBy,
+			CreatedAt:   vote.CreatedAt,
+			FirstName:   vote.FirstName.String,
+			LastName:    vote.LastName.String,
+			UserVoted:   vote.UserVoted,
+			CreatedByName: createdByName,
+		})
+	}
+
+	// Preload all vote options in a single query to avoid N+1
+	optionsByVoteID := map[string][]map[string]interface{}{}
+	if len(voteIDs) > 0 {
+		optionRows, err := db.(*sql.DB).Query(`
+			SELECT vote_id, id, option_text, vote_count
+			FROM vote_options
+			WHERE vote_id = ANY($1)
+			ORDER BY vote_id, vote_count DESC, id
+		`, voteIDs)
+		if err == nil {
+			for optionRows.Next() {
+				var voteID, optionID, optionText string
+				var voteCount int
+				if err := optionRows.Scan(&voteID, &optionID, &optionText, &voteCount); err == nil {
+					if optionsByVoteID[voteID] == nil {
+						optionsByVoteID[voteID] = []map[string]interface{}{}
+					}
+					optionsByVoteID[voteID] = append(optionsByVoteID[voteID], map[string]interface{}{
+						"id":          optionID,
+						"option_text": optionText,
+						"vote_count":  voteCount,
+					})
+				}
+			}
+			optionRows.Close()
+		}
+	}
+
+	var votes []map[string]interface{}
+	for _, vote := range voteMap {
+		options := optionsByVoteID[vote.ID]
+		if options == nil {
+			options = []map[string]interface{}{}
+		}
+		totalVotes := 0
+		for _, opt := range options {
+			if vc, ok := opt["vote_count"].(int); ok {
+				totalVotes += vc
+			}
+		}
+
 		// Determine result
 		result := "pending"
 		if len(options) > 0 && totalVotes > 0 {
-			// Simple majority wins - options[0] is already map[string]interface{}
 			firstOption := options[0]
-			if firstOptionVotes, ok := firstOption["voteCount"].(int); ok && firstOptionVotes > totalVotes/2 {
+			if firstOptionVotes, ok := firstOption["vote_count"].(int); ok && firstOptionVotes > totalVotes/2 {
 				result = "passed"
 			} else {
 				result = "failed"
@@ -534,12 +710,12 @@ func GetVoteResults(c *gin.Context) {
 		votes = append(votes, map[string]interface{}{
 			"id":           vote.ID,
 			"title":        vote.Title,
-			"description":  vote.Description.String,
+			"description":  vote.Description,
 			"type":         vote.Type,
 			"status":       vote.Status,
 			"starts_at":    vote.StartsAt,
 			"ends_at":      vote.EndsAt,
-			"created_by":   createdByName,
+			"created_by":   vote.CreatedByName,
 			"created_at":   vote.CreatedAt,
 			"options":      options,
 			"total_votes":  totalVotes,

@@ -140,6 +140,7 @@ func GetNotifications(c *gin.Context) {
 			"offset": offset,
 		},
 	})
+		c.Abort()
 }
 
 // GetUnreadNotificationCount returns the count of unread notifications for the authenticated user
@@ -183,6 +184,7 @@ func GetUnreadNotificationCount(c *gin.Context) {
 			"count": count,
 		},
 	})
+		c.Abort()
 }
 
 // MarkNotificationAsRead marks a notification as read
@@ -246,6 +248,7 @@ func MarkNotificationAsRead(c *gin.Context) {
 		"success": true,
 		"message": "Notification marked as read",
 	})
+		c.Abort()
 }
 
 // MarkAllNotificationsAsRead marks all notifications as read for a user
@@ -296,6 +299,7 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 		"success": true,
 		"message": fmt.Sprintf("All notifications marked as read (updated %d system notifications)", totalMarked),
 	})
+		c.Abort()
 }
 
 // DeleteNotification deletes a notification
@@ -367,6 +371,7 @@ func DeleteNotification(c *gin.Context) {
 		"message": "Notification deleted successfully",
 		"data":    nil, // Include data field for consistency with frontend expectations
 	})
+		c.Abort()
 }
 
 // SendSystemNotification creates a system notification
@@ -469,4 +474,5 @@ func SendSystemNotification(c *gin.Context) {
 			"notificationId": fmt.Sprintf("%d", notificationID),
 		},
 	})
+		c.Abort()
 }

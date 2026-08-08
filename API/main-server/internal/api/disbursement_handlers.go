@@ -135,6 +135,7 @@ func (h *DisbursementHandlers) GetDisbursementBatches(c *gin.Context) {
 		"data":    batches,
 		"count":   len(batches),
 	})
+		c.Abort()
 }
 
 // GetTransparencyLog retrieves financial transparency log for a chama
@@ -243,6 +244,7 @@ func (h *DisbursementHandlers) GetTransparencyLog(c *gin.Context) {
 		"data":    logs,
 		"count":   len(logs),
 	})
+		c.Abort()
 }
 
 // ProcessDisbursementBatch processes a disbursement batch
@@ -284,6 +286,7 @@ func (h *DisbursementHandlers) ProcessDisbursementBatch(c *gin.Context) {
 		"success": true,
 		"message": "Disbursement batch processed successfully",
 	})
+		c.Abort()
 }
 
 // ApproveDisbursementBatch approves a disbursement batch
@@ -315,4 +318,5 @@ func (h *DisbursementHandlers) ApproveDisbursementBatch(c *gin.Context) {
 		"success": true,
 		"message": "Disbursement batch approved successfully",
 	})
+		c.Abort()
 }

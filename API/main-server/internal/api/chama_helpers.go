@@ -99,8 +99,6 @@ func getStringValue(s *string) string {
 	return *s
 }
 
-// normalizeMpesaPhone converts a local phone number to the 254... format used
-// by M-Pesa STK push / B2C. It first strips any non-digit characters.
 func normalizeMpesaPhone(phone string) string {
 	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
 	if cleaned == "" {
@@ -112,7 +110,6 @@ func normalizeMpesaPhone(phone string) string {
 	case strings.HasPrefix(cleaned, "254"):
 		return cleaned
 	case strings.HasPrefix(cleaned, "7") && len(cleaned) >= 9:
-		// Numbers like 7XXXXXXXX (without leading 0)
 		return "254" + cleaned
 	}
 	return cleaned

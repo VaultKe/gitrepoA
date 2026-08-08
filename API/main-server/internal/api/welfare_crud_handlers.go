@@ -236,6 +236,7 @@ func GetWelfareRequests(c *gin.Context) {
 			"chamaId": chamaID,
 		},
 	})
+		c.Abort()
 }
 
 func CreateWelfareRequest(c *gin.Context) {
@@ -371,6 +372,7 @@ func GetWelfareRequest(c *gin.Context) {
 		"success": true,
 		"message": "Get welfare request endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 func UpdateWelfareRequest(c *gin.Context) {
@@ -378,6 +380,7 @@ func UpdateWelfareRequest(c *gin.Context) {
 		"success": true,
 		"message": "Update welfare request endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 func DeleteWelfareRequest(c *gin.Context) {
@@ -385,6 +388,7 @@ func DeleteWelfareRequest(c *gin.Context) {
 		"success": true,
 		"message": "Delete welfare request endpoint - coming soon",
 	})
+		c.Abort()
 }
 
 func VoteOnWelfareRequest(c *gin.Context) {
@@ -690,6 +694,7 @@ func VoteOnWelfareRequest(c *gin.Context) {
 			"status":       "recorded",
 		},
 	})
+		c.Abort()
 }
 
 // CheckAndCloseCompletedWelfareVotes checks for welfare votes where all members have voted

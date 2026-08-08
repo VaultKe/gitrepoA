@@ -360,6 +360,7 @@ func (h *AuthHandlers) UploadAvatar(c *gin.Context) {
 			},
 		},
 	})
+		c.Abort()
 }
 
 func OnboardUser(c *gin.Context) {
@@ -526,6 +527,7 @@ func OnboardUser(c *gin.Context) {
 			"createdAt": newUser.CreatedAt,
 		},
 	})
+		c.Abort()
 }
 
 func hashPassword(password string) (string, error) {

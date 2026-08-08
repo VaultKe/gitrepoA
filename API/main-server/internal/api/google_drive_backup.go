@@ -78,6 +78,7 @@ func CreateGoogleDriveBackup(c *gin.Context) {
 		"file_size": backupResult.FileSize,
 		"timestamp": backupResult.Timestamp,
 	})
+		c.Abort()
 }
 
 // RestoreGoogleDriveBackup restores user data from Google Drive backup
@@ -120,6 +121,7 @@ func RestoreGoogleDriveBackup(c *gin.Context) {
 		"restored_items": restoreResult.RestoredItems,
 		"timestamp":      restoreResult.Timestamp,
 	})
+		c.Abort()
 }
 
 // GetGoogleDriveBackupInfo gets information about the user's backup
@@ -163,6 +165,7 @@ func GetGoogleDriveBackupInfo(c *gin.Context) {
 		"backupSize":  backupInfo.BackupSize,
 		"backupCount": backupInfo.BackupCount,
 	})
+		c.Abort()
 }
 
 // GetBackupHistory retrieves backup history for admin
@@ -259,6 +262,7 @@ func GetBackupHistory(c *gin.Context) {
 		"success": true,
 		"backups": backups,
 	})
+		c.Abort()
 }
 
 // GetBackupSettings retrieves backup settings
@@ -331,6 +335,7 @@ func GetBackupSettings(c *gin.Context) {
 		"success":  true,
 		"settings": settings,
 	})
+		c.Abort()
 }
 
 // UpdateBackupSettings updates backup settings
@@ -422,6 +427,7 @@ func UpdateBackupSettings(c *gin.Context) {
 		"success": true,
 		"message": "Backup settings updated successfully",
 	})
+		c.Abort()
 }
 
 // StartBackup initiates a backup operation
@@ -530,4 +536,5 @@ func StartBackup(c *gin.Context) {
 		"message":   fmt.Sprintf("%s backup started successfully", strings.Title(request.Type)),
 		"backup_id": backupID,
 	})
+		c.Abort()
 }

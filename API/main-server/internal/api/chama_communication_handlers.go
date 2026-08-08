@@ -131,6 +131,7 @@ func SendChamaInvitation(c *gin.Context) {
 			"invitation_id": invitationID,
 		},
 	})
+		c.Abort()
 }
 
 // RespondToInvitation handles accepting or rejecting a chama invitation
@@ -213,6 +214,7 @@ func RespondToInvitation(c *gin.Context) {
 		"success": true,
 		"message": message,
 	})
+		c.Abort()
 }
 
 // GetUserInvitations gets pending invitations for a user
@@ -256,6 +258,7 @@ func GetUserInvitations(c *gin.Context) {
 		"data":    invitations,
 		"count":   len(invitations),
 	})
+		c.Abort()
 }
 
 // GetChamaSentInvitations gets all invitations sent for a specific chama
@@ -327,6 +330,7 @@ func GetChamaSentInvitations(c *gin.Context) {
 		"data":    invitations,
 		"count":   len(invitations),
 	})
+		c.Abort()
 }
 
 // CancelInvitation cancels a pending invitation
@@ -393,6 +397,7 @@ func CancelInvitation(c *gin.Context) {
 		"success": true,
 		"message": "Invitation cancelled successfully",
 	})
+		c.Abort()
 }
 
 // ResendInvitation resends a pending invitation
@@ -548,6 +553,7 @@ func ResendInvitation(c *gin.Context) {
 		"success": true,
 		"message": "Invitation resent successfully",
 	})
+		c.Abort()
 }
 
 // CreateChamaChatRoom creates a chat room for a chama that doesn't have one
@@ -713,4 +719,5 @@ func CreateChamaChatRoom(c *gin.Context) {
 			"chamaId": chamaID,
 		},
 	})
+		c.Abort()
 }

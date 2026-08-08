@@ -397,4 +397,5 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 			"totalAmount":             totalAmount,
 		},
 	})
+		c.Abort()
 }

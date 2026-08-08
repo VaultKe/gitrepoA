@@ -76,6 +76,7 @@ func StoreGoogleDriveTokens(c *gin.Context) {
 		"success": true,
 		"message": "Google Drive tokens stored successfully",
 	})
+		c.Abort()
 }
 
 // DisconnectGoogleDrive revokes and removes the user's Google Drive tokens
@@ -116,6 +117,7 @@ func DisconnectGoogleDrive(c *gin.Context) {
 		"success": true,
 		"message": "Google Drive disconnected successfully",
 	})
+		c.Abort()
 }
 
 // GetGoogleDriveStatus checks if user has Google Drive connected
@@ -186,6 +188,7 @@ func GetGoogleDriveStatus(c *gin.Context) {
 		"connected": connected,
 		"debug":     debugInfo,
 	})
+		c.Abort()
 }
 
 // DebugGoogleDriveTokens lists all Google Drive tokens for debugging (admin only)
@@ -252,6 +255,7 @@ func DebugGoogleDriveTokens(c *gin.Context) {
 		"tokens":  tokens,
 		"count":   len(tokens),
 	})
+		c.Abort()
 }
 
 // GenerateTestTokens creates mock tokens for development testing (admin only)
@@ -317,6 +321,7 @@ func GenerateTestTokens(c *gin.Context) {
 		"note":    "These are mock tokens for testing only. Use real OAuth for production.",
 		"warning": "Mock tokens cannot be used with actual Google Drive API. Use real OAuth flow for production backups.",
 	})
+		c.Abort()
 }
 
 // GetGoogleDriveAuthURL generates OAuth URL for frontend
@@ -369,6 +374,7 @@ func GetGoogleDriveAuthURL(c *gin.Context) {
 		"client_id": clientID,
 		"message":   "Use this URL to connect Google Drive",
 	})
+		c.Abort()
 }
 
 // InitiateGoogleDriveAuth starts the OAuth flow for Google Drive (legacy endpoint)

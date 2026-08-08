@@ -41,7 +41,7 @@ func main() {
 		if f, err := os.Create(testFile); err == nil {
 			f.Close()
 			os.Remove(testFile)
-			log.Printf("[INFO] Upload directory validated: %s", uploadDir)
+			// log.Printf("[INFO] Upload directory validated: %s", uploadDir)
 		} else {
 			log.Printf("[WARN] Upload directory %s is not writable: %v", uploadDir, err)
 		}

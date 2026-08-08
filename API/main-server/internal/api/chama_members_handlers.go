@@ -124,7 +124,7 @@ func GetChamaMembers(c *gin.Context) {
 
 		members = append(members, member)
 
-		if userStatus == "active" {
+		if isActive {
 			activeMembers++
 		} else {
 			pendingMembers++
@@ -469,6 +469,7 @@ func UpdateChamaMember(c *gin.Context) {
 		"success": true,
 		"message": "Member updated successfully",
 	})
+	c.Abort()
 }
 
 // RemoveChamaMember removes a member from a chama
@@ -540,6 +541,7 @@ func RemoveChamaMember(c *gin.Context) {
 		"success": true,
 		"message": "Member removed successfully",
 	})
+	c.Abort()
 }
 
 // GetChamaStatistics returns statistics for a chama
@@ -777,4 +779,5 @@ func RemoveMember(c *gin.Context) {
 		"success": true,
 		"message": "Member removed successfully. Their status is now left.",
 	})
+	c.Abort()
 }

@@ -118,6 +118,7 @@ func GetChamaSubscriptionPayments(c *gin.Context) {
 		"success": true,
 		"data":    payments,
 	})
+		c.Abort()
 }
 
 // PaySubscriptionPayment initiates an STK push payment for a subscription.
@@ -284,4 +285,5 @@ func PaySubscriptionPayment(c *gin.Context) {
 			"customerMessage":   stkResponse.CustomerMessage,
 		},
 	})
+		c.Abort()
 }

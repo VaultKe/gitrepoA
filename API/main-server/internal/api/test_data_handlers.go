@@ -40,6 +40,7 @@ func GetTestDataStats(c *gin.Context) {
 		"success": true,
 		"data":    stats,
 	})
+		c.Abort()
 }
 
 // GenerateTestData manually triggers a batch of test data generation
@@ -79,6 +80,7 @@ func GenerateTestData(c *gin.Context) {
 		"message": fmt.Sprintf("Generated test data batch (size=%d)", batchSize),
 		"data":    stats,
 	})
+		c.Abort()
 }
 
 // StartTestDataGenerator starts the periodic test data generator
@@ -102,6 +104,7 @@ func StartTestDataGenerator(c *gin.Context) {
 		"success": true,
 		"message": "Test data generator started",
 	})
+		c.Abort()
 }
 
 // StopTestDataGenerator stops the periodic generator
@@ -124,6 +127,7 @@ func StopTestDataGenerator(c *gin.Context) {
 		"success": true,
 		"message": "Test data generator stopped",
 	})
+		c.Abort()
 }
 
 // ResetTestDataStats resets generation statistics
@@ -141,4 +145,5 @@ func ResetTestDataStats(c *gin.Context) {
 		"success": true,
 		"message": "Test data statistics reset",
 	})
+		c.Abort()
 }

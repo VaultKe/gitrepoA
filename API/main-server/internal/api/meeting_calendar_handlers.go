@@ -87,6 +87,7 @@ func GetGoogleCalendarAddEventURL(c *gin.Context) {
 			"url": template + "?" + params.Encode(),
 		},
 	})
+		c.Abort()
 }
 
 // CreateGoogleCalendarEvent creates the event in the user's Google Calendar with 30/10/0 minute reminders

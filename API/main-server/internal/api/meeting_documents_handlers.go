@@ -197,6 +197,7 @@ func UploadMeetingDocument(c *gin.Context, uploadPath string) {
 			"uploadedAt":   time.Now().Format(time.RFC3339),
 		},
 	})
+		c.Abort()
 }
 
 // GetMeetingDocuments retrieves all documents for a meeting
@@ -277,6 +278,7 @@ func GetMeetingDocuments(c *gin.Context) {
 		"success": true,
 		"data":    documents,
 	})
+		c.Abort()
 }
 
 // DeleteMeetingDocument deletes a document from a meeting
@@ -355,4 +357,5 @@ func DeleteMeetingDocument(c *gin.Context) {
 		"success": true,
 		"message": "Document deleted successfully",
 	})
+		c.Abort()
 }

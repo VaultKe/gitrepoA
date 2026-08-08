@@ -116,6 +116,7 @@ func GetContributions(c *gin.Context) {
 		"count":   len(contributions),
 		"message": fmt.Sprintf("Found %d contributions", len(contributions)),
 	})
+	c.Abort()
 }
 
 // GetChamaMembersForContributions returns the member list used for cash contribution selection.
@@ -213,6 +214,7 @@ func GetChamaMembersForContributions(c *gin.Context) {
 		"data":    members,
 		"message": fmt.Sprintf("Found %d members", len(members)),
 	})
+	c.Abort()
 }
 
 // GetMerryGoRoundContributionAmount returns the expected contribution amount for merry-go-round.
@@ -266,6 +268,7 @@ func GetMerryGoRoundContributionAmount(c *gin.Context) {
 		},
 		"message": fmt.Sprintf("Expected merry-go-round contribution amount: %.2f KES", expectedAmount),
 	})
+	c.Abort()
 }
 
 // GetContribution is a placeholder endpoint.
@@ -274,4 +277,5 @@ func GetContribution(c *gin.Context) {
 		"success": true,
 		"message": "Get contribution endpoint - coming soon",
 	})
+	c.Abort()
 }

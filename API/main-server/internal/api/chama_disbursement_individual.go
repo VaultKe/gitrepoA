@@ -188,6 +188,7 @@ func CreateIndividualDisbursement(c *gin.Context) {
 			"transactionId":  transactionID,
 		},
 	})
+		c.Abort()
 }
 
 // DisburseMerryGoRoundCycle handles an individual MGR disbursement that sends
@@ -340,4 +341,5 @@ func DisburseMerryGoRoundCycle(c *gin.Context) {
 			"transactionId":  transactionID,
 		},
 	})
+		c.Abort()
 }

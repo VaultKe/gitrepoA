@@ -98,6 +98,7 @@ func (h *ReminderHandlers) GetUserReminders(c *gin.Context) {
 		Data:    reminders,
 		Count:   len(reminders),
 	})
+	c.Abort()
 }
 
 // GetReminder retrieves a specific reminder by ID
@@ -140,6 +141,7 @@ func (h *ReminderHandlers) GetReminder(c *gin.Context) {
 		Success: true,
 		Data:    reminder,
 	})
+	c.Abort()
 }
 
 // UpdateReminder updates an existing reminder
@@ -192,6 +194,7 @@ func (h *ReminderHandlers) UpdateReminder(c *gin.Context) {
 		Data:    reminder,
 		Message: "Reminder updated successfully",
 	})
+	c.Abort()
 }
 
 // DeleteReminder deletes a reminder
@@ -234,6 +237,7 @@ func (h *ReminderHandlers) DeleteReminder(c *gin.Context) {
 		Success: true,
 		Message: "Reminder deleted successfully",
 	})
+	c.Abort()
 }
 
 // ToggleReminder toggles the enabled status of a reminder
@@ -293,4 +297,5 @@ func (h *ReminderHandlers) ToggleReminder(c *gin.Context) {
 		Data:    updatedReminder,
 		Message: "Reminder toggled successfully",
 	})
+	c.Abort()
 }

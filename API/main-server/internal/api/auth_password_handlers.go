@@ -66,6 +66,7 @@ func (h *AuthHandlers) ForgotPassword(c *gin.Context) {
 		Success: true,
 		Message: "Password reset instructions sent successfully",
 	})
+	c.Abort()
 }
 
 // ResetPassword handles password reset
@@ -115,4 +116,5 @@ func (h *AuthHandlers) ResetPassword(c *gin.Context) {
 		Success: true,
 		Message: "Password reset successfully! You can now login with your new password.",
 	})
+	c.Abort()
 }

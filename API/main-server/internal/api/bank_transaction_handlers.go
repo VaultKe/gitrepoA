@@ -11,4 +11,5 @@ func InitiateBankTransfer(c *gin.Context) {
 		"success": true,
 		"message": "Bank transfer endpoint - coming soon",
 	})
+	c.Abort()
 }

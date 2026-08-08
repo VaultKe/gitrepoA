@@ -163,6 +163,7 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 		"count":   len(users),
 		"query":   query,
 	})
+		c.Abort()
 }
 
 // GetUserProfile gets a user's public profile information
@@ -228,6 +229,7 @@ func (h *UserSearchHandlers) GetUserProfile(c *gin.Context) {
 		"success": true,
 		"data":    user,
 	})
+		c.Abort()
 }
 
 // SearchUsersAdvanced provides advanced search with filters
@@ -344,6 +346,7 @@ func (h *UserSearchHandlers) SearchUsersAdvanced(c *gin.Context) {
 		"query":   query,
 		"type":    searchType,
 	})
+		c.Abort()
 }
 
 // CheckMarketplaceRoles checks what marketplace roles a user has
@@ -433,4 +436,5 @@ func (h *UserSearchHandlers) CheckMarketplaceRoles(c *gin.Context) {
 		"data":    roles,
 		"details": roleDetails,
 	})
+		c.Abort()
 }

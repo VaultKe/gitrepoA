@@ -147,6 +147,7 @@ func GetUsers(c *gin.Context) {
 		"success": true,
 		"data":    users,
 	})
+		c.Abort()
 }
 
 func GetProfile(c *gin.Context) {
@@ -313,6 +314,7 @@ func GetProfile(c *gin.Context) {
 		"message": "Profile retrieved successfully",
 		"data":    userMap,
 	})
+		c.Abort()
 }
 
 // GetUserByID - Get user by ID (used for loan enrichment and other user lookups)
@@ -474,6 +476,7 @@ func GetUserByID(c *gin.Context) {
 		"message": "User retrieved successfully",
 		"data":    userMap,
 	})
+		c.Abort()
 }
 
 // GetUserStatistics returns comprehensive statistics for the authenticated user
@@ -511,6 +514,7 @@ func GetUserStatistics(c *gin.Context) {
 		"success": true,
 		"data":    stats,
 	})
+		c.Abort()
 }
 
 // SearchUserByCredentials searches for a user by both phone and national ID
@@ -639,6 +643,7 @@ func SearchUserByCredentials(c *gin.Context) {
 		"success": false,
 		"error":   "No user found with these credentials",
 	})
+		c.Abort()
 }
 
 // SearchUserByIdNumber searches for a user by national ID alone.
@@ -702,6 +707,7 @@ func SearchUserByIdNumber(c *gin.Context) {
 		"match":     true,
 		"matchedBy": "nationalId",
 	})
+		c.Abort()
 }
 
 // SearchUserByPhone searches for a user by phone number alone.
@@ -768,4 +774,5 @@ func SearchUserByPhone(c *gin.Context) {
 		"match":     true,
 		"matchedBy": "phone",
 	})
+		c.Abort()
 }
