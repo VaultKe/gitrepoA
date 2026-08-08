@@ -142,13 +142,13 @@ func GetEligibleWelfareMembers(c *gin.Context) {
 		}
 
 		member := map[string]interface{}{
-			"id":                 userID,
-			"name":               firstName + " " + lastName,
-			"contributionAmount": contributionAmount,
-			"contributionCount":  contributionCount,
+			"id":                     userID,
+			"name":                   firstName + " " + lastName,
+			"contribution_amount":    contributionAmount,
+			"contribution_count":     contributionCount,
 		}
 		if lastContribution.Valid {
-			member["lastContribution"] = lastContribution.String
+			member["last_contribution"] = lastContribution.String
 		}
 		members = append(members, member)
 	}

@@ -57,7 +57,7 @@ export default function ChamaManagementScreen() {
             totalBalance: chama.total_funds || chama.totalBalance || 0,
             status: chama.status || 'active',
             chairperson: chama.chairperson_name || chama.chairperson || 'N/A',
-            contributionAmount: chama.contribution_amount || chama.contributionAmount || 0,
+            contributionAmount: chama.contribution_amount || 0,
             lastActivity: chama.updated_at || chama.lastActivity || chama.created_at,
             createdAt: chama.created_at,
             description: chama.description || 'No description available',
@@ -215,7 +215,7 @@ export default function ChamaManagementScreen() {
         <View style={styles.statItem}>
           <Ionicons name="calendar" size={16} color={colors.info} />
           <Text style={[styles.statValue, { color: colors.text }]}>
-            {formatCurrency(chama.contributionAmount)}
+            {formatCurrency(chama.contribution_amount)}
           </Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
             Contribution
@@ -344,7 +344,7 @@ export default function ChamaManagementScreen() {
                   <View style={styles.statRow}>
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Contribution:</Text>
                     <Text style={[styles.statValue, { color: colors.text }]}>
-                      {formatCurrency(selectedChama.contributionAmount)}
+                       {formatCurrency(selectedChama.contribution_amount)}
                     </Text>
                   </View>
                   <View style={styles.statRow}>

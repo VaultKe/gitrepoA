@@ -146,11 +146,12 @@ func CastVoteOnItem(c *gin.Context) {
 		"success": true,
 		"message": "Vote cast successfully",
 		"data": map[string]interface{}{
-			"voteId":     voteID,
-			"optionId":   req.OptionID,
-			"userVoteId": userVoteID,
+			"vote_id":     voteID,
+			"option_id":   req.OptionID,
+			"user_vote_id": userVoteID,
 		},
 	})
+	c.Abort()
 }
 
 // CreateRoleEscalationVote creates a role escalation vote
@@ -247,16 +248,17 @@ func CreateRoleEscalationVote(c *gin.Context) {
 		"message": "Role escalation vote created successfully",
 		"data": map[string]interface{}{
 			"id":            voteID,
-			"chamaId":       chamaID,
-			"candidateId":   req.CandidateID,
-			"candidateName": candidateName,
-			"requestedRole": req.RequestedRole,
+			"chama_id":      chamaID,
+			"candidate_id":  req.CandidateID,
+			"candidate_name": candidateName,
+			"requested_role": req.RequestedRole,
 			"title":         title,
 			"description":   description,
-			"endsAt":        endsAt.Format(time.RFC3339),
-			"createdBy":     userID,
+			"ends_at":       endsAt.Format(time.RFC3339),
+			"created_by":    userID,
 		},
 	})
+	c.Abort()
 }
 
 // GetVoteDetails retrieves details for a specific vote
@@ -372,19 +374,20 @@ func GetVoteDetails(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": map[string]interface{}{
-			"id":          vote.ID,
-			"title":       vote.Title,
-			"description": vote.Description.String,
-			"type":        vote.Type,
-			"status":      vote.Status,
-			"startsAt":    vote.StartsAt,
-			"endsAt":      vote.EndsAt,
-			"createdBy":   createdByName,
-			"createdAt":   vote.CreatedAt,
-			"options":     options,
-			"totalVotes":  totalVotes,
-			"userVoted":   vote.UserVoted == 1,
-			"isActive":    isActive,
+			"id":            vote.ID,
+			"title":         vote.Title,
+			"description":   vote.Description.String,
+			"type":          vote.Type,
+			"status":        vote.Status,
+			"starts_at":     vote.StartsAt,
+			"ends_at":       vote.EndsAt,
+			"created_by":    createdByName,
+			"created_at":    vote.CreatedAt,
+			"options":       options,
+			"total_votes":   totalVotes,
+			"user_voted":    vote.UserVoted == 1,
+			"is_active":     isActive,
 		},
 	})
+	c.Abort()
 }

@@ -55,8 +55,8 @@ const (
 // MeetingSchedule represents the meeting schedule for a chama
 type MeetingSchedule struct {
 	Frequency  string `json:"frequency"`  // weekly, monthly, quarterly
-	DayOfWeek  *int   `json:"dayOfWeek"`  // 0 = Sunday, 1 = Monday, etc.
-	DayOfMonth *int   `json:"dayOfMonth"` // 1-31
+	DayOfWeek  *int   `json:"day_of_week"`  // 0 = Sunday, 1 = Monday, etc.
+	DayOfMonth *int   `json:"day_of_month"` // 1-31
 	Time       string `json:"time"`       // HH:MM format
 }
 
@@ -73,60 +73,60 @@ type Chama struct {
 	Town                  string                 `json:"town" db:"town"`
 	Latitude              *float64               `json:"latitude,omitempty" db:"latitude"`
 	Longitude             *float64               `json:"longitude,omitempty" db:"longitude"`
-	ContributionAmount    float64                `json:"contributionAmount" db:"contribution_amount"`
-	ContributionFrequency ContributionFrequency  `json:"contributionFrequency" db:"contribution_frequency"`
-	TargetAmount          *float64               `json:"targetAmount,omitempty" db:"target_amount"`
-	TargetDeadline        *time.Time             `json:"targetDeadline,omitempty" db:"target_deadline"`
-	MaxMembers            *int                  `json:"maxMembers,omitempty" db:"max_members"`
-	CurrentMembers        int                    `json:"currentMembers" db:"current_members"`
-	TotalFunds            float64                `json:"totalFunds" db:"total_funds"`
-	IsPublic              bool                   `json:"isPublic" db:"is_public"`
-	RequiresApproval      bool                   `json:"requiresApproval" db:"requires_approval"`
+	ContributionAmount    float64                `json:"contribution_amount" db:"contribution_amount"`
+	ContributionFrequency ContributionFrequency  `json:"contribution_frequency" db:"contribution_frequency"`
+	TargetAmount          *float64               `json:"target_amount,omitempty" db:"target_amount"`
+	TargetDeadline        *time.Time             `json:"target_deadline,omitempty" db:"target_deadline"`
+	MaxMembers            *int                  `json:"max_members,omitempty" db:"max_members"`
+	CurrentMembers        int                    `json:"current_members" db:"current_members"`
+	TotalFunds            float64                `json:"total_funds" db:"total_funds"`
+	IsPublic              bool                   `json:"is_public" db:"is_public"`
+	RequiresApproval      bool                   `json:"requires_approval,omitempty" db:"requires_approval"`
 	Rules                 []string               `json:"rules" db:"rules"`
-	MeetingSchedule       *MeetingSchedule       `json:"meetingSchedule,omitempty" db:"meeting_schedule"`
+	MeetingSchedule       *MeetingSchedule       `json:"meeting_schedule,omitempty" db:"meeting_schedule"`
 	Permissions           map[string]interface{} `json:"permissions,omitempty" db:"permissions"`
-	RegistrationFeePaid  bool                   `json:"registrationFeePaid" db:"registration_fee_paid"`
-	MonthlySubscriptionFee float64              `json:"monthlySubscriptionFee" db:"monthly_subscription_fee"`
-	SubscriptionFeePaid   bool                   `json:"subscriptionFeePaid" db:"subscription_fee_paid"`
-	SubscriptionFeeDueDate *time.Time            `json:"subscriptionFeeDueDate,omitempty" db:"subscription_fee_due_date"`
-	CreatedBy             string                 `json:"createdBy" db:"created_by"`
-	CreatedAt             time.Time              `json:"createdAt" db:"created_at"`
-	UpdatedAt             time.Time              `json:"updatedAt" db:"updated_at"`
-	ChatRoomID            *string                `json:"chatRoomId,omitempty" db:"chat_room_id"`
+	RegistrationFeePaid   bool                   `json:"registration_fee_paid" db:"registration_fee_paid"`
+	MonthlySubscriptionFee float64              `json:"monthly_subscription_fee" db:"monthly_subscription_fee"`
+	SubscriptionFeePaid   bool                   `json:"subscription_fee_paid" db:"subscription_fee_paid"`
+	SubscriptionFeeDueDate *time.Time            `json:"subscription_fee_due_date,omitempty" db:"subscription_fee_due_date"`
+	CreatedBy             string                 `json:"created_by" db:"created_by"`
+	CreatedAt             time.Time              `json:"created_at" db:"created_at"`
+	UpdatedAt             time.Time              `json:"updated_at" db:"updated_at"`
+	ChatRoomID            *string                `json:"chat_room_id,omitempty" db:"chat_room_id"`
 
 	// Rules file (uploaded PDF document containing the chama/group rules)
 	RulesFilePath *string `json:"rules_file_path,omitempty" db:"rules_file_path"`
 	RulesFileName *string `json:"rules_file_name,omitempty" db:"rules_file_name"`
 
 	// Member-specific fields (populated when querying user's chamas)
-	MemberID              string                 `json:"memberId" db:"member_id"`
-	MemberRole            ChamaRole              `json:"memberRole" db:"role"`
-	ServiceFeePaid        bool                   `json:"serviceFeePaid" db:"service_fee_paid"`
-	ServiceFeeStatus      string                 `json:"serviceFeeStatus" db:"service_fee_status"`
-	MembershipIsActive    bool                   `json:"membershipIsActive" db:"is_active"`
+	MemberID              string                 `json:"member_id" db:"member_id"`
+	MemberRole            ChamaRole              `json:"member_role" db:"role"`
+	ServiceFeePaid        bool                   `json:"service_fee_paid" db:"service_fee_paid"`
+	ServiceFeeStatus      string                 `json:"service_fee_status" db:"service_fee_status"`
+	MembershipIsActive    bool                   `json:"membership_is_active" db:"is_active"`
 }
 
 // ChamaMember represents a member of a chama
 type ChamaMember struct {
 	ID                 string     `json:"id" db:"id"`
-	ChamaID            string     `json:"chamaId" db:"chama_id"`
-	UserID             string     `json:"userId" db:"user_id"`
+	ChamaID            string     `json:"chama_id" db:"chama_id"`
+	UserID             string     `json:"user_id" db:"user_id"`
 	Role               ChamaRole  `json:"role" db:"role"`
-	JoinedAt           time.Time  `json:"joinedAt" db:"joined_at"`
-	IsActive           bool       `json:"isActive" db:"is_active"`
-	TotalContributions float64    `json:"totalContributions" db:"total_contributions"`
-	LastContribution   *time.Time `json:"lastContribution,omitempty" db:"last_contribution"`
+	JoinedAt           time.Time  `json:"joined_at" db:"joined_at"`
+	IsActive           bool       `json:"is_active" db:"is_active"`
+	TotalContributions float64    `json:"total_contributions" db:"total_contributions"`
+	LastContribution   *time.Time `json:"last_contribution,omitempty" db:"last_contribution"`
 	Rating             float64    `json:"rating" db:"rating"`
-	TotalRatings       int        `json:"totalRatings" db:"total_ratings"`
+	TotalRatings       int        `json:"total_ratings" db:"total_ratings"`
 
 	// Joined user data (populated when needed)
 	User *User `json:"user,omitempty"`
 
 	// Service fee fields (one-time fee to join chama)
-	ServiceFeePaid      bool       `json:"serviceFeePaid" db:"service_fee_paid"`
-	ServiceFeePaidAt    *time.Time `json:"serviceFeePaidAt,omitempty" db:"service_fee_paid_at"`
-	ServiceFeeStatus    string     `json:"serviceFeeStatus" db:"service_fee_status"`
-	ServiceFeeWarningSent bool     `json:"serviceFeeWarningSent" db:"service_fee_warning_sent"`
+	ServiceFeePaid      bool       `json:"service_fee_paid" db:"service_fee_paid"`
+	ServiceFeePaidAt    *time.Time `json:"service_fee_paid_at,omitempty" db:"service_fee_paid_at"`
+	ServiceFeeStatus    string     `json:"service_fee_status" db:"service_fee_status"`
+	ServiceFeeWarningSent bool     `json:"service_fee_warning_sent" db:"service_fee_warning_sent"`
 }
 
 // ChamaCreation represents data for creating a new chama
@@ -139,13 +139,13 @@ type ChamaCreation struct {
 	Town                   string                `json:"town" validate:"required"`
 	Latitude               *float64              `json:"latitude,omitempty"`
 	Longitude              *float64              `json:"longitude,omitempty"`
-	ContributionAmount     float64               `json:"contributionAmount"`
-	ContributionFrequency  ContributionFrequency `json:"contributionFrequency"`
-	TargetAmount           *float64              `json:"targetAmount,omitempty"`
-	TargetDeadline         *time.Time            `json:"targetDeadline,omitempty"`
-	MaxMembers             *int                  `json:"maxMembers,omitempty"`
-	IsPublic               bool                  `json:"isPublic"`
-	RequiresApproval       bool                  `json:"requiresApproval"`
+	ContributionAmount     float64               `json:"contribution_amount"`
+	ContributionFrequency  ContributionFrequency `json:"contribution_frequency"`
+	TargetAmount           *float64              `json:"target_amount,omitempty"`
+	TargetDeadline         *time.Time             `json:"target_deadline,omitempty"`
+	MaxMembers             *int                  `json:"max_members,omitempty"`
+	IsPublic               bool                  `json:"is_public"`
+	RequiresApproval       bool                  `json:"requires_approval"`
 	Rules                  []string              `json:"rules"`
 	MeetingSchedule        *MeetingSchedule      `json:"meetingSchedule,omitempty"`
 	RegistrationFeePaid    bool                  `json:"registrationFeePaid"`
@@ -162,11 +162,11 @@ type ChamaUpdate struct {
 	Town                  *string                `json:"town,omitempty"`
 	Latitude              *float64               `json:"latitude,omitempty"`
 	Longitude             *float64               `json:"longitude,omitempty"`
-	ContributionAmount    *float64               `json:"contributionAmount,omitempty"`
-	ContributionFrequency *ContributionFrequency `json:"contributionFrequency,omitempty"`
-	MaxMembers            *int                   `json:"maxMembers,omitempty"`
-	IsPublic              *bool                  `json:"isPublic,omitempty"`
-	RequiresApproval      *bool                  `json:"requiresApproval,omitempty"`
+	ContributionAmount    *float64               `json:"contribution_amount,omitempty"`
+	ContributionFrequency *ContributionFrequency `json:"contribution_frequency,omitempty"`
+	MaxMembers            *int                   `json:"max_members,omitempty"`
+	IsPublic              *bool                  `json:"is_public,omitempty"`
+	RequiresApproval      *bool                  `json:"requires_approval,omitempty"`
 	Rules                 []string               `json:"rules,omitempty"`
 	MeetingSchedule       *MeetingSchedule       `json:"meetingSchedule,omitempty"`
 	MonthlySubscriptionFee *float64              `json:"monthlySubscriptionFee,omitempty"`

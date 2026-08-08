@@ -151,6 +151,7 @@ func GetChamaMembers(c *gin.Context) {
 			"last_updated":    time.Now().Format(time.RFC3339),
 		},
 	})
+	c.Abort()
 }
 
 // GetMemberRole gets a member's role in a chama
@@ -201,6 +202,7 @@ func GetMemberRole(c *gin.Context) {
 			"role": role,
 		},
 	})
+	c.Abort()
 }
 
 // GetChamaMember returns a single chama member with user details
@@ -292,6 +294,7 @@ func GetChamaMember(c *gin.Context) {
 		"data":    member,
 		"message": "Chama member retrieved successfully",
 	})
+	c.Abort()
 }
 
 // GetChamaMemberStatistics returns statistics for a specific chama member
@@ -357,6 +360,7 @@ func GetChamaMemberStatistics(c *gin.Context) {
 		"success": true,
 		"data":    memberStats,
 	})
+	c.Abort()
 }
 
 // Helper function to check if role can send invitations
@@ -676,6 +680,7 @@ func GetChamaTransactions(c *gin.Context) {
 		"data":    transactions,
 		"count":   len(transactions),
 	})
+	c.Abort()
 }
 
 // RemoveMember deactivates a chama member (sets status to left).

@@ -94,6 +94,7 @@ func GetUserChamas(c *gin.Context) {
 		"data":    chamas,
 		"count":   len(chamas),
 	})
+	c.Abort()
 }
 
 // GetChama returns a single chama by ID.
@@ -122,6 +123,7 @@ func GetChama(c *gin.Context) {
 		"data":    chama,
 		"message": "Chama details retrieved successfully",
 	})
+	c.Abort()
 }
 
 // DeleteChama removes a chama (cascades related data). Only the chairperson may delete.

@@ -1222,7 +1222,7 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             {paginatedChamas.map((chama, index) => {
               const isEven = index % 2 === 0;
-              const hasUnpaidFee = !chama.serviceFeePaid;
+              const hasUnpaidFee = !chama.service_fee_paid;
               const isPaying = payingChamaFee === chama.id;
               return (
                 <View
@@ -1243,15 +1243,15 @@ const ProfileScreen = ({ navigation }) => {
                   </Text>
                   <View style={[styles.chamasStatusCell, { flex: 1.2 }]}>
                     <Ionicons
-                      name={chama.serviceFeePaid ? 'checkmark-circle' : 'time'}
+                      name={chama.service_fee_paid ? 'checkmark-circle' : 'time'}
                       size={14}
-                      color={chama.serviceFeePaid ? colors.success : colors.warning}
+                      color={chama.service_fee_paid ? colors.success : colors.warning}
                     />
                     <Text style={[
                       styles.chamasStatusText,
-                      { color: chama.serviceFeePaid ? colors.success : colors.warning }
+                      { color: chama.service_fee_paid ? colors.success : colors.warning }
                     ]}>
-                      {chama.serviceFeePaid ? 'Paid' : 'Pending'}
+                      {chama.service_fee_paid ? 'Paid' : 'Pending'}
                     </Text>
                   </View>
                   <View style={[styles.chamasActionCell, { flex: 1 }]}>

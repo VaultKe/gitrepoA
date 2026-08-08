@@ -448,7 +448,7 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
         setChama(chamaData);
         // Only set amount for regular contributions, not for merry-go-round
         if (contributionType !== 'merry-go-round') {
-          setAmount((chamaData.contributionAmount || chamaData.contribution_amount || 0).toString());
+          setAmount((chamaData.contribution_amount || 0).toString());
         }
       } else {
         throw new Error('No chama data received');
@@ -1435,13 +1435,13 @@ const handleMpesaContribution = async (cleanChamaId) => {
                    : contributionType === 'welfare' && proposalTitle
                      ? `Welfare Support • ${chama?.name || 'Group'}`
                      : contributionType === 'regular'
-                       ? `${chama?.type || 'Community'} • ${chama?.contributionFrequency || 'regular'} contributions`
+                        ? `${chama?.type || 'Community'} • ${chama?.contribution_frequency || 'regular'} contributions`
                        : `${getContributionTitle()} • ${chama?.name || 'Group'}`
                  }
                </Text>
                <Text style={[styles.chamaAmount, { color: getContributionColor() }]}>
                  {contributionType === 'regular'
-                   ? `Regular: ${amount ? formatCurrency(parseFloat(amount)) : formatCurrency(chama?.contributionAmount || 0)}`
+                    ? `Regular: ${amount ? formatCurrency(parseFloat(amount)) : formatCurrency(chama?.contribution_amount || 0)}`
                    : contributionType === 'welfare' && requestedAmount
                      ? `Needed: ${formatCurrency(requestedAmount)}`
                      : contributionType === 'merry-go-round' && amount

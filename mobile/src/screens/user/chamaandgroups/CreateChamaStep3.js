@@ -860,14 +860,14 @@ useEffect(() => {
                     </View>
                   </View>
                   <View style={[styles.tableCell, { flex: 1, alignItems: 'center' }]}>
-                    <View style={[styles.statusChip, { backgroundColor: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success + '20' : colors.error + '20' }]}>
+                    <View style={[styles.statusChip, { backgroundColor: (member.service_fee_status === 'paid' || member.has_paid_registration) ? colors.success + '20' : colors.error + '20' }]}>
                       <Ionicons
-                        name={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'checkmark-circle' : 'close-circle'}
+                        name={(member.service_fee_status === 'paid' || member.has_paid_registration) ? 'checkmark-circle' : 'close-circle'}
                         size={16}
-                        color={(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error}
+                        color={(member.service_fee_status === 'paid' || member.has_paid_registration) ? colors.success : colors.error}
                       />
-                      <Text style={[styles.statusText, { color: (member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? colors.success : colors.error }]}>
-                        {(member.serviceFeeStatus === 'paid' || member.hasPaidRegistration) ? 'Paid' : 'Unpaid'}
+                      <Text style={[styles.statusText, { color: (member.service_fee_status === 'paid' || member.has_paid_registration) ? colors.success : colors.error }]}>
+                        {(member.service_fee_status === 'paid' || member.has_paid_registration) ? 'Paid' : 'Unpaid'}
                       </Text>
                     </View>
                   </View>

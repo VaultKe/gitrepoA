@@ -45,6 +45,10 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   // Ref to track current chama ID to prevent race conditions
   const currentChamaIdRef = useRef(null);
 
+  // Track in-flight statistics requests per chama to avoid duplicate network calls
+  const statsRequestIdRef = useRef(0);
+  const inFlightStatsRef = useRef(new Set());
+
   // Cache for chama data to enable fast switching
   const chamaDataCache = useRef(new Map());
   const cacheExpiryTime = 5 * 60 * 1000; // 5 minutes
@@ -69,7 +73,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   const switchToChama = (chama) => {
     // Prevent switching to a chama where the user has left — check only
     // the per-chama membership flag.
-    if (chama.membershipIsActive === false) {
+    if (chama.membership_is_active === false) {
       Alert.alert(
         'Not a Member',
         `You have left "${chama.name}". You can no longer access this chama.`,
@@ -109,10 +113,13 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     }
 
     // Always fetch fresh data in the background (but don't block UI)
-    setTimeout(() => {
-      loadChamaStatistics(chama.id);
-      loadChamaFeatures();
-    }, 100); // Small delay to allow UI to update first
+    // Skip if we already have fresh cached data to avoid duplicate requests
+    if (!cachedData) {
+      setTimeout(() => {
+        loadChamaStatistics(chama.id);
+        loadChamaFeatures();
+      }, 100); // Small delay to allow UI to update first
+    }
   };
 
   // Preload data for multiple chamas in the background
@@ -179,7 +186,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     if (route?.params?.chamaId && route?.params?.chama) {
       const chamaFromParams = route.params.chama;
       // Prevent selecting a chama where the user has left
-      if (chamaFromParams.membershipIsActive === false) {
+      if (chamaFromParams.membership_is_active === false) {
         setSelectedChama(null);
       } else {
         setSelectedChama(chamaFromParams);
@@ -231,7 +238,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         setLoading(true);
         const response = await ApiService.getUserChamas(20, 0);
         if (response.success) {
-          const userChamasData = (response.data || []).filter(chama => chama.membershipIsActive !== false);
+          const userChamasData = (response.data || []).filter(chama => chama.membership_is_active !== false);
           setUserChamas(userChamasData);
 
           // If the currently selected chama is no longer in the active list, clear it
@@ -314,22 +321,26 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       return;
     }
 
-    try {
-      setStatsLoading(true);
-
-      // Extract chamaId properly
-      let chamaId = targetChamaId;
-      if (!chamaId) {
-        if (typeof currentChama === 'string') {
-          chamaId = currentChama;
-        } else if (currentChama.id) {
-          chamaId = currentChama.id;
-        } else if (currentChama.chamaId) {
-          chamaId = currentChama.chamaId;
-        } else {
-          throw new Error('Invalid chama ID format');
-        }
+    let chamaId = targetChamaId;
+    if (!chamaId) {
+      if (typeof currentChama === 'string') {
+        chamaId = currentChama;
+      } else if (currentChama.id) {
+        chamaId = currentChama.id;
+      } else if (currentChama.chamaId) {
+        chamaId = currentChama.chamaId;
+      } else {
+        return;
       }
+    }
+
+    // Deduplicate: skip if a request for this chama is already in flight
+    if (inFlightStatsRef.current.has(chamaId)) {
+      return;
+    }
+
+    inFlightStatsRef.current.add(chamaId);
+    try {
       // Get comprehensive chama statistics only; chama details are refreshed via loadChamaFeatures
       const [statsResponse] = await Promise.all([
         ApiService.getChamaStatistics(chamaId),
@@ -381,6 +392,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
       // Don't show error to user, just log it
     } finally {
+      inFlightStatsRef.current.delete(chamaId);
       setStatsLoading(false);
     }
   };
@@ -447,7 +459,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
            {userChamas.map((chama) => {
-             const chamaLeft = chama.membershipIsActive === false;
+             const chamaLeft = chama.membership_is_active === false;
              return (
              <TouchableOpacity
                key={chama.id}

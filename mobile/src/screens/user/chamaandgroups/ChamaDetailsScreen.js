@@ -453,7 +453,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
   };
 
   const getExistingChatRoomId = () => {
-    return chama?.chat_room_id || chama?.chatRoomId || chama?.chat_room?.id || chama?.chatRoom?.id;
+    return chama?.chat_room_id || chama?.chat_room?.id || chama?.chatRoom?.id;
   };
 
   const getGroupLabel = () => {

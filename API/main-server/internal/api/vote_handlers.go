@@ -112,17 +112,18 @@ func CreateVote(c *gin.Context) {
 		"success": true,
 		"message": "Vote created successfully",
 		"data": map[string]interface{}{
-			"id":          voteID,
-			"chamaId":     chamaID,
-			"title":       req.Title,
-			"description": req.Description,
-			"type":        voteType,
-			"status":      "active",
-			"endsAt":      endsAt.Format(time.RFC3339),
-			"createdBy":   userID,
-			"createdAt":   time.Now().Format(time.RFC3339),
+			"id":            voteID,
+			"chama_id":      chamaID,
+			"title":         req.Title,
+			"description":   req.Description,
+			"type":          voteType,
+			"status":        "active",
+			"ends_at":       endsAt.Format(time.RFC3339),
+			"created_by":    userID,
+			"created_at":    time.Now().Format(time.RFC3339),
 		},
 	})
+	c.Abort()
 }
 
 // GetChamaVotes retrieves votes for a chama
@@ -235,11 +236,11 @@ func GetChamaVotes(c *gin.Context) {
 				VoteCount int
 			}
 			if err := optionRows.Scan(&option.ID, &option.Text, &option.VoteCount); err == nil {
-				options = append(options, map[string]interface{}{
-					"id":        option.ID,
-					"text":      option.Text,
-					"voteCount": option.VoteCount,
-				})
+			options = append(options, map[string]interface{}{
+				"id":          option.ID,
+				"option_text": option.Text,
+				"vote_count":  option.VoteCount,
+			})
 				totalVotes += option.VoteCount
 			}
 		}
@@ -251,18 +252,18 @@ func GetChamaVotes(c *gin.Context) {
 		}
 
 		votes = append(votes, map[string]interface{}{
-			"id":          vote.ID,
-			"title":       vote.Title,
-			"description": vote.Description.String,
-			"type":        vote.Type,
-			"status":      vote.Status,
-			"startsAt":    vote.StartsAt,
-			"endsAt":      vote.EndsAt,
-			"createdBy":   createdByName,
-			"createdAt":   vote.CreatedAt,
-			"options":     options,
-			"totalVotes":  totalVotes,
-			"userVoted":   vote.UserVoted == 1,
+			"id":           vote.ID,
+			"title":        vote.Title,
+			"description":  vote.Description.String,
+			"type":         vote.Type,
+			"status":       vote.Status,
+			"starts_at":    vote.StartsAt,
+			"ends_at":      vote.EndsAt,
+			"created_by":   createdByName,
+			"created_at":   vote.CreatedAt,
+			"options":      options,
+			"total_votes":  totalVotes,
+			"user_voted":   vote.UserVoted == 1,
 		})
 	}
 
@@ -271,6 +272,7 @@ func GetChamaVotes(c *gin.Context) {
 		"data":    votes,
 		"count":   len(votes),
 	})
+	c.Abort()
 }
 
 // GetActiveVotes retrieves active votes for a chama
@@ -368,11 +370,11 @@ func GetActiveVotes(c *gin.Context) {
 				VoteCount int
 			}
 			if err := optionRows.Scan(&option.ID, &option.Text, &option.VoteCount); err == nil {
-				options = append(options, map[string]interface{}{
-					"id":        option.ID,
-					"text":      option.Text,
-					"voteCount": option.VoteCount,
-				})
+			options = append(options, map[string]interface{}{
+				"id":          option.ID,
+				"option_text": option.Text,
+				"vote_count":  option.VoteCount,
+			})
 				totalVotes += option.VoteCount
 			}
 		}
@@ -384,18 +386,18 @@ func GetActiveVotes(c *gin.Context) {
 		}
 
 		votes = append(votes, map[string]interface{}{
-			"id":          vote.ID,
-			"title":       vote.Title,
-			"description": vote.Description.String,
-			"type":        vote.Type,
-			"status":      vote.Status,
-			"startsAt":    vote.StartsAt,
-			"endsAt":      vote.EndsAt,
-			"createdBy":   createdByName,
-			"createdAt":   vote.CreatedAt,
-			"options":     options,
-			"totalVotes":  totalVotes,
-			"userVoted":   vote.UserVoted == 1,
+			"id":           vote.ID,
+			"title":        vote.Title,
+			"description":  vote.Description.String,
+			"type":         vote.Type,
+			"status":       vote.Status,
+			"starts_at":    vote.StartsAt,
+			"ends_at":      vote.EndsAt,
+			"created_by":   createdByName,
+			"created_at":   vote.CreatedAt,
+			"options":      options,
+			"total_votes":  totalVotes,
+			"user_voted":   vote.UserVoted == 1,
 		})
 	}
 
@@ -404,6 +406,7 @@ func GetActiveVotes(c *gin.Context) {
 		"data":    votes,
 		"count":   len(votes),
 	})
+	c.Abort()
 }
 
 // GetVoteResults retrieves completed votes for a chama
@@ -501,11 +504,11 @@ func GetVoteResults(c *gin.Context) {
 				VoteCount int
 			}
 			if err := optionRows.Scan(&option.ID, &option.Text, &option.VoteCount); err == nil {
-				options = append(options, map[string]interface{}{
-					"id":        option.ID,
-					"text":      option.Text,
-					"voteCount": option.VoteCount,
-				})
+			options = append(options, map[string]interface{}{
+				"id":          option.ID,
+				"option_text": option.Text,
+				"vote_count":  option.VoteCount,
+			})
 				totalVotes += option.VoteCount
 			}
 		}
@@ -529,19 +532,19 @@ func GetVoteResults(c *gin.Context) {
 		}
 
 		votes = append(votes, map[string]interface{}{
-			"id":          vote.ID,
-			"title":       vote.Title,
-			"description": vote.Description.String,
-			"type":        vote.Type,
-			"status":      vote.Status,
-			"startsAt":    vote.StartsAt,
-			"endsAt":      vote.EndsAt,
-			"createdBy":   createdByName,
-			"createdAt":   vote.CreatedAt,
-			"options":     options,
-			"totalVotes":  totalVotes,
-			"userVoted":   vote.UserVoted == 1,
-			"result":      result,
+			"id":           vote.ID,
+			"title":        vote.Title,
+			"description":  vote.Description.String,
+			"type":         vote.Type,
+			"status":       vote.Status,
+			"starts_at":    vote.StartsAt,
+			"ends_at":      vote.EndsAt,
+			"created_by":   createdByName,
+			"created_at":   vote.CreatedAt,
+			"options":      options,
+			"total_votes":  totalVotes,
+			"user_voted":   vote.UserVoted == 1,
+			"result":       result,
 		})
 	}
 
@@ -550,6 +553,7 @@ func GetVoteResults(c *gin.Context) {
 		"data":    votes,
 		"count":   len(votes),
 	})
+	c.Abort()
 }
 
 // Helper function for min

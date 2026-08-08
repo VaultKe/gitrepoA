@@ -129,22 +129,22 @@ func getChamaInvitationNotifications(db *sql.DB, userID string) ([]map[string]in
 
 		notificationMap := map[string]interface{}{
 			"id":        id,
-			"userId":    userID,
+			"user_id":   userID,
 			"title":     title,
 			"message":   messageText,
 			"type":      "chama_invitation",
-			"isRead":    false, // Invitations are always unread until responded
-			"createdAt": createdAt,
+			"is_read":   false, // Invitations are always unread until responded
+			"created_at": createdAt,
 			"source":    "chama_invitation",
 			"data": map[string]interface{}{
-				"invitationId":          id,
-				"chamaId":               chamaID,
-				"chamaName":             chamaName,
-				"chamaDescription":      chamaDescription,
-				"contributionAmount":    contributionAmount,
-				"contributionFrequency": contributionFrequency,
-				"inviterName":           inviterName,
-				"expiresAt":             expiresAt,
+				"invitation_id":           id,
+				"chama_id":                chamaID,
+				"chama_name":              chamaName,
+				"chama_description":       chamaDescription,
+				"contribution_amount":     contributionAmount,
+				"contribution_frequency":  contributionFrequency,
+				"inviter_name":            inviterName,
+				"expires_at":              expiresAt,
 			},
 		}
 

@@ -67,6 +67,7 @@ func (h *PollsHandlers) CreatePoll(c *gin.Context) {
 		Data:    poll,
 		Message: "Poll created successfully",
 	})
+	c.Abort()
 }
 
 // GetChamaPolls retrieves polls for a chama
@@ -124,6 +125,7 @@ func (h *PollsHandlers) GetChamaPolls(c *gin.Context) {
 		Data:    basicPolls,
 		Count:   len(basicPolls),
 	})
+	c.Abort()
 }
 
 // GetPollDetails retrieves detailed information about a poll
@@ -168,6 +170,7 @@ func (h *PollsHandlers) GetPollDetails(c *gin.Context) {
 		Success: true,
 		Data:    pollDetails,
 	})
+	c.Abort()
 }
 
 // CastVote casts a vote in a poll
@@ -214,6 +217,7 @@ func (h *PollsHandlers) CastVote(c *gin.Context) {
 		Success: true,
 		Message: "Vote cast successfully",
 	})
+	c.Abort()
 }
 
 // CreateRoleEscalationPoll creates a poll for role escalation
@@ -260,6 +264,7 @@ func (h *PollsHandlers) CreateRoleEscalationPoll(c *gin.Context) {
 		Data:    escalationReq,
 		Message: "Role escalation poll created successfully",
 	})
+	c.Abort()
 }
 
 // GetActivePolls retrieves active polls for a chama
@@ -306,6 +311,7 @@ func (h *PollsHandlers) GetActivePolls(c *gin.Context) {
 		Data:    activePolls,
 		Count:   len(activePolls),
 	})
+	c.Abort()
 }
 
 // GetPollResults retrieves results for completed polls
@@ -352,6 +358,7 @@ func (h *PollsHandlers) GetPollResults(c *gin.Context) {
 		Data:    completedPolls,
 		Count:   len(completedPolls),
 	})
+	c.Abort()
 }
 
 // GetChamaMembers retrieves chama members for role voting
@@ -389,4 +396,5 @@ func (h *PollsHandlers) GetChamaMembers(c *gin.Context) {
 		"data":    members,
 		"count":   len(members),
 	})
+	c.Abort()
 }

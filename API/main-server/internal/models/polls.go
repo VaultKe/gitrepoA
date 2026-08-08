@@ -36,78 +36,78 @@ const (
 // Poll represents a poll in the system
 type Poll struct {
 	ID                  string      `json:"id" db:"id"`
-	ChamaID             string      `json:"chamaId" db:"chama_id"`
+	ChamaID             string      `json:"chama_id" db:"chama_id"`
 	Title               string      `json:"title" db:"title"`
 	Description         *string     `json:"description,omitempty" db:"description"`
-	PollType            PollType    `json:"pollType" db:"poll_type"`
-	CreatedBy           string      `json:"createdBy" db:"created_by"`
-	StartDate           time.Time   `json:"startDate" db:"start_date"`
-	EndDate             time.Time   `json:"endDate" db:"end_date"`
+	PollType            PollType    `json:"poll_type" db:"poll_type"`
+	CreatedBy           string      `json:"created_by" db:"created_by"`
+	StartDate           time.Time   `json:"start_date" db:"start_date"`
+	EndDate             time.Time   `json:"end_date" db:"end_date"`
 	Status              PollStatus  `json:"status" db:"status"`
-	IsAnonymous         bool        `json:"isAnonymous" db:"is_anonymous"`
-	RequiresMajority    bool        `json:"requiresMajority" db:"requires_majority"`
-	MajorityPercentage  float64     `json:"majorityPercentage" db:"majority_percentage"`
-	TotalEligibleVoters int         `json:"totalEligibleVoters" db:"total_eligible_voters"`
-	TotalVotesCast      int         `json:"totalVotesCast" db:"total_votes_cast"`
+	IsAnonymous         bool        `json:"is_anonymous" db:"is_anonymous"`
+	RequiresMajority    bool        `json:"requires_majority" db:"requires_majority"`
+	MajorityPercentage  float64     `json:"majority_percentage" db:"majority_percentage"`
+	TotalEligibleVoters int         `json:"total_eligible_voters" db:"total_eligible_voters"`
+	TotalVotesCast      int         `json:"total_votes_cast" db:"total_votes_cast"`
 	Result              *PollResult `json:"result,omitempty" db:"result"`
-	ResultDeclaredAt    *time.Time  `json:"resultDeclaredAt,omitempty" db:"result_declared_at"`
+	ResultDeclaredAt    *time.Time  `json:"result_declared_at,omitempty" db:"result_declared_at"`
 	Metadata            *string     `json:"metadata,omitempty" db:"metadata"`
-	CreatedAt           time.Time   `json:"createdAt" db:"created_at"`
-	UpdatedAt           time.Time   `json:"updatedAt" db:"updated_at"`
+	CreatedAt           time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time   `json:"updated_at" db:"updated_at"`
 }
 
 // PollOption represents an option in a poll
 type PollOption struct {
 	ID          string    `json:"id" db:"id"`
-	PollID      string    `json:"pollId" db:"poll_id"`
-	OptionText  string    `json:"optionText" db:"option_text"`
-	OptionOrder int       `json:"optionOrder" db:"option_order"`
-	VoteCount   int       `json:"voteCount" db:"vote_count"`
+	PollID      string    `json:"poll_id" db:"poll_id"`
+	OptionText  string    `json:"option_text" db:"option_text"`
+	OptionOrder int       `json:"option_order" db:"option_order"`
+	VoteCount   int       `json:"vote_count" db:"vote_count"`
 	Metadata    *string   `json:"metadata,omitempty" db:"metadata"`
-	CreatedAt   time.Time `json:"createdAt" db:"created_at"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 
 // Vote represents a vote in the system
 type Vote struct {
 	ID            string    `json:"id" db:"id"`
-	PollID        string    `json:"pollId" db:"poll_id"`
-	OptionID      string    `json:"optionId" db:"option_id"`
-	VoterHash     string    `json:"voterHash" db:"voter_hash"`
-	VoteTimestamp time.Time `json:"voteTimestamp" db:"vote_timestamp"`
-	IsValid       bool      `json:"isValid" db:"is_valid"`
+	PollID        string    `json:"poll_id" db:"poll_id"`
+	OptionID      string    `json:"option_id" db:"option_id"`
+	VoterHash     string    `json:"voter_hash" db:"voter_hash"`
+	VoteTimestamp time.Time `json:"vote_timestamp" db:"vote_timestamp"`
+	IsValid       bool      `json:"is_valid" db:"is_valid"`
 }
 
 // RoleEscalationRequest represents a role escalation request
 type RoleEscalationRequest struct {
-	ID            string    `json:"id" db:"id"`
-	ChamaID       string    `json:"chamaId" db:"chama_id"`
-	CandidateID   string    `json:"candidateId" db:"candidate_id"`
-	CurrentRole   string    `json:"currentRole" db:"current_role"`
-	RequestedRole string    `json:"requestedRole" db:"requested_role"`
-	RequestedBy   string    `json:"requestedBy" db:"requested_by"`
-	PollID        *string   `json:"pollId,omitempty" db:"poll_id"`
-	Status        string    `json:"status" db:"status"`
-	Justification *string   `json:"justification,omitempty" db:"justification"`
-	CreatedAt     time.Time `json:"createdAt" db:"created_at"`
-	UpdatedAt     time.Time `json:"updatedAt" db:"updated_at"`
+	ID            string `json:"id" db:"id"`
+	ChamaID       string `json:"chama_id" db:"chama_id"`
+	CandidateID   string `json:"candidate_id" db:"candidate_id"`
+	CurrentRole   string `json:"current_role" db:"current_role"`
+	RequestedRole string `json:"requested_role" db:"requested_role"`
+	RequestedBy   string `json:"requested_by" db:"requested_by"`
+	PollID        *string `json:"poll_id,omitempty" db:"poll_id"`
+	Status        string `json:"status" db:"status"`
+	Justification *string `json:"justification,omitempty" db:"justification"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // CreatePollRequest represents the request to create a new poll
 type CreatePollRequest struct {
 	Title              string              `json:"title" binding:"required,min=1,max=200"`
 	Description        *string             `json:"description,omitempty" binding:"omitempty,max=1000"`
-	PollType           PollType            `json:"pollType" binding:"required,oneof=general Election / Voting financial_decision"`
-	EndDate            time.Time           `json:"endDate" binding:"required"`
-	IsAnonymous        *bool               `json:"isAnonymous,omitempty"`
-	RequiresMajority   *bool               `json:"requiresMajority,omitempty"`
-	MajorityPercentage *float64            `json:"majorityPercentage,omitempty" binding:"omitempty,min=0,max=100"`
+	PollType           PollType            `json:"poll_type" binding:"required,oneof=general Election / Voting financial_decision"`
+	EndDate            time.Time           `json:"end_date" binding:"required"`
+	IsAnonymous        *bool               `json:"is_anonymous,omitempty"`
+	RequiresMajority   *bool               `json:"requires_majority,omitempty"`
+	MajorityPercentage *float64            `json:"majority_percentage,omitempty" binding:"omitempty,min=0,max=100"`
 	Options            []PollOptionRequest `json:"options" binding:"required,min=2,max=10"`
 	Metadata           *string             `json:"metadata,omitempty"`
 }
 
 // PollOptionRequest represents a poll option in the create request
 type PollOptionRequest struct {
-	OptionText string  `json:"optionText" binding:"required,min=1,max=200"`
+	OptionText string  `json:"option_text" binding:"required,min=1,max=200"`
 	Metadata   *string `json:"metadata,omitempty"`
 }
 
@@ -115,30 +115,30 @@ type PollOptionRequest struct {
 type UpdatePollRequest struct {
 	Title       *string     `json:"title,omitempty" binding:"omitempty,min=1,max=200"`
 	Description *string     `json:"description,omitempty" binding:"omitempty,max=1000"`
-	EndDate     *time.Time  `json:"endDate,omitempty"`
+	EndDate     *time.Time  `json:"end_date,omitempty"`
 	Status      *PollStatus `json:"status,omitempty" binding:"omitempty,oneof=active completed cancelled"`
 }
 
 // CastVoteRequest represents the request to cast a vote
 type CastVoteRequest struct {
-	OptionID string `json:"optionId" binding:"required"`
+	OptionID string `json:"option_id" binding:"required"`
 }
 
 // CreateRoleEscalationRequest represents the request to create a role escalation
 type CreateRoleEscalationRequest struct {
-	CandidateID   string  `json:"candidateId" binding:"required"`
-	RequestedRole string  `json:"requestedRole" binding:"required,oneof=chairperson secretary treasurer member"`
+	CandidateID   string  `json:"candidate_id" binding:"required"`
+	RequestedRole string  `json:"requested_role" binding:"required,oneof=chairperson secretary treasurer member"`
 	Justification *string `json:"justification,omitempty" binding:"omitempty,max=500"`
 }
 
 // PollWithDetails represents a poll with additional details
 type PollWithDetails struct {
 	Poll
-	CreatedByName string       `json:"createdByName"`
+	CreatedByName string       `json:"created_by_name"`
 	Options       []PollOption `json:"options"`
-	UserVoted     bool         `json:"userVoted"`
-	UserCanVote   bool         `json:"userCanVote"`
-	TimeRemaining *int64       `json:"timeRemaining,omitempty"` // seconds
+	UserVoted     bool         `json:"user_voted"`
+	UserCanVote   bool         `json:"user_can_vote"`
+	TimeRemaining *int64       `json:"time_remaining,omitempty"` // seconds
 }
 
 // PollResponse represents the response structure for poll operations

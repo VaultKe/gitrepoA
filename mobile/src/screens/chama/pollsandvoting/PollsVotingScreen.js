@@ -116,12 +116,9 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (chamaId) {
-      // If initial data hasn't been loaded yet, this is the first load
-      // Otherwise, it's a tab switch
-      const isTabSwitch = initialDataLoaded;
-      loadData(isTabSwitch);
+      loadData(false);
     }
-  }, [chamaId, activeTab, initialDataLoaded]);
+  }, [chamaId, activeTab]);
 
   // Auto-hide success banner after 5 seconds
   useEffect(() => {
@@ -244,26 +241,34 @@ const PollsVotingScreen = ({ route, navigation }) => {
            return true;
          });
 
-         const processedVotes = validVotes.map(vote => {
-           const isFullyVoted = isPollFullyVoted(vote);
+    const processedVotes = validVotes.map(vote => {
+      const isFullyVoted = isPollFullyVoted(vote);
+      const endsAt = vote.ends_at ? new Date(vote.ends_at).getTime() : null;
+      const now = Date.now();
+      let timeRemaining = null;
+      if (endsAt && vote.status === 'active') {
+        timeRemaining = Math.max(0, Math.floor((endsAt - now) / 1000));
+      }
 
-           if (isFullyVoted && vote.status === 'active') {
-             return {
-               ...vote,
-               status: 'completed',
-               result: 'completed_early',
-               endsAt: new Date().toISOString(),
-               isFullyVoted: true,
-               completionStatus: 'Completed (100% participation)'
-             };
-           }
+      if (isFullyVoted && vote.status === 'active') {
+        return {
+          ...vote,
+          status: 'completed',
+          result: 'completed_early',
+          ends_at: new Date().toISOString(),
+          isFullyVoted: true,
+          completionStatus: 'Completed (100% participation)',
+          timeRemaining: 0,
+        };
+      }
 
-           return {
-             ...vote,
-             isFullyVoted,
-             completionStatus: isFullyVoted ? 'All votes cast' : null
-           };
-         });
+      return {
+        ...vote,
+        isFullyVoted,
+        completionStatus: isFullyVoted ? 'All votes cast' : null,
+        timeRemaining,
+      };
+    });
 
          const allCompletedPolls = processedVotes.filter(vote => vote.status === 'completed');
          setCompletedPolls(allCompletedPolls);
@@ -779,7 +784,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
   const getTotalVotesCast = (poll) => {
     if (!poll.options || !Array.isArray(poll.options)) return 0;
-    return poll.options.reduce((total, option) => total + (option.voteCount || 0), 0);
+    return poll.options.reduce((total, option) => total + (option.vote_count || 0), 0);
   };
 
    const getTotalEligibleVoters = (poll) => {
@@ -850,7 +855,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               <Text style={[styles.tableCell, { color: colors.textSecondary }]}>
                 {getTotalVotesCast(poll)}/{getTotalEligibleVoters(poll)}
               </Text>
-              <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{formatTableDate(poll.endsAt)}</Text>
+                <Text style={[styles.tableCell, { color: colors.textSecondary }]}>{formatTableDate(poll.ends_at)}</Text>
               <TouchableOpacity
                 style={[styles.actionCell, { backgroundColor: colors.primary + '15' }]}
                 onPress={() => openVisualizationModal(poll)}
@@ -1024,9 +1029,9 @@ const PollsVotingScreen = ({ route, navigation }) => {
     if (!poll.options || poll.options.length === 0) return null;
 
     const totalVotes = getTotalVotesCast(poll);
-    const chartData = poll.options.map((option, index) => ({
-      label: option.text || `Option ${index + 1}`,
-      value: option.voteCount || 0,
+      const chartData = poll.options.map((option, index) => ({
+        label: option.option_text || `Option ${index + 1}`,
+        value: option.vote_count || 0,
     }));
 
     return (
@@ -1145,7 +1150,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
             {item.title}
           </Text>
           <Text style={[styles.pollCreator, { color: colors.textSecondary }]}>
-            by {item.createdBy}
+            by {item.created_by}
           </Text>
         </View>
         <View style={[
@@ -1189,14 +1194,14 @@ const PollsVotingScreen = ({ route, navigation }) => {
           </Text>
         </View>
 
-        {item.status === 'active' && item.timeRemaining && (
+        {item.status === 'active' && item.time_remaining && (
           <View style={styles.statItem}>
             <Text style={[
               styles.statValue,
               { color: item.isFullyVoted ? colors.success : colors.warning },
               isDesktop && styles.statValueDesktop
             ]}>
-              {item.isFullyVoted ? 'All Votes Cast' : formatTimeRemaining(item.timeRemaining)}
+              {item.isFullyVoted ? 'All Votes Cast' : formatTimeRemaining(item.time_remaining)}
             </Text>
             <Text style={[
               styles.statLabel,
@@ -1229,7 +1234,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
       </View>
 
       {/* Voting Status Message */}
-      {item.userVoted && (
+      {item.user_voted && (
         <View style={[styles.votingStatusMessage, { backgroundColor: colors.success + '10', borderColor: colors.success, borderWidth: 1 }]}>
           <Ionicons name="checkmark-circle" size={18} color={colors.success} />
           <Text style={[styles.votingStatusText, { color: colors.success, fontSize: 13, fontWeight: '600' }]}>
@@ -1238,7 +1243,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      {item.status === 'completed' && !item.userVoted && (
+      {item.status === 'completed' && !item.user_voted && (
         <View style={[styles.votingStatusMessage, { backgroundColor: colors.textSecondary + '10', borderColor: colors.textSecondary, borderWidth: 1 }]}>
           <Ionicons name="time" size={18} color={colors.textSecondary} />
           <Text style={[styles.votingStatusText, { color: colors.textSecondary, fontSize: 13 }]}>
@@ -1254,9 +1259,9 @@ const PollsVotingScreen = ({ route, navigation }) => {
       ]}>
         {item.options.map((option, index) => {
           const totalVotesCast = getTotalVotesCast(item);
-          const percentage = getVotePercentage(option.voteCount, totalVotesCast);
-          const canVote = item.status === 'active' && !item.userVoted;
-          const showVotingInterface = item.status === 'active' && !item.userVoted;
+          const percentage = getVotePercentage(option.vote_count, totalVotesCast);
+          const canVote = item.status === 'active' && !item.user_voted;
+          const showVotingInterface = item.status === 'active' && !item.user_voted;
 
           return (
             <View
@@ -1270,7 +1275,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                   borderWidth: 2,
                   backgroundColor: colors.primary + '08'
                 },
-                item.userVoted && {
+                item.user_voted && {
                   borderColor: colors.success,
                   backgroundColor: colors.success + '08'
                 },
@@ -1303,7 +1308,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                       handleVote(item.id, option.id, item);
                     }}
                     activeOpacity={0.8}
-                    accessibilityLabel={`Vote for ${option.text}`}
+                     accessibilityLabel={`Vote for ${option.option_text}`}
                     accessibilityRole="button"
                     accessibilityHint="Double tap to cast your vote for this option"
                   >
@@ -1315,7 +1320,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               )}
 
               {/* User Already Voted Icon - Smaller and cleaner */}
-              {item.userVoted && (
+              {item.user_voted && (
                 <View style={[styles.voteIconContainer, { backgroundColor: colors.success + '15', borderRadius: 12, padding: 6 }]}>
                   <Ionicons
                     name="checkmark-circle"
@@ -1326,7 +1331,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               )}
 
               {/* Completed Vote Icon - Smaller */}
-              {item.status === 'completed' && !item.userVoted && (
+              {item.status === 'completed' && !item.user_voted && (
                 <View style={[styles.voteIconContainer, { backgroundColor: colors.textSecondary + '15', borderRadius: 12, padding: 6 }]}>
                   <Ionicons
                     name="time"
@@ -1342,7 +1347,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                   { color: colors.text },
                   isDesktop && styles.optionTextDesktop
                 ]}>
-                  {option.text}
+                  {option.option_text}
                 </Text>
                 {/* Show vote count for all polls */}
                 <Text style={[
@@ -1350,7 +1355,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                   { color: colors.textSecondary },
                   isDesktop && styles.optionVotesDesktop
                 ]}>
-                  {option.voteCount} votes ({percentage}%)
+                  {option.vote_count} votes ({percentage}%)
                 </Text>
               </View>
 
@@ -1364,7 +1369,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               )}
 
               {/* Voted Indicator - Compact */}
-              {item.userVoted && (
+              {item.user_voted && (
                 <View style={[styles.actionIndicator, { backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2 }]}>
                   <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
                     VOTED
@@ -1373,7 +1378,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               )}
 
               {/* Completed Indicator - Compact */}
-              {item.status === 'completed' && !item.userVoted && (
+              {item.status === 'completed' && !item.user_voted && (
                 <View style={[styles.actionIndicator, { backgroundColor: colors.textSecondary, paddingHorizontal: 6, paddingVertical: 2 }]}>
                   <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
                     ENDED
@@ -1382,7 +1387,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               )}
 
               {/* Anonymous Voting Indicator */}
-              {item.isAnonymous && (
+          {item.is_anonymous && (
                 <View style={[styles.anonymousIndicator, { backgroundColor: colors.warning + '15', borderRadius: 12, padding: 4 }]}>
                   <Ionicons
                     name="eye-off"
@@ -1412,7 +1417,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
         </View>
 
       {/* Only show "You have voted" badge for active polls */}
-      {item.userVoted && item.status === 'active' && (
+      {item.user_voted && item.status === 'active' && (
         <View style={[styles.votedBadge, { backgroundColor: colors.success + '15' }]}>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} />
           <Text style={[styles.votedText, { color: colors.success }]}>
@@ -1450,11 +1455,11 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
       <View style={styles.pollMeta}>
         <Text style={[styles.pollDate, { color: colors.textSecondary }]}>
-          {item.status === 'active' ? 'Ends' : 'Ended'}: {formatDate(item.endsAt, 'datetime')}
+          {item.status === 'active' ? 'Ends' : 'Ended'}: {formatDate(item.ends_at, 'datetime')}
         </Text>
 
         <View style={styles.pollBadges}>
-          {item.isAnonymous && (
+          {item.is_anonymous && (
             <View style={[styles.anonymousBadge, { backgroundColor: colors.warning + '20', borderColor: colors.warning, borderWidth: 1 }]}>
               <Ionicons name="eye-off" size={12} color={colors.warning} />
               <Text style={[styles.anonymousText, { color: colors.warning }]}>
@@ -1463,7 +1468,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {item.userVoted && (
+          {item.user_voted && (
             <View style={[styles.votedBadge, { backgroundColor: colors.success + '15', borderColor: colors.success, borderWidth: 1 }]}>
               <Ionicons name="checkmark-circle" size={10} color={colors.success} />
               <Text style={[styles.votedText, { color: colors.success, fontSize: 12 }]}>
@@ -1472,7 +1477,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {item.status === 'active' && !item.userVoted && (
+          {item.status === 'active' && !item.user_voted && (
             <View style={[styles.canVoteBadge, { backgroundColor: colors.primary + '15', borderColor: colors.primary, borderWidth: 1 }]}>
               <Ionicons name="radio-button-off" size={10} color={colors.primary} />
               <Text style={[styles.canVoteText, { color: colors.primary, fontSize: 12 }]}>
@@ -2321,7 +2326,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
                         Ended:
                       </Text>
                       <Text style={[styles.statValue, { color: colors.textSecondary }]}>
-                        {formatDate(selectedVisualizationPoll.endsAt, 'datetime')}
+                        {formatDate(selectedVisualizationPoll.ends_at, 'datetime')}
                       </Text>
                     </View>
                     <View style={[styles.statItem, !isDesktop && { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
@@ -2344,15 +2349,15 @@ const PollsVotingScreen = ({ route, navigation }) => {
                     </Text>
                     {selectedVisualizationPoll.options.map((option, index) => {
                       const totalVotes = getTotalVotesCast(selectedVisualizationPoll);
-                      const percentage = getVotePercentage(option.voteCount, totalVotes);
+                      const percentage = getVotePercentage(option.vote_count, totalVotes);
                       return (
                         <View key={option.id || index} style={[styles.optionDetailItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <View style={styles.optionDetailContent}>
                             <Text style={[styles.optionDetailText, { color: colors.text }]}>
-                              {option.text || option.option_text}
+                              {option.option_text}
                             </Text>
                             <Text style={[styles.optionDetailVotes, { color: colors.textSecondary }]}>
-                              {option.voteCount || 0} votes ({percentage}%)
+                              {option.vote_count || 0} votes ({percentage}%)
                             </Text>
                           </View>
                           <View style={styles.progressBarContainer}>

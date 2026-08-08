@@ -292,7 +292,7 @@ const MyChamasScreen = ({ navigation, route }) => {
     let filtered = [...chamas];
 
     // Filter out chamas where the user has left (membership is inactive)
-    filtered = filtered.filter(chama => chama.membershipIsActive !== false);
+    filtered = filtered.filter(chama => chama.membership_is_active !== false);
 
     // Apply category filter
     if (selectedCategory !== 'all') {
