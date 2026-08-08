@@ -6,6 +6,28 @@ import { maskSensitiveData } from '../../utils/formatters';
 let isRefreshing = false;
 let refreshPromise = null;
 
+/**
+ * Endpoints that never return PII and should bypass the expensive
+ * maskSensitiveData deep-clone in makeRequest.  Matching is done with
+ * String.prototype.includes so a single prefix like "/chamas" covers
+ * /chamas/my, /chamas/:id, /chamas/:id/members, etc.
+ */
+const UNMASKED_ENDPOINTS = [
+  '/chamas/',          // chama listings, details, members, transactions
+  '/transactions',
+  '/meetings',
+  '/contributions',
+  '/wallets/',
+  '/merry-go-rounds',
+  '/notifications',
+  '/groups',
+  '/activity',
+  '/dashboard',
+];
+
+const isUnmaskedEndpoint = (endpoint) =>
+  UNMASKED_ENDPOINTS.some((pattern) => endpoint.includes(pattern));
+
 const refreshAccessToken = async () => {
   if (isRefreshing) {
     return refreshPromise;
@@ -233,7 +255,18 @@ const refreshAccessToken = async () => {
   }
 
   const result = data?.success !== undefined ? data : { success: true, data };
-  return isAuthEndpoint ? result : maskSensitiveData(result);
+
+  // maskSensitiveData deep-clones and recursively processes every field in the
+  // response — extremely expensive for large payloads (e.g. chama listings with
+  // 50+ items).  Only apply it to endpoints that may return PII.  Everything
+  // else returns the original parsed object, avoiding the memory/CPU overhead
+  // of a full deep clone.
+  if (isAuthEndpoint) {
+    return result;
+  }
+
+  const shouldMask = !isUnmaskedEndpoint(endpoint);
+  return shouldMask ? maskSensitiveData(result) : result;
 };
 
 const makeRequestWithRetry = async (endpoint, options = {}, maxRetries = 2) => {
