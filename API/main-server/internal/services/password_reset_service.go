@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"vaultke-backend/internal/utils"
 )
 
 // PasswordResetService handles password reset functionality
@@ -474,20 +476,7 @@ func normalizeEmail(email string) string {
 }
 
 // formatPhoneNumber formats a phone number for consistent storage and comparison
+// Uses utils.FormatPhoneNumber to ensure canonical +254XXXXXXXXX format
 func formatPhoneNumber(phone string) string {
-	// Remove all non-digit characters
-	cleaned := strings.ReplaceAll(phone, " ", "")
-	cleaned = strings.ReplaceAll(cleaned, "-", "")
-	cleaned = strings.ReplaceAll(cleaned, "(", "")
-	cleaned = strings.ReplaceAll(cleaned, ")", "")
-	cleaned = strings.ReplaceAll(cleaned, "+", "")
-
-	// Add Kenya country code if it's a local number
-	if len(cleaned) == 10 && strings.HasPrefix(cleaned, "0") {
-		cleaned = "254" + cleaned[1:]
-	} else if len(cleaned) == 9 {
-		cleaned = "254" + cleaned
-	}
-
-	return cleaned
+	return utils.FormatPhoneNumber(phone)
 }

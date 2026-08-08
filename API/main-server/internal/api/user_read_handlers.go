@@ -526,6 +526,9 @@ func SearchUserByCredentials(c *gin.Context) {
 		return
 	}
 
+	// Format phone number to canonical +254 format for consistent lookup
+	phone = utils.FormatPhoneNumber(phone)
+
 	db, exists := c.Get("db")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -714,6 +717,9 @@ func SearchUserByPhone(c *gin.Context) {
 		})
 		return
 	}
+
+	// Format phone number to canonical +254 format for consistent lookup
+	phone = utils.FormatPhoneNumber(phone)
 
 	db, exists := c.Get("db")
 	if !exists {

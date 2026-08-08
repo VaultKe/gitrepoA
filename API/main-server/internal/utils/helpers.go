@@ -56,22 +56,36 @@ func FormatCurrency(amount float64) string {
 	return fmt.Sprintf("KSh %.2f", amount)
 }
 
-// FormatPhoneNumber formats a phone number to international format
+// FormatPhoneNumber formats a phone number to the standard international
+// format +254XXXXXXXXX (Kenya). All common local formats (0712..., 011...,
+// 254712..., +254712...) are normalized to this single canonical form so
+// that DB storage and lookup are always consistent.
 func FormatPhoneNumber(phone string) string {
-	// Remove all non-digit characters
+	// Remove all non-digit characters (including +)
 	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
 
-	// Handle different formats
-	if strings.HasPrefix(cleaned, "254") {
-		return "+" + cleaned
-	} else if strings.HasPrefix(cleaned, "0") && len(cleaned) == 10 {
-		return "+254" + cleaned[1:]
-	} else if len(cleaned) == 9 {
-		return "+254" + cleaned
+	// Strip leading zeros that were used as local dialing prefix
+	cleaned = strings.TrimLeft(cleaned, "0")
+
+	// At this point `cleaned` should be 9 or 12 digits:
+	//   9 digits  → missing country code (e.g. 712345678)
+	//  12 digits  → already includes 254 prefix (e.g. 254712345678)
+	// Any other length means the input is not a valid Kenyan phone number;
+	// return the original value so callers can decide how to handle it.
+	if len(cleaned) == 9 {
+		cleaned = "254" + cleaned
+	} else if len(cleaned) == 12 {
+		// Already in 254XXXXXXXXXX form — keep as-is
+	} else {
+		return phone
 	}
 
-	// Return as-is if format is unclear
-	return phone
+	// Ensure the number starts with 254 (Kenya country code)
+	if !strings.HasPrefix(cleaned, "254") {
+		return phone
+	}
+
+	return "+" + cleaned
 }
 
 // ParsePhoneNumber extracts the phone number without country code

@@ -863,12 +863,10 @@ const AppContext = createContext();
         console.warn('WebSocket disconnect failed during logout:', wsError);
       }
 
-      try {
-        await ApiService.logout();
-      } catch (apiError) {
-        console.warn('API logout failed, continuing with local logout:', apiError);
-      }
-
+      // Do NOT call ApiService.logout() here — it will fire an HTTP request
+      // with the auth token that was already stripped by triggerAppLogout,
+      // triggering a 401 that re-enters triggerAppLogout and creates an
+      // infinite logout loop.  Local cleanup only.
       await AsyncStorage.multiRemove([
         'authToken',
         'userData',

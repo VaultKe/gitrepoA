@@ -117,8 +117,9 @@ func TransferMoney(c *gin.Context) {
 	var recipientWalletID string
 
 	if req.RecipientType == "phone" {
-		// Find user by phone number
-		err := db.(*sql.DB).QueryRow("SELECT id FROM users WHERE phone = $1", req.RecipientID).Scan(&recipientUserID)
+		// Format phone number to canonical +254 format before lookup
+		formattedPhone := utils.FormatPhoneNumber(req.RecipientID)
+		err := db.(*sql.DB).QueryRow("SELECT id FROM users WHERE phone = $1", formattedPhone).Scan(&recipientUserID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"success": false,

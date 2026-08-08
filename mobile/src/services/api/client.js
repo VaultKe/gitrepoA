@@ -43,7 +43,9 @@ const refreshAccessToken = async () => {
 
       return newAccessToken;
     } catch (error) {
-      await triggerAppLogout();
+      if (!getLoggingOut()) {
+        await triggerAppLogout();
+      }
       throw error;
     } finally {
       isRefreshing = false;
@@ -81,10 +83,16 @@ const refreshAccessToken = async () => {
     }
   };
 
- const makeRequest = async (endpoint, options = {}) => {
-  if (endpoint === '/auth/refresh') {
-    throw new Error('Use refreshAccessToken instead');
-  }
+  const makeRequest = async (endpoint, options = {}) => {
+    // Bail out early if a logout is already in progress — prevents a cascade
+    // of failed requests that would each independently call triggerAppLogout
+    if (getLoggingOut()) {
+      throw new Error('Request cancelled — user is logging out');
+    }
+
+    if (endpoint === '/auth/refresh') {
+      throw new Error('Use refreshAccessToken instead');
+    }
 
   const token = await getAuthToken();
   const isFormData = !!(options.body &&
@@ -164,7 +172,9 @@ const refreshAccessToken = async () => {
     if (response.status === 401) {
       const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
       if (isAuthEndpoint) {
-        await triggerAppLogout();
+        if (!getLoggingOut()) {
+          await triggerAppLogout();
+        }
         throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
       }
 
@@ -204,7 +214,9 @@ const refreshAccessToken = async () => {
           return maskSensitiveData(retryData?.success !== undefined ? retryData : { success: true, data: retryData });
         }
       } catch (refreshError) {
-        await triggerAppLogout();
+        if (!getLoggingOut()) {
+          await triggerAppLogout();
+        }
         throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
       }
     }

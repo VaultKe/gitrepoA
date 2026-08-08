@@ -242,24 +242,38 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 		normalizedIdentifier = strings.TrimSpace(identifier)
 	}
 
-	// Format phone number if it looks like a phone number
+	// If the identifier does not contain "@", treat it as a phone number and
+	// always attempt to format it to the canonical +254 international form.
+	// This is more robust than relying on IsPhoneNumber, which strips only
+	// a limited set of separators and can miss formats like +254.712.345.678.
 	formattedIdentifier := normalizedIdentifier
-	if utils.IsPhoneNumber(identifier) {
-		formattedIdentifier = utils.FormatPhoneNumber(identifier)
+	formattedWithoutPlus := normalizedIdentifier
+	if !strings.Contains(identifier, "@") {
+		formattedIdentifier = utils.FormatPhoneNumber(normalizedIdentifier)
+		// Strip the leading "+" so we can also match phones stored without it
+		// (e.g. legacy data stored as "254712345678" instead of "+254712345678")
+		formattedWithoutPlus = strings.TrimPrefix(formattedIdentifier, "+")
 	}
 
-	// Use both direct comparison (for new normalized emails) and LOWER() for legacy data
+	// Use both direct comparison (for normalized emails) and LOWER() for legacy data.
+	// For phone lookups, search by multiple formats to handle legacy data:
+	//   $3 → formatted phone with + (e.g. +254712345678)
+	//   $4 → raw identifier as typed by user (e.g. 0712345678)
+	//   $5 → formatted phone without + (e.g. 254712345678) for legacy storage
 	query := `
 		SELECT id, email, phone, first_name, last_name, password_hash, avatar, role, status,
 			   is_email_verified, is_phone_verified, language, theme, county, town,
 			   latitude, longitude, business_type, business_description, bio, occupation,
 			   date_of_birth, gender, id_number, rating, total_ratings, token_version,
 			   created_at, updated_at
-		FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3
+		FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3 OR phone = $4 OR phone = $5
 	`
 
 	user := &models.User{}
-	err := s.db.QueryRow(query, normalizedIdentifier, normalizedIdentifier, formattedIdentifier).Scan(
+	err := s.db.QueryRow(query,
+		normalizedIdentifier, normalizedIdentifier,
+		formattedIdentifier, normalizedIdentifier, formattedWithoutPlus,
+	).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.FirstName, &user.LastName,
 		&user.PasswordHash, &user.Avatar, &user.Role, &user.Status,
 		&user.IsEmailVerified, &user.IsPhoneVerified, &user.Language, &user.Theme,
