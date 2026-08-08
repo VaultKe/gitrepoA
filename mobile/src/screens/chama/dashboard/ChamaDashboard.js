@@ -10,7 +10,6 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
@@ -42,7 +41,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     lastUpdated: null,
   });
   const [userRole, setUserRole] = useState('member');
-  const [userLeft, setUserLeft] = useState(false);
 
   // Ref to track current chama ID to prevent race conditions
   const currentChamaIdRef = useRef(null);
@@ -70,8 +68,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   // Fast chama switching function
   const switchToChama = (chama) => {
     // Prevent switching to a chama where the user has left — check only
-    // the per-chama membership flag, not a global userLeft state that could
-    // be stale or erroneously set.
+    // the per-chama membership flag.
     if (chama.membershipIsActive === false) {
       Alert.alert(
         'Not a Member',
@@ -214,30 +211,6 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     return () => clearInterval(interval);
   }, [selectedChama?.id || selectedChama?.chamaId || selectedChama]);
 
-  // Refresh data when screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      if (selectedChama) {
-        // Verify selected chama membership is still active
-        if (userChamas.length > 0) {
-          const stillMember = userChamas.find(c => c.id === selectedChama.id);
-          if (!stillMember || stillMember.membershipIsActive === false) {
-            setSelectedChama(null);
-            Alert.alert(
-              'Membership Expired',
-              `You are no longer a member of "${selectedChama.name}".`,
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-        }
-        const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
-        loadChamaStatistics(currentChamaId);
-      }
-    }, [selectedChama?.id || selectedChama?.chamaId || selectedChama])
-  );
-
-
   const loadMemberRole = async (targetChamaId) => {
     const chamaId = targetChamaId || selectedChama?.id || selectedChama?.chamaId || selectedChama;
     if (!chamaId || !user?.id) return;
@@ -245,9 +218,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       const response = await ApiService.getMemberRole(chamaId, user.id);
       if (response.success) {
         setUserRole(response.data?.role || 'member');
-        setUserLeft(false);
       }
-      // If response.success is false or the API errors out, do NOT set userLeft to true.
       // Membership status is already determined by the membershipIsActive flag
       // which is checked in loadUserChamas. A failed role fetch does not mean
       // the user has left the chama.
@@ -256,34 +227,23 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   };
 
    const loadUserChamas = async () => {
-     try {
-       setLoading(true);
-       const response = await ApiService.getUserChamas(20, 0);
-       if (response.success) {
-         const userChamasData = (response.data || []).filter(chama => chama.membershipIsActive !== false);
-         setUserChamas(userChamasData);
+      try {
+        setLoading(true);
+        const response = await ApiService.getUserChamas(20, 0);
+        if (response.success) {
+          const userChamasData = (response.data || []).filter(chama => chama.membershipIsActive !== false);
+          setUserChamas(userChamasData);
 
-         // Verify current user membership for the selected chama
-         if (selectedChama) {
-           const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
-           const stillActive = userChamasData.find(c => c.id === currentChamaId);
-           if (!stillActive) {
-             const leftChama = (response.data || []).find(c => c.id === currentChamaId && c.membershipIsActive === false);
-             if (leftChama) {
-               setUserLeft(true);
-               setUserRole('left');
-               Alert.alert(
-                 'Membership Expired',
-                 `You have left "${leftChama.name}". It has been removed from your chamas.`,
-                 [{ text: 'OK' }]
-               );
-             }
-             setSelectedChama(null);
-           } else {
-             setUserLeft(false);
-             await loadMemberRole(currentChamaId);
-           }
-         }
+          // If the currently selected chama is no longer in the active list, clear it
+          if (selectedChama) {
+            const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
+            const stillActive = userChamasData.find(c => c.id === currentChamaId);
+            if (!stillActive) {
+              setSelectedChama(null);
+            } else {
+              await loadMemberRole(currentChamaId);
+            }
+          }
 
           // If no chama is currently selected and we have chamas, select the first one
           if (userChamasData.length > 0 && !selectedChama) {
@@ -295,33 +255,19 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
             ]);
           }
 
-         // If we have a selected chama, make sure it's still in the list (in case it was deleted or user left)
-         if (selectedChama && !userChamasData.find(c => c.id === selectedChama.id)) {
-           setSelectedChama(null);
-           // If the user left the selected chama, alert them
-           const leftChama = (response.data || []).find(c => c.id === selectedChama.id && c.membershipIsActive === false);
-           if (leftChama) {
-             Alert.alert(
-               'Membership Expired',
-               `You have left "${leftChama.name}". It has been removed from your chamas.`,
-               [{ text: 'OK' }]
-             );
-           }
-         }
+          // Preload data for other chamas in the background for faster switching
+          setTimeout(() => {
+            preloadChamaData(userChamasData);
+          }, 2000); // Wait 2 seconds after initial load
+        }
+      } catch (error) {
 
-         // Preload data for other chamas in the background for faster switching
-         setTimeout(() => {
-           preloadChamaData(userChamasData);
-         }, 2000); // Wait 2 seconds after initial load
-       }
-     } catch (error) {
-
-       // Set empty array on error to show empty state
-       setUserChamas([]);
-     } finally {
-       setLoading(false);
-     }
-   };
+        // Set empty array on error to show empty state
+        setUserChamas([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const loadChamaFeatures = async () => {
     try {

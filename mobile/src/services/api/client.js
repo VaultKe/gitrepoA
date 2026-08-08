@@ -86,18 +86,30 @@ const refreshAccessToken = async () => {
     try {
       return JSON.parse(trimmed);
     } catch (e) {
-      // Try to extract valid JSON from the response by finding
-      // the first { or [ and the matching closing } or ].
       const startChar = trimmed.charAt(0);
       if (startChar === '{' || startChar === '[') {
         const endChar = startChar === '{' ? '}' : ']';
         const startIdx = trimmed.indexOf(startChar);
-        const endIdx = trimmed.lastIndexOf(endChar);
-        if (startIdx !== -1 && endIdx > startIdx) {
-          try {
-            return JSON.parse(trimmed.substring(startIdx, endIdx + 1));
-          } catch (_) {
-            // Fall through to throw below
+        if (startIdx !== -1) {
+          // Find the matching end character by counting depth so we
+          // only parse the first complete JSON value even if the
+          // response body contains duplicate JSON objects.
+          let depth = 0;
+          let endIdx = -1;
+          for (let i = startIdx; i < trimmed.length; i++) {
+            if (trimmed[i] === startChar) depth++;
+            else if (trimmed[i] === endChar) depth--;
+            if (depth === 0) {
+              endIdx = i;
+              break;
+            }
+          }
+          if (endIdx !== -1) {
+            try {
+              return JSON.parse(trimmed.substring(startIdx, endIdx + 1));
+            } catch (_) {
+              // fall through to throw below
+            }
           }
         }
       }

@@ -598,6 +598,7 @@ func GetChamaStatistics(c *gin.Context) {
 		"success": true,
 		"data":    stats,
 	})
+	c.Abort()
 }
 
 // GetChamaTransactions retrieves all transactions for a chama
