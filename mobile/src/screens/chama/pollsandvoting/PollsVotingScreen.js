@@ -27,6 +27,7 @@ import ApiService from '../../../services/api';
 
 const PollsVotingScreen = ({ route, navigation }) => {
   const { chamaId } = route.params;
+  console.log('[PollsVoting] render chamaId=', chamaId, 'route.params=', route?.params);
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
   const formInputStyle = {
@@ -82,6 +83,10 @@ const PollsVotingScreen = ({ route, navigation }) => {
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [floatingButtonPosition, setFloatingButtonPosition] = useState({ x: Dimensions.get('window').width - 80, y: Dimensions.get('window').height - 160 });
 
+  // Error state for visible feedback
+  const [loadError, setLoadError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+
   // Success banner states
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -115,8 +120,12 @@ const PollsVotingScreen = ({ route, navigation }) => {
   });
 
   useEffect(() => {
+    console.log('[PollsVoting] mount useEffect chamaId=', chamaId, 'activeTab=', activeTab);
     if (chamaId) {
+      console.log('[PollsVoting] calling loadData from mount useEffect');
       loadData(false);
+    } else {
+      console.warn('[PollsVoting] loadData skipped because chamaId is falsy');
     }
   }, [chamaId, activeTab]);
 
@@ -129,22 +138,11 @@ const PollsVotingScreen = ({ route, navigation }) => {
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [showSuccessBanner]);
+   }, [showSuccessBanner]);
 
-  // Real-time updates - refresh data every 30 seconds
-  useEffect(() => {
-    if (!autoRefreshEnabled) return;
-
-    const interval = setInterval(() => {
-      loadVotes();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [chamaId, activeTab, autoRefreshEnabled]);
-
-  // PanResponder for draggable floating button
-  const panResponder = useRef(
-    PanResponder.create({
+   // PanResponder for draggable floating button
+   const panResponder = useRef(
+     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         // Optional: Add visual feedback
@@ -165,146 +163,195 @@ const PollsVotingScreen = ({ route, navigation }) => {
     })
   ).current;
 
-   const loadData = async (isTabSwitch = false) => {
-     try {
-       if (!isTabSwitch) {
-         setLoading(true);
-       }
+    const loadData = async (isTabSwitch = false) => {
+      console.log('[PollsVoting] loadData start isTabSwitch=', isTabSwitch, 'chamaId=', chamaId);
+      try {
+        if (!isTabSwitch) {
+          setLoading(true);
+        }
 
-       // Load votes first — they are the primary content and should
-       // be displayed as soon as they arrive, without waiting for
-       // the secondary (non-essential) data to finish.
-       await loadPolls();
+        setLoadError(null);
+        console.log('[PollsVoting] loadData about to call loadPolls');
+        await loadPolls();
+        console.log('[PollsVoting] loadPolls finished');
 
-       // Fire the remaining non-blocking requests in the background
-       // so the UI is not held up waiting for them.
-       Promise.all([
-         loadUserRole(),
-         loadChamaMembers(),
-         loadChamaDetails(),
-       ]).catch(() => {
-         // Non-critical data failures are silently ignored;
-         // the vote list is already rendered.
-       });
+        Promise.all([
+          loadUserRole(),
+          loadChamaMembers(),
+          loadChamaDetails(),
+        ]).catch(() => {
+          // Non-critical data failures are silently ignored;
+          // the vote list is already rendered.
+        });
 
-       if (!isTabSwitch) {
-         setInitialDataLoaded(true);
-       }
-     } catch (error) {
-       Alert.alert('Error', 'Failed to load data');
-     } finally {
-       if (!isTabSwitch) {
-         setLoading(false);
-         setInitialDataLoaded(true);
-       }
-     }
-   };
+        if (!isTabSwitch) {
+          setInitialDataLoaded(true);
+        }
+      } catch (error) {
+        setLoadError(error?.message || 'Failed to load polls and votes');
+      } finally {
+        if (!isTabSwitch) {
+          setLoading(false);
+          setInitialDataLoaded(true);
+        }
+      }
+    };
 
    // Ref to track if a vote refresh is already in flight, to prevent concurrent calls
    const isRefreshingRef = useRef(false);
 
-   const loadVotes = useCallback(async () => {
-     // Prevent concurrent refresh calls
-     if (isRefreshingRef.current) {
-       return;
-     }
-     isRefreshingRef.current = true;
+     const loadVotes = useCallback(async () => {
+        console.log('[PollsVoting] loadVotes start chamaId=', chamaId);
+        if (!chamaId || typeof chamaId !== 'string') {
+          console.warn('[PollsVoting] loadVotes aborted: invalid chamaId');
+          Alert.alert('Error', 'Invalid chama access. Please try again.');
+          return;
+        }
 
-     try {
-       if (!chamaId || typeof chamaId !== 'string') {
-         Alert.alert('Error', 'Invalid chama access. Please try again.');
-         return;
-       }
+      try {
+         console.log('[PollsVoting] loadVotes fetching votes and polls');
+         const [activeResult, completedResult, activePollsResult, completedPollsResult] = await Promise.allSettled([
+           ApiService.getActiveVotes(chamaId),
+           ApiService.getVoteResults(chamaId),
+           ApiService.getActivePolls(chamaId),
+           ApiService.getPollResults(chamaId),
+         ]);
 
-       const [activeResponse, completedResponse] = await Promise.all([
-         ApiService.getActiveVotes(chamaId),
-         ApiService.getVoteResults(chamaId)
-       ]);
-       const allPolls = [];
-       const pollMap = new Map();
+         console.log('[PollsVoting] loadVotes results:', {
+           activeStatus: activeResult.status,
+           activeSuccess: activeResult.value?.success,
+           activeCount: activeResult.value?.data?.length,
+           completedStatus: completedResult.status,
+           completedSuccess: completedResult.value?.success,
+           completedCount: completedResult.value?.data?.length,
+           activePollsStatus: activePollsResult.status,
+           activePollsSuccess: activePollsResult.value?.success,
+           activePollsCount: activePollsResult.value?.data?.length,
+           completedPollsStatus: completedPollsResult.status,
+           completedPollsSuccess: completedPollsResult.value?.success,
+           completedPollsCount: completedPollsResult.value?.data?.length,
+         });
+         console.log('[PollsVoting] activeResult.value keys:', activeResult.value ? Object.keys(activeResult.value) : 'no value');
+         console.log('[PollsVoting] completedResult.value keys:', completedResult.value ? Object.keys(completedResult.value) : 'no value');
 
-       if (activeResponse.success && activeResponse.data) {
-         activeResponse.data.forEach(poll => pollMap.set(poll.id, poll));
-       }
+         const voteMap = new Map();
 
-       if (completedResponse.success && completedResponse.data) {
-         completedResponse.data.forEach(poll => pollMap.set(poll.id, poll));
-       }
+         if (activeResult.status === 'fulfilled' && activeResult.value?.success && Array.isArray(activeResult.value?.data)) {
+           activeResult.value.data.forEach(item => voteMap.set(item.id, { ...item, source: 'vote' }));
+         } else if (activeResult.status === 'fulfilled' && activeResult.value?.success && activeResult.value?.data) {
+           console.warn('[PollsVoting] active votes data is not an array:', typeof activeResult.value?.data, activeResult.value?.data);
+         }
 
-       const response = { success: true, data: [...pollMap.values()] };
+         if (completedResult.status === 'fulfilled' && completedResult.value?.success && Array.isArray(completedResult.value?.data)) {
+           completedResult.value.data.forEach(item => voteMap.set(item.id, { ...item, source: 'vote' }));
+         } else if (completedResult.status === 'fulfilled' && completedResult.value?.success && completedResult.value?.data) {
+           console.warn('[PollsVoting] completed votes data is not an array:', typeof completedResult.value?.data, completedResult.value?.data);
+         }
 
-       if (response.success) {
-         const validVotes = (response.data || []).filter(vote => {
-           if (!vote.id) {
-             return false;
+         const pollMap = new Map();
+
+         if (activePollsResult.status === 'fulfilled' && activePollsResult.value?.success && Array.isArray(activePollsResult.value?.data)) {
+           activePollsResult.value.data.forEach(item => pollMap.set(item.id, { ...item, source: 'poll' }));
+         } else if (activePollsResult.status === 'rejected') {
+           console.warn('[PollsVoting] active polls endpoint failed:', activePollsResult.reason?.message || activePollsResult.reason);
+         }
+
+         if (completedPollsResult.status === 'fulfilled' && completedPollsResult.value?.success && Array.isArray(completedPollsResult.value?.data)) {
+           completedPollsResult.value.data.forEach(item => pollMap.set(item.id, { ...item, source: 'poll' }));
+         } else if (completedPollsResult.status === 'rejected') {
+           console.warn('[PollsVoting] completed polls endpoint failed:', completedPollsResult.reason?.message || completedPollsResult.reason);
+         }
+
+         // Merge polls and votes, preferring poll data on ID collision
+         const merged = new Map();
+         for (const item of [...voteMap.values(), ...pollMap.values()]) {
+           merged.set(item.id, item);
+         }
+
+         const allItems = [...merged.values()];
+         const validItems = allItems.filter(item => item.id);
+         console.log('[PollsVoting] allItems=', allItems.length, 'validItems=', validItems.length);
+
+         // Normalize field names so polls and votes render uniformly.
+         const normalizedItems = validItems.map(item => {
+           if (item.source === 'poll') {
+             return {
+               ...item,
+               type: item.poll_type || item.type || 'general',
+               ends_at: item.end_date || item.ends_at,
+               starts_at: item.start_date || item.starts_at,
+               total_votes: item.total_votes_cast ?? item.total_votes ?? 0,
+             };
            }
-           return true;
+           return item;
          });
 
-    const processedVotes = validVotes.map(vote => {
-      const isFullyVoted = isPollFullyVoted(vote);
-      const endsAt = vote.ends_at ? new Date(vote.ends_at).getTime() : null;
-      const now = Date.now();
-      let timeRemaining = null;
-      if (endsAt && vote.status === 'active') {
-        timeRemaining = Math.max(0, Math.floor((endsAt - now) / 1000));
+         const processedItems = normalizedItems.map(item => {
+           const isFullyVoted = isPollFullyVoted(item);
+           const endsAt = item.ends_at ? new Date(item.ends_at).getTime() : null;
+           const now = Date.now();
+           let timeRemaining = null;
+           if (endsAt && item.status === 'active') {
+             timeRemaining = Math.max(0, Math.floor((endsAt - now) / 1000));
+           }
+
+           if (isFullyVoted && item.status === 'active') {
+             return {
+               ...item,
+               status: 'completed',
+               result: 'completed_early',
+               ends_at: new Date().toISOString(),
+               isFullyVoted: true,
+               completionStatus: 'Completed (100% participation)',
+               timeRemaining: 0,
+             };
+           }
+
+           return {
+             ...item,
+             isFullyVoted,
+             completionStatus: isFullyVoted ? 'All votes cast' : null,
+             timeRemaining,
+           };
+         });
+
+         const allCompleted = processedItems.filter(item => item.status === 'completed');
+         console.log('[PollsVoting] processedItems=', processedItems.length, 'allCompleted=', allCompleted.length, 'activeTab=', activeTab);
+         setCompletedPolls(allCompleted);
+
+        let filtered;
+        if (activeTab === 'active') {
+          filtered = processedItems.filter(item => item.status === 'active');
+        } else if (activeTab === 'completed') {
+          filtered = processedItems.filter(item => item.status === 'completed');
+        } else {
+          filtered = processedItems;
+        }
+
+        setVotes(filtered);
+        setPolls(filtered);
+        setLoadError(null);
+      } catch (error) {
+        console.warn('loadPolls error, keeping existing data:', error?.message || error);
+        setLoadError(error?.message || 'Failed to load polls and votes');
       }
-
-      if (isFullyVoted && vote.status === 'active') {
-        return {
-          ...vote,
-          status: 'completed',
-          result: 'completed_early',
-          ends_at: new Date().toISOString(),
-          isFullyVoted: true,
-          completionStatus: 'Completed (100% participation)',
-          timeRemaining: 0,
-        };
-      }
-
-      return {
-        ...vote,
-        isFullyVoted,
-        completionStatus: isFullyVoted ? 'All votes cast' : null,
-        timeRemaining,
-      };
-    });
-
-         const allCompletedPolls = processedVotes.filter(vote => vote.status === 'completed');
-         setCompletedPolls(allCompletedPolls);
-
-         let filteredVotes;
-         if (activeTab === 'active') {
-           filteredVotes = processedVotes.filter(vote => vote.status === 'active');
-         } else if (activeTab === 'completed') {
-           filteredVotes = processedVotes.filter(vote => vote.status === 'completed');
-         } else {
-           filteredVotes = processedVotes;
-         }
-
-         setVotes(filteredVotes);
-         setPolls(filteredVotes);
-       } else {
-         // On non-error API responses (e.g. access denied), clear state
-         setVotes([]);
-         setPolls([]);
-
-         if (response.error?.includes('Access denied') || response.error?.includes('not a member')) {
-           Alert.alert('Access Denied', 'You do not have permission to view votes for this chama.');
-         }
-       }
-     } catch (error) {
-       // Do NOT clear polls/votes on network errors — keep existing data
-       // so the UI doesn't flicker. The next refresh cycle will retry.
-       console.warn('loadVotes error, keeping existing data:', error?.message || error);
-     } finally {
-       isRefreshingRef.current = false;
-     }
-   }, [chamaId, activeTab]);
+    }, [chamaId, activeTab]);
 
   // Keep old function name for compatibility but redirect to new one
   const loadPolls = loadVotes;
 
+  // Real-time updates - refresh data every 30 seconds
+  // NOTE: This effect must come after loadVotes is defined to avoid
+  // a temporal dead zone / initialization error.
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+
+    const interval = setInterval(() => {
+      loadVotes();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [chamaId, activeTab, autoRefreshEnabled, loadVotes]);
 
   const loadUserRole = async () => {
     try {
@@ -344,9 +391,16 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadData(true); // Always treat refresh as a tab switch (subtle loading)
+    setLoadError(null);
+    await loadData(true);
     setRefreshing(false);
-  }, [activeTab]);
+  }, [activeTab, chamaId]);
+
+  const handleRetry = useCallback(async () => {
+    setLoadError(null);
+    setRetryCount(prev => prev + 1);
+    await loadData(false);
+  }, [chamaId, activeTab]);
 
   // Pagination helpers
   const getPaginatedCompletedPolls = () => {
@@ -451,7 +505,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           justification: roleForm.justification || `Election for ${roleForm.requestedRole} position with ${roleForm.selectedCandidates.length} candidates`
         };
 
-        const response = await ApiService.createVote(chamaId, pollData);
+        const response = await ApiService.createPoll(chamaId, pollData);
         if (response.success) {
           setSuccessMessage(`Role election poll created successfully with ${roleForm.selectedCandidates.length} candidates! Members can now vote for their preferred candidate.`);
           setShowSuccessBanner(true);
@@ -471,7 +525,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
           options: pollForm.options.map(optionText => ({ option_text: optionText.trim() })),
         };
 
-        const response = await ApiService.createVote(chamaId, voteData);
+        const response = await ApiService.createPoll(chamaId, voteData);
         if (response.success) {
           setSuccessMessage('Poll created successfully! Members can now vote.');
           setShowSuccessBanner(true);
@@ -574,7 +628,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
         )
       );
 
-      const response = await ApiService.castVote(chamaId, pollId, optionId);
+      const response = await ApiService.castPollVote(chamaId, pollId, optionId);
 
       if (response.success) {
         // Check if this vote completed the poll and it's a role escalation
@@ -1684,6 +1738,45 @@ const PollsVotingScreen = ({ route, navigation }) => {
                   Loading polls...
                 </Text>
               </View>
+            ) : loadError ? (
+              <View style={[
+                styles.emptyContainer,
+                isDesktop && styles.emptyContainerDesktop
+              ]}>
+                <Ionicons
+                  name="warning-outline"
+                  size={isDesktop ? 80 : 64}
+                  color={colors.error}
+                />
+                <Text style={[
+                  styles.emptyText,
+                  { color: colors.error, marginTop: 12 },
+                  isDesktop && styles.emptyTextDesktop
+                ]}>
+                  Failed to load polls
+                </Text>
+                <Text style={[
+                  styles.emptyText,
+                  { fontSize: 14, marginTop: 8, color: colors.textSecondary },
+                  isDesktop && styles.emptyTextDesktop
+                ]}>
+                  {loadError}
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.retryButton,
+                    { backgroundColor: colors.primary + '20', marginTop: 16 }
+                  ]}
+                  onPress={handleRetry}
+                >
+                  <Text style={[
+                    styles.retryButtonText,
+                    { color: colors.primary }
+                  ]}>
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <View style={[
                 styles.emptyContainer,
@@ -2722,6 +2815,17 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     paddingHorizontal: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   modalContainer: {
     position: 'absolute',

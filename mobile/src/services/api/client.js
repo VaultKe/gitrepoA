@@ -181,11 +181,13 @@ const refreshAccessToken = async () => {
     if (method === 'GET') {
       const cached = getCachedResponse(cacheKey);
       if (cached) {
+        console.log('[api] cache hit', endpoint);
         return cached;
       }
 
       const inFlight = inFlightRequests.get(cacheKey);
       if (inFlight) {
+        console.log('[api] in-flight hit', endpoint);
         return inFlight;
       }
     }
@@ -237,6 +239,7 @@ const refreshAccessToken = async () => {
       requestPromise = inFlightRequests.get(cacheKey);
       if (!requestPromise) {
         requestPromise = (async () => {
+          console.log('[api] network start', endpoint);
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -244,6 +247,7 @@ const refreshAccessToken = async () => {
           if (typeof __DEV__ !== 'undefined' && __DEV__) {
           }
           const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchConfig);
+          console.log('[api] network request', endpoint, 'status', response.status);
           clearTimeout(timeoutId);
 
           const contentType = response.headers.get('content-type');

@@ -297,7 +297,7 @@ func GetChamaVotes(c *gin.Context) {
 		}
 	}
 
-	var votes []map[string]interface{}
+	votes := []map[string]interface{}{}
 	for _, vote := range voteMap {
 		options := optionsByVoteID[vote.ID]
 		if options == nil {
@@ -490,7 +490,7 @@ func GetActiveVotes(c *gin.Context) {
 		}
 	}
 
-	var votes []map[string]interface{}
+	votes := []map[string]interface{}{}
 	for _, vote := range voteMap {
 		options := optionsByVoteID[vote.ID]
 		if options == nil {
@@ -683,7 +683,7 @@ func GetVoteResults(c *gin.Context) {
 		}
 	}
 
-	var votes []map[string]interface{}
+	votes := []map[string]interface{}{}
 	for _, vote := range voteMap {
 		options := optionsByVoteID[vote.ID]
 		if options == nil {
