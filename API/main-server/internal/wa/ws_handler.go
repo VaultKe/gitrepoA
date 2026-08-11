@@ -203,7 +203,7 @@ func (h *WSHandler) handleGetRooms(ctx context.Context, userID string, msg map[s
 			"id":            roomID,
 			"chatId":        chat.ID,
 			"name":          chat.Name,
-			"type":          mapChatKind(chat.Kind, chat.IsGroup),
+			"type":          MapChatKind(chat.Kind, chat.IsGroup),
 			"lastMessage":   chat.LastMessage,
 			"lastMessageAt": chat.Timestamp,
 			"unreadCount":   chat.UnreadCount,
@@ -555,7 +555,7 @@ func (h *WSHandler) BroadcastFromWebhook(event map[string]interface{}) {
 	}
 }
 
-func mapChatKind(kind string, isGroup bool) string {
+func MapChatKind(kind string, isGroup bool) string {
 	if isGroup || kind == "group" {
 		return "group"
 	}

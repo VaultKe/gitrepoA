@@ -124,11 +124,13 @@ const ChatScreen = () => {
   }, [rooms, getLatestMessageTime]);
 
   const filteredRooms = useMemo(() => {
+    const normalizedTab = activeTab === 'groups' ? 'group' : activeTab;
     return sortedRooms.filter(room => {
       const latestMessage = getLatestMessage(room);
       const matchesSearch = room.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            latestMessage?.content?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesTab = activeTab === 'all' || room.type === activeTab;
+      const roomType = room.type || (room.isGroup ? 'group' : 'private');
+      const matchesTab = normalizedTab === 'all' || roomType === normalizedTab;
       return matchesSearch && matchesTab;
     });
   }, [sortedRooms, searchQuery, activeTab, getLatestMessage]);

@@ -78,29 +78,8 @@ func InitializeSchema(db *sql.DB) error {
 	return nil
 }
 
-// InitializeDefaultSession creates a default OpenWA session record if none exists.
+// InitializeDefaultSession is deprecated; bootstrapDefaultSession now owns default-session creation.
 func InitializeDefaultSession(db *sql.DB, defaultSessionID, defaultSessionName string) error {
-	if defaultSessionID == "" {
-		return nil
-	}
-
-	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM wa_sessions WHERE session_id = $1`, defaultSessionID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("check default session: %w", err)
-	}
-
-	if count == 0 {
-		_, err = db.Exec(
-			`INSERT INTO wa_sessions (session_id, name, status, is_default, created_at, updated_at)
-			 VALUES ($1, $2, 'created', true, NOW(), NOW())`,
-			defaultSessionID, defaultSessionName,
-		)
-		if err != nil {
-			return fmt.Errorf("insert default session: %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -148,4 +127,17 @@ func UpsertSession(db *sql.DB, sessionID, name, status string) error {
 		return fmt.Errorf("upsert session: %w", err)
 	}
 	return nil
+}
+
+// GetDefaultSessionID returns the OpenWA session UUID for the default session.
+func GetDefaultSessionID(db *sql.DB) (string, error) {
+	var sessionID string
+	err := db.QueryRow(`SELECT session_id FROM wa_sessions WHERE is_default = true LIMIT 1`).Scan(&sessionID)
+	if err == nil {
+		return sessionID, nil
+	}
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("no default openwa session configured")
+	}
+	return "", fmt.Errorf("query default session: %w", err)
 }

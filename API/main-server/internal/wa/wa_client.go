@@ -74,9 +74,9 @@ type OpenWASendResult struct {
 
 // OpenWAGroup represents a WhatsApp group from OpenWA.
 type OpenWAGroup struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	LinkedParentJID *string `json:"linkedParentJID,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	LinkedParentJID *string  `json:"linkedParentJID,omitempty"`
 }
 
 // requestDo performs an HTTP request to OpenWA with API key auth.
@@ -97,7 +97,7 @@ func (c *OpenWAClient) requestDo(ctx context.Context, method, path string, body 
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", c.APIKey)
+	req.Header.Set("X-API-Key", c.APIKey)
 	req.Header.Set("Accept", "application/json")
 	if reqBody != nil && reqBody.Len() > 0 {
 		req.Header.Set("Content-Type", "application/json")

@@ -360,7 +360,7 @@ func (s *SessionAssignment) EnsureDefaultSession(ctx context.Context, client *Op
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", client.APIKey)
+	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)

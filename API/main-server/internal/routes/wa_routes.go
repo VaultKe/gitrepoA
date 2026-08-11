@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -20,6 +21,23 @@ import (
 	"github.com/google/uuid"
 )
 
+var defaultSessionID struct {
+	value string
+	mu    sync.RWMutex
+}
+
+func setDefaultSessionID(id string) {
+	defaultSessionID.mu.Lock()
+	defaultSessionID.value = id
+	defaultSessionID.mu.Unlock()
+}
+
+func getDefaultSessionID() string {
+	defaultSessionID.mu.RLock()
+	defer defaultSessionID.mu.RUnlock()
+	return defaultSessionID.value
+}
+
 func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 	if defaultSessionID == "" {
 		return
@@ -28,13 +46,13 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 
 	// 1) Check if OpenWA already knows this session
 	checkReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL+"/api/sessions/"+defaultSessionID, nil)
-	checkReq.Header.Set("Authorization", client.APIKey)
+	checkReq.Header.Set("X-API-Key", client.APIKey)
 	checkResp, err := client.HTTPClient.Do(checkReq)
 	if err == nil && checkResp.StatusCode == http.StatusOK {
 		checkResp.Body.Close()
 		// Session exists; try to start it if it's not ready.
 		startReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, client.BaseURL+"/api/sessions/"+defaultSessionID+"/start", nil)
-		startReq.Header.Set("Authorization", client.APIKey)
+		startReq.Header.Set("X-API-Key", client.APIKey)
 		startResp, err := client.HTTPClient.Do(startReq)
 		if err == nil && startResp.StatusCode < 300 {
 			fmt.Printf("[WA] default session %s start initiated\n", defaultSessionID)
@@ -42,6 +60,7 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 		} else if err != nil {
 			fmt.Printf("[WA] default session start request failed: %v\n", err)
 		}
+		setDefaultSessionID(defaultSessionID)
 		return
 	}
 	if checkResp != nil && checkResp.Body != nil {
@@ -56,7 +75,7 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 		fmt.Printf("[WA] create session request error: %v\n", err)
 		return
 	}
-	createReq.Header.Set("Authorization", client.APIKey)
+	createReq.Header.Set("X-API-Key", client.APIKey)
 	createReq.Header.Set("Content-Type", "application/json")
 	createResp, err := client.HTTPClient.Do(createReq)
 	if err != nil {
@@ -65,17 +84,33 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 	}
 	defer createResp.Body.Close()
 	if createResp.StatusCode != http.StatusCreated && createResp.StatusCode != http.StatusOK {
-		fmt.Printf("[WA] create session unexpected status: %d\n", createResp.StatusCode)
+		b, _ := io.ReadAll(createResp.Body)
+		fmt.Printf("[WA] create session unexpected status: %d %s\n", createResp.StatusCode, strings.TrimSpace(string(b)))
 		return
 	}
 
-	// 3) Start the newly created session
-	startReq, err := http.NewRequestWithContext(ctx, http.MethodPost, client.BaseURL+"/api/sessions/"+defaultSessionID+"/start", nil)
+	var createdSession struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&createdSession); err != nil {
+		fmt.Printf("[WA] decode created session failed: %v\n", err)
+		return
+	}
+	if createdSession.ID == "" {
+		fmt.Printf("[WA] created session has empty id\n")
+		return
+	}
+
+	// 3) Persist the created session locally so GetDefaultSessionID can resolve it.
+	_ = wa.UpsertSession(nil, createdSession.ID, "vaultke-default", "created")
+
+	// 4) Start the newly created session using the real UUID returned by OpenWA
+	startReq, err := http.NewRequestWithContext(ctx, http.MethodPost, client.BaseURL+"/api/sessions/"+createdSession.ID+"/start", nil)
 	if err != nil {
 		fmt.Printf("[WA] start session request error: %v\n", err)
 		return
 	}
-	startReq.Header.Set("Authorization", client.APIKey)
+	startReq.Header.Set("X-API-Key", client.APIKey)
 	startResp, err := client.HTTPClient.Do(startReq)
 	if err != nil {
 		fmt.Printf("[WA] start session failed: %v\n", err)
@@ -83,10 +118,13 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 	}
 	defer startResp.Body.Close()
 	if startResp.StatusCode < 300 {
-		fmt.Printf("[WA] default session %s created and started\n", defaultSessionID)
+		fmt.Printf("[WA] default session %s created and started\n", createdSession.ID)
 	} else {
-		fmt.Printf("[WA] default session start unexpected status: %d\n", startResp.StatusCode)
+		b, _ := io.ReadAll(startResp.Body)
+		fmt.Printf("[WA] default session start unexpected status: %d %s\n", startResp.StatusCode, strings.TrimSpace(string(b)))
 	}
+
+	setDefaultSessionID(createdSession.ID)
 }
 
 // SetupWARoutes registers OpenWA-related routes on the given router group.
@@ -102,7 +140,6 @@ func SetupWARoutes(
 
 	// Initialize OpenWA schema tables
 	_ = wa.InitializeSchema(db.WriteDB())
-	_ = wa.InitializeDefaultSession(db.WriteDB(), cfg.OpenWADefaultSessionID, "vaultke-default")
 
 	waClient := wa.NewOpenWAClient(cfg)
 	wsHandler := wa.NewWSHandler(waClient, nil, db.WriteDB(), cfg.OpenWADefaultSessionID)
@@ -203,15 +240,42 @@ func SetupWARoutes(
 
 		// Chat compatibility layer: /api/v1/chat/* proxies to OpenWA default session.
 		// This preserves the existing mobile REST fallbacks without requiring a frontend change.
-		chatProxy := waGroup.Group("/chat")
+		chatProxy := router.Group("/api/v1/chat")
 		chatProxy.Use(authMiddleware.AuthRequired())
 		chatProxy.Use(func(c *gin.Context) {
 			c.Set("db", db.WriteDB())
 			c.Next()
 		})
 		{
-			chatProxy.GET("/rooms", func(c *gin.Context) {
-				handleGetChats(c, waClient, cfg.OpenWADefaultSessionID)
+		chatProxy.GET("/rooms", func(c *gin.Context) {
+			sessionID, err := wa.GetDefaultSessionID(db.WriteDB())
+			if err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "no default openwa session configured"})
+				return
+			}
+			chats, err := waClient.GetChats(c.Request.Context(), sessionID, 100, 0)
+			if err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+				return
+			}
+				rooms := make([]map[string]interface{}, 0, len(chats))
+				for _, chat := range chats {
+					roomID, _ := wa.NewRoomMapper(db.WriteDB()).ReverseLookup(chat.ID)
+					if roomID == "" {
+						roomID = chat.ID
+					}
+					rooms = append(rooms, map[string]interface{}{
+						"id":            roomID,
+						"chatId":        chat.ID,
+						"name":          chat.Name,
+						"type":          wa.MapChatKind(chat.Kind, chat.IsGroup),
+						"lastMessage":   chat.LastMessage,
+						"lastMessageAt": chat.Timestamp * 1000,
+						"unreadCount":   chat.UnreadCount,
+						"isActive":      true,
+					})
+				}
+				c.JSON(http.StatusOK, gin.H{"success": true, "data": rooms})
 			})
 			chatProxy.GET("/rooms/:roomId", func(c *gin.Context) {
 				// OpenWA doesn't have a single-room endpoint; return the room mapping info.
@@ -226,8 +290,8 @@ func SetupWARoutes(
 			chatProxy.POST("/rooms", func(c *gin.Context) {
 				// Create a chat room via OpenWA group creation or private chat mapping.
 				var req struct {
-					Name     string `json:"name"`
-					Type     string `json:"type"`
+					Name      string   `json:"name"`
+					Type      string   `json:"type"`
 					MemberIds []string `json:"memberIds"`
 					RecipientId string `json:"recipientId"`
 				}
@@ -235,20 +299,37 @@ func SetupWARoutes(
 					c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 					return
 				}
+				sessionID, err := wa.GetDefaultSessionID(db.WriteDB())
+				if err != nil {
+					c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "no default openwa session configured"})
+					return
+				}
 				if req.Type == "group" || req.Type == "chama" {
-					group, err := waClient.CreateGroup(c.Request.Context(), cfg.OpenWADefaultSessionID, req.Name, req.MemberIds)
+					group, err := waClient.CreateGroup(c.Request.Context(), sessionID, req.Name, req.MemberIds)
 					if err != nil {
 						c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
 						return
 					}
-					c.JSON(http.StatusCreated, gin.H{"success": true, "data": group})
+				// Persist mapping so future messages resolve.
+				roomID := group.ID
+				if roomID == "" {
+					roomID = req.Name
+				}
+				_, _ = wa.NewRoomMapper(db.WriteDB()).EnsureMapping(c.Request.Context(), roomID, "group", req.Name, "", sessionID, waClient)
+				c.JSON(http.StatusCreated, gin.H{"success": true, "data": group})
 					return
 				}
 				roomID := req.RecipientId
 				if roomID == "" {
 					roomID = req.Name
 				}
-				c.JSON(http.StatusCreated, gin.H{"success": true, "data": map[string]interface{}{"id": roomID}})
+				// For private chats, store the recipient JID if provided, otherwise use roomID.
+				chatID := req.RecipientId
+				if chatID == "" {
+					chatID = roomID
+				}
+				_, _ = wa.NewRoomMapper(db.WriteDB()).EnsureMapping(c.Request.Context(), roomID, "private", "", "", sessionID, waClient)
+				c.JSON(http.StatusCreated, gin.H{"success": true, "data": map[string]interface{}{"id": roomID, "chatId": chatID}})
 			})
 			chatProxy.POST("/rooms/:roomId/join", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"success": true})
@@ -260,17 +341,49 @@ func SetupWARoutes(
 				roomID := c.Param("roomId")
 				chatID, ok := wa.NewRoomMapper(db.WriteDB()).Lookup(roomID)
 				if !ok {
-					c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "room not mapped"})
+					sessionID, err := wa.GetDefaultSessionID(db.WriteDB())
+					if err != nil {
+						c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "no default openwa session configured"})
+						return
+					}
+					chatID, err = wa.NewRoomMapper(db.WriteDB()).EnsureMapping(c.Request.Context(), roomID, "private", "", "", sessionID, waClient)
+					if err != nil {
+						c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "room not mapped and could not create mapping: " + err.Error()})
+						return
+					}
+				}
+				sessionID, err := wa.GetDefaultSessionID(db.WriteDB())
+				if err != nil {
+					c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "no default openwa session configured"})
 					return
 				}
-				handleGetMessages(c, waClient, cfg.OpenWADefaultSessionID, chatID, c.Query("limit"), c.Query("before"))
+				messages, err := waClient.GetMessages(c.Request.Context(), sessionID, chatID, 50, c.Query("before"))
+				if err != nil {
+					c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+					return
+				}
+				translator := wa.NewMessageTranslator(db.WriteDB())
+				data := make([]map[string]interface{}, 0, len(messages))
+				for _, m := range messages {
+					data = append(data, translator.ToVaultKeMessage(m))
+				}
+				c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
 			})
 			chatProxy.POST("/rooms/:roomId/messages", func(c *gin.Context) {
 				roomID := c.Param("roomId")
 				chatID, ok := wa.NewRoomMapper(db.WriteDB()).Lookup(roomID)
 				if !ok {
-					c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "room not mapped"})
-					return
+					// Auto-create a mapping for unmapped rooms so existing chats don't break.
+					sessionID, err := wa.GetDefaultSessionID(db.WriteDB())
+					if err != nil {
+						c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "no default openwa session configured"})
+						return
+					}
+					chatID, err = wa.NewRoomMapper(db.WriteDB()).EnsureMapping(c.Request.Context(), roomID, "private", "", "", sessionID, waClient)
+					if err != nil {
+						c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "room not mapped and could not create mapping: " + err.Error()})
+						return
+					}
 				}
 				var req struct {
 					Content string `json:"content"`
@@ -280,24 +393,31 @@ func SetupWARoutes(
 					c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 					return
 				}
-				// Build a new request with chatId injected
-				result, err := waClient.SendText(c.Request.Context(), cfg.OpenWADefaultSessionID, chatID, req.Content)
+				sessionID, err := wa.GetDefaultSessionID(db.WriteDB())
+				if err != nil {
+					c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "no default openwa session configured"})
+					return
+				}
+				result, err := waClient.SendText(c.Request.Context(), sessionID, chatID, req.Content)
 				if err != nil {
 					c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
 					return
 				}
 				c.JSON(http.StatusCreated, gin.H{"success": true, "data": result})
 			})
-			chatProxy.POST("/rooms/:roomId/read", func(c *gin.Context) {
-				roomID := c.Param("roomId")
-				chatID, ok := wa.NewRoomMapper(db.WriteDB()).Lookup(roomID)
-				if !ok {
-					c.JSON(http.StatusOK, gin.H{"success": true})
-					return
-				}
-				_ = waClient.MarkRead(c.Request.Context(), cfg.OpenWADefaultSessionID, chatID)
+		chatProxy.POST("/rooms/:roomId/read", func(c *gin.Context) {
+			roomID := c.Param("roomId")
+			chatID, ok := wa.NewRoomMapper(db.WriteDB()).Lookup(roomID)
+			if !ok {
 				c.JSON(http.StatusOK, gin.H{"success": true})
-			})
+				return
+			}
+			sessionID, err := wa.GetDefaultSessionID(db.WriteDB())
+			if err == nil {
+				_ = waClient.MarkRead(c.Request.Context(), sessionID, chatID)
+			}
+			c.JSON(http.StatusOK, gin.H{"success": true})
+		})
 			chatProxy.DELETE("/messages/:messageId", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"success": true})
 			})
@@ -318,7 +438,8 @@ func SetupWARoutes(
 	}
 
 	// WebSocket endpoint for real-time chat via OpenWA
-	waWSGroup := router.Group("/api/v1/wa")
+	waWSGroup := waGroup.Group("/")
+	waWSGroup.Use(authMiddleware.AuthRequired())
 	{
 		waWSGroup.POST("/ws-token", func(c *gin.Context) {
 			waWSTokenHandler(c, cache)
@@ -464,7 +585,7 @@ func handleCreateSession(c *gin.Context, client *wa.OpenWAClient) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	httpReq.Header.Set("Authorization", client.APIKey)
+	httpReq.Header.Set("X-API-Key", client.APIKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(httpReq)
@@ -497,7 +618,7 @@ func handleStartSession(c *gin.Context, client *wa.OpenWAClient, sessionID strin
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	req.Header.Set("Authorization", client.APIKey)
+	req.Header.Set("X-API-Key", client.APIKey)
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -521,7 +642,7 @@ func handleLogoutSession(c *gin.Context, client *wa.OpenWAClient, sessionID stri
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	req.Header.Set("Authorization", client.APIKey)
+	req.Header.Set("X-API-Key", client.APIKey)
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -742,7 +863,7 @@ func handleGetContacts(c *gin.Context, client *wa.OpenWAClient, sessionID string
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	req.Header.Set("Authorization", client.APIKey)
+	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
@@ -773,7 +894,7 @@ func handleGetProfile(c *gin.Context, client *wa.OpenWAClient, sessionID string)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	req.Header.Set("Authorization", client.APIKey)
+	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
