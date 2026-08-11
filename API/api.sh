@@ -18,11 +18,65 @@ if ! redis-cli -h 127.0.0.1 -p 6379 ping >/dev/null 2>&1; then
 fi
 echo "Redis is running"
 
+# --- postgres ------------------------------------------------------------------
+echo "==> PostgreSQL"
+if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+  echo "Starting PostgreSQL..."
+  if command -v pg_ctlcluster >/dev/null 2>&1; then
+    pg_ctlcluster --force 16 main start 2>/dev/null || true
+  fi
+  service postgresql start 2>/dev/null || true
+  sleep 2
+fi
+if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+  echo "WARNING: PostgreSQL not available on localhost:5432. Ensure DATABASE_URL points to a reachable instance."
+else
+  echo "PostgreSQL is running"
+fi
+
+# --- openwa --------------------------------------------------------------------
+echo "==> OpenWA"
+OPENWA_PID=""
+if [ "${OPENWA_ENABLED:-false}" = "true" ]; then
+  OPENWA_DIR="$ROOT/OpenWA"
+  if [ -d "$OPENWA_DIR" ]; then
+    if [ ! -d "$OPENWA_DIR/node_modules" ]; then
+      echo "  Installing OpenWA dependencies..."
+      (cd "$OPENWA_DIR" && npm ci --omit=dev) || echo "  WARNING: npm ci failed, OpenWA may not start"
+    fi
+    if [ ! -d "$OPENWA_DIR/dist" ]; then
+      echo "  Building OpenWA..."
+      (cd "$OPENWA_DIR" && npm run build) || echo "  WARNING: build failed"
+    fi
+    echo "  Starting OpenWA..."
+    (cd "$OPENWA_DIR" && node dist/main) >"$LOG_DIR/openwa.log" 2>&1 &
+    OPENWA_PID=$!
+    echo -n "  waiting up to 60s"
+    for i in $(seq 1 60); do
+      if ! kill -0 "$OPENWA_PID" 2>/dev/null; then
+        echo ""
+        echo "  DIED early. Last 40 lines of openwa.log:"
+        tail -n 40 "$LOG_DIR/openwa.log" >&2
+        break
+      fi
+      if curl -sf http://localhost:2785/api/health/ready >/dev/null 2>&1; then
+        echo " OK (PID $OPENWA_PID)"
+        break
+      fi
+      sleep 1
+    done
+  else
+    echo "  OpenWA directory not found at $OPENWA_DIR, skipping."
+  fi
+else
+  echo "  OpenWA disabled (set OPENWA_ENABLED=true to start)"
+fi
+
 # --- cleanup ------------------------------------------------------------------
 cleanup() {
   echo ""
   echo "==> Stopping services..."
-  for pid in "${MAIN_PID:-}" "${CHAT_PID:-}" "${MEETING_PID:-}"; do
+  for pid in "${MAIN_PID:-}" "${CHAT_PID:-}" "${MEETING_PID:-}" "${OPENWA_PID:-}"; do
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
@@ -97,12 +151,18 @@ echo "All services running."
 echo "  main-server     -> http://localhost:8085"
 echo "  chat-service    -> http://localhost:8084"
 echo "  meeting-service -> http://localhost:8086"
+if [ -n "$OPENWA_PID" ]; then
+  echo "  openwa          -> http://localhost:2785"
+fi
 echo "========================================"
 echo ""
 echo "Logs:"
 echo "  tail -f $LOG_DIR/main-server.log"
 echo "  tail -f $LOG_DIR/chat-service.log"
 echo "  tail -f $LOG_DIR/meeting-service.log"
+if [ -n "$OPENWA_PID" ]; then
+  echo "  tail -f $LOG_DIR/openwa.log"
+fi
 echo ""
 echo "Press Ctrl+C to stop all services."
 

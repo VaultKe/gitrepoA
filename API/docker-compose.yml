@@ -1,0 +1,170 @@
+version: "3.8"
+
+services:
+  # =========================================================================
+  # PostgreSQL - shared database for all services
+  # =========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: vaultke-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vaultke
+      POSTGRES_PASSWORD: vaultke-secret
+      POSTGRES_DB: vaultke
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaultke -d vaultke"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # =========================================================================
+  # Redis - used by chat-service for sessions and pub/sub
+  # =========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: vaultke-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # =========================================================================
+  # OpenWA - WhatsApp gateway (whatsapp-web.js / baileys)
+  # =========================================================================
+  openwa:
+    image: ghcr.io/rmyndharis/openwa:latest
+    container_name: vaultke-openwa
+    restart: unless-stopped
+    ports:
+      - "2785:2785"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      DATABASE_TYPE: postgres
+      DATABASE_URL: postgresql://neondb_owner:npg_raLTI8VNq4Fn@ep-small-pond-adgvxr3v.c-2.us-east-1.aws.neon.tech/OpenWa?sslmode=require&channel_binding=require
+      DATABASE_SYNCHRONIZE: "false"
+      DATABASE_SSL: "true"
+      DATABASE_SSL_REJECT_UNAUTHORIZED: "true"
+      POSTGRES_SCHEMA: openwa
+      AUTO_START_SESSIONS: "true"
+      CORS_ORIGINS: "*"
+      OPENWA_MEM_LIMIT: 2g
+      OPENWA_PIDS_LIMIT: 2048
+    volumes:
+      - openwa_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2785/api/health/ready"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # =========================================================================
+  # Main Server - API Gateway (Go / Gin)
+  # =========================================================================
+  main-server:
+    build:
+      context: ./main-server
+      dockerfile: Dockerfile
+    container_name: vaultke-main-server
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      ENVIRONMENT: production
+      PORT: 8085
+      DATABASE_URL: postgresql://vaultke:vaultke-secret@postgres:5432/vaultke?sslmode=disable
+      JWT_SECRET: change-me-in-production
+      REDIS_URL: redis://redis:6379
+      OPENWA_ENABLED: "true"
+      OPENWA_API_URL: http://openwa:2785
+      OPENWA_API_KEY: ${OPENWA_API_KEY:-}
+      OPENWA_WEBHOOK_SECRET: ${OPENWA_WEBHOOK_SECRET:-}
+      OPENWA_DEFAULT_SESSION_ID: default
+      CHAT_SERVICE_URL: http://chat-service:8084
+      MEETING_SERVICE_URL: http://meeting-service:8086
+      ALLOW_ALL_ORIGINS: "true"
+      ALLOWED_ORIGINS: "*"
+    volumes:
+      - main_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      openwa:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =========================================================================
+  # Chat Service - WebSocket chat (Go / Gin)
+  # =========================================================================
+  chat-service:
+    build:
+      context: ./chat-service
+      dockerfile: Dockerfile
+    container_name: vaultke-chat-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: 8084
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: "0"
+      MAX_ROOM_CAPACITY: "150"
+      MESSAGE_RETENTION_DAYS: "30"
+      ENABLE_E2EE: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =========================================================================
+  # Meeting Service - WebRTC (Go / Gin)
+  # =========================================================================
+  meeting-service:
+    build:
+      context: ./meeting-service
+      dockerfile: Dockerfile
+    container_name: vaultke-meeting-service
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      SERVER_PORT: 8086
+      STUN_SERVER1: stun:stun.l.google.com:19302
+      MAX_ROOM_CAPACITY: "150"
+      MAX_CONCURRENT_ROOMS: "50000"
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  openwa_data:
+  main_uploads:

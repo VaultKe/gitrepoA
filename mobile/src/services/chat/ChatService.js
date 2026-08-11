@@ -60,6 +60,7 @@ class ChatService {
   _setupWebSocketHandlers() {
     websocketService.registerMessageHandler('new_message', this._handleNewMessage.bind(this));
     websocketService.registerMessageHandler('message_read', this._handleRead.bind(this));
+    websocketService.registerMessageHandler('message_ack', this._handleDelivered.bind(this));
     websocketService.registerMessageHandler('user_typing', this._handleTyping.bind(this));
     websocketService.registerMessageHandler('room_updated', this._handleRoomUpdate.bind(this));
     websocketService.registerMessageHandler('room_members', this._handleRoomMembers.bind(this));

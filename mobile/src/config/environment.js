@@ -202,6 +202,7 @@ const buildEnvironmentConfig = (envName) => {
     ENABLE_DEV_TOOLS: envBool(prefix + 'ENABLE_DEV_TOOLS', envBool('ENABLE_DEV_TOOLS', envName === 'development')),
     MOCK_PAYMENTS: envBool(prefix + 'MOCK_PAYMENTS', envBool('MOCK_PAYMENTS', envName === 'staging')),
     SKIP_AUTH: envBool(prefix + 'SKIP_AUTH', envBool('SKIP_AUTH', false)),
+    OPENWA_ENABLED: envBool(prefix + 'OPENWA_ENABLED', envBool('OPENWA_ENABLED', true)),
   };
 };
 
@@ -332,6 +333,7 @@ export const {
   ENABLE_DEV_TOOLS,
   MOCK_PAYMENTS,
   SKIP_AUTH,
+  OPENWA_ENABLED,
   GOOGLE_CLIENT_ID,
   FIREBASE_PROJECT_ID,
   FIREBASE_API_KEY,

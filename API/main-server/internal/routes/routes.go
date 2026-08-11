@@ -2,15 +2,12 @@ package routes
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"vaultke-backend/config"
@@ -20,7 +17,6 @@ import (
 	"vaultke-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -522,21 +518,8 @@ func SetupRoutes(
 
 			onlineMeetings := protected.Group("/online-meetings")
 			{
-				onlineMeetings.Use(meetingAuthPassthrough)
-				onlineMeetings.Any("/*path", proxyTo(cfg.MeetingServiceURL, "/online-meetings"))
-			}
-
-			chat := apiGroup.Group("/chat")
-			{
-				chat.Use(authMiddleware.AuthRequired())
-				chat.Use(meetingAuthPassthrough)
-				chat.Any("/*path", proxyTo(cfg.ChatServiceURL, "/chat"))
-			}
-
-			chatWS := apiGroup.Group("/chat-ws")
-			{
-				chatWS.POST("/ws-token", authMiddleware.AuthRequired(), chatWSTokenHandler(cfg))
-				chatWS.GET("/ws", chatWSHandler(cfg))
+			onlineMeetings.Use(meetingAuthPassthrough)
+			onlineMeetings.Any("/*path", proxyTo(cfg.MeetingServiceURL, "/online-meetings"))
 			}
 
 			merryGoRounds := protected.Group("/merry-go-rounds")
@@ -759,126 +742,4 @@ func copyWebSocketMessages(dst, src *websocket.Conn, errChan chan<- error, ctx c
 
 func meetingAuthPassthrough(c *gin.Context) {
 	c.Next()
-}
-
-var chatSessions = struct {
-	store map[string]string
-	mu    sync.Mutex
-}{store: make(map[string]string)}
-
-var chatSessionStore = struct {
-	store map[string]string
-	mu    sync.Mutex
-}{store: make(map[string]string)}
-
-func chatWSTokenHandler(cfg *config.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userID := c.GetString("userID")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			return
-		}
-
-		sessionID := uuid.New().String()
-		chatSessionStore.mu.Lock()
-		chatSessionStore.store[sessionID] = userID
-		chatSessionStore.mu.Unlock()
-
-		go func(id string) {
-			time.Sleep(5 * time.Minute)
-			chatSessionStore.mu.Lock()
-			delete(chatSessionStore.store, id)
-			chatSessionStore.mu.Unlock()
-		}(sessionID)
-
-		c.JSON(http.StatusOK, gin.H{
-			"sessionId": sessionID,
-			"expiresIn": 300,
-		})
-	}
-}
-
-func chatWSHandler(cfg *config.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		sessionID := c.Query("session")
-		if sessionID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "session required"})
-			return
-		}
-
-		chatSessionStore.mu.Lock()
-		userID, ok := chatSessionStore.store[sessionID]
-		chatSessionStore.mu.Unlock()
-
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired session"})
-			return
-		}
-
-		roomID := c.Query("roomId")
-		if roomID == "" {
-			roomID = "main"
-		}
-
-		targetURL := fmt.Sprintf("%s/rooms/%s/ws?session=%s", cfg.ChatServiceURL, roomID, sessionID)
-		targetURL = strings.Replace(targetURL, "http://", "ws://", 1)
-		targetURL = strings.Replace(targetURL, "https://", "wss://", 1)
-
-		headers := make(http.Header)
-		for k, v := range c.Request.Header {
-			headers[k] = v
-		}
-		headers.Set("X-User-ID", userID)
-		headers.Del("Host")
-		headers.Del("Cookie")
-		headers.Del("Authorization")
-		headers.Del("Upgrade")
-		headers.Del("Connection")
-		headers.Del("Sec-WebSocket-Key")
-		headers.Del("Sec-WebSocket-Version")
-		headers.Del("Sec-WebSocket-Protocol")
-		headers.Del("Sec-WebSocket-Extensions")
-
-		dialer := &websocket.Dialer{
-			HandshakeTimeout: 10 * time.Second,
-			NetDialContext: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-		}
-		backendConn, _, err := dialer.Dial(targetURL, headers)
-		if err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to connect to chat service"})
-			return
-		}
-		defer backendConn.Close()
-
-		upgrader := websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
-		}
-		clientConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			return
-		}
-		defer clientConn.Close()
-
-		errChan := make(chan error, 2)
-		ctx := c.Request.Context()
-
-		go copyWebSocketMessages(clientConn, backendConn, errChan, ctx)
-		go copyWebSocketMessages(backendConn, clientConn, errChan, ctx)
-
-		// Wait for either side to finish, the context to cancel, or an overall
-		// reasonable timeout so a hung proxy does not pin a goroutine forever.
-		select {
-		case err := <-errChan:
-			if err != nil {
-				log.Printf("chat ws proxy error: %v", err)
-			}
-		case <-ctx.Done():
-			log.Printf("chat ws proxy cancelled: %v", ctx.Err())
-		case <-time.After(5 * time.Minute):
-			log.Println("chat ws proxy reached max duration")
-		}
-	}
 }

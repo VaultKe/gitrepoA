@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL, WS_URL } from '../config/environment';
+import { API_BASE_URL, WS_URL, OPENWA_ENABLED } from '../config/environment';
 import { maskSensitiveData } from '../utils/formatters';
 
 class WebSocketService {
@@ -16,9 +16,23 @@ class WebSocketService {
     this.isRealtimeEnabled = true;
     this.lastDataSync = new Map();
     this.pollingInterval = null;
-    // Correlated request/response for REST-style WS calls (get_rooms,
-    // get_messages, create_room, mark_read, ...). Keyed by requestId.
     this.pendingRequests = new Map();
+    this._useOpenWA = true;
+  }
+
+  setUseOpenWA(useOpenWA) {
+    this._useOpenWA = !!useOpenWA;
+    if (this.isConnected) {
+      this.disconnect();
+    }
+  }
+
+  get _wsTokenPath() {
+    return this._useOpenWA ? '/api/v1/wa/ws-token' : '/chat-ws/ws-token';
+  }
+
+  get _wsPath() {
+    return this._useOpenWA ? '/api/v1/wa/ws' : '/chat-ws/ws';
   }
 
   async connect() {
@@ -55,7 +69,7 @@ class WebSocketService {
         return false;
       }
 
-      const sessionRes = await fetch(`${API_BASE_URL}/chat-ws/ws-token`, {
+      const sessionRes = await fetch(`${API_BASE_URL}${this._wsTokenPath}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -69,7 +83,7 @@ class WebSocketService {
       const { sessionId } = await sessionRes.json();
       if (!sessionId) return false;
 
-      const wsUrl = `${WS_URL}/chat-ws/ws?session=${encodeURIComponent(sessionId)}`;
+      const wsUrl = `${WS_URL}${this._wsPath}?session=${encodeURIComponent(sessionId)}`;
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = this.onOpen.bind(this);

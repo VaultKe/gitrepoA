@@ -248,6 +248,15 @@ func main() {
 	// Register routes and middleware
 	routes.SetupRoutes(router, cfg, db, authService, passwordResetService, emailVerificationService, authHandlers, reminderHandlers, pollsHandlers, disbursementHandlers, reportsHandlers, userSearchHandlers, receiptHandlers, accountHandlers, testDataGenerator, subwalletHandlers, disbursementService, devicePolicyService, cache)
 
+	// Register OpenWA routes if enabled
+	if cfg.OpenWAEnabled && cfg.OpenWAAPIURL != "" {
+		log.Println("[OPENWA] Initializing OpenWA integration...")
+		routes.SetupWARoutes(router, cfg, db, cache)
+		log.Printf("[OPENWA] Routes registered at /api/v1/wa (baseURL=%s)", cfg.OpenWAAPIURL)
+	} else {
+		log.Println("[OPENWA] Integration disabled (OPENWA_ENABLED=false or OPENWA_API_URL empty)")
+	}
+
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {

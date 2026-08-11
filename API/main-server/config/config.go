@@ -116,6 +116,13 @@ type Config struct {
 	// Microservice URLs
 	MeetingServiceURL string
 	ChatServiceURL    string
+
+	// OpenWA Configuration
+	OpenWAAPIURL           string
+	OpenWAAPIKey           string
+	OpenWAWebhookSecret    string
+	OpenWADefaultSessionID string
+	OpenWAEnabled          bool
 }
 
 // Load loads configuration from environment variables
@@ -222,6 +229,13 @@ func Load() *Config {
 		// Microservice URLs
 		MeetingServiceURL: getEnv("MEETING_SERVICE_URL", "https://livemeeting-service.onrender.com"),
 		ChatServiceURL:    getEnv("CHAT_SERVICE_URL", "https://chat-services-l1a6.onrender.com"),
+
+		// OpenWA Configuration
+		OpenWAAPIURL:           getEnv("OPENWA_API_URL", "http://localhost:2785"),
+		OpenWAAPIKey:           getEnv("OPENWA_API_KEY", ""),
+		OpenWAWebhookSecret:    getEnv("OPENWA_WEBHOOK_SECRET", ""),
+		OpenWADefaultSessionID: getEnv("OPENWA_DEFAULT_SESSION_ID", "default"),
+		OpenWAEnabled:          getEnv("OPENWA_ENABLED", "true") == "true",
 	}
 
 	// Resolve UploadPath to an absolute path so that uploads and static file
