@@ -631,6 +631,15 @@ function ChamaTabNavigator({ route }) {
         initialParams={{ chamaId, chamaName, chama }}
       />
       <Tab.Screen
+        name="WhatsAppLink"
+        component={WhatsAppLinkScreen}
+        options={{
+          title: 'Link WhatsApp',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={{ chamaId, chamaName, chama }}
+      />
+      <Tab.Screen
         name="AdminSupport"
         component={AdminSupportScreen}
         options={{

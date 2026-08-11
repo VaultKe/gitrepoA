@@ -58,12 +58,16 @@ const UserTabBar = ({ state, descriptors, navigation: navProp }) => {
         return 'list';
       case 'Admin':
         return 'shield-checkmark';
+      case 'WhatsApp':
+        return 'logo-whatsapp';
+      case 'WhatsAppLink':
+        return 'logo-whatsapp';
       default:
         return 'ellipse';
     }
   };
 
-  // Quick action shortcuts for user dashboard - exactly 4 items
+  // Quick action shortcuts for user dashboard
   const quickShortcuts = [
     {
       name: 'Home',
@@ -90,6 +94,12 @@ const UserTabBar = ({ state, descriptors, navigation: navProp }) => {
       name: 'AI Assistant',
       label: 'AI',
       onPress: () => nav.navigate('AIAssistant'),
+    },
+    {
+      name: 'WhatsApp',
+      label: 'WhatsApp',
+      icon: 'logo-whatsapp',
+      onPress: () => nav.navigate('WhatsAppLink'),
     },
     {
       name: 'Admin',
@@ -120,7 +130,8 @@ const UserTabBar = ({ state, descriptors, navigation: navProp }) => {
       (shortcut.name === 'Home' && currentRoute.name === 'EnhancedUserDashboard') ||
       (shortcut.name === 'Chat' && currentRoute.name === 'Chat') ||
       (shortcut.name === 'Wallet' && currentRoute.name === 'Wallet') ||
-      (shortcut.name === 'Profile' && currentRoute.name === 'Profile')
+      (shortcut.name === 'Profile' && currentRoute.name === 'Profile') ||
+      (shortcut.name === 'WhatsApp' && currentRoute.name === 'WhatsAppLink')
     );
     return shortcutIndex >= 0 ? shortcutIndex : 0;
   };

@@ -10,14 +10,18 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
+import Button from '../../../components/common/Button';
 import ApiService from '../../../services/api';
+import WhatsAppLinkScreen from '../whatsapp/WhatsAppLinkScreen';
 
 const SecuritySettingsScreen = ({ navigation }) => {
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
+  const nav = useNavigation();
 
   const [securitySettings, setSecuritySettings] = useState({
     biometric_login: false,
@@ -55,6 +59,10 @@ const SecuritySettingsScreen = ({ navigation }) => {
 
   const handleViewLoginHistory = () => {
     navigation.navigate('LoginHistory');
+  };
+
+  const handleWhatsAppLink = () => {
+    nav.navigate('WhatsAppLink');
   };
 
   const renderSecuritySetting = (key, title, description, requiresConfirmation = false) => (
@@ -181,6 +189,24 @@ const SecuritySettingsScreen = ({ navigation }) => {
                 </Text>
                 <Text style={[styles.actionDescription, { color: colors.textSecondary }]}>
                   View recent login activity
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionItem, { borderBottomWidth: 0 }]}
+            onPress={handleWhatsAppLink}
+          >
+            <View style={styles.actionContent}>
+              <Ionicons name="logo-whatsapp" size={24} color={colors.success || '#25D366'} />
+              <View style={styles.actionText}>
+                <Text style={[styles.actionTitle, { color: colors.text }]}>
+                  Link WhatsApp
+                </Text>
+                <Text style={[styles.actionDescription, { color: colors.textSecondary }]}>
+                  Connect your WhatsApp account
                 </Text>
               </View>
             </View>

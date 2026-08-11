@@ -26,6 +26,7 @@ import apiService from '../../../services/api';
 import { getTransactions } from '../../../services/api/walletEndpoints';
 import { getUserChamas, payMemberServiceFee } from '../../../services/api/chamaEndpoints';
 import KENYA_COUNTIES from '../../../utils/kenyaCounties';
+import WhatsAppLinkScreen from '../whatsapp/WhatsAppLinkScreen';
 
 const ProfileScreen = ({ navigation }) => {
   const { theme, user, userRole, updateUser, wallets, chamas, logout, getCachedData, getLightningData, getCachedAvatarData } = useApp();
@@ -1177,6 +1178,24 @@ const ProfileScreen = ({ navigation }) => {
     </Card>
   );
 
+  const renderWhatsAppLink = () => (
+    <Card variant="outlined" style={styles.section}>
+      <View style={styles.whatsappHeader}>
+        <Ionicons name="logo-whatsapp" size={28} color={colors.success || '#25D366'} />
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>WhatsApp</Text>
+      </View>
+      <Text style={[styles.whatsappDescription, { color: colors.textSecondary }]}>
+        Link your WhatsApp account to send and receive messages directly in the app.
+      </Text>
+      <Button
+        title="Link WhatsApp"
+        onPress={() => navigation.navigate('WhatsAppLink')}
+        style={styles.whatsappButton}
+        leftIcon="qr-code-outline"
+      />
+    </Card>
+  );
+
   const renderUserChamasTable = () => {
     if (chamasLoading) {
       return (
@@ -1319,6 +1338,7 @@ const ProfileScreen = ({ navigation }) => {
       >
         {renderProfileHeader()}
         {renderPersonalInfo()}
+        {renderWhatsAppLink()}
         {renderUserChamasTable()}
         <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.lg }}>
           {renderRecentActivity()}
@@ -1818,6 +1838,20 @@ const createStyles = (colors) => StyleSheet.create({
   chamasPageText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  whatsappHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  whatsappDescription: {
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  whatsappButton: {
+    alignSelf: 'flex-start',
   },
 });
 

@@ -44,7 +44,7 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 	}
 	ctx := context.Background()
 
-	// 1) Check if OpenWA already knows this session
+	// 1) Check if OpenWA already knows this session by ID
 	checkReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL+"/api/sessions/"+defaultSessionID, nil)
 	checkReq.Header.Set("X-API-Key", client.APIKey)
 	checkResp, err := client.HTTPClient.Do(checkReq)
@@ -67,7 +67,37 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 		checkResp.Body.Close()
 	}
 
-	// 2) Create the session in OpenWA
+	// 2) List all sessions and look for "vaultke-default" by name to avoid 409
+	listReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL+"/api/sessions", nil)
+	listReq.Header.Set("X-API-Key", client.APIKey)
+	listResp, err := client.HTTPClient.Do(listReq)
+	if err == nil && listResp.StatusCode == http.StatusOK {
+		var sessions []map[string]interface{}
+		if json.NewDecoder(listResp.Body).Decode(&sessions); err == nil {
+			for _, s := range sessions {
+				name, _ := s["name"].(string)
+				sid, _ := s["id"].(string)
+				if name == "vaultke-default" && sid != "" {
+					// Found existing session; start it and use it
+					startReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, client.BaseURL+"/api/sessions/"+sid+"/start", nil)
+					startReq.Header.Set("X-API-Key", client.APIKey)
+					startResp, err := client.HTTPClient.Do(startReq)
+					if err == nil && startResp.StatusCode < 300 {
+						fmt.Printf("[WA] default session %s start initiated\n", sid)
+						startResp.Body.Close()
+					} else if err != nil {
+						fmt.Printf("[WA] default session start request failed: %v\n", err)
+					}
+					setDefaultSessionID(sid)
+					listResp.Body.Close()
+					return
+				}
+			}
+		}
+		listResp.Body.Close()
+	}
+
+	// 3) Session not found; create it
 	createPayload := map[string]interface{}{"name": "vaultke-default"}
 	createBody := strings.NewReader(wa.MustJSON(createPayload))
 	createReq, err := http.NewRequestWithContext(ctx, http.MethodPost, client.BaseURL+"/api/sessions", createBody)
@@ -101,10 +131,9 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 		return
 	}
 
-	// 3) Persist the created session locally so GetDefaultSessionID can resolve it.
+	// 4) Persist locally and start the newly created session
 	_ = wa.UpsertSession(nil, createdSession.ID, "vaultke-default", "created")
 
-	// 4) Start the newly created session using the real UUID returned by OpenWA
 	startReq, err := http.NewRequestWithContext(ctx, http.MethodPost, client.BaseURL+"/api/sessions/"+createdSession.ID+"/start", nil)
 	if err != nil {
 		fmt.Printf("[WA] start session request error: %v\n", err)
@@ -430,11 +459,28 @@ func SetupWARoutes(
 			chatProxy.POST("/upload/image", func(c *gin.Context) {
 				c.JSON(http.StatusNotImplemented, gin.H{"success": false, "error": "image upload not yet implemented for OpenWA"})
 			})
-			chatProxy.GET("/rooms/:roomId/members", func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{"success": true, "data": []interface{}{}})
-			})
+		chatProxy.GET("/rooms/:roomId/members", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": []interface{}{}})
+		})
 		}
 
+		// WhatsApp linking flow: create session, get QR, check status, logout.
+		linkGroup := waGroup.Group("/link")
+		linkGroup.Use(authMiddleware.AuthRequired())
+		{
+			linkGroup.POST("/session", func(c *gin.Context) {
+				handleWALinkCreate(c, waClient, db.WriteDB())
+			})
+			linkGroup.GET("/session/:sessionId/qr", func(c *gin.Context) {
+				handleWALinkQR(c, waClient, c.Param("sessionId"))
+			})
+			linkGroup.GET("/session/:sessionId/status", func(c *gin.Context) {
+				handleWALinkStatus(c, waClient, c.Param("sessionId"), db.WriteDB())
+			})
+			linkGroup.POST("/session/:sessionId/logout", func(c *gin.Context) {
+				handleWALinkLogout(c, waClient, c.Param("sessionId"), db.WriteDB())
+			})
+		}
 	}
 
 	// WebSocket endpoint for real-time chat via OpenWA
@@ -916,4 +962,195 @@ func handleGetProfile(c *gin.Context, client *wa.OpenWAClient, sessionID string)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": profile})
+}
+
+// ==================== WhatsApp Linking Handlers ====================
+
+func handleWALinkCreate(c *gin.Context, client *wa.OpenWAClient, db *sql.DB) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "unauthorized"})
+		return
+	}
+
+	// Create a session in OpenWA
+	createPayload := map[string]interface{}{"name": "vaultke-user-" + userID}
+	createBody := strings.NewReader(wa.MustJSON(createPayload))
+	createReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, client.BaseURL+"/api/sessions", createBody)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	createReq.Header.Set("X-API-Key", client.APIKey)
+	createReq.Header.Set("Content-Type", "application/json")
+
+	createResp, err := client.HTTPClient.Do(createReq)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa unreachable: %v", err)})
+		return
+	}
+	defer createResp.Body.Close()
+
+	if createResp.StatusCode != http.StatusCreated && createResp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(createResp.Body)
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa create session failed: %d %s", createResp.StatusCode, strings.TrimSpace(string(b)))})
+		return
+	}
+
+	var createdSession struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&createdSession); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if createdSession.ID == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "openwa returned empty session id"})
+		return
+	}
+
+	// Start the session to generate QR
+	startReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, client.BaseURL+"/api/sessions/"+createdSession.ID+"/start", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	startReq.Header.Set("X-API-Key", client.APIKey)
+
+	startResp, err := client.HTTPClient.Do(startReq)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa start failed: %v", err)})
+		return
+	}
+	defer startResp.Body.Close()
+
+	if startResp.StatusCode != http.StatusOK && startResp.StatusCode != http.StatusAccepted {
+		b, _ := io.ReadAll(startResp.Body)
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa start failed: %d %s", startResp.StatusCode, strings.TrimSpace(string(b)))})
+		return
+	}
+
+	// Persist mapping to user
+	_ = wa.UpsertSession(db, createdSession.ID, "vaultke-user-"+userID, "scanning")
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"data": map[string]interface{}{
+			"sessionId": createdSession.ID,
+			"status":    "scanning",
+		},
+	})
+}
+
+func handleWALinkQR(c *gin.Context, client *wa.OpenWAClient, sessionID string) {
+	path := fmt.Sprintf("/api/sessions/%s", sessionID)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, client.BaseURL+path, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa get session failed: %d", resp.StatusCode)})
+		return
+	}
+
+	var session map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	qr, _ := session["qr"].(string)
+	status, _ := session["status"].(string)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": map[string]interface{}{
+			"sessionId": sessionID,
+			"status":    status,
+			"qr":       qr,
+		},
+	})
+}
+
+func handleWALinkStatus(c *gin.Context, client *wa.OpenWAClient, sessionID string, db *sql.DB) {
+	path := fmt.Sprintf("/api/sessions/%s", sessionID)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, client.BaseURL+path, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa get session failed: %d", resp.StatusCode)})
+		return
+	}
+
+	var session map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	status, _ := session["status"].(string)
+	phone, _ := session["phone"].(string)
+
+	// Update local registry if ready
+	if status == "ready" {
+		_ = wa.UpdateSessionStatus(db, sessionID, status, phone, "")
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": map[string]interface{}{
+			"sessionId": sessionID,
+			"status":    status,
+			"phone":     phone,
+		},
+	})
+}
+
+func handleWALinkLogout(c *gin.Context, client *wa.OpenWAClient, sessionID string, db *sql.DB) {
+	path := fmt.Sprintf("/api/sessions/%s/logout", sessionID)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, client.BaseURL+path, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa logout failed: %d", resp.StatusCode)})
+		return
+	}
+
+	_ = wa.UpdateSessionStatus(db, sessionID, "logged_out", "", "")
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "WhatsApp session logged out"})
 }

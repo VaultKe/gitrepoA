@@ -36,6 +36,7 @@ import AdminSupportChatScreen from '../screens/admin/support/AdminSupportChatScr
 import UpdateSupportRequestScreen from '../screens/admin/support/UpdateSupportRequestScreen';
 import ChangePasswordScreen from '../screens/security/ChangePasswordScreen';
 import LoginHistoryScreen from '../screens/security/LoginHistoryScreen';
+import WhatsAppLinkScreen from '../screens/user/whatsapp/WhatsAppLinkScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
 import ReminderScreen from '../screens/user/reminders/ReminderScreen';
@@ -55,12 +56,13 @@ function AdminTabBar({ state, descriptors, navigation }) {
   const colors = getThemeColors(theme);
   const insets = useSafeAreaInsets();
 
-  // Smart shortcuts for admin dashboard - exactly 6 icons
+  // Smart shortcuts for admin dashboard
   const quickShortcuts = [
     { name: 'Dashboard', label: 'Dashboard', icon: 'home', onPress: () => navigation.navigate('AdminHomepage') },
     { name: 'Users', label: 'Users', icon: 'people', onPress: () => navigation.navigate('UserManagementScreen') },
     { name: 'Chamas', label: 'Chamas', icon: 'business', onPress: () => navigation.navigate('ChamaManagementScreen') },
     { name: 'Analytics', label: 'Analytics', icon: 'analytics', onPress: () => navigation.navigate('SystemAnalyticsScreen') },
+    { name: 'WhatsApp', label: 'WhatsApp', icon: 'logo-whatsapp', onPress: () => navigation.navigate('WhatsAppLink') },
     { name: 'User', label: 'User', icon: 'person', onPress: () => switchToUserDashboard() },
   ];
 
@@ -73,7 +75,8 @@ function AdminTabBar({ state, descriptors, navigation }) {
       (shortcut.name === 'Dashboard' && currentRoute.name === 'AdminHomepage') ||
       (shortcut.name === 'Users' && currentRoute.name === 'UserManagementScreen') ||
       (shortcut.name === 'Chamas' && currentRoute.name === 'ChamaManagementScreen') ||
-      (shortcut.name === 'Analytics' && currentRoute.name === 'SystemAnalyticsScreen')
+      (shortcut.name === 'Analytics' && currentRoute.name === 'SystemAnalyticsScreen') ||
+      (shortcut.name === 'WhatsApp' && currentRoute.name === 'WhatsAppLink')
     );
     return shortcutIndex >= 0 ? shortcutIndex : 0;
   };
@@ -413,6 +416,15 @@ function AdminTabNavigator({ route }) {
         component={LoginHistoryScreen}
         options={{
           title: 'Login History',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+        initialParams={routeParams}
+      />
+      <Tab.Screen
+        name="WhatsAppLink"
+        component={WhatsAppLinkScreen}
+        options={{
+          title: 'Link WhatsApp',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={routeParams}

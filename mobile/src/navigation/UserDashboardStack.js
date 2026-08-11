@@ -19,6 +19,8 @@ import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
 import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
 import ChangePasswordScreen from '../screens/security/ChangePasswordScreen';
 import LoginHistoryScreen from '../screens/security/LoginHistoryScreen';
+import withUserFooter from '../components/common/withUserFooter';
+import WhatsAppLinkScreen from '../screens/user/whatsapp/WhatsAppLinkScreen';
 import AdminSupportScreen from '../screens/admin/support/AdminSupportScreen';
 import AdminSupportChatScreen from '../screens/admin/support/AdminSupportChatScreen';
 import UpdateSupportRequestScreen from '../screens/admin/support/UpdateSupportRequestScreen';
@@ -61,7 +63,6 @@ import { getThemeColors } from '../utils/theme';
 
 // Import the extracted UserTabBar and HOC
 import UserTabBar from '../components/common/UserTabBar';
-import withUserFooter from '../components/common/withUserFooter';
 
 
 const Tab = createBottomTabNavigator();
@@ -361,6 +362,14 @@ function UserTabNavigator() {
         }}
       />
       <Tab.Screen
+        name="WhatsAppLink"
+        component={WhatsAppLinkScreen}
+        options={{
+          title: 'Link WhatsApp',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+      />
+      <Tab.Screen
         name="AdminSupport"
         component={AdminSupportScreen}
         options={{
@@ -404,7 +413,6 @@ function UserTabNavigator() {
           tabBarButton: () => null, // Hide from tab bar
         }}
       />
-
       <Tab.Screen
         name="PhysicalMeeting"
         component={PhysicalMeetingScreen}
@@ -471,7 +479,7 @@ export default function UserDashboardStack({ navigation }) {
         name="CreateGroupChat"
         component={withUserFooter(CreateGroupChatScreen)}
         options={{ title: 'New Group Chat' }}
-      />
+      />  
       {/* Meeting Summary Screen */}
       <Stack.Screen
         name="MeetingSummary"
