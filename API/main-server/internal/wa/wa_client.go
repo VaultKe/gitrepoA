@@ -81,15 +81,16 @@ type OpenWAGroup struct {
 
 // requestDo performs an HTTP request to OpenWA with API key auth.
 func (c *OpenWAClient) requestDo(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
-	var reqBody *bytes.Buffer
+	var reqBody io.Reader
 	if body != nil {
 		if b, ok := body.(*bytes.Buffer); ok {
 			reqBody = b
 		} else {
-			reqBody = &bytes.Buffer{}
-			if _, err := io.Copy(reqBody, body); err != nil {
+			buf := &bytes.Buffer{}
+			if _, err := io.Copy(buf, body); err != nil {
 				return nil, fmt.Errorf("copy request body: %w", err)
 			}
+			reqBody = buf
 		}
 	}
 
@@ -99,7 +100,7 @@ func (c *OpenWAClient) requestDo(ctx context.Context, method, path string, body 
 	}
 	req.Header.Set("X-API-Key", c.APIKey)
 	req.Header.Set("Accept", "application/json")
-	if reqBody != nil && reqBody.Len() > 0 {
+	if reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	return c.HTTPClient.Do(req)

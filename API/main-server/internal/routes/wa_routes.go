@@ -991,6 +991,59 @@ func handleWALinkCreate(c *gin.Context, client *wa.OpenWAClient, db *sql.DB) {
 	}
 	defer createResp.Body.Close()
 
+	if createResp.StatusCode == http.StatusConflict {
+		// Session already exists for this user; reuse it.
+		_ = createResp.Body.Close()
+		listReq, _ := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, client.BaseURL+"/api/sessions", nil)
+		listReq.Header.Set("X-API-Key", client.APIKey)
+		listReq.Header.Set("Accept", "application/json")
+		listResp, err := client.HTTPClient.Do(listReq)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa list sessions failed: %v", err)})
+			return
+		}
+		defer listResp.Body.Close()
+
+		if listResp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(listResp.Body)
+			c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa list sessions failed: %d %s", listResp.StatusCode, strings.TrimSpace(string(b)))})
+			return
+		}
+
+		var sessions []map[string]interface{}
+		if err := json.NewDecoder(listResp.Body).Decode(&sessions); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+
+		targetName := "vaultke-user-" + userID
+		for _, s := range sessions {
+			name, _ := s["name"].(string)
+			if name == targetName {
+				sid, _ := s["id"].(string)
+				if sid != "" {
+					startReq, _ := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, client.BaseURL+"/api/sessions/"+sid+"/start", nil)
+					startReq.Header.Set("X-API-Key", client.APIKey)
+					startResp, err := client.HTTPClient.Do(startReq)
+					if err == nil && startResp.StatusCode < 300 {
+						startResp.Body.Close()
+					} else if startResp != nil && startResp.Body != nil {
+						startResp.Body.Close()
+					}
+					_ = wa.UpsertSession(db, sid, targetName, "scanning")
+					c.JSON(http.StatusCreated, gin.H{
+						"success": true,
+						"data": map[string]interface{}{
+							"sessionId": sid,
+							"status":    "scanning",
+						},
+					})
+					return
+				}
+			}
+		}
+	}
+
 	if createResp.StatusCode != http.StatusCreated && createResp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(createResp.Body)
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa create session failed: %d %s", createResp.StatusCode, strings.TrimSpace(string(b)))})
@@ -1043,7 +1096,7 @@ func handleWALinkCreate(c *gin.Context, client *wa.OpenWAClient, db *sql.DB) {
 }
 
 func handleWALinkQR(c *gin.Context, client *wa.OpenWAClient, sessionID string) {
-	path := fmt.Sprintf("/api/sessions/%s", sessionID)
+	path := fmt.Sprintf("/api/sessions/%s/qr", sessionID)
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, client.BaseURL+path, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
@@ -1054,33 +1107,70 @@ func handleWALinkQR(c *gin.Context, client *wa.OpenWAClient, sessionID string) {
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa unreachable: %v", err)})
 		return
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa get session failed: %d", resp.StatusCode)})
+	if resp.StatusCode == http.StatusOK {
+		var qrResp map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&qrResp); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		qr, _ := qrResp["qrCode"].(string)
+		status, _ := qrResp["status"].(string)
+		if status == "" {
+			status = "scanning"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": map[string]interface{}{
+				"sessionId": sessionID,
+				"status":    status,
+				"qr":       qr,
+			},
+		})
 		return
 	}
 
-	var session map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
-		return
+	// OpenWA may return 400 while the QR is still generating.
+	// In that case, return the current session status so the mobile app can keep polling.
+	if resp.StatusCode == http.StatusBadRequest {
+		statusPath := fmt.Sprintf("/api/sessions/%s", sessionID)
+		statusReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, client.BaseURL+statusPath, nil)
+		if err == nil {
+			statusReq.Header.Set("X-API-Key", client.APIKey)
+			statusReq.Header.Set("Accept", "application/json")
+			statusResp, err := client.HTTPClient.Do(statusReq)
+			if err == nil && statusResp.StatusCode == http.StatusOK {
+				var session map[string]interface{}
+				decodeErr := json.NewDecoder(statusResp.Body).Decode(&session)
+				if decodeErr == nil {
+					status, _ := session["status"].(string)
+					if status == "" {
+						status = "scanning"
+					}
+					statusResp.Body.Close()
+					c.JSON(http.StatusOK, gin.H{
+						"success": true,
+						"data": map[string]interface{}{
+							"sessionId": sessionID,
+							"status":    status,
+							"qr":       "",
+						},
+					})
+					return
+				}
+			}
+			if statusResp != nil && statusResp.Body != nil {
+				statusResp.Body.Close()
+			}
+		}
 	}
 
-	qr, _ := session["qr"].(string)
-	status, _ := session["status"].(string)
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": map[string]interface{}{
-			"sessionId": sessionID,
-			"status":    status,
-			"qr":       qr,
-		},
-	})
+	b, _ := io.ReadAll(resp.Body)
+	c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("openwa get qr failed: %d %s", resp.StatusCode, strings.TrimSpace(string(b)))})
 }
 
 func handleWALinkStatus(c *gin.Context, client *wa.OpenWAClient, sessionID string, db *sql.DB) {

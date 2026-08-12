@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import { API_BASE_URL } from '../../../config/environment';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import apiService from '../../../services/api';
@@ -30,25 +32,49 @@ const WhatsAppLinkScreen = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [logs, setLogs] = useState([]);
   const pollRef = useRef(null);
+
+  const addLog = (msg) => {
+    const ts = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev.slice(-40), `[${ts}] ${msg}`]);
+  };
 
   const startLink = async () => {
     try {
       setLoading(true);
       setStatus('idle');
       setQrBase64(null);
-      const response = await apiService.request('/wa/link/session', {
+      setLogs([]);
+      addLog('Creating WhatsApp session...');
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session`;
+      const res = await fetch(url, {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
       });
-      if (response.success && response.data) {
-        setSessionId(response.data.sessionId);
-        setStatus(response.data.status || 'scanning');
-        startPolling(response.data.sessionId);
+      const text = await res.text();
+      addLog(`Create session status=${res.status} body=${text.slice(0, 200)}`);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.success && data.data) {
+        setSessionId(data.data.sessionId);
+        setStatus(data.data.status || 'scanning');
+        startPolling(data.data.sessionId);
       } else {
         setStatus('failed');
-        Alert.alert('Error', response.error || 'Failed to start WhatsApp linking');
+        Alert.alert('Error', data.error || `Failed to start WhatsApp linking (${res.status})`);
       }
     } catch (error) {
+      addLog(`Create session error: ${error.message}`);
       setStatus('failed');
       Alert.alert('Error', error.message || 'Failed to start WhatsApp linking');
     } finally {
@@ -56,38 +82,91 @@ const WhatsAppLinkScreen = () => {
     }
   };
 
+  const fetchQR = async (sid) => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session/${sid}/qr`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const text = await res.text();
+      addLog(`QR poll status=${res.status} body=${text.slice(0, 160)}`);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.success && data.data) {
+        if (data.data.qr) setQrBase64(data.data.qr);
+        if (data.data.status) {
+          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
+          setStatus(normalizedStatus);
+        }
+        if (data.data.status === 'ready') {
+          clearInterval(pollRef.current);
+          setPolling(false);
+          Alert.alert('Success', 'WhatsApp linked successfully');
+        }
+      } else {
+        // Backend returned an error or unexpected shape — keep polling but surface in logs
+        addLog(`QR poll unexpected response: ${text.slice(0, 200)}`);
+        if (data && data.data && data.data.status) {
+          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
+          setStatus(normalizedStatus);
+        }
+      }
+    } catch (e) {
+      addLog(`QR poll error: ${e.message}`);
+    }
+  };
+
   const startPolling = (sid) => {
     if (pollRef.current) clearInterval(pollRef.current);
     setPolling(true);
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await apiService.request(`/wa/link/session/${sid}/qr`);
-        if (res.success && res.data) {
-          if (res.data.qr) setQrBase64(res.data.qr);
-          if (res.data.status) setStatus(res.data.status);
-          if (res.data.status === 'ready') {
-            clearInterval(pollRef.current);
-            setPolling(false);
-            Alert.alert('Success', 'WhatsApp linked successfully');
-          }
-        }
-      } catch (e) {
-        // ignore transient poll errors
-      }
+    setStatus('scanning');
+    addLog(`Polling QR for session ${sid}`);
+    fetchQR(sid);
+    pollRef.current = setInterval(() => {
+      fetchQR(sid);
     }, 3000);
   };
 
   const checkStatus = async () => {
     if (!sessionId) return;
     try {
-      const res = await apiService.request(`/wa/link/session/${sessionId}/status`);
-      if (res.success && res.data) {
-        if (res.data.status) setStatus(res.data.status);
-        if (res.data.status === 'ready') {
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session/${sessionId}/status`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const text = await res.text();
+      addLog(`Status check status=${res.status} body=${text.slice(0, 200)}`);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.success && data.data) {
+        if (data.data.status) {
+          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
+          setStatus(normalizedStatus);
+        }
+        if (data.data.status === 'ready') {
           Alert.alert('Success', 'WhatsApp linked successfully');
         }
+      } else {
+        addLog(`Status check unexpected response: ${text.slice(0, 200)}`);
       }
     } catch (error) {
+      addLog(`Status error: ${error.message}`);
       console.error('Status check failed:', error);
     }
   };
@@ -95,17 +174,32 @@ const WhatsAppLinkScreen = () => {
   const handleLogout = async () => {
     if (!sessionId) return;
     try {
-      const res = await apiService.request(`/wa/link/session/${sessionId}/logout`, {
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session/${sessionId}/logout`;
+      const res = await fetch(url, {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
       });
-      if (res.success) {
+      const text = await res.text();
+      addLog(`Logout status=${res.status} body=${text.slice(0, 200)}`);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.success) {
         setStatus('logged_out');
         setQrBase64(null);
         Alert.alert('Logged out', 'WhatsApp session has been logged out');
       } else {
-        Alert.alert('Error', res.error || 'Failed to logout WhatsApp session');
+        Alert.alert('Error', data.error || 'Failed to logout WhatsApp session');
       }
     } catch (error) {
+      addLog(`Logout error: ${error.message}`);
       Alert.alert('Error', error.message || 'Failed to logout WhatsApp session');
     }
   };
@@ -117,19 +211,35 @@ const WhatsAppLinkScreen = () => {
     }
     try {
       setLoading(true);
-      const response = await apiService.request('/wa/link/session', {
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session`;
+      const res = await fetch(url, {
         method: 'POST',
-        body: { phone: phoneNumber.trim() },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ phone: phoneNumber.trim() }),
       });
-      if (response.success && response.data) {
-        setSessionId(response.data.sessionId);
-        setStatus(response.data.status || 'scanning');
-        startPolling(response.data.sessionId);
+      const text = await res.text();
+      addLog(`Phone link status=${res.status} body=${text.slice(0, 200)}`);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.success && data.data) {
+        setSessionId(data.data.sessionId);
+        setStatus(data.data.status || 'scanning');
+        startPolling(data.data.sessionId);
       } else {
         setStatus('failed');
-        Alert.alert('Error', response.error || 'Failed to link WhatsApp by phone');
+        Alert.alert('Error', data.error || 'Failed to link WhatsApp by phone');
       }
     } catch (error) {
+      addLog(`Phone link error: ${error.message}`);
       setStatus('failed');
       Alert.alert('Error', error.message || 'Failed to link WhatsApp by phone');
     } finally {
@@ -182,12 +292,37 @@ const WhatsAppLinkScreen = () => {
 
     // scanning or idle
     if (qrBase64) {
+      const uri = qrBase64.startsWith('data:image') ? qrBase64 : `data:image/png;base64,${qrBase64}`;
       return (
         <View style={styles.qrContainer}>
-          <Image source={{ uri: `data:image/png;base64,${qrBase64}` }} style={styles.qrImage} />
+          <Image source={{ uri }} style={styles.qrImage} />
           <Text style={[styles.qrText, { color: colors.text }]}>Scan this QR code</Text>
           <Text style={[styles.qrSubtext, { color: colors.textSecondary }]}>
             Open WhatsApp → Linked Devices → Link a Device
+          </Text>
+        </View>
+      );
+    }
+
+    if (status === 'initializing') {
+      return (
+        <View style={styles.qrContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.qrText, { color: colors.text }]}>Initializing WhatsApp...</Text>
+          <Text style={[styles.qrSubtext, { color: colors.textSecondary }]}>
+            Please wait while we set up your session
+          </Text>
+        </View>
+      );
+    }
+
+    if (status === 'authenticating') {
+      return (
+        <View style={styles.qrContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.qrText, { color: colors.text }]}>Authenticating...</Text>
+          <Text style={[styles.qrSubtext, { color: colors.textSecondary }]}>
+            Please wait while WhatsApp verifies your identity
           </Text>
         </View>
       );
@@ -224,6 +359,12 @@ const WhatsAppLinkScreen = () => {
             <Button
               title="Refresh QR"
               onPress={() => sessionId && startPolling(sessionId)}
+              variant="outline"
+              style={styles.actionButton}
+            />
+            <Button
+              title="Check Status"
+              onPress={checkStatus}
               variant="outline"
               style={styles.actionButton}
             />
@@ -270,6 +411,15 @@ const WhatsAppLinkScreen = () => {
             />
           </View>
         )}
+
+        {/* {logs.length > 0 && (
+          <Card variant="outlined" style={styles.logCard}>
+            <Text style={[styles.logTitle, { color: colors.text }]}>Debug Logs</Text>
+            {logs.map((log, idx) => (
+              <Text key={idx} style={[styles.logLine, { color: colors.textSecondary }]}>{log}</Text>
+            ))}
+          </Card>
+        )} */}
 
         <View style={styles.infoSection}>
           <Text style={[styles.infoTitle, { color: colors.text }]}>How it works</Text>
@@ -375,6 +525,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
     marginBottom: spacing.lg,
+    flexWrap: 'wrap',
   },
   actionButton: {
     flex: 1,
@@ -398,6 +549,20 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.fontSize.sm,
     lineHeight: 18,
+  },
+  logCard: {
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  logTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
+  },
+  logLine: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    marginBottom: 2,
   },
   modalOverlay: {
     flex: 1,

@@ -28,11 +28,11 @@ class WebSocketService {
   }
 
   get _wsTokenPath() {
-    return this._useOpenWA ? '/api/v1/wa/ws-token' : '/chat-ws/ws-token';
+    return this._useOpenWA ? '/wa/ws-token' : '/chat-ws/ws-token';
   }
 
   get _wsPath() {
-    return this._useOpenWA ? '/api/v1/wa/ws' : '/chat-ws/ws';
+    return this._useOpenWA ? '/wa/ws' : '/chat-ws/ws';
   }
 
   async connect() {
