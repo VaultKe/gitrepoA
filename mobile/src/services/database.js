@@ -17,7 +17,7 @@ class DatabaseService {
       transactions: '/transactions',
       notifications: '/notifications',
       chat_rooms: '/wa/chat/rooms',
-      chat_messages: '/chat/messages',
+      chat_messages: '/wa/chat/rooms',
       loans: '/loans',
       sync_queue: '/sync' // Special handling for sync operations
     };
@@ -48,7 +48,7 @@ class DatabaseService {
       transactions: `/transactions/${id}`,
       notifications: `/notifications/${id}`,
       chat_rooms: `/wa/chat/rooms/${id}`,
-      chat_messages: `/chat/messages/${id}`,
+      chat_messages: `/wa/chat/rooms/${id}`,
       loans: `/loans/${id}`,
       sync_queue: `/sync/${id}` // Special handling for sync operations
     };
@@ -96,7 +96,7 @@ class DatabaseService {
       transactions: `/transactions/${id}`,
       notifications: `/notifications/${id}`,
       chat_rooms: `/wa/chat/rooms/${id}`,
-      chat_messages: `/chat/messages/${id}`,
+      chat_messages: `/wa/chat/rooms/${id}`,
       loans: `/loans/${id}`,
       sync_queue: `/sync/${id}` // Special handling for sync operations
     };
@@ -126,7 +126,7 @@ class DatabaseService {
       transactions: `/transactions/${id}`,
       notifications: `/notifications/${id}`,
       chat_rooms: `/wa/chat/rooms/${id}`,
-      chat_messages: `/chat/messages/${id}`,
+      chat_messages: `/wa/chat/rooms/${id}`,
       loans: `/loans/${id}`,
       sync_queue: `/sync/${id}` // Special handling for sync operations
     };
@@ -156,7 +156,7 @@ class DatabaseService {
       transactions: '/transactions',
       notifications: '/notifications',
       chat_rooms: '/wa/chat/rooms',
-      chat_messages: '/chat/messages',
+      chat_messages: '/wa/chat/rooms',
       loans: '/loans',
       sync_queue: '/sync' // Special handling for sync operations
     };

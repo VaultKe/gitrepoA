@@ -79,7 +79,7 @@ const AdminSupportChatScreen = ({ route, navigation }) => {
             setMessages(prev => prev.filter(m => m.id !== message.id));
           } else {
             setMessages(prev => {
-              const idx = prev.findIndex(m => m.id === message.id || m.tempId === message.id);
+              const idx = prev.findIndex(m => m.id === message.id);
               if (idx !== -1) {
                 const updated = [...prev];
                 updated[idx] = { ...updated[idx], ...message };

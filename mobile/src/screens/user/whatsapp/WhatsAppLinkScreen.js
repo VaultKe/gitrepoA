@@ -293,7 +293,7 @@ const WhatsAppLinkScreen = () => {
       const uri = qrBase64.startsWith('data:image') ? qrBase64 : `data:image/png;base64,${qrBase64}`;
       return (
         <View style={styles.qrContainer}>
-          <Image source={{ uri }} style={styles.qrImage} />
+          <Image source={{ uri }} style={styles.qrImage} resizeMode="contain" />
           <Text style={[styles.qrText, { color: colors.text }]}>Scan this QR code</Text>
           <Text style={[styles.qrSubtext, { color: colors.textSecondary }]}>
             Open WhatsApp → Linked Devices → Link a Device

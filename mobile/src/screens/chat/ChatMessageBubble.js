@@ -28,7 +28,7 @@ const ChatMessageBubble = React.memo(({
   MAX_BUBBLE_WIDTH,
 }) => {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const isOwn = message.senderId === user?.id;
+  const isOwn = message.isOwn || message.direction === 'outgoing';
   const status = message.status || 'sent';
 
   // Validate image URI. Some server responses include a base64 data-URI
@@ -51,7 +51,7 @@ const ChatMessageBubble = React.memo(({
     const replyData = message.replyTo;
     if (!replyData?.id) return null;
 
-    const replyIsOwn = replyData.senderId === user?.id;
+    const replyIsOwn = replyData.isOwn || replyData.direction === 'outgoing';
     const replyBubbleBg = replyIsOwn ? colors.primary : '#e5e7eb';
     const replyTextClr = replyIsOwn ? 'white' : colors.text;
 
@@ -71,7 +71,7 @@ const ChatMessageBubble = React.memo(({
   };
 
   const renderActions = () => {
-    if (openActionId !== message.id && openActionId !== message.tempId) return null;
+    if (openActionId !== message.id) return null;
 
     return (
       <View style={[styles.actionOverlayContainer, { backgroundColor: colors.backgroundSecondary }, getShadowStyle('md')]}>
@@ -122,7 +122,7 @@ const ChatMessageBubble = React.memo(({
       )}
       <Swipeable
         ref={ref => {
-          if (ref) swipeableRefs.current.set(message.id || message.tempId, ref);
+          if (ref) swipeableRefs.current.set(message.id, ref);
         }}
         renderRightActions={() => <View style={{ width: 220 }} />}
         onSwipeableOpen={() => onSwipeableOpen(message)}

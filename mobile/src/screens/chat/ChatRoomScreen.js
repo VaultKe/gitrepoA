@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Swipeable } from 'react-native-gesture-handler';
 import { getThemeColors, spacing, typography, borderRadius, getShadowStyle } from '../../utils/theme';
 import { formatTime } from '../../utils/dateUtils';
 import { useApp } from '../../context/AppContext';
@@ -60,16 +59,13 @@ const ChatRoomScreen = ({ route, navigation }) => {
     if (!roomId) return;
 
     try {
-      const cached = chatService.getRoomMessages(roomId);
-      if (cached.length) setMessages(cached);
-
       await Promise.all([
         chatService.joinRoom(roomId),
         chatService.getMessages(roomId, 100, 0),
       ]);
       const roomMessages = chatService.getRoomMessages(roomId);
       setMessages(roomMessages);
-      chatService.markRoomAsRead(roomId);
+      await chatService.markRoomAsRead(roomId);
       setError(null);
     } catch (err) {
       console.error('Load room error:', err);
@@ -102,7 +98,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
         return;
       }
       setMessages(prev => {
-        const idx = prev.findIndex(m => m.id === message.id || m.tempId === message.tempId);
+        const idx = prev.findIndex(m => m.id === message.id);
         if (idx !== -1) {
           const updated = [...prev];
           updated[idx] = { ...updated[idx], ...message };
@@ -136,22 +132,20 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const handleSend = useCallback(async (content, type, metadata, selectedImages) => {
     if (!content.trim() && selectedImages.length === 0) return;
 
-    const replyToId = replyTo?.id || null;
-    const replyToData = replyTo ? { id: replyTo.id, senderName: replyTo.senderName, content: replyTo.content, type: replyTo.type } : null;
-
     try {
       if (selectedImages.length > 0) {
         for (const image of selectedImages) {
-          await chatService.sendMessage(roomId, content, 'image', { imageUri: image.uri, replyToId, replyToData });
+          await chatService.sendMessage(roomId, content, 'image', { imageUri: image.uri });
         }
       } else {
-        await chatService.sendMessage(roomId, content, type || 'text', { replyToId, replyToData, ...metadata });
+        await chatService.sendMessage(roomId, content, type || 'text', metadata);
       }
+      setReplyTo(null);
     } catch (err) {
       console.error('Send error:', err);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
-  }, [roomId, replyTo]);
+  }, [roomId]);
 
   const handleImagePicker = useCallback(async () => {
     try {
@@ -176,10 +170,6 @@ const ChatRoomScreen = ({ route, navigation }) => {
   }, []);
 
   const handleTyping = useCallback((text) => {
-    if (!replyTo) {
-      // Only handle typing when not replying to avoid conflicting state.
-    }
-
     if (text.length > 0) {
       chatService.setTyping(roomId, true);
     }
@@ -188,7 +178,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
     typingDebounceRef.current = setTimeout(() => {
       chatService.setTyping(roomId, false);
     }, 1000);
-  }, [roomId, replyTo]);
+  }, [roomId]);
 
   const handleReply = useCallback((message) => {
     setReplyTo(message);
@@ -231,7 +221,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
     if (action === 'reply') handleReply(message);
     else if (action === 'delete') handleDelete(message);
     else if (action === 'copy') handleCopy(message);
-    closeSwipeable(message.id || message.tempId);
+    closeSwipeable(message.id);
     setOpenActionId(null);
   }, [handleReply, handleDelete, handleCopy]);
 
@@ -282,9 +272,9 @@ const ChatRoomScreen = ({ route, navigation }) => {
         onDelete={handleDelete}
         onCopy={handleCopy}
         onActionPress={handleActionPress}
-        onOpenActions={(msg) => setOpenActionId(msg.id || msg.tempId)}
+        onOpenActions={(msg) => setOpenActionId(msg.id)}
         onCloseActions={() => setOpenActionId(null)}
-        onSwipeableOpen={(msg) => setOpenActionId(msg.id || msg.tempId)}
+        onSwipeableOpen={(msg) => setOpenActionId(msg.id)}
         onSwipeableClose={() => setOpenActionId(null)}
         getShadowStyle={getShadowStyle}
         formatTime={formatTime}
@@ -318,7 +308,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
-        keyExtractor={(item) => item.id || item.tempId}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messageList}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}

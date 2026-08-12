@@ -563,7 +563,7 @@ class MilitaryGradeEncryptedChat {
 
   async uploadEncryptedImage(encryptedImageData) {
     // Upload encrypted image to server
-    const response = await apiService.makeRequest('/chat/upload-encrypted-image', {
+    const response = await apiService.makeRequest('/wa/chat/upload/image', {
       method: 'POST',
       body: encryptedImageData,
     });

@@ -20,9 +20,20 @@ class ChatService {
 
   async initialize() {
     try {
-      if (openWASocketService.enabled && !openWASocketService.isConnected) {
-        await openWASocketService.connect();
+      // Resolve session ID for backend REST calls
+      if (!openWASocketService.sessionID) {
+        console.log('[ChatService] initialize: resolving session ID...');
+        const resolved = await openWASocketService.resolveSessionID();
+        if (resolved) {
+          openWASocketService.sessionID = resolved;
+          openWASocketService._sessionResolved = true;
+          console.log('[ChatService] initialize: resolved session ID:', resolved);
+        } else {
+          console.warn('[ChatService] initialize: could not resolve session ID');
+        }
       }
+
+      // No socket connection needed; chat uses backend REST only.
       this._attachListeners();
       return true;
     } catch (error) {
@@ -86,15 +97,49 @@ class ChatService {
 
   async getRooms(forceRefresh = false) {
     try {
-      const ApiService = (await import('../api')).default;
-      const response = await ApiService.makeRequest('/wa/chat/rooms');
-      if (response.success && Array.isArray(response.data)) {
-        this.rooms = response.data;
+      // If we don't have a session ID yet, try to resolve one
+      if (!openWASocketService.sessionID && openWASocketService.enabled) {
+        console.log('[ChatService] getRooms: resolving session ID...');
+        const resolved = await openWASocketService.resolveSessionID();
+        if (resolved) {
+          openWASocketService.sessionID = resolved;
+          openWASocketService._sessionResolved = true;
+          console.log('[ChatService] getRooms: resolved session ID:', resolved);
+        } else {
+          console.warn('[ChatService] getRooms: could not resolve session ID');
+        }
+      }
+
+      if (!openWASocketService.sessionID) {
+        console.warn('[ChatService] getRooms: no session ID available');
         return this.rooms;
       }
+
+      console.log('[ChatService] getRooms: fetching chats for session:', openWASocketService.sessionID);
+      const payload = await openWASocketService.getChats(openWASocketService.sessionID);
+      const chats = Array.isArray(payload?.data) ? payload.data : [];
+      console.log('[ChatService] getRooms: received', chats.length, 'chats');
+      this.rooms = chats.map(chat => {
+        const id = chat.id || chat.chatId || chat.waChatId;
+        const name = chat.name || chat.chatName || chat.title || 'Chat';
+        const isGroup = chat.isGroup || chat.is_group || false;
+        const kind = chat.kind || chat.type || (isGroup ? 'group' : 'private');
+        const timestamp = chat.timestamp || chat.lastMessageAt || chat.createdAt;
+        return {
+          id,
+          chatId: id,
+          name,
+          type: kind,
+          isGroup,
+          lastMessage: chat.lastMessage || chat.last_message || chat.body || null,
+          lastMessageAt: timestamp ? new Date(timestamp).getTime() : Date.now(),
+          unreadCount: chat.unreadCount || chat.unread_count || 0,
+          ...chat,
+        };
+      });
       return this.rooms;
     } catch (error) {
-      console.warn('getRooms failed:', error.message);
+      console.warn('[ChatService] getRooms failed:', error.message);
       return this.rooms;
     }
   }
@@ -108,21 +153,17 @@ class ChatService {
   }
 
   async createRoom(roomData) {
-    try {
-      const ApiService = (await import('../api')).default;
-      const response = await ApiService.makeRequest('/wa/chat/rooms', {
-        method: 'POST',
-        body: roomData,
-      });
-      if (response.success && response.data) {
-        this.rooms.push(response.data);
-        return response.data;
-      }
-      throw new Error(response.error || 'Failed to create room');
-    } catch (error) {
-      console.error('createRoom error:', error);
-      throw error;
-    }
+    // OpenWA does not need a create-room proxy; chats are created on first send.
+    // Return a stub room object for UI compatibility.
+    const room = {
+      id: roomData.recipientId || roomData.name || `room_${Date.now()}`,
+      name: roomData.name || 'New Chat',
+      type: roomData.type || 'private',
+      chatId: roomData.recipientId || roomData.name,
+      lastMessageAt: Date.now(),
+    };
+    this.rooms.push(room);
+    return room;
   }
 
   joinRoom(roomId) {
@@ -143,15 +184,10 @@ class ChatService {
 
   async getMessages(roomId, limit = 50, offset = 0, beforeMessageId) {
     try {
-      const ApiService = (await import('../api')).default;
-      const params = new URLSearchParams({ limit: String(limit) });
-      if (beforeMessageId) params.set('before', beforeMessageId);
-      const response = await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/messages?${params.toString()}`);
-      if (response.success && Array.isArray(response.data)) {
-        response.data.forEach(m => this._upsertMessage(roomId, m));
-        return this.messages.get(roomId) || response.data;
-      }
-      return this.messages.get(roomId) || [];
+      const data = await openWASocketService.getMessages(openWASocketService.sessionID, roomId, limit, offset);
+      const messages = Array.isArray(data?.data) ? data.data : [];
+      messages.forEach(m => this._upsertMessage(roomId, m));
+      return this.messages.get(roomId) || messages;
     } catch (error) {
       console.error('getMessages error:', error);
       return this.messages.get(roomId) || [];
@@ -164,16 +200,33 @@ class ChatService {
 
   async sendMessage(roomId, content, type = 'text', metadata = {}) {
     try {
-      const ApiService = (await import('../api')).default;
-      const response = await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/messages`, {
-        method: 'POST',
-        body: { content, type, metadata },
-      });
-      if (response.success && response.data) {
+      const chatId = roomId;
+      if (!chatId) throw new Error('Missing chatId');
+
+      if (type === 'image') {
+        // For images, we still need the backend upload endpoint because OpenWA
+        // expects a URL or base64. Keep the existing upload flow if available.
+        const ApiService = (await import('../api')).default;
+        const uploadResp = await ApiService.makeRequest('/wa/chat/upload/image', {
+          method: 'POST',
+          body: { imageUri: metadata.imageUri },
+        });
+        if (uploadResp.success && uploadResp.data?.url) {
+          const response = await openWASocketService.sendTextMessage(openWASocketService.sessionID, chatId, metadata.caption || content);
+          if (response?.data) {
+            this._upsertMessage(roomId, response.data);
+            return response.data;
+          }
+        }
+        throw new Error(uploadResp.error || 'Image upload failed');
+      }
+
+      const response = await openWASocketService.sendTextMessage(openWASocketService.sessionID, chatId, content);
+      if (response?.data) {
         this._upsertMessage(roomId, response.data);
         return response.data;
       }
-      throw new Error(response.error || 'Failed to send message');
+      throw new Error('Send message failed');
     } catch (error) {
       console.error('sendMessage error:', error);
       throw error;
@@ -185,42 +238,30 @@ class ChatService {
   }
 
   async markMessageAsRead(roomId, messageId) {
+    // OpenWA marks entire chats as read, not individual messages.
+    await this.markRoomAsRead(roomId);
+  }
+
+  async markRoomAsRead(roomId) {
     try {
-      const ApiService = (await import('../api')).default;
-      await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/read`, {
-        method: 'POST',
-      }).catch(() => {});
-      this._updateMessageStatus(roomId, messageId, 'read');
+      await openWASocketService.markChatRead(openWASocketService.sessionID, roomId);
+      const roomMessages = this.messages.get(roomId) || [];
+      roomMessages.forEach(m => { m.isRead = true; m.status = 'read'; });
+      this._notifyMessageSubscribers(roomId, { type: 'room_read', roomId });
     } catch (error) {
       console.error('Mark read error:', error);
     }
   }
 
-  async markRoomAsRead(roomId) {
-    const roomMessages = this.messages.get(roomId) || [];
-    await Promise.all(roomMessages.map(m => this.markMessageAsRead(roomId, m.id)));
-  }
-
   async deleteMessage(roomId, messageId) {
-    try {
-      const ApiService = (await import('../api')).default;
-      await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/messages/${messageId}`, {
-        method: 'DELETE',
-      });
-      this._removeMessage(roomId, messageId);
-    } catch (error) {
-      console.error('deleteMessage error:', error);
-      throw error;
-    }
+    // OpenWA does not expose per-message delete in the standard REST API.
+    // Remove locally to keep UI responsive.
+    this._removeMessage(roomId, messageId);
   }
 
   async setTyping(roomId, isTyping) {
     try {
-      const ApiService = (await import('../api')).default;
-      await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/typing`, {
-        method: 'POST',
-        body: { isTyping },
-      });
+      await openWASocketService.sendTyping(openWASocketService.sessionID, roomId, isTyping ? 'typing' : 'paused');
     } catch (error) {
       // Ignore typing errors
     }
@@ -315,6 +356,43 @@ class ChatService {
     const cbs = this.roomSubscribers.get(roomId);
     const room = this.getRoom(roomId);
     if (cbs && room) cbs.forEach(cb => { try { cb(room); } catch (e) { console.error('Room subscriber error:', e); } });
+  }
+
+  _normalizeMessage(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const direction = raw.direction || (raw.from === raw.to ? 'outgoing' : 'incoming');
+    const isOwn = direction === 'outgoing';
+    const normalized = {
+      ...raw,
+      content: raw.body ?? raw.content ?? '',
+      senderId: isOwn ? 'me' : (raw.from || raw.author || 'them'),
+      direction,
+      isOwn,
+      status: raw.status || (isOwn ? 'sent' : 'received'),
+      timestamp: raw.timestamp || (raw.createdAt ? new Date(raw.createdAt).getTime() : Date.now()),
+    };
+    if (normalized.imageUrl === undefined && raw.mediaPath) {
+      normalized.imageUrl = raw.mediaPath;
+    }
+    if (normalized.metadata && typeof normalized.metadata !== 'object') {
+      normalized.metadata = {};
+    }
+    return normalized;
+  }
+
+  _upsertMessage(roomId, message) {
+    const normalized = this._normalizeMessage(message);
+    if (!this.messages.has(roomId)) {
+      this.messages.set(roomId, []);
+    }
+    const list = this.messages.get(roomId);
+    const idx = list.findIndex(m => m.id === normalized.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...normalized };
+    } else {
+      list.push(normalized);
+    }
+    this._notifyMessageSubscribers(roomId, normalized);
   }
 }
 
