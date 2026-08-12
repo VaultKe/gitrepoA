@@ -19,7 +19,7 @@ import chatService from '../../services/chat/ChatService';
 
 const ChatScreen = () => {
   const navigation = useNavigation();
-  const { theme } = useApp();
+  const { theme, user } = useApp();
   const colors = getThemeColors(theme);
 
   // State
@@ -40,6 +40,9 @@ const ChatScreen = () => {
       initializedRef.current = true;
 
       try {
+        if (user && user.id) {
+          chatService.setCurrentUser(user);
+        }
         await chatService.initialize();
 
         const cachedRooms = chatService.getAllRooms();

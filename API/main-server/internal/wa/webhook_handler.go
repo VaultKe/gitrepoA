@@ -3,6 +3,7 @@ package wa
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -16,13 +17,15 @@ type WebhookHandler struct {
 	client    *OpenWAClient
 	wsHandler *WSHandler
 	secret    string
+	db        *sql.DB
 }
 
 // NewWebhookHandler creates a new webhook handler.
-func NewWebhookHandler(client *OpenWAClient, wsHandler *WSHandler, secret string) *WebhookHandler {
+func NewWebhookHandler(client *OpenWAClient, wsHandler *WSHandler, db *sql.DB, secret string) *WebhookHandler {
 	return &WebhookHandler{
 		client:    client,
 		wsHandler: wsHandler,
+		db:        db,
 		secret:    secret,
 	}
 }
@@ -47,11 +50,35 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 		return
 	}
 
+	userID := h.resolveUserID(payload)
+
 	if h.wsHandler != nil {
-		h.wsHandler.BroadcastFromWebhook(payload)
+		h.wsHandler.BroadcastFromWebhook(payload, userID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *WebhookHandler) resolveUserID(payload map[string]interface{}) string {
+	if h.db == nil {
+		return ""
+	}
+	sessionID := ""
+	if v, ok := payload["sessionId"].(string); ok && v != "" {
+		sessionID = v
+	} else if data, ok := payload["data"].(map[string]interface{}); ok {
+		if v, ok := data["sessionId"].(string); ok && v != "" {
+			sessionID = v
+		}
+	}
+	if sessionID == "" {
+		return ""
+	}
+	owner, err := GetSessionOwner(h.db, sessionID)
+	if err != nil {
+		return ""
+	}
+	return owner
 }
 
 // ValidateWebhook validates an OpenWA webhook signature using HMAC-SHA256.

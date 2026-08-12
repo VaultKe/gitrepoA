@@ -36,6 +36,7 @@ type WSHandler struct {
 	userMapper  *UserMapper
 	translator  *MessageTranslator
 	sessionID   string
+	db          *sql.DB
 	mu          sync.Mutex
 	connections map[string]*WSClient // key: userID
 }
@@ -49,8 +50,20 @@ func NewWSHandler(client *OpenWAClient, hub WebSocketHub, db *sql.DB, defaultSes
 		userMapper:  NewUserMapper(db),
 		translator:  NewMessageTranslator(db),
 		sessionID:   defaultSessionID,
+		db:          db,
 		connections: make(map[string]*WSClient),
 	}
+}
+
+func (h *WSHandler) resolveSessionID(userID string) string {
+	if h.db == nil {
+		return h.sessionID
+	}
+	sid, err := GetUserSessionID(h.db, userID)
+	if err == nil && sid != "" {
+		return sid
+	}
+	return h.sessionID
 }
 
 // HandleWebSocket upgrades the HTTP connection and handles the VaultKe chat protocol.
@@ -84,7 +97,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	h.mu.Unlock()
 
 	// Ensure the room has a mapping; if not, create a default chat mapping.
-	chatID, err := h.roomMapper.EnsureMapping(c.Request.Context(), roomID, "private", "", "", h.sessionID, h.client)
+	chatID, err := h.roomMapper.EnsureMapping(c.Request.Context(), roomID, "private", "", "", h.resolveSessionID(userID), h.client)
 	if err != nil {
 		fmt.Printf("WA adapter: ensure mapping failed for room %s: %v\n", roomID, err)
 	}
@@ -170,7 +183,7 @@ func (h *WSHandler) handleIncoming(ctx context.Context, userID, fallbackRoomID s
 
 func (h *WSHandler) handleJoinRoom(ctx context.Context, userID, roomID string) {
 	// Ensure room mapping exists so future sends know where to go.
-	_, _ = h.roomMapper.EnsureMapping(ctx, roomID, "private", "", "", h.sessionID, h.client)
+	_, _ = h.roomMapper.EnsureMapping(ctx, roomID, "private", "", "", h.resolveSessionID(userID), h.client)
 
 	response := map[string]interface{}{
 		"type":    "joined_room",
@@ -190,7 +203,7 @@ func (h *WSHandler) handleLeaveRoom(ctx context.Context, userID, roomID string) 
 }
 
 func (h *WSHandler) handleGetRooms(ctx context.Context, userID string, msg map[string]interface{}) {
-	chats, err := h.client.GetChats(ctx, h.sessionID, 100, 0)
+	chats, err := h.client.GetChats(ctx, h.resolveSessionID(userID), 100, 0)
 	if err != nil {
 		h.sendError(userID, "get_rooms", fmt.Sprintf("failed to load chats: %v", err))
 		return
@@ -236,7 +249,7 @@ func (h *WSHandler) handleGetMessages(ctx context.Context, userID, roomID string
 		before = b
 	}
 
-	messages, err := h.client.GetMessages(ctx, h.sessionID, chatID, limit, before)
+	messages, err := h.client.GetMessages(ctx, h.resolveSessionID(userID), chatID, limit, before)
 	if err != nil {
 		h.sendError(userID, "get_messages", fmt.Sprintf("failed to load messages: %v", err))
 		return
@@ -275,9 +288,9 @@ func (h *WSHandler) handleSendMessage(ctx context.Context, userID, roomID string
 	}
 
 	// Replace placeholder with actual session ID
-	path = strings.Replace(path, "{sessionId}", h.sessionID, 1)
+	path = strings.Replace(path, "{sessionId}", h.resolveSessionID(userID), 1)
 
-	result, err := h.client.send(ctx, h.sessionID, path, payload)
+	result, err := h.client.send(ctx, h.resolveSessionID(userID), path, payload)
 	if err != nil {
 		h.sendError(userID, "send_message", fmt.Sprintf("send failed: %v", err))
 		return
@@ -311,7 +324,7 @@ func (h *WSHandler) handleMarkRead(ctx context.Context, userID, roomID string, m
 	if !ok {
 		return
 	}
-	_ = h.client.MarkRead(ctx, h.sessionID, chatID)
+	_ = h.client.MarkRead(ctx, h.resolveSessionID(userID), chatID)
 
 	messageID, _ := msg["messageId"].(string)
 
@@ -338,7 +351,7 @@ func (h *WSHandler) handleTyping(ctx context.Context, userID, roomID string, isT
 	if isTyping {
 		state = "composing"
 	}
-	_ = h.client.SendChatState(ctx, h.sessionID, chatID, state)
+	_ = h.client.SendChatState(ctx, h.resolveSessionID(userID), chatID, state)
 }
 
 func (h *WSHandler) handleDeleteMessage(ctx context.Context, userID, roomID string, msg map[string]interface{}) {
@@ -375,7 +388,7 @@ func (h *WSHandler) handleCreateRoom(ctx context.Context, userID, roomID string,
 		if recipientId != "" {
 			participants = append(participants, recipientId)
 		}
-		group, err := h.client.CreateGroup(ctx, h.sessionID, name, participants)
+		group, err := h.client.CreateGroup(ctx, h.resolveSessionID(userID), name, participants)
 		if err != nil {
 			h.sendError(userID, "create_room", fmt.Sprintf("failed to create group: %v", err))
 			return
@@ -403,7 +416,7 @@ func (h *WSHandler) handleCreateRoom(ctx context.Context, userID, roomID string,
 		mappedRoomID = name
 	}
 
-	chatID, err := h.roomMapper.EnsureMapping(ctx, mappedRoomID, "private", "", "", h.sessionID, h.client)
+	chatID, err := h.roomMapper.EnsureMapping(ctx, mappedRoomID, "private", "", "", h.resolveSessionID(userID), h.client)
 	if err != nil {
 		h.sendError(userID, "create_room", fmt.Sprintf("failed to map room: %v", err))
 		return
@@ -470,7 +483,7 @@ func (h *WSHandler) sendError(userID, requestType, errorMsg string) {
 }
 
 // BroadcastFromWebhook is called by the webhook receiver when an OpenWA event arrives.
-func (h *WSHandler) BroadcastFromWebhook(event map[string]interface{}) {
+func (h *WSHandler) BroadcastFromWebhook(event map[string]interface{}, userID string) {
 	eventType, _ := event["event"].(string)
 	data, _ := event["data"].(map[string]interface{})
 	if data == nil {
@@ -501,7 +514,11 @@ func (h *WSHandler) BroadcastFromWebhook(event map[string]interface{}) {
 			"success": true,
 			"data":    vaultkeMsg,
 		}
-		h.broadcastToRoom(roomID, response)
+		if userID != "" {
+			h.sendToUser(userID, response)
+		} else {
+			h.broadcastToRoom(roomID, response)
+		}
 
 	case "message.ack":
 		chatID, _ := data["chatId"].(string)
@@ -520,7 +537,11 @@ func (h *WSHandler) BroadcastFromWebhook(event map[string]interface{}) {
 				"ack":       ack,
 			},
 		}
-		h.broadcastToRoom(roomID, response)
+		if userID != "" {
+			h.sendToUser(userID, response)
+		} else {
+			h.broadcastToRoom(roomID, response)
+		}
 
 	case "message.revoked":
 		chatID, _ := data["chatId"].(string)
@@ -535,7 +556,11 @@ func (h *WSHandler) BroadcastFromWebhook(event map[string]interface{}) {
 				"messageId": getString(data, "messageId"),
 			},
 		}
-		h.broadcastToRoom(roomID, response)
+		if userID != "" {
+			h.sendToUser(userID, response)
+		} else {
+			h.broadcastToRoom(roomID, response)
+		}
 
 	case "presence.update":
 		chatID, _ := data["chatId"].(string)
@@ -551,7 +576,11 @@ func (h *WSHandler) BroadcastFromWebhook(event map[string]interface{}) {
 				"isTyping": getString(data, "state") == "composing",
 			},
 		}
-		h.broadcastToRoom(roomID, response)
+		if userID != "" {
+			h.sendToUser(userID, response)
+		} else {
+			h.broadcastToRoom(roomID, response)
+		}
 	}
 }
 

@@ -1,55 +1,29 @@
-import websocketService from '../websocket';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import openWASocketService, { OPENWA_EVENTS } from '../openwaSocket';
 
-const WS_EVENTS = {
-  JOIN_ROOM: 'join_room',
-  LEAVE_ROOM: 'leave_room',
-  SEND_MESSAGE: 'send_message',
-  MARK_READ: 'mark_read',
-  TYPING_START: 'typing_start',
-  TYPING_STOP: 'typing_stop',
-  NEW_MESSAGE: 'new_message',
-  MESSAGE_DELIVERED: 'message_delivered',
-  MESSAGE_READ: 'message_read',
-  USER_TYPING: 'user_typing',
-  ROOM_UPDATED: 'room_updated',
-  ROOM_MEMBERS: 'room_members',
-  ERROR: 'error',
+const CHAT_WS_EVENTS = {
+  MESSAGE_RECEIVED: OPENWA_EVENTS.MESSAGE_RECEIVED,
+  MESSAGE_ACK: OPENWA_EVENTS.MESSAGE_ACK,
+  MESSAGE_REVOKED: OPENWA_EVENTS.MESSAGE_REVOKED,
+  PRESENCE_UPDATE: OPENWA_EVENTS.PRESENCE_UPDATE,
+  GROUP_UPDATE: OPENWA_EVENTS.GROUP_UPDATE,
 };
 
 class ChatService {
   constructor() {
-    this.rooms = new Map();
+    this.rooms = [];
     this.messages = new Map();
-    this.pendingMessages = new Map();
-    this.processedMessageIds = new Set();
-    this.readReceipts = new Map();
     this.typingUsers = new Map();
-    this._persistTimer = null;
-    this._isOnline = true;
-
-    this.roomSubscribers = new Map();
     this.messageSubscribers = new Map();
-
-    this.reconnectTimer = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10;
-
-    this.typingTimeout = null;
-    this.typingDebounceMs = 500;
-
-    this._setupWebSocketHandlers();
-    this._setupCleanup();
+    this.roomSubscribers = new Map();
+    this._listenersAttached = false;
   }
 
   async initialize() {
     try {
-      await this._loadFromCache();
-
-      if (!websocketService.isConnected) {
-        websocketService.connect();
+      if (openWASocketService.enabled && !openWASocketService.isConnected) {
+        await openWASocketService.connect();
       }
-
+      this._attachListeners();
       return true;
     } catch (error) {
       console.error('ChatService init error:', error);
@@ -57,76 +31,91 @@ class ChatService {
     }
   }
 
-  _setupWebSocketHandlers() {
-    websocketService.registerMessageHandler('new_message', this._handleNewMessage.bind(this));
-    websocketService.registerMessageHandler('message_read', this._handleRead.bind(this));
-    websocketService.registerMessageHandler('message_ack', this._handleDelivered.bind(this));
-    websocketService.registerMessageHandler('user_typing', this._handleTyping.bind(this));
-    websocketService.registerMessageHandler('room_updated', this._handleRoomUpdate.bind(this));
-    websocketService.registerMessageHandler('room_members', this._handleRoomMembers.bind(this));
-    websocketService.registerMessageHandler('message_deleted', this._handleDeleted.bind(this));
-    websocketService.registerMessageHandler('error', this._handleError.bind(this));
+  setCurrentUser(user) {
+    if (!user || !user.id) return;
+    openWASocketService.setUserID(user.id);
   }
 
-  _setupCleanup() {
-    this.cleanup = () => {
-      this._clearReconnectTimer();
-      websocketService.unregisterMessageHandler('new_message');
-      websocketService.unregisterMessageHandler('message_read');
-      websocketService.unregisterMessageHandler('user_typing');
-      websocketService.unregisterMessageHandler('room_updated');
-      websocketService.unregisterMessageHandler('room_members');
-      websocketService.unregisterMessageHandler('error');
-    };
-  }
+  _attachListeners() {
+    if (this._listenersAttached) return;
+    this._listenersAttached = true;
 
-  // ==================== Room Management ====================
+    openWASocketService.onEvent(CHAT_WS_EVENTS.MESSAGE_RECEIVED, (msg) => {
+      const chatId = msg.data?.chatId || msg.sessionId;
+      if (!chatId) return;
+      const message = msg.data || {};
+      if (message.id) {
+        this._upsertMessage(chatId, message);
+      }
+    });
+
+    openWASocketService.onEvent(CHAT_WS_EVENTS.MESSAGE_ACK, (msg) => {
+      const messageId = msg.data?.messageId || msg.data?.id;
+      const chatId = msg.data?.chatId || msg.sessionId;
+      if (!messageId || !chatId) return;
+      this._updateMessageStatus(chatId, messageId, 'delivered');
+    });
+
+    openWASocketService.onEvent(CHAT_WS_EVENTS.MESSAGE_REVOKED, (msg) => {
+      const messageId = msg.data?.messageId || msg.data?.revokedId || msg.data?.id;
+      const chatId = msg.data?.chatId || msg.sessionId;
+      if (!messageId || !chatId) return;
+      this._removeMessage(chatId, messageId);
+    });
+
+    openWASocketService.onEvent(CHAT_WS_EVENTS.PRESENCE_UPDATE, (msg) => {
+      const chatId = msg.data?.chatId || msg.sessionId;
+      const userId = msg.data?.participantId || msg.data?.from;
+      const isTyping = msg.data?.state === 'composing';
+      if (!chatId || !userId) return;
+
+      if (!this.typingUsers.has(chatId)) {
+        this.typingUsers.set(chatId, new Set());
+      }
+      const set = this.typingUsers.get(chatId);
+      if (isTyping) set.add(userId); else set.delete(userId);
+      this._notifyRoomSubscribers(chatId);
+    });
+
+    openWASocketService.onEvent(CHAT_WS_EVENTS.GROUP_UPDATE, (msg) => {
+      const chatId = msg.data?.chatId || msg.sessionId;
+      if (!chatId) return;
+      this._notifyRoomSubscribers(chatId);
+    });
+  }
 
   async getRooms(forceRefresh = false) {
     try {
-      if (websocketService.isConnected) {
-        return await this._getRoomsViaWebSocket(forceRefresh);
+      const ApiService = (await import('../api')).default;
+      const response = await ApiService.makeRequest('/wa/chat/rooms');
+      if (response.success && Array.isArray(response.data)) {
+        this.rooms = response.data;
+        return this.rooms;
       }
-      return await this._getRoomsViaRest(forceRefresh);
+      return this.rooms;
     } catch (error) {
-      try {
-        return await this._getRoomsViaRest(forceRefresh);
-      } catch (e) {
-        console.warn('REST getRooms failed, falling back to cache:', e.message);
-        return Array.from(this.rooms.values());
-      }
+      console.warn('getRooms failed:', error.message);
+      return this.rooms;
     }
+  }
+
+  getRoom(roomId) {
+    return this.rooms.find(r => r.id === roomId) || null;
+  }
+
+  getAllRooms() {
+    return this.rooms;
   }
 
   async createRoom(roomData) {
     try {
-      if (websocketService.isConnected) {
-        try {
-          const response = await websocketService.sendRequest({
-            type: 'create_room',
-            name: roomData.name,
-            chamaId: roomData.chamaId,
-            memberIds: roomData.memberIds,
-            recipientId: roomData.recipientId,
-            type: roomData.type,
-          });
-          if (response.success && response.data) {
-            this._updateRoom(response.data);
-            return response.data;
-          }
-        } catch (wsErr) {
-          // fall through to REST
-        }
-      }
-
       const ApiService = (await import('../api')).default;
-      const response = await ApiService.makeRequest('/chat/rooms', {
+      const response = await ApiService.makeRequest('/wa/chat/rooms', {
         method: 'POST',
         body: roomData,
       });
-
-      if (response.success) {
-        this._updateRoom(response.data);
+      if (response.success && response.data) {
+        this.rooms.push(response.data);
         return response.data;
       }
       throw new Error(response.error || 'Failed to create room');
@@ -136,23 +125,114 @@ class ChatService {
     }
   }
 
-  getRoom(roomId) {
-    return this.rooms.get(roomId);
-  }
-
-  getAllRooms() {
-    return Array.from(this.rooms.values());
-  }
-
   joinRoom(roomId) {
-    if (!websocketService.isConnected) {
-      websocketService.connect();
+    if (openWASocketService.enabled) {
+      openWASocketService.ensureSubscribed([
+        CHAT_WS_EVENTS.MESSAGE_RECEIVED,
+        CHAT_WS_EVENTS.MESSAGE_ACK,
+        CHAT_WS_EVENTS.MESSAGE_REVOKED,
+        CHAT_WS_EVENTS.PRESENCE_UPDATE,
+        CHAT_WS_EVENTS.GROUP_UPDATE,
+      ]);
     }
-    websocketService.joinRoom(roomId);
   }
 
   leaveRoom(roomId) {
-    websocketService.leaveRoom(roomId);
+    // OpenWA socket subscriptions are global; no per-room unsubscribe needed.
+  }
+
+  async getMessages(roomId, limit = 50, offset = 0, beforeMessageId) {
+    try {
+      const ApiService = (await import('../api')).default;
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (beforeMessageId) params.set('before', beforeMessageId);
+      const response = await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/messages?${params.toString()}`);
+      if (response.success && Array.isArray(response.data)) {
+        response.data.forEach(m => this._upsertMessage(roomId, m));
+        return this.messages.get(roomId) || response.data;
+      }
+      return this.messages.get(roomId) || [];
+    } catch (error) {
+      console.error('getMessages error:', error);
+      return this.messages.get(roomId) || [];
+    }
+  }
+
+  getRoomMessages(roomId) {
+    return this.messages.get(roomId) || [];
+  }
+
+  async sendMessage(roomId, content, type = 'text', metadata = {}) {
+    try {
+      const ApiService = (await import('../api')).default;
+      const response = await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/messages`, {
+        method: 'POST',
+        body: { content, type, metadata },
+      });
+      if (response.success && response.data) {
+        this._upsertMessage(roomId, response.data);
+        return response.data;
+      }
+      throw new Error(response.error || 'Failed to send message');
+    } catch (error) {
+      console.error('sendMessage error:', error);
+      throw error;
+    }
+  }
+
+  async sendImage(roomId, imageUri, caption = '') {
+    return this.sendMessage(roomId, caption, 'image', { imageUri });
+  }
+
+  async markMessageAsRead(roomId, messageId) {
+    try {
+      const ApiService = (await import('../api')).default;
+      await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/read`, {
+        method: 'POST',
+      }).catch(() => {});
+      this._updateMessageStatus(roomId, messageId, 'read');
+    } catch (error) {
+      console.error('Mark read error:', error);
+    }
+  }
+
+  async markRoomAsRead(roomId) {
+    const roomMessages = this.messages.get(roomId) || [];
+    await Promise.all(roomMessages.map(m => this.markMessageAsRead(roomId, m.id)));
+  }
+
+  async deleteMessage(roomId, messageId) {
+    try {
+      const ApiService = (await import('../api')).default;
+      await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/messages/${messageId}`, {
+        method: 'DELETE',
+      });
+      this._removeMessage(roomId, messageId);
+    } catch (error) {
+      console.error('deleteMessage error:', error);
+      throw error;
+    }
+  }
+
+  async setTyping(roomId, isTyping) {
+    try {
+      const ApiService = (await import('../api')).default;
+      await ApiService.makeRequest(`/wa/chat/rooms/${roomId}/typing`, {
+        method: 'POST',
+        body: { isTyping },
+      });
+    } catch (error) {
+      // Ignore typing errors
+    }
+  }
+
+  getUnreadCount(roomId) {
+    const messages = this.messages.get(roomId) || [];
+    return messages.filter(m => !m.isRead && m.status !== 'read').length;
+  }
+
+  getTypingUsers(roomId) {
+    return this.typingUsers.get(roomId) || new Set();
   }
 
   subscribeToRoom(roomId, callback) {
@@ -160,16 +240,12 @@ class ChatService {
       this.roomSubscribers.set(roomId, new Set());
     }
     this.roomSubscribers.get(roomId).add(callback);
-
     this.joinRoom(roomId);
-
     return () => {
-      const callbacks = this.roomSubscribers.get(roomId);
-      if (callbacks) {
-        callbacks.delete(callback);
-        if (callbacks.size === 0) {
-          this.leaveRoom(roomId);
-        }
+      const cbs = this.roomSubscribers.get(roomId);
+      if (cbs) {
+        cbs.delete(callback);
+        if (cbs.size === 0) this.leaveRoom(roomId);
       }
     };
   }
@@ -180,82 +256,67 @@ class ChatService {
     }
     this.messageSubscribers.get(roomId).add(callback);
     return () => {
-      const callbacks = this.messageSubscribers.get(roomId);
-      if (callbacks) {
-        callbacks.delete(callback);
-      }
+      const cbs = this.messageSubscribers.get(roomId);
+      if (cbs) cbs.delete(callback);
     };
   }
 
-  getUnreadCount(roomId) {
-    const messages = this.messages.get(roomId) || [];
-    const readReceipts = this.readReceipts.get(roomId) || new Set();
-    return messages.filter(m => !readReceipts.has(m.id)).length;
-  }
-
-  getTypingUsers(roomId) {
-    return this.typingUsers.get(roomId) || new Set();
-  }
-
-  setTyping(roomId, isTyping) {
-    clearTimeout(this.typingTimeout);
-
-    this.typingTimeout = setTimeout(async () => {
-      try {
-        await websocketService.send({
-          type: isTyping ? WS_EVENTS.TYPING_START : WS_EVENTS.TYPING_STOP,
-          roomId,
-        });
-      } catch (error) {
-        // Ignore errors for typing indicators
-      }
-    }, this.typingDebounceMs);
-  }
-
-  _setupNetworkMonitoring() {
-    // Network state is tracked via WebSocket connection status.
-  }
-
   isOnline() {
-    return websocketService.isConnected || this._isOnline;
-  }
-
-  setOnlineStatus(online) {
-    this._isOnline = online;
-  }
-
-  _clearPersistTimer() {
-    if (this._persistTimer) {
-      clearTimeout(this._persistTimer);
-      this._persistTimer = null;
-    }
-  }
-
-  _clearReconnectTimer() {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    return openWASocketService.isConnected;
   }
 
   destroy() {
-    if (this.cleanup) this.cleanup();
-    this._clearReconnectTimer();
-    this.rooms.clear();
+    this.rooms = [];
     this.messages.clear();
-    this.pendingMessages.clear();
-    this.processedMessageIds.clear();
     this.typingUsers.clear();
     this.roomSubscribers.clear();
     this.messageSubscribers.clear();
+    this._listenersAttached = false;
+  }
+
+  _upsertMessage(roomId, message) {
+    if (!this.messages.has(roomId)) {
+      this.messages.set(roomId, []);
+    }
+    const list = this.messages.get(roomId);
+    const idx = list.findIndex(m => m.id === message.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...message };
+    } else {
+      list.push(message);
+    }
+    this._notifyMessageSubscribers(roomId, message);
+  }
+
+  _updateMessageStatus(roomId, messageId, status) {
+    const list = this.messages.get(roomId) || [];
+    const msg = list.find(m => m.id === messageId);
+    if (msg) {
+      msg.status = status;
+      this._notifyMessageSubscribers(roomId, msg);
+    }
+  }
+
+  _removeMessage(roomId, messageId) {
+    const list = this.messages.get(roomId) || [];
+    const idx = list.findIndex(m => m.id === messageId);
+    if (idx >= 0) {
+      list.splice(idx, 1);
+      this._notifyMessageSubscribers(roomId, { type: 'remove', id: messageId });
+    }
+  }
+
+  _notifyMessageSubscribers(roomId, message) {
+    const cbs = this.messageSubscribers.get(roomId);
+    if (cbs) cbs.forEach(cb => { try { cb(message); } catch (e) { console.error('Message subscriber error:', e); } });
+  }
+
+  _notifyRoomSubscribers(roomId) {
+    const cbs = this.roomSubscribers.get(roomId);
+    const room = this.getRoom(roomId);
+    if (cbs && room) cbs.forEach(cb => { try { cb(room); } catch (e) { console.error('Room subscriber error:', e); } });
   }
 }
-
-import { attachMessaging } from './chatMessaging';
-import { attachPersistence } from './chatPersistence';
-
-attachMessaging(ChatService.prototype);
-attachPersistence(ChatService.prototype);
 
 const chatService = new ChatService();
 export default chatService;

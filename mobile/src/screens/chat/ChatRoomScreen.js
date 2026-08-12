@@ -50,6 +50,12 @@ const ChatRoomScreen = ({ route, navigation }) => {
     }
   }, [roomId, navigation]);
 
+  useEffect(() => {
+    if (user && user.id) {
+      chatService.setCurrentUser(user);
+    }
+  }, [user]);
+
   const loadData = useCallback(async () => {
     if (!roomId) return;
 
@@ -100,14 +106,9 @@ const ChatRoomScreen = ({ route, navigation }) => {
         if (idx !== -1) {
           const updated = [...prev];
           updated[idx] = { ...updated[idx], ...message };
-          // After reconciliation two items may share the same `id`; remove
-          // any other duplicate so React keys stay unique.
-          const dupIdx = updated.findIndex((m, i) => i !== idx && m.id && m.id === (message.id || updated[idx].id));
-          if (dupIdx !== -1) updated.splice(dupIdx, 1);
           return updated;
         }
-        const filtered = prev.filter(m => m.tempId !== message.tempId && m.id !== message.id);
-        return [...filtered, message].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        return [...prev, message].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       });
     });
 

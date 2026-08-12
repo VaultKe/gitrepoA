@@ -203,6 +203,9 @@ const buildEnvironmentConfig = (envName) => {
     MOCK_PAYMENTS: envBool(prefix + 'MOCK_PAYMENTS', envBool('MOCK_PAYMENTS', envName === 'staging')),
     SKIP_AUTH: envBool(prefix + 'SKIP_AUTH', envBool('SKIP_AUTH', false)),
     OPENWA_ENABLED: envBool(prefix + 'OPENWA_ENABLED', envBool('OPENWA_ENABLED', true)),
+    OPENWA_API_URL: env(prefix + 'OPENWA_API_URL', env('OPENWA_API_URL', '')),
+    OPENWA_API_KEY: env(prefix + 'OPENWA_API_KEY', env('OPENWA_API_KEY', '')),
+    OPENWA_DEFAULT_SESSION_ID: env(prefix + 'OPENWA_DEFAULT_SESSION_ID', env('OPENWA_DEFAULT_SESSION_ID', '')),
   };
 };
 
@@ -334,6 +337,9 @@ export const {
   MOCK_PAYMENTS,
   SKIP_AUTH,
   OPENWA_ENABLED,
+  OPENWA_API_URL,
+  OPENWA_API_KEY,
+  OPENWA_DEFAULT_SESSION_ID,
   GOOGLE_CLIENT_ID,
   FIREBASE_PROJECT_ID,
   FIREBASE_API_KEY,

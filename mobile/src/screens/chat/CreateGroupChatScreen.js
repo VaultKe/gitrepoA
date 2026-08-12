@@ -24,6 +24,9 @@ export default function CreateGroupChatScreen({ navigation }) {
   const loadChatRooms = useCallback(async () => {
     try {
       setLoading(true);
+      if (user && user.id) {
+        chatService.setCurrentUser(user);
+      }
       const rooms = await chatService.getRooms();
       
       if (rooms && rooms.length > 0) {

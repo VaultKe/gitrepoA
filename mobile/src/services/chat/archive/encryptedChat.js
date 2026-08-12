@@ -405,7 +405,7 @@ class MilitaryGradeEncryptedChat {
       }
       
       // Fallback to HTTP API
-      const response = await apiService.makeRequest(`/chat/rooms/${messagePayload.roomId}/messages`, {
+      const response = await apiService.makeRequest(`/wa/chat/rooms/${messagePayload.roomId}/messages`, {
         method: 'POST',
         body: messagePayload,
       });
@@ -751,7 +751,7 @@ class MilitaryGradeEncryptedChat {
         }
       }
 
-      const response = await apiService.makeRequest(`/chat/rooms/${messagePayload.roomId}/messages`, {
+      const response = await apiService.makeRequest(`/wa/chat/rooms/${messagePayload.roomId}/messages`, {
         method: 'POST',
         body: messagePayload,
       });

@@ -47,6 +47,10 @@ const AdminSupportChatScreen = ({ route, navigation }) => {
         throw new Error('Support request missing user ID');
       }
 
+      if (user && user.id) {
+        chatService.setCurrentUser(user);
+      }
+
       // Create or get existing chat room for this support request
       const chatContext = {
         type: 'support_request',

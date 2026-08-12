@@ -149,6 +149,23 @@ func GetSessionOwner(db *sql.DB, sessionID string) (string, error) {
 	return userID, nil
 }
 
+// GetUserSessionID returns the OpenWA session ID for a given user, if they have one.
+// It prefers a user-specific session over the default session.
+func GetUserSessionID(db *sql.DB, userID string) (string, error) {
+	if db == nil || userID == "" {
+		return "", nil
+	}
+	var sessionID string
+	err := db.QueryRow(`SELECT session_id FROM wa_sessions WHERE user_id = $1 AND status != 'logged_out' LIMIT 1`, userID).Scan(&sessionID)
+	if err == nil {
+		return sessionID, nil
+	}
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return "", fmt.Errorf("query user session: %w", err)
+}
+
 // GetDefaultSessionID returns the OpenWA session UUID for the default session.
 func GetDefaultSessionID(db *sql.DB) (string, error) {
 	var sessionID string
