@@ -93,14 +93,13 @@ const WhatsAppLinkScreen = () => {
         },
       });
       const text = await res.text();
-      addLog(`QR poll status=${res.status} body=${text.slice(0, 160)}`);
       let data;
       try {
         data = JSON.parse(text);
       } catch {
         data = {};
       }
-      if (res.ok && data.success && data.data) {
+      if (res.ok && data && data.data) {
         if (data.data.qr) setQrBase64(data.data.qr);
         if (data.data.status) {
           const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
@@ -112,8 +111,7 @@ const WhatsAppLinkScreen = () => {
           Alert.alert('Success', 'WhatsApp linked successfully');
         }
       } else {
-        // Backend returned an error or unexpected shape — keep polling but surface in logs
-        addLog(`QR poll unexpected response: ${text.slice(0, 200)}`);
+        addLog(`QR poll error: status=${res.status} body=${text.slice(0, 120)}`);
         if (data && data.data && data.data.status) {
           const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
           setStatus(normalizedStatus);

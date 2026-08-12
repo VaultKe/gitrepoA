@@ -40,7 +40,6 @@ func InitializeSchema(db *sql.DB) error {
 			updated_at TIMESTAMP DEFAULT NOW()
 		)`,
 
-		// OpenWA session registry (tracks which sessions we manage)
 		`CREATE TABLE IF NOT EXISTS wa_sessions (
 			session_id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
@@ -48,9 +47,11 @@ func InitializeSchema(db *sql.DB) error {
 			phone TEXT,
 			push_name TEXT,
 			is_default BOOLEAN DEFAULT FALSE,
+			user_id TEXT,
 			created_at TIMESTAMP DEFAULT NOW(),
 			updated_at TIMESTAMP DEFAULT NOW()
 		)`,
+		`ALTER TABLE wa_sessions ADD COLUMN IF NOT EXISTS user_id TEXT`,
 
 		// Optional: local message cache for fast loading and offline support
 		`CREATE TABLE IF NOT EXISTS wa_message_cache (
@@ -116,17 +117,36 @@ func UpdateSessionStatus(db *sql.DB, sessionID, status, phone, pushName string) 
 }
 
 // UpsertSession inserts or updates an OpenWA session record.
-func UpsertSession(db *sql.DB, sessionID, name, status string) error {
+func UpsertSession(db *sql.DB, sessionID, name, status, userID string) error {
+	if db == nil {
+		return nil
+	}
 	_, err := db.Exec(
-		`INSERT INTO wa_sessions (session_id, name, status, created_at, updated_at)
-		 VALUES ($1, $2, $3, NOW(), NOW())
-		 ON CONFLICT (session_id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status, updated_at = NOW()`,
-		sessionID, name, status,
+		`INSERT INTO wa_sessions (session_id, name, status, user_id, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, NOW(), NOW())
+		 ON CONFLICT (session_id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status, user_id = EXCLUDED.user_id, updated_at = NOW()`,
+		sessionID, name, status, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert session: %w", err)
 	}
 	return nil
+}
+
+// GetSessionOwner returns the user_id that owns the given OpenWA session, if any.
+func GetSessionOwner(db *sql.DB, sessionID string) (string, error) {
+	if db == nil {
+		return "", nil
+	}
+	var userID string
+	err := db.QueryRow(`SELECT user_id FROM wa_sessions WHERE session_id = $1`, sessionID).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", fmt.Errorf("query session owner: %w", err)
+	}
+	return userID, nil
 }
 
 // GetDefaultSessionID returns the OpenWA session UUID for the default session.

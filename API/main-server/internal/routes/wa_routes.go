@@ -38,6 +38,24 @@ func getDefaultSessionID() string {
 	return defaultSessionID.value
 }
 
+func requireSessionOwner(c *gin.Context, db *sql.DB, sessionID string) (string, bool) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "unauthorized"})
+		return "", false
+	}
+	owner, err := wa.GetSessionOwner(db, sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return "", false
+	}
+	if owner != "" && owner != userID {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "session does not belong to current user"})
+		return "", false
+	}
+	return userID, true
+}
+
 func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 	if defaultSessionID == "" {
 		return
@@ -132,7 +150,7 @@ func bootstrapDefaultSession(client *wa.OpenWAClient, defaultSessionID string) {
 	}
 
 	// 4) Persist locally and start the newly created session
-	_ = wa.UpsertSession(nil, createdSession.ID, "vaultke-default", "created")
+	_ = wa.UpsertSession(nil, createdSession.ID, "vaultke-default", "created", "")
 
 	startReq, err := http.NewRequestWithContext(ctx, http.MethodPost, client.BaseURL+"/api/sessions/"+createdSession.ID+"/start", nil)
 	if err != nil {
@@ -472,7 +490,7 @@ func SetupWARoutes(
 				handleWALinkCreate(c, waClient, db.WriteDB())
 			})
 			linkGroup.GET("/session/:sessionId/qr", func(c *gin.Context) {
-				handleWALinkQR(c, waClient, c.Param("sessionId"))
+				handleWALinkQR(c, waClient, c.Param("sessionId"), db.WriteDB())
 			})
 			linkGroup.GET("/session/:sessionId/status", func(c *gin.Context) {
 				handleWALinkStatus(c, waClient, c.Param("sessionId"), db.WriteDB())
@@ -1030,7 +1048,7 @@ func handleWALinkCreate(c *gin.Context, client *wa.OpenWAClient, db *sql.DB) {
 					} else if startResp != nil && startResp.Body != nil {
 						startResp.Body.Close()
 					}
-					_ = wa.UpsertSession(db, sid, targetName, "scanning")
+					_ = wa.UpsertSession(db, sid, targetName, "scanning", userID)
 					c.JSON(http.StatusCreated, gin.H{
 						"success": true,
 						"data": map[string]interface{}{
@@ -1084,7 +1102,7 @@ func handleWALinkCreate(c *gin.Context, client *wa.OpenWAClient, db *sql.DB) {
 	}
 
 	// Persist mapping to user
-	_ = wa.UpsertSession(db, createdSession.ID, "vaultke-user-"+userID, "scanning")
+	_ = wa.UpsertSession(db, createdSession.ID, "vaultke-user-"+userID, "scanning", userID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
@@ -1095,7 +1113,11 @@ func handleWALinkCreate(c *gin.Context, client *wa.OpenWAClient, db *sql.DB) {
 	})
 }
 
-func handleWALinkQR(c *gin.Context, client *wa.OpenWAClient, sessionID string) {
+func handleWALinkQR(c *gin.Context, client *wa.OpenWAClient, sessionID string, db *sql.DB) {
+	_, ok := requireSessionOwner(c, db, sessionID)
+	if !ok {
+		return
+	}
 	path := fmt.Sprintf("/api/sessions/%s/qr", sessionID)
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, client.BaseURL+path, nil)
 	if err != nil {
@@ -1174,6 +1196,10 @@ func handleWALinkQR(c *gin.Context, client *wa.OpenWAClient, sessionID string) {
 }
 
 func handleWALinkStatus(c *gin.Context, client *wa.OpenWAClient, sessionID string, db *sql.DB) {
+	_, ok := requireSessionOwner(c, db, sessionID)
+	if !ok {
+		return
+	}
 	path := fmt.Sprintf("/api/sessions/%s", sessionID)
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, client.BaseURL+path, nil)
 	if err != nil {
@@ -1220,6 +1246,10 @@ func handleWALinkStatus(c *gin.Context, client *wa.OpenWAClient, sessionID strin
 }
 
 func handleWALinkLogout(c *gin.Context, client *wa.OpenWAClient, sessionID string, db *sql.DB) {
+	_, ok := requireSessionOwner(c, db, sessionID)
+	if !ok {
+		return
+	}
 	path := fmt.Sprintf("/api/sessions/%s/logout", sessionID)
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, client.BaseURL+path, nil)
 	if err != nil {
