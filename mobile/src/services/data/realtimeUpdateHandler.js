@@ -1,4 +1,3 @@
-import webSocketService from '../websocket';
 import cacheManager from './cacheManager';
 import dataFetcher from './dataFetcher';
 
@@ -13,55 +12,11 @@ class RealtimeUpdateHandler {
     const dataTypes = ['notifications', 'wallet', 'chamas', 'transactions', 'products', 'orders', 'messages'];
 
     dataTypes.forEach(dataType => {
-      webSocketService.registerDataUpdateHandler(dataType, async (update) => {
-        try {
-          await this.handleRealtimeUpdate(dataType, update);
-          const handler = this.realtimeHandlers.get(dataType);
-          if (handler) {
-            handler(update);
-          }
-        } catch (error) {
-        }
-      });
+      this.startPolling(dataType);
     });
-
-    webSocketService.setRealtimeEnabled(true);
   }
 
-  async handleRealtimeUpdate(dataType, update) {
-    const { action, data, update: bulkUpdate } = update;
-    const currentData = await dataFetcher.getData(dataType);
-
-    if (currentData.success) {
-      let updatedData;
-
-      if (action === 'create' || action === 'add') {
-        updatedData = Array.isArray(currentData.data)
-          ? [data, ...currentData.data]
-          : data;
-      } else if (action === 'update') {
-        updatedData = Array.isArray(currentData.data)
-          ? currentData.data.map(item => item.id === data.id ? { ...item, ...data } : item)
-          : { ...currentData.data, ...data };
-      } else if (action === 'bulk_update') {
-        updatedData = Array.isArray(currentData.data)
-          ? currentData.data.map(item => ({ ...item, ...bulkUpdate }))
-          : { ...currentData.data, ...bulkUpdate };
-      } else if (action === 'delete' || action === 'remove') {
-        updatedData = Array.isArray(currentData.data)
-          ? currentData.data.filter(item => item.id !== data.id)
-          : null;
-      } else {
-        updatedData = data;
-      }
-
-      const cacheKey = cacheManager.generateCacheKey(dataType);
-      cacheManager.setMemoryCache(cacheKey, updatedData);
-      await cacheManager.setPersistentCache(cacheKey, updatedData);
-    }
-  }
-
-  startChatRoomsPolling(dataType) {
+  startPolling(dataType) {
     if (this.pollingIntervals.has(dataType)) {
       return;
     }
@@ -83,8 +38,9 @@ class RealtimeUpdateHandler {
           }
         }
       } catch (error) {
+        // Silently ignore polling errors
       }
-    }, 5000);
+    }, 15000);
 
     this.pollingIntervals.set(dataType, pollInterval);
   }
@@ -106,6 +62,7 @@ class RealtimeUpdateHandler {
       this.dataChangeListeners.set(dataType, new Set());
     }
     this.dataChangeListeners.get(dataType).add(callback);
+    this.startPolling(dataType);
   }
 
   removeDataChangeListener(dataType, callback) {
@@ -126,6 +83,7 @@ class RealtimeUpdateHandler {
         try {
           callback(newData);
         } catch (error) {
+          // Ignore listener errors
         }
       });
     }
