@@ -15,7 +15,7 @@ import Toast from 'react-native-toast-message';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors } from '../../../utils/theme';
+import { getThemeColors, spacing } from '../../../utils/theme';
 import ApiService from '../../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ChamaMembersHeaderCard from './ChamaMembersHeaderCard';
@@ -23,6 +23,7 @@ import ChamaMembersTable from './ChamaMembersTable';
 import ChamaInvitationsList from './ChamaInvitationsList';
 import ChamaMemberRoleModal from './ChamaMemberRoleModal';
 import { getFilteredMembers, roles } from './chamaMembersUtils';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const { chamaId } = route.params;
@@ -387,73 +388,78 @@ const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          <ChamaMembersHeaderCard
+            activeTab={activeTab}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            filteredMembersCount={filteredMembers.length}
+            sentInvitationsCount={sentInvitations.length}
+            canManageMembers={canManageMembers}
+            canExportMembers={canExportMembers()}
+            setActiveTab={setActiveTab}
+            theme={theme}
+            onExportMenuPress={handleExportMembers}
           />
-        }
-      >
-        <ChamaMembersHeaderCard
-          activeTab={activeTab}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          filteredMembersCount={filteredMembers.length}
-          sentInvitationsCount={sentInvitations.length}
-          canManageMembers={canManageMembers}
-          canExportMembers={canExportMembers()}
-          setActiveTab={setActiveTab}
-          theme={theme}
-          onExportMenuPress={handleExportMembers}
-        />
 
-        {activeTab === 'members' ? (
-          <ChamaMembersTable
-            filteredMembers={filteredMembers}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            itemsPerPage={itemsPerPage}
-            setCurrentPage={setCurrentPage}
-            loading={loading}
-            navigation={navigation}
-            chamaId={chamaId}
-            currentUser={user}
-            userRole={userRole}
-            searchQuery={searchQuery}
-            theme={theme}
-            onOpenRoleModal={(member) => {
-              setSelectedMember(member);
-              setShowRoleModal(true);
-            }}
-          />
-        ) : (
-          <ChamaInvitationsList
-            invitations={sentInvitations}
-            loading={invitationsLoading}
-            searchQuery={searchQuery}
-            onResendInvitation={handleResendInvitation}
-            onCancelInvitation={handleCancelInvitation}
-            theme={theme}
-          />
-        )}
+          {activeTab === 'members' ? (
+            <ChamaMembersTable
+              filteredMembers={filteredMembers}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              itemsPerPage={itemsPerPage}
+              setCurrentPage={setCurrentPage}
+              loading={loading}
+              navigation={navigation}
+              chamaId={chamaId}
+              currentUser={user}
+              userRole={userRole}
+              searchQuery={searchQuery}
+              theme={theme}
+              onOpenRoleModal={(member) => {
+                setSelectedMember(member);
+                setShowRoleModal(true);
+              }}
+            />
+          ) : (
+            <ChamaInvitationsList
+              invitations={sentInvitations}
+              loading={invitationsLoading}
+              searchQuery={searchQuery}
+              onResendInvitation={handleResendInvitation}
+              onCancelInvitation={handleCancelInvitation}
+              theme={theme}
+            />
+          )}
+
+          <View style={{ height: 60 }} />
+        </ScrollView>
 
         {canManageMembers() && (
-          <TouchableOpacity
-            style={{ position: 'absolute', bottom: 32, right: 32, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 }}
-            onPress={handleInvitePress}
-          >
-            <Ionicons name="person-add" size={24} color={colors.white} />
-          </TouchableOpacity>
+          <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+            <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
+            <TouchableOpacity
+              style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 }}
+              onPress={handleInvitePress}
+            >
+              <Ionicons name="person-add" size={24} color={colors.white} />
+            </TouchableOpacity>
+          </View>
         )}
-
-        <View style={{ height: 60 }} />
-      </ScrollView>
+      </View>
 
       <Modal visible={showRemoveConfirm} transparent animationType="fade">
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }} activeOpacity={1} onPress={() => setShowRemoveConfirm(false)}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import Toast from 'react-native-toast-message';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import api from '../../../services/api';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import DestructiveConfirmModal from '../../../components/common/DestructiveConfirmModal';
 
 const ChamaSettings = ({ route, navigation, onRouteChange }) => {
@@ -24,6 +25,7 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [chamaData, setChamaData] = useState(null);
 
   const [chamaInfo, setChamaInfo] = useState({
@@ -66,6 +68,15 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
     transactionAlerts: true,
     emergencyAlerts: true,
   });
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchChamaSettings();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [chamaId]);
 
   useEffect(() => {
     fetchChamaSettings();
@@ -399,11 +410,12 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Basic Information */}
         {renderSection('Basic Information', (
           <>
@@ -626,6 +638,8 @@ const ChamaSettings = ({ route, navigation, onRouteChange }) => {
         action="delete"
         loading={saving}
       />
+      <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
     </SafeAreaView>
   );
 };

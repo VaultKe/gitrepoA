@@ -21,9 +21,35 @@ const ContributionTypeSelector = ({
   onToggleMerryGoRound,
   onToggleWelfare,
   formatCurrency,
+  availableContributionTypes = ['regular', 'merry-go-round', 'welfare', 'savings'],
 }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
+
+  const allContributionTypes = [
+    {
+      id: 'merry-go-round',
+      label: 'Merry-Go-Round',
+      icon: 'refresh-circle',
+      color: colors.warning,
+    },
+    {
+      id: 'welfare',
+      label: 'Welfare',
+      icon: 'heart',
+      color: '#EC4899',
+    },
+    {
+      id: 'savings',
+      label: 'Savings',
+      icon: 'wallet',
+      color: colors.success,
+    },
+  ];
+
+  const enabledContributionTypes = allContributionTypes.filter(type =>
+    availableContributionTypes.includes(type.id)
+  );
 
   return (
     <View style={styles.contributionTypeWrapper}>
@@ -63,53 +89,24 @@ const ContributionTypeSelector = ({
         {/* Contribution Type Options Dropdown */}
         {showContributionTypeDropdown && (
           <View style={[styles.contributionTypeDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TouchableOpacity
-              style={[
-                styles.contributionTypeOption,
-                { backgroundColor: contributionType === 'merry-go-round' ? colors.primary + '15' : 'transparent' }
-              ]}
-              onPress={() => onContributionTypeChange('merry-go-round')}
-            >
-              <Ionicons name="refresh-circle" size={20} color={colors.warning} />
-              <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
-                Merry-Go-Round
-              </Text>
-              {contributionType === 'merry-go-round' && (
-                <Ionicons name="checkmark" size={18} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.contributionTypeOption,
-                { backgroundColor: contributionType === 'welfare' ? colors.primary + '15' : 'transparent' }
-              ]}
-              onPress={() => onContributionTypeChange('welfare')}
-            >
-              <Ionicons name="heart" size={20} color="#EC4899" />
-              <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
-                Welfare
-              </Text>
-              {contributionType === 'welfare' && (
-                <Ionicons name="checkmark" size={18} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.contributionTypeOption,
-                { backgroundColor: contributionType === 'savings' ? colors.primary + '15' : 'transparent' }
-              ]}
-              onPress={() => onContributionTypeChange('savings')}
-            >
-              <Ionicons name="wallet" size={20} color={colors.success} />
-              <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
-                Savings
-              </Text>
-              {contributionType === 'savings' && (
-                <Ionicons name="checkmark" size={18} color={colors.primary} />
-              )}
-            </TouchableOpacity>
+            {enabledContributionTypes.map((type) => (
+              <TouchableOpacity
+                key={type.id}
+                style={[
+                  styles.contributionTypeOption,
+                  { backgroundColor: contributionType === type.id ? colors.primary + '15' : 'transparent' }
+                ]}
+                onPress={() => onContributionTypeChange(type.id)}
+              >
+                <Ionicons name={type.icon} size={20} color={type.color} />
+                <Text style={[styles.contributionTypeOptionText, { color: colors.text }]}>
+                  {type.label}
+                </Text>
+                {contributionType === type.id && (
+                  <Ionicons name="checkmark" size={18} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
           </View>
         )}
 

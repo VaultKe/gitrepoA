@@ -27,6 +27,7 @@ import MerryGoRoundRules from './components/MerryGoRoundRules';
 import AnonymousContribution from './components/AnonymousContribution';
 import ValidationMessage from './components/ValidationMessage';
 import PhoneNumberDisplay from './components/PhoneNumberDisplay';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 
 const ContributeScreen = ({ route, navigation }) => {
@@ -49,9 +50,32 @@ const ContributeScreen = ({ route, navigation }) => {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('wallet'); // 'wallet', 'mpesa', or 'pay_for'
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contributions
+   const [walletBalance, setWalletBalance] = useState(0);
+   const [showPaymentModal, setShowPaymentModal] = useState(false);
+   const [refreshing, setRefreshing] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contributions
+  const [availablePaymentMethods, setAvailablePaymentMethods] = useState(['wallet', 'mpesa', 'pay_for']);
+  const [availableContributionTypes, setAvailableContributionTypes] = useState(['regular', 'merry-go-round', 'welfare', 'savings']);
+
+  // Reset payment method if it's no longer allowed by the chama
+  useEffect(() => {
+    if (!availablePaymentMethods.includes(paymentMethod)) {
+      // Default to the first available method, prefer 'wallet' if available
+      const preferred = availablePaymentMethods.includes('wallet') ? 'wallet' : availablePaymentMethods[0];
+      setPaymentMethod(preferred);
+    }
+  }, [availablePaymentMethods]);
+
+  // Reset contribution type if it's no longer allowed by the chama
+  useEffect(() => {
+    if (!availableContributionTypes.includes(contributionType)) {
+      const preferred = availableContributionTypes.includes('regular') ? 'regular' : availableContributionTypes[0];
+      setContributionType(preferred);
+      setSelectedMerryGoRound(null);
+      setSelectedWelfare(null);
+      setAmount('');
+    }
+  }, [availableContributionTypes]);
    
    // New states for contribution type selection
    const [contributionType, setContributionType] = useState(initialContributionType);
@@ -153,6 +177,10 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
 
   // Handle contribution type selection and reset related state
   const handleContributionTypeChange = async (type) => {
+    // Guard: only allow switching to enabled contribution types
+    if (!availableContributionTypes.includes(type)) {
+      return;
+    }
     setContributionType(type);
     setShowContributionTypeDropdown(false);
     setSelectedMerryGoRound(null);
@@ -417,11 +445,83 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
   };
 
   // Stop status checking
-  const stopStatusChecking = () => {
+   const stopStatusChecking = () => {
     if (statusCheckInterval) {
       clearInterval(statusCheckInterval);
       setStatusCheckInterval(null);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadChamaDetails(),
+        loadWalletBalance(),
+        loadContributionOptions(),
+        checkUserRole(),
+      ]);
+    } catch (error) {
+      console.warn('ContributeScreen refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const deriveAvailablePaymentMethods = (walletTypes = []) => {
+    if (!walletTypes || walletTypes.length === 0) {
+      return ['wallet', 'mpesa', 'pay_for'];
+    }
+
+    const methods = new Set();
+
+    walletTypes.forEach((type) => {
+      switch (type) {
+        case 'merry-go-round':
+        case 'welfare':
+        case 'loans':
+          methods.add('wallet');
+          methods.add('mpesa');
+          methods.add('pay_for');
+          break;
+        case 'savings':
+        case 'shares':
+        case 'dividends':
+          methods.add('wallet');
+          break;
+        default:
+          methods.add('wallet');
+          break;
+      }
+    });
+
+    return Array.from(methods);
+  };
+
+  const deriveAvailableContributionTypes = (walletTypes = []) => {
+    if (!walletTypes || walletTypes.length === 0) {
+      return ['regular', 'merry-go-round', 'welfare', 'savings'];
+    }
+
+    const types = new Set(['regular']);
+
+    walletTypes.forEach((type) => {
+      switch (type) {
+        case 'merry-go-round':
+          types.add('merry-go-round');
+          break;
+        case 'welfare':
+          types.add('welfare');
+          break;
+        case 'savings':
+          types.add('savings');
+          break;
+        default:
+          break;
+      }
+    });
+
+    return Array.from(types);
   };
 
   const loadChamaDetails = async () => {
@@ -450,6 +550,13 @@ const [isAnonymous, setIsAnonymous] = useState(false); // For anonymous contribu
         if (contributionType !== 'merry-go-round') {
           setAmount((chamaData.contribution_amount || 0).toString());
         }
+
+        // Derive available payment methods from the chama's enabled wallet types
+        const walletTypes = chamaData.permissions?.activeWalletTypes || chamaData.wallet_types || [];
+        setAvailablePaymentMethods(deriveAvailablePaymentMethods(walletTypes));
+
+        // Derive available contribution types from the chama's enabled wallet types
+        setAvailableContributionTypes(deriveAvailableContributionTypes(walletTypes));
       } else {
         throw new Error('No chama data received');
       }
@@ -1410,248 +1517,256 @@ const handleMpesaContribution = async (cleanChamaId) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Card style={styles.chamaInfoCard} variant="outlined">
-           <View style={styles.chamaInfo}>
-             <View style={[styles.chamaIcon, { backgroundColor: getContributionColor() }]}>
-               <Ionicons
-                 name={getContributionIcon()}
-                 size={24}
-                 color={colors.white}
-               />
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={{ flex: 1 }}>
+            <Card style={styles.chamaInfoCard} variant="outlined">
+             <View style={styles.chamaInfo}>
+               <View style={[styles.chamaIcon, { backgroundColor: getContributionColor() }]}>
+                 <Ionicons
+                   name={getContributionIcon()}
+                   size={24}
+                   color={colors.white}
+                 />
+               </View>
+               <View style={styles.chamaDetails}>
+                 <Text style={[styles.chamaName, { color: colors.text }]}>
+                   {contributionType === 'merry-go-round'
+                     ? roundName
+                     : contributionType === 'welfare' && proposalTitle
+                       ? proposalTitle
+                       : chama?.name
+                   }
+                 </Text>
+                 <Text style={[styles.chamaType, { color: colors.textSecondary }]}>
+                   {contributionType === 'merry-go-round'
+                     ? `Merry-Go-Round • ${chama?.name || 'Group'}`
+                     : contributionType === 'welfare' && proposalTitle
+                       ? `Welfare Support • ${chama?.name || 'Group'}`
+                       : contributionType === 'regular'
+                          ? `${chama?.type || 'Community'} • ${chama?.contribution_frequency || 'regular'} contributions`
+                         : `${getContributionTitle()} • ${chama?.name || 'Group'}`
+                   }
+                 </Text>
+                 <Text style={[styles.chamaAmount, { color: getContributionColor() }]}>
+                   {contributionType === 'regular'
+                      ? `Regular: ${amount ? formatCurrency(parseFloat(amount)) : formatCurrency(chama?.contribution_amount || 0)}`
+                     : contributionType === 'welfare' && requestedAmount
+                       ? `Needed: ${formatCurrency(requestedAmount)}`
+                       : contributionType === 'merry-go-round' && amount
+                         ? `Contributing: ${formatCurrency(parseFloat(amount))}`
+                         : amount
+                           ? `Amount: ${formatCurrency(parseFloat(amount))}`
+                           : getContributionTitle()
+                   }
+                 </Text>
+               </View>
              </View>
-             <View style={styles.chamaDetails}>
-               <Text style={[styles.chamaName, { color: colors.text }]}>
-                 {contributionType === 'merry-go-round'
-                   ? roundName
-                   : contributionType === 'welfare' && proposalTitle
-                     ? proposalTitle
-                     : chama?.name
-                 }
+           </Card>
+
+  {/* Current Recipient Info for Merry-Go-Round */}
+           {contributionType === 'merry-go-round' && currentRecipient && (
+             <CurrentRecipientInfo
+               currentRecipient={currentRecipient}
+               contributionStatus={contributionStatus}
+               formatCurrency={formatCurrency}
+             />
+           )}
+
+           <Card style={styles.formCard} variant="outlined">
+             <Text style={[styles.formTitle, { color: colors.text }]}>
+               Choose What to Pay
+             </Text>
+
+             {/* Contribution Type Selection */}
+             <ContributionTypeSelector
+               contributionType={contributionType}
+               selectedMerryGoRound={selectedMerryGoRound}
+               selectedWelfare={selectedWelfare}
+               merryGoRounds={merryGoRounds}
+               welfareContributions={welfareContributions}
+               loadingContributionOptions={loadingContributionOptions}
+               showContributionTypeDropdown={showContributionTypeDropdown}
+               showMerryGoRoundDropdown={showMerryGoRoundDropdown}
+               showWelfareDropdown={showWelfareDropdown}
+               onContributionTypeChange={handleContributionTypeChange}
+               onMerryGoRoundSelect={handleMerryGoRoundSelect}
+               onWelfareSelect={handleWelfareSelect}
+                onToggleContributionType={() => setShowContributionTypeDropdown(!showContributionTypeDropdown)}
+                onToggleMerryGoRound={() => setShowMerryGoRoundDropdown(!showMerryGoRoundDropdown)}
+                onToggleWelfare={() => setShowWelfareDropdown(!showWelfareDropdown)}
+                formatCurrency={formatCurrency}
+                availableContributionTypes={availableContributionTypes}
+              />
+
+              {/* Payment Method Selection */}
+              <PaymentMethodSelector
+                paymentMethod={paymentMethod}
+                walletBalance={walletBalance}
+                amount={amount}
+                setPaymentMethod={setPaymentMethod}
+                formatCurrency={formatCurrency}
+                availablePaymentMethods={availablePaymentMethods}
+              />
+
+             {/* Member Listing Section for Pay for Someone Contributions */}
+             {paymentMethod === 'pay_for' && (
+               <MemberListingSection
+                 chamaMembers={chamaMembers}
+                 selectedContributor={selectedContributor}
+                 memberSearchQuery={memberSearchQuery}
+                 setMemberSearchQuery={setMemberSearchQuery}
+                 contributionType={contributionType}
+                 roundName={roundName}
+                 setSelectedContributor={setSelectedContributor}
+                 getMemberName={getMemberName}
+                 renderMemberAvatar={renderMemberAvatar}
+                 validateMemberSelection={validateMemberSelection}
+               />
+             )}
+
+             {/* M-Pesa Phone Number Display */}
+             {paymentMethod === 'mpesa' && (
+               <PhoneNumberDisplay user={user} />
+             )}
+
+  {/* Pay for Someone Notice */}
+             {paymentMethod === 'pay_for' && (
+               <View style={styles.cashContributionContainer}>
+                 <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
+                   <Ionicons name="information-circle" size={20} color={colors.warning} />
+                   <Text style={[styles.cashNoticeText, { color: colors.text }]}>
+                     You are paying for a member. The amount will be deducted from your VaultKe wallet and the selected member will appear to have paid.
+                   </Text>
+                 </View>
+               </View>
+             )}
+
+             <Input
+               label="Amount (KES)"
+               value={amount}
+               onChangeText={
+                 contributionType === 'merry-go-round' 
+                   ? undefined 
+                   : setAmount
+               }
+               placeholder={
+                 contributionType === 'merry-go-round'
+                   ? (selectedMerryGoRound 
+                       ? "Amount set automatically from cycle"
+                       : "Select a merry-go-round cycle first")
+                   : contributionType === 'welfare' && selectedWelfare
+                     ? "Amount from selected welfare"
+                     : "Enter contribution amount"
+               }
+               keyboardType="numeric"
+               leftIcon="wallet"
+               editable={contributionType !== 'merry-go-round'}
+               style={contributionType === 'merry-go-round' ? { backgroundColor: colors.surface + '80' } : undefined}
+             />
+
+             {/* Real-time validation for wallet payments */}
+             {paymentMethod === 'wallet' && amount && (
+               <ValidationMessage
+                 amount={amount}
+                 walletBalance={walletBalance}
+                 formatCurrency={formatCurrency}
+               />
+             )}
+
+             <Input
+               label="Description (Optional)"
+               value={description}
+               onChangeText={setDescription}
+               placeholder="Add a note for this contribution..."
+               multiline
+               numberOfLines={3}
+               leftIcon="document-text"
+             />
+
+             {/* Anonymous Contribution Option - Only for Contribution Groups, not for Merry-Go-Round */}
+             {chama?.category === 'contribution' && contributionType !== 'merry-go-round' && (
+               <AnonymousContribution
+                 isAnonymous={isAnonymous}
+                 setIsAnonymous={setIsAnonymous}
+               />
+             )}
+
+             {/* Merry-Go-Round Restrictions Notice */}
+             {contributionType === 'merry-go-round' && (
+               <MerryGoRoundRules
+                 contributionStatus={contributionStatus}
+                 currentRecipient={currentRecipient}
+                 amountPerRound={amountPerRound}
+               />
+             )}
+
+           <View style={styles.summaryContainer}>
+             <View style={styles.summaryRow}>
+               <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+                 Contribution Amount:
                </Text>
-               <Text style={[styles.chamaType, { color: colors.textSecondary }]}>
-                 {contributionType === 'merry-go-round'
-                   ? `Merry-Go-Round • ${chama?.name || 'Group'}`
-                   : contributionType === 'welfare' && proposalTitle
-                     ? `Welfare Support • ${chama?.name || 'Group'}`
-                     : contributionType === 'regular'
-                        ? `${chama?.type || 'Community'} • ${chama?.contribution_frequency || 'regular'} contributions`
-                       : `${getContributionTitle()} • ${chama?.name || 'Group'}`
-                 }
-               </Text>
-               <Text style={[styles.chamaAmount, { color: getContributionColor() }]}>
-                 {contributionType === 'regular'
-                    ? `Regular: ${amount ? formatCurrency(parseFloat(amount)) : formatCurrency(chama?.contribution_amount || 0)}`
-                   : contributionType === 'welfare' && requestedAmount
-                     ? `Needed: ${formatCurrency(requestedAmount)}`
-                     : contributionType === 'merry-go-round' && amount
-                       ? `Contributing: ${formatCurrency(parseFloat(amount))}`
-                       : amount
-                         ? `Amount: ${formatCurrency(parseFloat(amount))}`
-                         : getContributionTitle()
-                 }
+               <Text style={[styles.summaryValue, { color: colors.text }]}>
+                 {amount ? formatCurrency(parseFloat(amount)) : formatCurrency(0)}
                </Text>
              </View>
            </View>
-         </Card>
 
-{/* Current Recipient Info for Merry-Go-Round */}
-          {contributionType === 'merry-go-round' && currentRecipient && (
-            <CurrentRecipientInfo
-              currentRecipient={currentRecipient}
-              contributionStatus={contributionStatus}
-              formatCurrency={formatCurrency}
+ <Button
+             title={
+               contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for'
+                 ? "✅ You have already contributed!"
+                 : contributionType === 'merry-go-round'
+                   ? !selectedMerryGoRound
+                     ? "Select a merry-go-round cycle first"
+                     : amount && amount !== '0'
+                       ? `Contribute ${formatCurrency(parseFloat(amount))}`
+                       : "Loading Contribution Details..."
+                   : contributionType === 'welfare' && !selectedWelfare
+                     ? "Select a welfare contribution first"
+                     : "Make Contribution"
+             }
+             onPress={handleContribute}
+             loading={loading}
+             disabled={
+               !amount ||
+               parseFloat(amount) <= 0 ||
+               (paymentMethod === 'pay_for' && !selectedContributor) ||
+               (contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for') ||
+               (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
+               (contributionType === 'welfare' && !selectedWelfare)
+             }
+             variant="outline"
+             style={styles.contributeButton}
+             icon={
+               <Ionicons
+                 name={
+                   contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for'
+                     ? "checkmark-circle"
+                     : contributionType === 'merry-go-round' && !selectedMerryGoRound
+                       ? "time"
+                       : contributionType === 'welfare' && !selectedWelfare
+                         ? "time"
+                         : "add-circle"
+                 }
+                 size={20}
+                 color={
+                   !amount || parseFloat(amount) <= 0 ||
+                   (contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for') ||
+                   (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
+                   (contributionType === 'welfare' && !selectedWelfare)
+                     ? colors.textSecondary
+                     : colors.primary
+                 }
+               />
+             }
             />
-          )}
+  </Card>
+         </View>
+       </ScrollView>
 
-          <Card style={styles.formCard} variant="outlined">
-            <Text style={[styles.formTitle, { color: colors.text }]}>
-              Choose What to Pay
-            </Text>
-
-            {/* Contribution Type Selection */}
-            <ContributionTypeSelector
-              contributionType={contributionType}
-              selectedMerryGoRound={selectedMerryGoRound}
-              selectedWelfare={selectedWelfare}
-              merryGoRounds={merryGoRounds}
-              welfareContributions={welfareContributions}
-              loadingContributionOptions={loadingContributionOptions}
-              showContributionTypeDropdown={showContributionTypeDropdown}
-              showMerryGoRoundDropdown={showMerryGoRoundDropdown}
-              showWelfareDropdown={showWelfareDropdown}
-              onContributionTypeChange={handleContributionTypeChange}
-              onMerryGoRoundSelect={handleMerryGoRoundSelect}
-              onWelfareSelect={handleWelfareSelect}
-              onToggleContributionType={() => setShowContributionTypeDropdown(!showContributionTypeDropdown)}
-              onToggleMerryGoRound={() => setShowMerryGoRoundDropdown(!showMerryGoRoundDropdown)}
-              onToggleWelfare={() => setShowWelfareDropdown(!showWelfareDropdown)}
-              formatCurrency={formatCurrency}
-            />
-
-            {/* Payment Method Selection */}
-            <PaymentMethodSelector
-              paymentMethod={paymentMethod}
-              walletBalance={walletBalance}
-              amount={amount}
-              setPaymentMethod={setPaymentMethod}
-              formatCurrency={formatCurrency}
-            />
-
-            {/* Member Listing Section for Pay for Someone Contributions */}
-            {paymentMethod === 'pay_for' && (
-              <MemberListingSection
-                chamaMembers={chamaMembers}
-                selectedContributor={selectedContributor}
-                memberSearchQuery={memberSearchQuery}
-                setMemberSearchQuery={setMemberSearchQuery}
-                contributionType={contributionType}
-                roundName={roundName}
-                setSelectedContributor={setSelectedContributor}
-                getMemberName={getMemberName}
-                renderMemberAvatar={renderMemberAvatar}
-                validateMemberSelection={validateMemberSelection}
-              />
-            )}
-
-            {/* M-Pesa Phone Number Display */}
-            {paymentMethod === 'mpesa' && (
-              <PhoneNumberDisplay user={user} />
-            )}
-
-{/* Pay for Someone Notice */}
-            {paymentMethod === 'pay_for' && (
-              <View style={styles.cashContributionContainer}>
-                <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
-                  <Ionicons name="information-circle" size={20} color={colors.warning} />
-                  <Text style={[styles.cashNoticeText, { color: colors.text }]}>
-                    You are paying for a member. The amount will be deducted from your VaultKe wallet and the selected member will appear to have paid.
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            <Input
-              label="Amount (KES)"
-              value={amount}
-              onChangeText={
-                contributionType === 'merry-go-round' 
-                  ? undefined 
-                  : setAmount
-              }
-              placeholder={
-                contributionType === 'merry-go-round'
-                  ? (selectedMerryGoRound 
-                      ? "Amount set automatically from cycle"
-                      : "Select a merry-go-round cycle first")
-                  : contributionType === 'welfare' && selectedWelfare
-                    ? "Amount from selected welfare"
-                    : "Enter contribution amount"
-              }
-              keyboardType="numeric"
-              leftIcon="wallet"
-              editable={contributionType !== 'merry-go-round'}
-              style={contributionType === 'merry-go-round' ? { backgroundColor: colors.surface + '80' } : undefined}
-            />
-
-            {/* Real-time validation for wallet payments */}
-            {paymentMethod === 'wallet' && amount && (
-              <ValidationMessage
-                amount={amount}
-                walletBalance={walletBalance}
-                formatCurrency={formatCurrency}
-              />
-            )}
-
-            <Input
-              label="Description (Optional)"
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Add a note for this contribution..."
-              multiline
-              numberOfLines={3}
-              leftIcon="document-text"
-            />
-
-            {/* Anonymous Contribution Option - Only for Contribution Groups, not for Merry-Go-Round */}
-            {chama?.category === 'contribution' && contributionType !== 'merry-go-round' && (
-              <AnonymousContribution
-                isAnonymous={isAnonymous}
-                setIsAnonymous={setIsAnonymous}
-              />
-            )}
-
-            {/* Merry-Go-Round Restrictions Notice */}
-            {contributionType === 'merry-go-round' && (
-              <MerryGoRoundRules
-                contributionStatus={contributionStatus}
-                currentRecipient={currentRecipient}
-                amountPerRound={amountPerRound}
-              />
-            )}
-
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-                Contribution Amount:
-              </Text>
-              <Text style={[styles.summaryValue, { color: colors.text }]}>
-                {amount ? formatCurrency(parseFloat(amount)) : formatCurrency(0)}
-              </Text>
-            </View>
-          </View>
-
-<Button
-            title={
-              contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for'
-                ? "✅ You have already contributed!"
-                : contributionType === 'merry-go-round'
-                  ? !selectedMerryGoRound
-                    ? "Select a merry-go-round cycle first"
-                    : amount && amount !== '0'
-                      ? `Contribute ${formatCurrency(parseFloat(amount))}`
-                      : "Loading Contribution Details..."
-                  : contributionType === 'welfare' && !selectedWelfare
-                    ? "Select a welfare contribution first"
-                    : "Make Contribution"
-            }
-            onPress={handleContribute}
-            loading={loading}
-            disabled={
-              !amount ||
-              parseFloat(amount) <= 0 ||
-              (paymentMethod === 'pay_for' && !selectedContributor) ||
-              (contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for') ||
-              (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
-              (contributionType === 'welfare' && !selectedWelfare)
-            }
-            variant="outline"
-            style={styles.contributeButton}
-            icon={
-              <Ionicons
-                name={
-                  contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for'
-                    ? "checkmark-circle"
-                    : contributionType === 'merry-go-round' && !selectedMerryGoRound
-                      ? "time"
-                      : contributionType === 'welfare' && !selectedWelfare
-                        ? "time"
-                        : "add-circle"
-                }
-                size={20}
-                color={
-                  !amount || parseFloat(amount) <= 0 ||
-                  (contributionType === 'merry-go-round' && contributionStatus?.hasContributed && paymentMethod !== 'pay_for') ||
-                  (contributionType === 'merry-go-round' && !selectedMerryGoRound) ||
-                  (contributionType === 'welfare' && !selectedWelfare)
-                    ? colors.textSecondary
-                    : colors.primary
-                }
-              />
-            }
-          />
-</Card>
-      </ScrollView>
+       <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+     </View>
 
       {/* Payment Confirmation Modal */}
       <PaymentConfirmationModal

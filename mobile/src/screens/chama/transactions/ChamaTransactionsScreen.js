@@ -29,6 +29,7 @@ import ChamaTransactionsTable from './ChamaTransactionsTable';
 import ChamaTransactionsExportModal from './ChamaTransactionsExportModal';
 import ChamaTransactionsMemberSelectorModal from './ChamaTransactionsMemberSelectorModal';
 import ChamaTransactionsNoChama from './ChamaTransactionsNoChama';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const ChamaTransactionsScreen = ({ navigation, route }) => {
   const { theme, user } = useApp();
@@ -867,79 +868,83 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
-      <ScrollView
-        style={styles.pageScroll}
-        nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.pageScroll}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          <ChamaTransactionsHeader
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            selectedFilter={selectedFilter}
+            isDropdownOpen={showFilterDropdown}
+            canViewGroupRecords={canViewGroupRecords}
+            onToggleFilter={() => setShowFilterDropdown(!showFilterDropdown)}
+            theme={theme}
           />
-        }
-      >
-        <ChamaTransactionsHeader
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          selectedFilter={selectedFilter}
-          isDropdownOpen={showFilterDropdown}
-          canViewGroupRecords={canViewGroupRecords}
-          onToggleFilter={() => setShowFilterDropdown(!showFilterDropdown)}
-          theme={theme}
-        />
 
-        <ChamaTransactionsFilterChips
-          selectedFilter={selectedFilter}
-          onSelectFilter={handleSelectFilter}
-          theme={theme}
-        />
+          <ChamaTransactionsFilterChips
+            selectedFilter={selectedFilter}
+            onSelectFilter={handleSelectFilter}
+            theme={theme}
+          />
 
-        <ChamaTransactionsTable
-          transactions={transactions}
-          loading={loading}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          setCurrentPage={setCurrentPage}
-          chamaMembers={chamaMembers}
-          onReceiptPress={handleIndividualReceipt}
-          onBulkPrintReceipts={handleBulkPrintReceipts}
-          onBulkShareReceipts={handleBulkShareReceipts}
+          <ChamaTransactionsTable
+            transactions={transactions}
+            loading={loading}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            setCurrentPage={setCurrentPage}
+            chamaMembers={chamaMembers}
+            onReceiptPress={handleIndividualReceipt}
+            onBulkPrintReceipts={handleBulkPrintReceipts}
+            onBulkShareReceipts={handleBulkShareReceipts}
+            exportLoading={exportLoading}
+            selectedFilter={selectedFilter}
+            theme={theme}
+          />
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+
+        {showFilterDropdown && (
+          <ChamaTransactionsFilterDropdown
+            selectedFilter={selectedFilter}
+            onSelectFilter={handleSelectFilter}
+            theme={theme}
+          />
+        )}
+
+        <ChamaTransactionsExportModal
+          visible={showExportModal}
+          transactionsCount={transactions.length}
           exportLoading={exportLoading}
-          selectedFilter={selectedFilter}
+          onClose={() => setShowExportModal(false)}
+          onExport={handleExport}
           theme={theme}
         />
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-
-      {showFilterDropdown && (
-        <ChamaTransactionsFilterDropdown
-          selectedFilter={selectedFilter}
-          onSelectFilter={handleSelectFilter}
+        <ChamaTransactionsMemberSelectorModal
+          visible={showMemberSelector}
+          chamaMembers={chamaMembers}
+          onClose={() => setShowMemberSelector(false)}
+          onSelectMember={(memberId) => {
+            handleDownload('pdf', 'member', memberId);
+          }}
           theme={theme}
         />
-      )}
 
-      <ChamaTransactionsExportModal
-        visible={showExportModal}
-        transactionsCount={transactions.length}
-        exportLoading={exportLoading}
-        onClose={() => setShowExportModal(false)}
-        onExport={handleExport}
-        theme={theme}
-      />
-
-      <ChamaTransactionsMemberSelectorModal
-        visible={showMemberSelector}
-        chamaMembers={chamaMembers}
-        onClose={() => setShowMemberSelector(false)}
-        onSelectMember={(memberId) => {
-          handleDownload('pdf', 'member', memberId);
-        }}
-        theme={theme}
-      />
+        <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
     </SafeAreaView>
   );
 };

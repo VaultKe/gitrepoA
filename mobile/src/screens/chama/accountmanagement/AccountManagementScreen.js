@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 
 const isMemberLeft = (member) => {
@@ -32,6 +33,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
 
   const [userMembership, setUserMembership] = useState(null);
   const [membershipLoading, setMembershipLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Check if the current user is still an active member
   useEffect(() => {
@@ -154,6 +156,22 @@ const AccountManagementScreen = ({ route, navigation }) => {
     return activeWalletTypes.includes(mod.walletType);
   });
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const response = await ApiService.getChamaMember(resolvedChamaId, user?.id);
+      if (response.success) {
+        setUserMembership(response.data);
+      } else {
+        setUserMembership(null);
+      }
+    } catch (error) {
+      setUserMembership(null);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [resolvedChamaId, user?.id]);
+
   const isDesktop = width >= 1024;
   const isTablet = width >= 768;
   const itemsPerRow = isDesktop ? 4 : isTablet ? 4 : 3;
@@ -163,10 +181,11 @@ const AccountManagementScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.mainContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.mainContent}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Stat Cards 2x2 Grid */}
         <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginHorizontal: spacing.md }}>
           <View style={styles.statsContainer}>
@@ -263,8 +282,10 @@ const AccountManagementScreen = ({ route, navigation }) => {
                </Text>
              </TouchableOpacity>
           </View>
-        </Card>
-      </ScrollView>
+          </Card>
+        </ScrollView>
+        <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
     </SafeAreaView>
   );
 };

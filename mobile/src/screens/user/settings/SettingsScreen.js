@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -17,6 +18,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 import GoogleDriveService from '../../../services/GoogleDriveService';
 import Toast from 'react-native-toast-message';
@@ -56,6 +58,7 @@ const SettingsScreen = ({ navigation }) => {
 
   const [availableSounds, setAvailableSounds] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Google Drive backup state
   const [googleDriveConnected, setGoogleDriveConnected] = useState(false);
@@ -159,6 +162,20 @@ const SettingsScreen = ({ navigation }) => {
       Alert.alert('Error', 'Failed to load settings. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadUserSettings(),
+        checkGoogleDriveConnection(),
+      ]);
+    } catch (error) {
+      console.warn('SettingsScreen refresh failed:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -1285,19 +1302,28 @@ const SettingsScreen = ({ navigation }) => {
     },
   ];
 
-  return (
+   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        bounces={true}
-        alwaysBounceVertical={false}
-        scrollEventThrottle={16}
-        removeClippedSubviews={false}
-      >
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
+          bounces={true}
+          alwaysBounceVertical={false}
+          scrollEventThrottle={16}
+          removeClippedSubviews={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+        >
         {loading && (
           <View style={styles.inlineLoadingContainer}>
             <ActivityIndicator size="small" color={colors.primary} />
@@ -1339,6 +1365,8 @@ const SettingsScreen = ({ navigation }) => {
           </Text>
         </View>
       </ScrollView>
+      <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
     </SafeAreaView>
   );
 };

@@ -17,6 +17,7 @@ import * as Sharing from 'expo-sharing';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableContainer: {
@@ -362,8 +363,13 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadMeetingSummaryData();
-    setRefreshing(false);
+    try {
+      await loadMeetingSummaryData();
+    } catch (error) {
+      console.warn('Meeting summary refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -641,24 +647,27 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
-        showsVerticalScrollIndicator={false}
-      >
-        {(meetingDetails || meetingData) ? (
-          <>
-            {renderMeetingHeader()}
-            {renderMeetingDetails()}
-          </>
-        ) : (
-          <View style={styles.noMeetingsContainer}>
-            <Ionicons name="document-outline" size={80} color={colors.textTertiary} />
-            <Text style={[styles.noMeetingsTitle, { color: colors.text }]}>Meeting Data Not Available</Text>
-            <Text style={[styles.noMeetingsText, { color: colors.textSecondary }]}>Unable to load the meeting summary.</Text>
-          </View>
-        )}
-      </ScrollView>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {(meetingDetails || meetingData) ? (
+            <>
+              {renderMeetingHeader()}
+              {renderMeetingDetails()}
+            </>
+          ) : (
+            <View style={styles.noMeetingsContainer}>
+              <Ionicons name="document-outline" size={80} color={colors.textTertiary} />
+              <Text style={[styles.noMeetingsTitle, { color: colors.text }]}>Meeting Data Not Available</Text>
+              <Text style={[styles.noMeetingsText, { color: colors.textSecondary }]}>Unable to load the meeting summary.</Text>
+            </View>
+          )}
+        </ScrollView>
+         <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
     </SafeAreaView>
   );
 };

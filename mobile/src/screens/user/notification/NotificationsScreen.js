@@ -22,6 +22,7 @@ import notificationService from '../../../services/notificationService';
 import Toast from 'react-native-toast-message';
 import NotificationCard from './NotificationCard';
 import NotificationHeader from './NotificationHeader';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -258,48 +259,57 @@ const NotificationsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {renderHeader()}
+      <View style={{ flex: 1, position: 'relative' }}>
+        {renderHeader()}
 
-      <FlatList
-        data={filteredNotifications}
-        renderItem={renderNotification}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.notificationsList,
-          filteredNotifications.length === 0 && styles.emptyListContainer
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        ListEmptyComponent={!loading && (
-          <View style={styles.emptyState}>
-            <Ionicons
-              name={selectedFilter === 'unread' ? 'checkmark-circle-outline' : 'notifications-outline'}
-              size={64}
-              color={colors.textTertiary}
+        <FlatList
+          data={filteredNotifications}
+          renderItem={renderNotification}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            styles.notificationsList,
+            filteredNotifications.length === 0 && styles.emptyListContainer
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              {selectedFilter === 'unread' ? 'All caught up!' : 'No notifications'}
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              {selectedFilter === 'unread'
-                ? 'You have no unread notifications'
-                : 'You\'ll see notifications here when they arrive'}
-            </Text>
-          </View>
-        )}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        initialNumToRender={10}
-        updateCellsBatchingPeriod={50}
-      />
+          }
+          ListEmptyComponent={!loading && (
+            <View style={styles.emptyState}>
+              <Ionicons
+                name={selectedFilter === 'unread' ? 'checkmark-circle-outline' : 'notifications-outline'}
+                size={64}
+                color={colors.textTertiary}
+              />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                {selectedFilter === 'unread' ? 'All caught up!' : 'No notifications'}
+              </Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                {selectedFilter === 'unread'
+                  ? 'You have no unread notifications'
+                  : 'You\'ll see notifications here when they arrive'}
+              </Text>
+            </View>
+          )}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={10}
+          updateCellsBatchingPeriod={50}
+        />
+
+        <PageRefreshButton
+          onRefresh={onRefresh}
+          refreshing={refreshing}
+          color={colors.primary}
+          bottom={64}
+        />
+      </View>
     </SafeAreaView>
   );
 };

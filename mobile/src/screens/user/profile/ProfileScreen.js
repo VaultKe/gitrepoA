@@ -22,6 +22,7 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import apiService from '../../../services/api';
 import { getTransactions } from '../../../services/api/walletEndpoints';
 import { getUserChamas, payMemberServiceFee } from '../../../services/api/chamaEndpoints';
@@ -1330,20 +1331,38 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {renderProfileHeader()}
-        {renderPersonalInfo()}
-        {renderWhatsAppLink()}
-        {renderUserChamasTable()}
-        <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.lg }}>
-          {renderRecentActivity()}
-        </View>
-      </ScrollView>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {renderProfileHeader()}
+          {renderPersonalInfo()}
+          {renderWhatsAppLink()}
+          {renderUserChamasTable()}
+          <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.lg }}>
+            {renderRecentActivity()}
+          </View>
+        </ScrollView>
+
+        <PageRefreshButton
+          onRefresh={async () => {
+            try {
+              await Promise.all([
+                loadRecentActivities(),
+                loadUserChamas(),
+              ]);
+            } catch (error) {
+              console.warn('Profile refresh failed:', error);
+            }
+          }}
+          refreshing={false}
+          color={colors.primary}
+          bottom={64}
+        />
+      </View>
     </SafeAreaView>
   );
 };

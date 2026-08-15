@@ -15,6 +15,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import { toEAT, formatDate, nowEAT } from '../../../utils/dateUtils';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 import ChamaMeetingsTable from './ChamaMeetingsTable';
 
@@ -99,8 +100,13 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadMeetings();
-    setRefreshing(false);
+    try {
+      await loadMeetings();
+    } catch (error) {
+      console.warn('Meetings refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const getFilteredMeetings = () => {
@@ -335,18 +341,20 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, position: 'relative' }}>
         {renderTable()}
+        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
+          {!isUserMeetingsView && (
+            <TouchableOpacity
+              style={[styles.fab, { backgroundColor: colors.primary }]}
+              onPress={handleScheduleMeeting}
+            >
+              <Ionicons name="add" size={24} color={colors.white} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-
-      {!isUserMeetingsView && (
-        <TouchableOpacity
-          style={[styles.fab, { backgroundColor: colors.primary }]}
-          onPress={handleScheduleMeeting}
-        >
-          <Ionicons name="add" size={24} color={colors.white} />
-        </TouchableOpacity>
-      )}
     </SafeAreaView>
   );
 };
@@ -363,7 +371,7 @@ const styles = StyleSheet.create({
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl },
   emptyTitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.semibold, marginTop: spacing.lg, marginBottom: spacing.sm },
   emptySubtitle: { fontSize: typography.fontSize.base, textAlign: 'center', marginBottom: spacing.xl },
-  fab: { position: 'absolute', bottom: spacing.lg, right: spacing.lg, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', ...shadows.lg },
+  fab: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', ...shadows.lg },
   dropdownOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 },
   dropdownContainer: { minWidth: 200, maxWidth: 250, borderRadius: borderRadius.md, borderWidth: 1, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 20 },
   dropdownItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm, justifyContent: 'space-between' },

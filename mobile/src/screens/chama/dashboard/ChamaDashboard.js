@@ -15,6 +15,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 
 const { width } = Dimensions.get('window');
@@ -27,9 +28,9 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [chamaFeatures, setChamaFeatures] = useState({
-    allowMerryGoRound: true,
-    allowWelfare: true,
-    activeWalletTypes: ['merry-go-round', 'welfare', 'savings', 'shares', 'dividends', 'loans'],
+    allowMerryGoRound: false,
+    allowWelfare: false,
+    activeWalletTypes: [],
   });
   const [chamaStats, setChamaStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -89,7 +90,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     const permissions = chama?.permissions || {};
     const activeWalletTypes = Array.isArray(permissions.activeWalletTypes)
       ? permissions.activeWalletTypes
-      : ['merry-go-round', 'welfare', 'savings', 'shares', 'dividends', 'loans'];
+      : [];
 
     // Check if we have cached data for this chama
     const cachedData = getCachedChamaData(chama.id);
@@ -106,8 +107,8 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       setStatsLoading(true);
       // Set features immediately from chama data
       setChamaFeatures({
-        allowMerryGoRound: permissions.allowMerryGoRound ?? true,
-        allowWelfare: permissions.allowWelfare ?? true,
+        allowMerryGoRound: permissions.allowMerryGoRound ?? false,
+        allowWelfare: permissions.allowWelfare ?? false,
         activeWalletTypes,
       });
     }
@@ -166,8 +167,8 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
             realTimeData: preloadedRealTimeData,
             chamaStats: statsResponse.data,
             chamaFeatures: {
-              allowMerryGoRound: true,
-              allowWelfare: true,
+              allowMerryGoRound: false,
+              allowWelfare: false,
               activeWalletTypes: [],
             }
           });
@@ -302,8 +303,8 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           ? permissions.activeWalletTypes
           : [];
         setChamaFeatures({
-          allowMerryGoRound: permissions.allowMerryGoRound ?? true,
-          allowWelfare: permissions.allowWelfare ?? true,
+          allowMerryGoRound: permissions.allowMerryGoRound ?? false,
+          allowWelfare: permissions.allowWelfare ?? false,
           activeWalletTypes,
         });
         // Refresh selected chama with latest data from this single source of truth
@@ -922,30 +923,33 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
 
 
-        {userChamas.length === 0 && !selectedChama ? (
-          renderEmptyState()
-        ) : (
-          <>
-            {renderChamaSelector()}
-            {renderQuickStats()}
-            {renderQuickActions()}
-          </>
-        )}
-      </ScrollView>
+          {userChamas.length === 0 && !selectedChama ? (
+            renderEmptyState()
+          ) : (
+            <>
+              {renderChamaSelector()}
+              {renderQuickStats()}
+              {renderQuickActions()}
+            </>
+          )}
+        </ScrollView>
+        <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
     </SafeAreaView>
   );
 };

@@ -21,6 +21,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import ApiService from '../../../services/api';
 import Card from '../../../components/common/Card';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 export default function TransactionHistoryScreen() {
   const { theme, user } = useApp();
@@ -86,8 +87,13 @@ export default function TransactionHistoryScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadAllUserTransactions();
-    setRefreshing(false);
+    try {
+      await loadAllUserTransactions();
+    } catch (error) {
+      console.warn('Transaction history refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadAllUserTransactions]);
 
   useFocusEffect(
@@ -435,191 +441,200 @@ export default function TransactionHistoryScreen() {
 
   return (
     <View style={[{ flex: 1, backgroundColor: colors.background }]}>
-      <View style={[{ borderBottomWidth: 1, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={[{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
-            <View style={{ flex: 1 }}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: spacing.xs }}
-              >
-                {filterTypes.map((type) => (
-                  <TouchableOpacity
-                    key={type.id}
-                    style={[
-                      { flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.full, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: spacing.xs, marginRight: spacing.xs, backgroundColor: colors.backgroundSecondary },
-                      filter === type.id && { backgroundColor: colors.primary },
-                    ]}
-                    onPress={() => setFilter(type.id)}
-                  >
-                    <Ionicons
-                      name={type.icon}
-                      size={14}
-                      color={filter === type.id ? colors.white : colors.textSecondary}
-                    />
-                    <Text style={[
-                      { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium, color: filter === type.id ? colors.white : colors.textSecondary },
-                      filter === type.id && { fontWeight: '600' },
-                    ]}>
-                      {type.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <View style={[{ borderBottomWidth: 1, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <View style={[{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: spacing.xs }}
+                >
+                  {filterTypes.map((type) => (
+                    <TouchableOpacity
+                      key={type.id}
+                      style={[
+                        { flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.full, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: spacing.xs, marginRight: spacing.xs, backgroundColor: colors.backgroundSecondary },
+                        filter === type.id && { backgroundColor: colors.primary },
+                      ]}
+                      onPress={() => setFilter(type.id)}
+                    >
+                      <Ionicons
+                        name={type.icon}
+                        size={14}
+                        color={filter === type.id ? colors.white : colors.textSecondary}
+                      />
+                      <Text style={[
+                        { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.medium, color: filter === type.id ? colors.white : colors.textSecondary },
+                        filter === type.id && { fontWeight: '600' },
+                      ]}>
+                        {type.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
 
-            {transactions.length > 0 && (
-              <TouchableOpacity
-                style={{ width: 36, height: 36, borderRadius: borderRadius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary }}
-                onPress={() => setShowHeaderMenu(!showHeaderMenu)}
-              >
-                <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
-              </TouchableOpacity>
+              {transactions.length > 0 && (
+                <TouchableOpacity
+                  style={{ width: 36, height: 36, borderRadius: borderRadius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary }}
+                  onPress={() => setShowHeaderMenu(!showHeaderMenu)}
+                >
+                  <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {showHeaderMenu && (
+          <View style={{ position: 'absolute', top: 60, right: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, paddingVertical: spacing.xs, minWidth: 170, backgroundColor: colors.surface, borderColor: colors.border, zIndex: 1001, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 }}>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm }}
+              onPress={() => {
+                setShowHeaderMenu(false);
+                handleBulkDownloadReceipts();
+              }}
+              disabled={receiptLoading}
+            >
+              <Ionicons name="download" size={18} color={receiptLoading ? colors.textTertiary : colors.text} />
+              <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: receiptLoading ? colors.textTertiary : colors.text }]}>Download All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm }}
+              onPress={() => {
+                setShowHeaderMenu(false);
+                handleBulkPrintReceipts();
+              }}
+              disabled={receiptLoading}
+            >
+              <Ionicons name="print" size={18} color={receiptLoading ? colors.textTertiary : colors.text} />
+              <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: receiptLoading ? colors.textTertiary : colors.text }]}>Print All</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {showHeaderMenu && (
+          <TouchableOpacity
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
+            onPress={() => setShowHeaderMenu(false)}
+            activeOpacity={1}
+          />
+        )}
+
+        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+          <Card variant="outlined" style={{ flex: 1, borderRadius: 8, overflow: 'hidden' }}>
+            {loading && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary }}>
+                  Loading transactions...
+                </Text>
+              </View>
             )}
-          </View>
+            {renderTransactionHeader()}
+            <FlatList
+                data={filteredTransactions}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    colors={[colors.primary]}
+                    tintColor={colors.primary}
+                  />
+                }
+                renderItem={renderTransaction}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={() => (
+                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
+                    <Ionicons name="receipt-outline" size={64} color={colors.textTertiary} />
+                    <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.textSecondary, marginTop: spacing.md }]}>
+                      {transactions.length === 0 ? 'No transactions yet' : 'No transactions found'}
+                    </Text>
+                    <Text style={[{ fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center', color: colors.textTertiary }]}>
+                      {transactions.length === 0
+                        ? 'Start by making a deposit or transfer'
+                        : 'Try changing the filter above'
+                      }
+                    </Text>
+                  </View>
+                )}
+                contentContainerStyle={{ paddingBottom: spacing.md }}
+                style={{ flex: 1 }}
+              />
+          </Card>
+
+          <PageRefreshButton
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+            color={colors.primary}
+            bottom={64}
+          />
         </View>
-      </View>
 
-      {showHeaderMenu && (
-        <View style={{ position: 'absolute', top: 60, right: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, paddingVertical: spacing.xs, minWidth: 170, backgroundColor: colors.surface, borderColor: colors.border, zIndex: 1001, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 }}>
-          <TouchableOpacity
-            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm }}
-            onPress={() => {
-              setShowHeaderMenu(false);
-              handleBulkDownloadReceipts();
-            }}
-            disabled={receiptLoading}
-          >
-            <Ionicons name="download" size={18} color={receiptLoading ? colors.textTertiary : colors.text} />
-            <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: receiptLoading ? colors.textTertiary : colors.text }]}>Download All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm }}
-            onPress={() => {
-              setShowHeaderMenu(false);
-              handleBulkPrintReceipts();
-            }}
-            disabled={receiptLoading}
-          >
-            <Ionicons name="print" size={18} color={receiptLoading ? colors.textTertiary : colors.text} />
-            <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: receiptLoading ? colors.textTertiary : colors.text }]}>Print All</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {showHeaderMenu && (
-        <TouchableOpacity
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
-          onPress={() => setShowHeaderMenu(false)}
-          activeOpacity={1}
-        />
-      )}
-
-      <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-        <Card variant="outlined" style={{ flex: 1, borderRadius: 8, overflow: 'hidden' }}>
-          {loading && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md }}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={{ fontSize: typography.fontSize.sm, color: colors.textSecondary }}>
-                Loading transactions...
-              </Text>
-            </View>
-          )}
-          {renderTransactionHeader()}
-          <FlatList
-              data={filteredTransactions}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={[colors.primary]}
-                  tintColor={colors.primary}
-                />
-              }
-              renderItem={renderTransaction}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={() => (
-                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl }}>
-                  <Ionicons name="receipt-outline" size={64} color={colors.textTertiary} />
-                  <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.textSecondary, marginTop: spacing.md }]}>
-                    {transactions.length === 0 ? 'No transactions yet' : 'No transactions found'}
-                  </Text>
-                  <Text style={[{ fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center', color: colors.textTertiary }]}>
-                    {transactions.length === 0
-                      ? 'Start by making a deposit or transfer'
-                      : 'Try changing the filter above'
-                    }
-                  </Text>
-                </View>
-              )}
-              contentContainerStyle={{ paddingBottom: spacing.md }}
-              style={{ flex: 1 }}
-            />
-        </Card>
-      </View>
-
-      <Modal
-        visible={!!showTransactionMenu}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowTransactionMenu(null)}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)', justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}
-          onPress={() => setShowTransactionMenu(null)}
-          activeOpacity={1}
+        <Modal
+          visible={!!showTransactionMenu}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowTransactionMenu(null)}
         >
-          <View style={{ width: 220, borderRadius: borderRadius.xl, borderWidth: 1, backgroundColor: colors.surface, borderColor: colors.border, elevation: 20, overflow: 'hidden' }}>
-            <View style={{ padding: spacing.md, borderBottomWidth: 1, alignItems: 'center', borderBottomColor: colors.border }}>
-              <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Receipt Actions</Text>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)', justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}
+            onPress={() => setShowTransactionMenu(null)}
+            activeOpacity={1}
+          >
+            <View style={{ width: 220, borderRadius: borderRadius.xl, borderWidth: 1, backgroundColor: colors.surface, borderColor: colors.border, elevation: 20, overflow: 'hidden' }}>
+              <View style={{ padding: spacing.md, borderBottomWidth: 1, alignItems: 'center', borderBottomColor: colors.border }}>
+                <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold, color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Receipt Actions</Text>
+              </View>
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
+                onPress={() => handleTransactionMenuAction(
+                  filteredTransactions.find((t) => t.id === showTransactionMenu),
+                  'download'
+                )}
+                activeOpacity={0.7}
+              >
+                <View style={{ width: 32, height: 32, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '20' }}>
+                  <Ionicons name="download-outline" size={18} color={colors.primary} />
+                </View>
+                <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.medium, color: colors.text, flex: 1 }]}>Download Receipt</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
+                onPress={() => handleTransactionMenuAction(
+                  filteredTransactions.find((t) => t.id === showTransactionMenu),
+                  'print'
+                )}
+                activeOpacity={0.7}
+              >
+                <View style={{ width: 32, height: 32, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.success + '20' }}>
+                  <Ionicons name="print-outline" size={18} color={colors.success} />
+                </View>
+                <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.medium, color: colors.text, flex: 1 }]}>Print Receipt</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md }}
+                onPress={() => handleTransactionMenuAction(
+                  filteredTransactions.find((t) => t.id === showTransactionMenu),
+                  'share'
+                )}
+                activeOpacity={0.7}
+              >
+                <View style={{ width: 32, height: 32, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent + '20' }}>
+                  <Ionicons name="share-outline" size={18} color={colors.accent} />
+                </View>
+                <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.medium, color: colors.text, flex: 1 }]}>Share Receipt</Text>
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
-              onPress={() => handleTransactionMenuAction(
-                filteredTransactions.find((t) => t.id === showTransactionMenu),
-                'download'
-              )}
-              activeOpacity={0.7}
-            >
-              <View style={{ width: 32, height: 32, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '20' }}>
-                <Ionicons name="download-outline" size={18} color={colors.primary} />
-              </View>
-              <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.medium, color: colors.text, flex: 1 }]}>Download Receipt</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }}
-              onPress={() => handleTransactionMenuAction(
-                filteredTransactions.find((t) => t.id === showTransactionMenu),
-                'print'
-              )}
-              activeOpacity={0.7}
-            >
-              <View style={{ width: 32, height: 32, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.success + '20' }}>
-                <Ionicons name="print-outline" size={18} color={colors.success} />
-              </View>
-              <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.medium, color: colors.text, flex: 1 }]}>Print Receipt</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md }}
-              onPress={() => handleTransactionMenuAction(
-                filteredTransactions.find((t) => t.id === showTransactionMenu),
-                'share'
-              )}
-              activeOpacity={0.7}
-            >
-              <View style={{ width: 32, height: 32, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent + '20' }}>
-                <Ionicons name="share-outline" size={18} color={colors.accent} />
-              </View>
-              <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.medium, color: colors.text, flex: 1 }]}>Share Receipt</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+          </TouchableOpacity>
+        </Modal>
+      </View>
     </View>
   );
 }

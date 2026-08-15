@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors } from '../../../utils/theme';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import api from '../../../services/api';
 
 const InvitationsScreen = ({ navigation }) => {
@@ -291,19 +292,20 @@ const InvitationsScreen = ({ navigation }) => {
           </Text>
         </View>
       ) : (
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-        >
+        <View style={{ flex: 1, position: 'relative' }}>
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+          >
           {invitations.length > 0 ? (
             <>
               <View style={styles.statsContainer}>
@@ -317,7 +319,9 @@ const InvitationsScreen = ({ navigation }) => {
           ) : (
             renderEmptyState()
           )}
-        </ScrollView>
+          </ScrollView>
+          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+        </View>
       )}
     </SafeAreaView>
   );

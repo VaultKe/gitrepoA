@@ -19,6 +19,7 @@ import { getThemeColors, spacing, typography, borderRadius } from '../../../util
 import { API_BASE_URL } from '../../../config/environment';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import apiService from '../../../services/api';
 
 const WhatsAppLinkScreen = () => {
@@ -32,8 +33,20 @@ const WhatsAppLinkScreen = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [logs, setLogs] = useState([]);
   const pollRef = useRef(null);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await startLink();
+    } catch (error) {
+      console.warn('WhatsApp link refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const addLog = (msg) => {
     const ts = new Date().toLocaleTimeString();
@@ -339,108 +352,111 @@ const WhatsAppLinkScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Ionicons name="logo-whatsapp" size={48} color={colors.success || '#25D366'} />
-          <Text style={[styles.title, { color: colors.text }]}>Link WhatsApp</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Connect your WhatsApp account to send and receive messages
-          </Text>
-        </View>
-
-        <Card variant="outlined" style={styles.qrCard}>
-          {renderQR()}
-        </Card>
-
-        {status === 'scanning' && (
-          <View style={styles.actions}>
-            <Button
-              title="Refresh QR"
-              onPress={() => sessionId && startPolling(sessionId)}
-              variant="outline"
-              style={styles.actionButton}
-            />
-            <Button
-              title="Check Status"
-              onPress={checkStatus}
-              variant="outline"
-              style={styles.actionButton}
-            />
-            <Button
-              title="Cancel"
-              onPress={() => {
-                if (pollRef.current) clearInterval(pollRef.current);
-                setPolling(false);
-                setStatus('idle');
-                setSessionId(null);
-                setQrBase64(null);
-              }}
-              variant="outline"
-              style={styles.actionButton}
-            />
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Ionicons name="logo-whatsapp" size={48} color={colors.success || '#25D366'} />
+            <Text style={[styles.title, { color: colors.text }]}>Link WhatsApp</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Connect your WhatsApp account to send and receive messages
+            </Text>
           </View>
-        )}
 
-        {status === 'ready' && (
-          <View style={styles.actions}>
-            <Button
-              title="Logout WhatsApp"
-              onPress={handleLogout}
-              variant="outline"
-              style={[styles.actionButton, { borderColor: colors.error }]}
-              textStyle={{ color: colors.error }}
-            />
-          </View>
-        )}
-
-        {!sessionId && status !== 'ready' && status !== 'logged_out' && (
-          <View style={styles.actions}>
-            <Button
-              title={loading ? 'Starting...' : 'Start QR Link'}
-              onPress={startLink}
-              loading={loading}
-              style={styles.actionButton}
-            />
-            <Button
-              title="Link by Phone Number"
-              onPress={() => setShowPhoneInput(true)}
-              variant="outline"
-              style={styles.actionButton}
-            />
-          </View>
-        )}
-
-        {/* {logs.length > 0 && (
-          <Card variant="outlined" style={styles.logCard}>
-            <Text style={[styles.logTitle, { color: colors.text }]}>Debug Logs</Text>
-            {logs.map((log, idx) => (
-              <Text key={idx} style={[styles.logLine, { color: colors.textSecondary }]}>{log}</Text>
-            ))}
+          <Card variant="outlined" style={styles.qrCard}>
+            {renderQR()}
           </Card>
-        )} */}
 
-        <View style={styles.infoSection}>
-          <Text style={[styles.infoTitle, { color: colors.text }]}>How it works</Text>
-          <View style={styles.infoItem}>
-            <Ionicons name="qr-code-outline" size={20} color={colors.primary} />
-            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              Scan the QR code with WhatsApp on your phone
-            </Text>
+          {status === 'scanning' && (
+            <View style={styles.actions}>
+              <Button
+                title="Refresh QR"
+                onPress={() => sessionId && startPolling(sessionId)}
+                variant="outline"
+                style={styles.actionButton}
+              />
+              <Button
+                title="Check Status"
+                onPress={checkStatus}
+                variant="outline"
+                style={styles.actionButton}
+              />
+              <Button
+                title="Cancel"
+                onPress={() => {
+                  if (pollRef.current) clearInterval(pollRef.current);
+                  setPolling(false);
+                  setStatus('idle');
+                  setSessionId(null);
+                  setQrBase64(null);
+                }}
+                variant="outline"
+                style={styles.actionButton}
+              />
+            </View>
+          )}
+
+          {status === 'ready' && (
+            <View style={styles.actions}>
+              <Button
+                title="Logout WhatsApp"
+                onPress={handleLogout}
+                variant="outline"
+                style={[styles.actionButton, { borderColor: colors.error }]}
+                textStyle={{ color: colors.error }}
+              />
+            </View>
+          )}
+
+          {!sessionId && status !== 'ready' && status !== 'logged_out' && (
+            <View style={styles.actions}>
+              <Button
+                title={loading ? 'Starting...' : 'Start QR Link'}
+                onPress={startLink}
+                loading={loading}
+                style={styles.actionButton}
+              />
+              <Button
+                title="Link by Phone Number"
+                onPress={() => setShowPhoneInput(true)}
+                variant="outline"
+                style={styles.actionButton}
+              />
+            </View>
+          )}
+
+          {/* {logs.length > 0 && (
+            <Card variant="outlined" style={styles.logCard}>
+              <Text style={[styles.logTitle, { color: colors.text }]}>Debug Logs</Text>
+              {logs.map((log, idx) => (
+                <Text key={idx} style={[styles.logLine, { color: colors.textSecondary }]}>{log}</Text>
+              ))}
+            </Card>
+          )} */}
+
+          <View style={styles.infoSection}>
+            <Text style={[styles.infoTitle, { color: colors.text }]}>How it works</Text>
+            <View style={styles.infoItem}>
+              <Ionicons name="qr-code-outline" size={20} color={colors.primary} />
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                Scan the QR code with WhatsApp on your phone
+              </Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Ionicons name="phone-portrait-outline" size={20} color={colors.primary} />
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                Or enter your phone number to receive a link by code
+              </Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.primary} />
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                Once linked, you can chat directly from the app
+              </Text>
+            </View>
           </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="phone-portrait-outline" size={20} color={colors.primary} />
-            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              Or enter your phone number to receive a link by code
-            </Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="chatbubbles-outline" size={20} color={colors.primary} />
-            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              Once linked, you can chat directly from the app
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+         <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
 
       <Modal visible={showPhoneInput} transparent animationType="fade" onRequestClose={() => setShowPhoneInput(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPhoneInput(false)}>

@@ -189,9 +189,14 @@ const EnhancedUserDashboard = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refreshData(true);
-    await loadUserStatistics();
-    setRefreshing(false);
+    try {
+      await refreshData(true);
+      await loadUserStatistics();
+    } catch (error) {
+      console.warn('Dashboard refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -550,6 +555,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
           onRefresh={onRefresh}
           refreshing={refreshing || isSyncing}
           color={colors.primary}
+          bottom={64}
         />
       </View>
     </SafeAreaView>

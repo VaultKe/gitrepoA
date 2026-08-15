@@ -14,6 +14,7 @@ import ChamaLoansSearchCard from './ChamaLoansSearchCard';
 import ChamaLoansTable from './ChamaLoansTable';
 import ApplyForLoanScreen from './ApplyForLoanScreen';
 import MessageBanner from '../../../components/common/MessageBanner';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
   const { chamaId } = route.params;
@@ -393,38 +394,43 @@ const ChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
 
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
-      {successBanner.visible && (
-        <MessageBanner
-          type="success"
-          message={successBanner.message}
-          onClose={() => setSuccessBanner({ visible: false, message: '' })}
+      <View style={{ flex: 1, position: 'relative' }}>
+        {successBanner.visible && (
+          <MessageBanner
+            type="success"
+            message={successBanner.message}
+            onClose={() => setSuccessBanner({ visible: false, message: '' })}
+          />
+        )}
+
+        <ChamaLoansSearchCard
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          theme={theme}
         />
-      )}
 
-      <ChamaLoansSearchCard
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        theme={theme}
-      />
+        <ChamaLoansTable
+          loans={filteredLoans}
+          loading={loading}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          navigation={navigation}
+          currentUser={user}
+          canManageLoans={canManageLoans}
+          onLoanAction={handleLoanAction}
+          theme={theme}
+        />
 
-      <ChamaLoansTable
-        loans={filteredLoans}
-        loading={loading}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        navigation={navigation}
-        currentUser={user}
-        canManageLoans={canManageLoans}
-        onLoanAction={handleLoanAction}
-        theme={theme}
-      />
-
-      <TouchableOpacity
-        style={[styles.fab, styles.fabPrimary]}
-        onPress={handleApplyForLoan}
-      >
-        <Ionicons name="add" size={24} color={colors.white} />
-      </TouchableOpacity>
+        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
+          <TouchableOpacity
+            style={[styles.fab, styles.fabPrimary]}
+            onPress={handleApplyForLoan}
+          >
+            <Ionicons name="add" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -437,9 +443,6 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.background,
   },
   fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    right: spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,

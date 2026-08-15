@@ -19,10 +19,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Rect, Text as SvgText, G, Line } from 'react-native-svg';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors } from '../../../utils/theme';
+import { getThemeColors, spacing } from '../../../utils/theme';
 import { formatDate, formatTimeRemaining } from '../../../utils/formatters';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 
 const PollsVotingScreen = ({ route, navigation }) => {
@@ -1685,7 +1686,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
 
       {/* Content */}
-      {activeTab === 'completed' ? (
+      <View style={{ flex: 1, position: 'relative' }}>
+        {activeTab === 'completed' ? (
         <ScrollView
           style={{ flex: 1 }}
           refreshControl={
@@ -1808,6 +1810,20 @@ const PollsVotingScreen = ({ route, navigation }) => {
           }
         />
       )}
+
+      {/* Floating Action Buttons */}
+      <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+        <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} absolute={false} />
+        <TouchableOpacity
+          {...panResponder.panHandlers}
+          style={styles.floatingButton}
+          onPress={openCreateModal}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={24} color={colors.surface} />
+        </TouchableOpacity>
+      </View>
+      </View>
 
       {/* Create Poll Modal Overlay */}
       {showCreateModal && (

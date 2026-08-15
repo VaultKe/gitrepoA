@@ -34,6 +34,8 @@ const PageRefreshButton = ({
   iconSize = 24,
   style,
   label,
+  bottom = 64,
+  absolute = true,
 }) => {
   const [internalRefreshing, setInternalRefreshing] = useState(false);
   const [spinAnim] = useState(new Animated.Value(0));
@@ -82,8 +84,14 @@ const PageRefreshButton = ({
     }
   }, [refreshing, externalRefreshing, onRefresh, startSpin, stopSpin]);
 
+  const wrapperStyle = [
+    absolute ? styles.wrapper : styles.wrapperRelative,
+    absolute ? { bottom } : {},
+    style,
+  ];
+
   return (
-    <View style={[styles.wrapper, style]} pointerEvents="box-none">
+    <View style={wrapperStyle} pointerEvents="box-none">
       <TouchableOpacity
         activeOpacity={0.85}
         onPress={handlePress}
@@ -119,9 +127,13 @@ const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
     right: spacing.md,
-    bottom: 100,
     zIndex: 999,
     alignItems: 'flex-end',
+  },
+  wrapperRelative: {
+    position: 'relative',
+    zIndex: 999,
+    alignItems: 'center',
   },
   button: {
     alignItems: 'center',

@@ -20,6 +20,7 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 import Toast from 'react-native-toast-message';
 
@@ -1492,7 +1493,7 @@ const WelfareScreen = ({ route, navigation }) => {
     );
   }
 
-  return (
+   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.surface }]}>
@@ -1526,19 +1527,20 @@ const WelfareScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.content}>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.content}>
           {activeTab === 'requests' ? (
             <>
               <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
@@ -1676,12 +1678,16 @@ const WelfareScreen = ({ route, navigation }) => {
           </View>
         </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => setShowCreateModal(true)}
-      >
-        <Ionicons name="add" size={24} color={colors.white} />
-      </TouchableOpacity>
+        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
+          <TouchableOpacity
+            style={[styles.fab, { backgroundColor: colors.primary }]}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <Ionicons name="add" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* Create Welfare Request Modal */}
       <Modal
@@ -2536,9 +2542,6 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    right: spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -3232,9 +3235,6 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
   },
   fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    right: spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,

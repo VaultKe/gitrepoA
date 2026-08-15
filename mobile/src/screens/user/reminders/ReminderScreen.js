@@ -27,6 +27,7 @@ import ReminderItem from './components/ReminderItem';
 import EmptyRemindersState from './components/EmptyRemindersState';
 import AddEditReminderModal from './components/AddEditReminderModal';
 import ReminderTableHeader from './components/ReminderTableHeader';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import styles from '../../../styles/ReminderScreenStyles';
 
 // Configure notification handler
@@ -578,8 +579,13 @@ const ReminderScreen = () => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadReminders();
-    setRefreshing(false);
+    try {
+      await loadReminders();
+    } catch (error) {
+      console.warn('Reminders refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   // Filter reminders based on search and filter
@@ -603,93 +609,96 @@ const ReminderScreen = () => {
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading reminders...</Text>
         </View>
       ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
-        >
-          <Card
-            variant="outlined"
-            style={{
-              borderRadius: 8,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: colors.border,
-              shadowColor: 'transparent',
-              shadowOpacity: 0,
-              shadowRadius: 0,
-              shadowOffset: { width: 0, height: 0 },
-              elevation: 0,
-              marginBottom: spacing.sm,
-            }}
+        <View style={{ flex: 1, position: 'relative' }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
           >
-            <ReminderTableHeader
-              isDesktop={true}
-              searchValue={searchValue}
-              onSearchChange={setSearchValue}
-              filterValue={filterValue}
-              onFilterChange={setFilterValue}
-              onCreate={openAddModal}
-              showTableHeader={false}
-            />
-          </Card>
-
-          <Card
-            variant="outlined"
-            style={{
-              borderRadius: 8,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: colors.border,
-              shadowColor: 'transparent',
-              shadowOpacity: 0,
-              shadowRadius: 0,
-              shadowOffset: { width: 0, height: 0 },
-              elevation: 0,
-            }}
-          >
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ flexGrow: 1, minWidth: Math.max(width - 32, 760) }}
+            <Card
+              variant="outlined"
+              style={{
+                borderRadius: 8,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: colors.border,
+                shadowColor: 'transparent',
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 0,
+                marginBottom: spacing.sm,
+              }}
             >
-              <View style={{ width: '100%' }}>
-                <ReminderTableHeader
-                  isDesktop={true}
-                  searchValue={searchValue}
-                  onSearchChange={setSearchValue}
-                  filterValue={filterValue}
-                  onFilterChange={setFilterValue}
-                  onCreate={openAddModal}
-                  showSearchFilter={false}
-                />
+              <ReminderTableHeader
+                isDesktop={true}
+                searchValue={searchValue}
+                onSearchChange={setSearchValue}
+                filterValue={filterValue}
+                onFilterChange={setFilterValue}
+                onCreate={openAddModal}
+                showTableHeader={false}
+              />
+            </Card>
 
-                {filteredReminders.length > 0 ? (
-                  filteredReminders.map((item, index) => (
-                    <ReminderItem
-                      key={item.id}
-                      reminder={item}
-                      onToggle={handleToggleReminder}
-                      onEdit={openEditModal}
-                      onDelete={handleDeleteReminder}
-                      index={index}
-                    />
-                  ))
-                ) : (
-                  <EmptyRemindersState onAddReminder={openAddModal} />
-                )}
-              </View>
-            </ScrollView>
-          </Card>
-        </ScrollView>
+            <Card
+              variant="outlined"
+              style={{
+                borderRadius: 8,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: colors.border,
+                shadowColor: 'transparent',
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 0,
+              }}
+            >
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ flexGrow: 1, minWidth: Math.max(width - 32, 760) }}
+              >
+                <View style={{ width: '100%' }}>
+                  <ReminderTableHeader
+                    isDesktop={true}
+                    searchValue={searchValue}
+                    onSearchChange={setSearchValue}
+                    filterValue={filterValue}
+                    onFilterChange={setFilterValue}
+                    onCreate={openAddModal}
+                    showSearchFilter={false}
+                  />
+
+                  {filteredReminders.length > 0 ? (
+                    filteredReminders.map((item, index) => (
+                      <ReminderItem
+                        key={item.id}
+                        reminder={item}
+                        onToggle={handleToggleReminder}
+                        onEdit={openEditModal}
+                        onDelete={handleDeleteReminder}
+                        index={index}
+                      />
+                    ))
+                  ) : (
+                    <EmptyRemindersState onAddReminder={openAddModal} />
+                  )}
+                </View>
+              </ScrollView>
+            </Card>
+          </ScrollView>
+           <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+        </View>
       )}
 
       <AddEditReminderModal

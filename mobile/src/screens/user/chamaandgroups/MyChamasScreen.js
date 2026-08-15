@@ -19,6 +19,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows, createThemedStyles } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -284,8 +285,13 @@ const MyChamasScreen = ({ navigation, route }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadUserChamas();
-    setRefreshing(false);
+    try {
+      await loadUserChamas();
+    } catch (error) {
+      console.warn('My Chamas refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const applyFiltersAndSort = () => {
@@ -436,8 +442,9 @@ const MyChamasScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Search and Filter Bar - Fixed Position */}
-      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+      <View style={{ flex: 1, position: 'relative' }}>
+        {/* Search and Filter Bar - Fixed Position */}
+        <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
         <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
           <View style={[themedStyles.searchContainer, { flex: 1 }]}>
             <Ionicons name="search" size={14} color={colors.textSecondary} style={themedStyles.searchIcon} />
@@ -586,12 +593,16 @@ const MyChamasScreen = ({ navigation, route }) => {
         </Card>
       </View>
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('CreateChama')}
-      >
-        <Ionicons name="add" size={24} color={colors.white} />
-      </TouchableOpacity>
+      <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
+          <TouchableOpacity
+            style={[styles.fab, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('CreateChama')}
+          >
+            <Ionicons name="add" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -828,9 +839,6 @@ const getResponsiveStyles = (isLargeScreen, screenWidth, numColumns, screenType,
     marginTop: spacing.md,
   },
   fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    right: spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,

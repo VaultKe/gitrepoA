@@ -4,15 +4,45 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../../utils/theme';
 
-const PaymentMethodSelector = ({ 
-  paymentMethod, 
-  walletBalance, 
+const PaymentMethodSelector = ({
+  paymentMethod,
+  walletBalance,
   amount,
   setPaymentMethod,
-  formatCurrency 
+  formatCurrency,
+  availablePaymentMethods,
 }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
+
+  const allMethods = [
+    {
+      id: 'wallet',
+      label: 'VaultKe Wallet',
+      icon: 'wallet',
+      colorKey: 'primary',
+      showBalance: true,
+    },
+    {
+      id: 'mpesa',
+      label: 'M-Pesa',
+      icon: 'phone-portrait',
+      colorKey: 'success',
+      showBalance: false,
+    },
+    {
+      id: 'pay_for',
+      label: 'Pay for Someone',
+      icon: 'people',
+      colorKey: 'primary',
+      showBalance: false,
+      subtext: 'Select a member to pay for',
+    },
+  ];
+
+  const methods = availablePaymentMethods
+    ? allMethods.filter(m => availablePaymentMethods.includes(m.id))
+    : allMethods;
 
   return (
     <View style={styles.paymentMethodContainer}>
@@ -20,123 +50,87 @@ const PaymentMethodSelector = ({
         Payment Method
       </Text>
       <View style={styles.paymentMethodOptions}>
-        <TouchableOpacity
-          style={[
-            styles.paymentMethodOption,
-            {
-              backgroundColor: colors.surface,
-              borderColor: paymentMethod === 'wallet' ? colors.primary : colors.border,
-              borderWidth: paymentMethod === 'wallet' ? 2 : 1,
-            }
-          ]}
-          onPress={() => setPaymentMethod('wallet')}
-        >
-          <Ionicons
-            name="wallet"
-            size={20}
-            color={paymentMethod === 'wallet' ? colors.primary : colors.text}
-          />
-          <Text
+        {methods.map((method) => (
+          <TouchableOpacity
+            key={method.id}
             style={[
-              styles.paymentMethodText,
-              { color: paymentMethod === 'wallet' ? colors.primary : colors.text }
+              styles.paymentMethodOption,
+              {
+                backgroundColor: colors.surface,
+                borderColor: paymentMethod === method.id
+                  ? method.colorKey === 'success'
+                    ? colors.success
+                    : colors.primary
+                  : colors.border,
+                borderWidth: paymentMethod === method.id ? 2 : 1,
+              }
             ]}
+            onPress={() => setPaymentMethod(method.id)}
           >
-            VaultKe Wallet
-          </Text>
-          {paymentMethod === 'wallet' && (
-            <View style={styles.walletBalanceContainer}>
+            <Ionicons
+              name={method.icon}
+              size={20}
+              color={
+                paymentMethod === method.id
+                  ? method.colorKey === 'success'
+                    ? colors.success
+                    : colors.primary
+                  : colors.text
+              }
+            />
+            <Text
+              style={[
+                styles.paymentMethodText,
+                {
+                  color:
+                    paymentMethod === method.id
+                      ? method.colorKey === 'success'
+                        ? colors.success
+                        : colors.primary
+                      : colors.text
+                }
+              ]}
+            >
+              {method.label}
+            </Text>
+            {method.showBalance && paymentMethod === method.id && (
+              <View style={styles.walletBalanceContainer}>
+                <Text
+                  style={[
+                    styles.paymentMethodBalance,
+                    {
+                      color:
+                        paymentMethod === method.id
+                          ? method.colorKey === 'success'
+                            ? colors.success
+                            : colors.primary
+                          : colors.textSecondary
+                    }
+                  ]}
+                >
+                  Balance: {formatCurrency(walletBalance)}
+                </Text>
+                {walletBalance <= 0 && (
+                  <Text style={[styles.balanceWarning, { color: colors.error }]}>
+                    ⚠️ No balance
+                  </Text>
+                )}
+                {walletBalance > 0 && amount && parseFloat(amount) > walletBalance && (
+                  <Text style={[styles.balanceWarning, { color: colors.error }]}>
+                    ⚠️ Insufficient
+                  </Text>
+                )}
+              </View>
+            )}
+            {method.subtext && paymentMethod !== method.id && (
               <Text
-                style={[
-                  styles.paymentMethodBalance,
-                  { color: paymentMethod === 'wallet' ? colors.primary : colors.textSecondary }
-                ]}
+                style={[styles.paymentMethodSubtext, { color: colors.textSecondary }]}
               >
-                Balance: {formatCurrency(walletBalance)}
+                {method.subtext}
               </Text>
-              {walletBalance <= 0 && (
-                <Text
-                  style={[
-                    styles.balanceWarning,
-                    { color: colors.error }
-                  ]}
-                >
-                  ⚠️ No balance
-                </Text>
-              )}
-              {walletBalance > 0 && amount && parseFloat(amount) > walletBalance && (
-                <Text
-                  style={[
-                    styles.balanceWarning,
-                    { color: colors.error }
-                  ]}
-                >
-                  ⚠️ Insufficient
-                </Text>
-              )}
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.paymentMethodOption,
-            {
-              backgroundColor: colors.surface,
-              borderColor: paymentMethod === 'mpesa' ? colors.success : colors.border,
-              borderWidth: paymentMethod === 'mpesa' ? 2 : 1,
-            }
-          ]}
-          onPress={() => setPaymentMethod('mpesa')}
-        >
-          <Ionicons
-            name="phone-portrait"
-            size={20}
-            color={paymentMethod === 'mpesa' ? colors.success : colors.text}
-          />
-          <Text
-            style={[
-              styles.paymentMethodText,
-              { color: paymentMethod === 'mpesa' ? colors.success : colors.text }
-            ]}
-          >
-            M-Pesa
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.paymentMethodOption,
-            {
-              backgroundColor: colors.surface,
-              borderColor: paymentMethod === 'pay_for' ? colors.primary : colors.border,
-              borderWidth: paymentMethod === 'pay_for' ? 2 : 1,
-            }
-          ]}
-          onPress={() => setPaymentMethod('pay_for')}
-        >
-          <Ionicons
-            name="people"
-            size={20}
-            color={paymentMethod === 'pay_for' ? colors.primary : colors.text}
-          />
-          <Text
-            style={[
-              styles.paymentMethodText,
-              { color: paymentMethod === 'pay_for' ? colors.primary : colors.text }
-            ]}
-          >
-            Pay for Someone
-          </Text>
-          <Text
-            style={[
-              styles.paymentMethodSubtext,
-              { color: colors.textSecondary }
-            ]}
-          >
-            Select a member to pay for
-          </Text>
-        </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        ))}
       </View>
     </View>
   );

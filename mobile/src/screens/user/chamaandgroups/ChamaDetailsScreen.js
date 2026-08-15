@@ -21,6 +21,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 import DestructiveConfirmModal from '../../../components/common/DestructiveConfirmModal';
 import getResponsiveStyles from '../../../styles/ChamaDetailsScreenStyles';
@@ -409,8 +410,13 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadChamaDetails(chamaId);
-    setRefreshing(false);
+    try {
+      await loadChamaDetails(chamaId);
+    } catch (error) {
+      console.warn('Chama details refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -1502,64 +1508,67 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
      );
    };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        key={chamaId} // Force re-render when chamaId changes
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Always single column - Header and Stats */}
-        {renderChamaHeader()}
-        {renderStats()}
+   return (
+     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+       <View style={{ flex: 1, position: 'relative' }}>
+         <ScrollView
+           key={chamaId} // Force re-render when chamaId changes
+           style={styles.scrollView}
+           refreshControl={
+             <RefreshControl
+               refreshing={refreshing}
+               onRefresh={onRefresh}
+               colors={[colors.primary]}
+               tintColor={colors.primary}
+             />
+           }
+           showsVerticalScrollIndicator={false}
+         >
+           {/* Always single column - Header and Stats */}
+           {renderChamaHeader()}
+           {renderStats()}
 
-        {/* Smart responsive layout for content cards */}
-        <SmartResponsiveLayout>
-          {renderMembers()}
-          {renderMeetings()}
-          {renderTransactions()}
-          {renderActivePolls()}
-        </SmartResponsiveLayout>
+           {/* Smart responsive layout for content cards */}
+           <SmartResponsiveLayout>
+             {renderMembers()}
+             {renderMeetings()}
+             {renderTransactions()}
+             {renderActivePolls()}
+           </SmartResponsiveLayout>
 
-        {isLargeScreen ? (
-          <View style={styles.desktopBottomRow}>
-            <View style={styles.desktopRulesColumn}>
-              {renderChamaRules()}
-            </View>
-            <View style={styles.desktopSideColumn}>
-              {renderUploadRulesButton()}
-              {renderGroupChat()}
-              {renderMembershipActions()}
-            </View>
-          </View>
-        ) : (
-          <>
-            {renderChamaRules()}
-            {renderUploadRulesButton()}
-            {renderGroupChat()}
-            {renderMembershipActions()}
-          </>
-        )}
-      </ScrollView>
+           {isLargeScreen ? (
+             <View style={styles.desktopBottomRow}>
+               <View style={styles.desktopRulesColumn}>
+                 {renderChamaRules()}
+               </View>
+               <View style={styles.desktopSideColumn}>
+                 {renderUploadRulesButton()}
+                 {renderGroupChat()}
+                 {renderMembershipActions()}
+               </View>
+             </View>
+           ) : (
+             <>
+               {renderChamaRules()}
+               {renderUploadRulesButton()}
+               {renderGroupChat()}
+               {renderMembershipActions()}
+             </>
+           )}
+         </ScrollView>
+          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+       </View>
 
-      <DestructiveConfirmModal
-        visible={showLeaveModal}
-        onClose={() => setShowLeaveModal(false)}
-        onConfirm={confirmLeaveChama}
-        chamaName={chama?.name}
-        action="leave"
-      />
+       <DestructiveConfirmModal
+         visible={showLeaveModal}
+         onClose={() => setShowLeaveModal(false)}
+         onConfirm={confirmLeaveChama}
+         chamaName={chama?.name}
+         action="leave"
+       />
 
-    </SafeAreaView>
-  );
+     </SafeAreaView>
+   );
 };
 
 export default ChamaDetailsScreen;

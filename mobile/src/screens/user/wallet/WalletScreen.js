@@ -17,6 +17,7 @@ import { useLightningData, useOptimisticUpdate } from '../../../hooks/useLightni
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 
 // Generate theme-aware styles
@@ -113,11 +114,16 @@ const WalletScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      loadLocalData(),
-      loadRealTimeBalance()
-    ]);
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        loadLocalData(),
+        loadRealTimeBalance()
+      ]);
+    } catch (error) {
+      console.warn('Wallet refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -265,21 +271,30 @@ const WalletScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[{ flex: 1 }, themeStyles.safeArea]}>
-      <ScrollView
-        style={{ flex: 1 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {renderWalletHeader()}
-        {renderQuickActionsSection()}
-      </ScrollView>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {renderWalletHeader()}
+          {renderQuickActionsSection()}
+        </ScrollView>
+
+        <PageRefreshButton
+          onRefresh={onRefresh}
+          refreshing={refreshing}
+          color={colors.primary}
+          bottom={64}
+        />
+      </View>
     </SafeAreaView>
   );
 };

@@ -23,6 +23,7 @@ import BorderedButton from '../../../components/BorderedButton';
 import { ButtonGrid } from '../../../components/ButtonGroup';
 import ApiService from '../../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const { width } = Dimensions.get('window');
 
@@ -934,14 +935,15 @@ const getRowData = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
-        }
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+          }
+          showsVerticalScrollIndicator={false}
+        >
         {renderRoundSelector()}
         {selectedRound && (
           <>
@@ -990,17 +992,21 @@ const getRowData = () => {
             {renderActions()}
           </>
         )}
-      </ScrollView>
+        </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => {
-          if (onRouteChange) onRouteChange('create-merry-go-round', 'CreateMerryGoRound');
-          else navigation.navigate('CreateMerryGoRound', { chamaId });
-        }}
-      >
-        <Ionicons name="add" size={24} color={colors.white} />
-      </TouchableOpacity>
+        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
+          <TouchableOpacity
+            style={[styles.fab, { backgroundColor: colors.primary }]}
+            onPress={() => {
+              if (onRouteChange) onRouteChange('create-merry-go-round', 'CreateMerryGoRound');
+              else navigation.navigate('CreateMerryGoRound', { chamaId });
+            }}
+          >
+            <Ionicons name="add" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -1029,7 +1035,7 @@ const styles = StyleSheet.create({
    emptyTitle: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.semibold, marginTop: spacing.lg, marginBottom: spacing.sm },
    emptySubtitle: { fontSize: typography.fontSize.base, textAlign: 'center', marginBottom: spacing.xl },
    createButton: { marginTop: spacing.md },
-    fab: { position: 'absolute', bottom: spacing.xl, right: spacing.xl, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
+    fab: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...shadows.lg },
 
    emptyMembersList: { alignItems: 'center', paddingVertical: spacing.xl },
   emptyMembersText: { fontSize: typography.fontSize.base, marginTop: spacing.md, textAlign: 'center' },

@@ -21,6 +21,7 @@ import ApiService from '../../../services/api';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useFocusEffect } from '@react-navigation/native';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const SavingsOverviewScreen = ({ navigation, route }) => {
   const { theme, user } = useApp();
@@ -392,162 +393,166 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* User's Personal Savings Banner */}
-      {userSavings && (
+      <View style={{ flex: 1, position: 'relative' }}>
+        {/* User's Personal Savings Banner */}
+        {userSavings && (
+          <View style={{
+            marginHorizontal: spacing.md,
+            marginTop: spacing.md,
+            padding: spacing.md,
+            backgroundColor: colors.success + '15',
+            borderRadius: borderRadius.md,
+            borderWidth: 1,
+            borderColor: colors.success + '30',
+          }}>
+            <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: spacing.xs }}>
+              My Savings Balance
+            </Text>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: colors.success }}>
+              {formatCurrency(userSavings.balance || 0)}
+            </Text>
+          </View>
+        )}
+
+        {/* Tab Navigation */}
         <View style={{
-          marginHorizontal: spacing.md,
+          flexDirection: 'row',
+          backgroundColor: colors.surface,
           marginTop: spacing.md,
-          padding: spacing.md,
-          backgroundColor: colors.success + '15',
+          marginHorizontal: spacing.md,
           borderRadius: borderRadius.md,
-          borderWidth: 1,
-          borderColor: colors.success + '30',
+          overflow: 'hidden',
         }}>
-          <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: spacing.xs }}>
-            My Savings Balance
-          </Text>
-          <Text style={{ fontSize: 24, fontWeight: '700', color: colors.success }}>
-            {formatCurrency(userSavings.balance || 0)}
-          </Text>
+          {renderTabButton('overview', 'Overview', 'bar-chart-outline')}
+          {renderTabButton('history', 'History', 'document-text-outline')}
         </View>
-      )}
 
-      {/* Tab Navigation */}
-      <View style={{
-        flexDirection: 'row',
-        backgroundColor: colors.surface,
-        marginTop: spacing.md,
-        marginHorizontal: spacing.md,
-        borderRadius: borderRadius.md,
-        overflow: 'hidden',
-      }}>
-        {renderTabButton('overview', 'Overview', 'bar-chart-outline')}
-        {renderTabButton('history', 'History', 'document-text-outline')}
-      </View>
-
-      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, flex: 1 }}>
-        <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', flex: 1 }}>
-          <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-                {activeTab === 'overview' ? 'Members Savings Overview' : 'Savings Transaction History'}
-              </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                {activeTab === 'history' && (
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, flex: 1 }}>
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', flex: 1 }}>
+            <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
+                  {activeTab === 'overview' ? 'Members Savings Overview' : 'Savings Transaction History'}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                  {activeTab === 'history' && (
+                    <TouchableOpacity
+                      onPress={handleExportSavings}
+                      disabled={exporting}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: colors.success,
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: spacing.xs,
+                        borderRadius: borderRadius.md,
+                        gap: spacing.xs,
+                      }}
+                    >
+                      <Ionicons name="download" size={16} color={colors.white} />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.white }}>
+                        {exporting ? 'Exporting...' : 'Export'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
-                    onPress={handleExportSavings}
-                    disabled={exporting}
+                    onPress={() => navigation.navigate('ContributeScreen', {
+                      chamaId: currentChamaId,
+                      contributionType: 'savings',
+                    })}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      backgroundColor: colors.success,
+                      backgroundColor: colors.primary,
                       paddingHorizontal: spacing.sm,
                       paddingVertical: spacing.xs,
                       borderRadius: borderRadius.md,
                       gap: spacing.xs,
                     }}
                   >
-                    <Ionicons name="download" size={16} color={colors.white} />
+                    <Ionicons name="wallet" size={16} color={colors.white} />
                     <Text style={{ fontSize: 12, fontWeight: '600', color: colors.white }}>
-                      {exporting ? 'Exporting...' : 'Export'}
+                      Save
                     </Text>
                   </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('ContributeScreen', {
-                    chamaId: currentChamaId,
-                    contributionType: 'savings',
-                  })}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: colors.primary,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xs,
-                    borderRadius: borderRadius.md,
-                    gap: spacing.xs,
-                  }}
-                >
-                  <Ionicons name="wallet" size={16} color={colors.white} />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.white }}>
-                    Save
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={onRefresh}
-                  disabled={refreshing || loading}
-                  style={{ padding: spacing.xs }}
-                >
-                  <Ionicons
-                    name="refresh"
-                    size={18}
-                    color={refreshing || loading ? colors.textTertiary : colors.primary}
-                  />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={onRefresh}
+                    disabled={refreshing || loading}
+                    style={{ padding: spacing.xs }}
+                  >
+                    <Ionicons
+                      name="refresh"
+                      size={18}
+                      color={refreshing || loading ? colors.textTertiary : colors.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
+
+              {activeTab === 'overview' && (
+                <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <Ionicons name="people" size={14} color={colors.primary} />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                      {memberCount} Member{memberCount !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <Ionicons name="wallet" size={14} color={colors.success} />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.success }}>
+                      Total: {formatCurrency(totalBalance)}
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
 
-            {activeTab === 'overview' && (
-              <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                  <Ionicons name="people" size={14} color={colors.primary} />
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                    {memberCount} Member{memberCount !== 1 ? 's' : ''}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                  <Ionicons name="wallet" size={14} color={colors.success} />
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.success }}>
-                    Total: {formatCurrency(totalBalance)}
-                  </Text>
-                </View>
-              </View>
+            {activeTab === 'overview' ? (
+              <>
+                {renderTableHeader()}
+                <FlatList
+                  data={savingsData}
+                  renderItem={renderRow}
+                  keyExtractor={(item) => item.id?.toString()}
+                  contentContainerStyle={{ paddingBottom: spacing.sm }}
+                  showsVerticalScrollIndicator={false}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                      colors={[colors.primary]}
+                      tintColor={colors.primary}
+                    />
+                  }
+                  ListEmptyComponent={
+                    !loading ? renderEmptyState() : null
+                  }
+                  scrollEnabled={true}
+                />
+              </>
+            ) : (
+              <>
+                {renderHistoryHeader()}
+                <FlatList
+                  data={savingsTransactions}
+                  renderItem={renderHistoryRow}
+                  keyExtractor={(item) => item.id?.toString()}
+                  contentContainerStyle={{ paddingBottom: spacing.sm }}
+                  showsVerticalScrollIndicator={false}
+                  ListEmptyComponent={
+                    !transactionsLoading ? renderHistoryEmptyState() : <LoadingSpinner />
+                  }
+                  scrollEnabled={true}
+                />
+              </>
             )}
-          </View>
+          </Card>
+        </View>
 
-          {activeTab === 'overview' ? (
-            <>
-              {renderTableHeader()}
-              <FlatList
-                data={savingsData}
-                renderItem={renderRow}
-                keyExtractor={(item) => item.id?.toString()}
-                contentContainerStyle={{ paddingBottom: spacing.sm }}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    colors={[colors.primary]}
-                    tintColor={colors.primary}
-                  />
-                }
-                ListEmptyComponent={
-                  !loading ? renderEmptyState() : null
-                }
-                scrollEnabled={true}
-              />
-            </>
-          ) : (
-            <>
-              {renderHistoryHeader()}
-              <FlatList
-                data={savingsTransactions}
-                renderItem={renderHistoryRow}
-                keyExtractor={(item) => item.id?.toString()}
-                contentContainerStyle={{ paddingBottom: spacing.sm }}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                  !transactionsLoading ? renderHistoryEmptyState() : <LoadingSpinner />
-                }
-                scrollEnabled={true}
-              />
-            </>
-          )}
-        </Card>
+        {loading && !refreshing && <LoadingSpinner />}
+
+        <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
       </View>
-
-      {loading && !refreshing && <LoadingSpinner />}
     </SafeAreaView>
   );
 };

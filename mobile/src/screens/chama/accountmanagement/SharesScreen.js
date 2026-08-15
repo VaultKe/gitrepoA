@@ -21,6 +21,7 @@ import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import ApiService from '../../../services/api';
 import { getWalletBalance, transferMoney } from '../../../services/api/walletEndpoints';
 import stkPushService from '../../../services/stkPushService';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 
 const SharesScreen = ({ navigation, route }) => {
   const { theme } = useApp();
@@ -302,7 +303,8 @@ const SharesScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
         {offerings.length > 0 && (
           <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginBottom: spacing.md }}>
             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm }}>
@@ -367,6 +369,9 @@ const SharesScreen = ({ navigation, route }) => {
       </View>
 
       {loading && !refreshing && <LoadingSpinner />}
+
+        <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+      </View>
 
       <Modal
         visible={showBuyModal}

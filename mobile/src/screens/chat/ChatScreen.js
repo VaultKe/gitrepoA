@@ -16,6 +16,7 @@ import { getThemeColors, spacing, typography, borderRadius } from '../../utils/t
 import { formatDate } from '../../utils/dateUtils';
 import { useApp } from '../../context/AppContext';
 import chatService from '../../services/chat/ChatService';
+import PageRefreshButton from '../../components/common/PageRefreshButton';
 
 const ChatScreen = () => {
   const navigation = useNavigation();
@@ -159,79 +160,84 @@ const ChatScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
-        <Ionicons name="search" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Search chats..."
-          placeholderTextColor={colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      <View style={styles.tabs}>
-        {['all', 'private', 'groups'].map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary }]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabText, { color: activeTab === tab ? colors.primary : colors.textSecondary }]}>
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {error && (
-        <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
-          <Ionicons name="alert-circle" size={20} color={colors.error} />
-          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-        </View>
-      )}
-
-      <FlatList
-        data={filteredRooms}
-        renderItem={renderRoom}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={rooms.length === 0 ? styles.emptyContainer : null}
-        ListEmptyComponent={
-          loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                Loading chats...
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.center}>
-              <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No chats yet
-              </Text>
-              <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-                Start a conversation by tapping the + button
-              </Text>
-            </View>
-          )
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
+      <View style={{ flex: 1, position: 'relative' }}>
+        <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
+          <Ionicons name="search" size={20} color={colors.textSecondary} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search chats..."
+            placeholderTextColor={colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
-        }
-      />
+        </View>
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('UserSearch')}
-      >
-        <Ionicons name="add" size={28} color="white" />
-      </TouchableOpacity>
+        <View style={styles.tabs}>
+          {['all', 'private', 'groups'].map(tab => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary }]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, { color: activeTab === tab ? colors.primary : colors.textSecondary }]}>
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {error && (
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
+            <Ionicons name="alert-circle" size={20} color={colors.error} />
+            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          </View>
+        )}
+
+        <FlatList
+          data={filteredRooms}
+          renderItem={renderRoom}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={rooms.length === 0 ? styles.emptyContainer : null}
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.center}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                  Loading chats...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.center}>
+                <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                  No chats yet
+                </Text>
+                <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+                  Start a conversation by tapping the + button
+                </Text>
+              </View>
+            )
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+        />
+
+        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+          <PageRefreshButton onRefresh={handleRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
+          <TouchableOpacity
+            style={[styles.fab, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('UserSearch')}
+          >
+            <Ionicons name="add" size={28} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 };
@@ -260,7 +266,7 @@ const styles = StyleSheet.create({
   emptyContainer: { paddingTop: 100 },
   emptyText: { fontSize: typography.fontSize.xl, fontWeight: '600', marginTop: spacing.md },
   emptySubtext: { fontSize: typography.fontSize.md, marginTop: spacing.xs, textAlign: 'center', paddingHorizontal: spacing.xl },
-  fab: { position: 'absolute', bottom: spacing.lg, right: spacing.lg, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+  fab: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
 });
 
 export default ChatScreen;
