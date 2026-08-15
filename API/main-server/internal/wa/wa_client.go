@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -127,12 +128,15 @@ func (c *OpenWAClient) GetChats(ctx context.Context, sessionID string, limit, of
 	return chats, nil
 }
 
-// GetMessages fetches messages for a chat.
-func (c *OpenWAClient) GetMessages(ctx context.Context, sessionID, chatID string, limit int, before string) ([]OpenWAMessage, error) {
-	path := fmt.Sprintf("/api/sessions/%s/chats/%s/messages?limit=%d", sessionID, chatID, limit)
-	if before != "" {
-		path += "&before=" + before
-	}
+// OpenWAMessageListResponse is the envelope returned by OpenWA's local-DB messages endpoint.
+type OpenWAMessageListResponse struct {
+	Messages []OpenWAMessage `json:"messages"`
+	Total    int             `json:"total"`
+}
+
+// GetMessages fetches messages for a chat from OpenWA's local DB.
+func (c *OpenWAClient) GetMessages(ctx context.Context, sessionID, chatID string, limit int, offset int) ([]OpenWAMessage, error) {
+	path := fmt.Sprintf("/api/sessions/%s/messages?chatId=%s&limit=%d&offset=%d", sessionID, url.QueryEscape(chatID), limit, offset)
 	resp, err := c.requestDo(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -144,11 +148,11 @@ func (c *OpenWAClient) GetMessages(ctx context.Context, sessionID, chatID string
 		return nil, fmt.Errorf("openwa get messages failed: %d %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 
-	var messages []OpenWAMessage
-	if err := json.NewDecoder(resp.Body).Decode(&messages); err != nil {
+	var envelope OpenWAMessageListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
 		return nil, fmt.Errorf("decode messages: %w", err)
 	}
-	return messages, nil
+	return envelope.Messages, nil
 }
 
 // SendText sends a text message.

@@ -405,7 +405,7 @@ class MilitaryGradeEncryptedChat {
       }
       
       // Fallback to HTTP API
-      const response = await apiService.makeRequest(`/wa/chat/rooms/${messagePayload.roomId}/messages`, {
+      const response = await apiService.makeRequest(`/chat/rooms/${messagePayload.roomId}/messages`, {
         method: 'POST',
         body: messagePayload,
       });
@@ -563,7 +563,7 @@ class MilitaryGradeEncryptedChat {
 
   async uploadEncryptedImage(encryptedImageData) {
     // Upload encrypted image to server
-    const response = await apiService.makeRequest('/wa/chat/upload/image', {
+    const response = await apiService.makeRequest('/chat/upload/image', {
       method: 'POST',
       body: encryptedImageData,
     });
@@ -751,7 +751,7 @@ class MilitaryGradeEncryptedChat {
         }
       }
 
-      const response = await apiService.makeRequest(`/wa/chat/rooms/${messagePayload.roomId}/messages`, {
+      const response = await apiService.makeRequest(`/chat/rooms/${messagePayload.roomId}/messages`, {
         method: 'POST',
         body: messagePayload,
       });

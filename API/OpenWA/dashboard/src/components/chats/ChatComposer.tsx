@@ -158,7 +158,7 @@ function ChatComposer({
     setMessageInput('');
     setSending(true);
 
-    const tempId = `temp_${Date.now()}`;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const tempMessage: ChatMessageView = {
       id: tempId,
       chatId: activeChat.id,

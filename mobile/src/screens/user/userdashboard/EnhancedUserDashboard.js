@@ -17,6 +17,7 @@ import { getThemeColors, spacing, typography, borderRadius } from '../../../util
 import { getUserFirstName } from '../../../utils/userUtils';
 import WalletCard from '../../../components/wallet/WalletCard';
 import Card from '../../../components/common/Card';
+import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 
 // ─────────────────────────────────────────────────────────────
@@ -514,35 +515,43 @@ const EnhancedUserDashboard = ({ navigation }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing || isSyncing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {renderGreetingSection()}
-
-        {selectedWallet && (
-          <View style={{ paddingHorizontal: spacing.md, marginVertical: spacing.xs }}>
-            <WalletCard
-              wallet={selectedWallet}
-              onDeposit={() => navigation.navigate('Wallet')}
-              onWithdraw={() => navigation.navigate('Wallet')}
-              onViewTransactions={() => navigation.navigate('TransactionHistory')}
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing || isSyncing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
-          </View>
-        )}
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {renderGreetingSection()}
 
-        {renderStats()}
-        {renderWalletTrend()}
-        {renderQuickActions()}
-      </ScrollView>
+          {selectedWallet && (
+            <View style={{ paddingHorizontal: spacing.md, marginVertical: spacing.xs }}>
+              <WalletCard
+                wallet={selectedWallet}
+                onDeposit={() => navigation.navigate('Wallet')}
+                onWithdraw={() => navigation.navigate('Wallet')}
+                onViewTransactions={() => navigation.navigate('TransactionHistory')}
+              />
+            </View>
+          )}
+
+          {renderStats()}
+          {renderWalletTrend()}
+          {renderQuickActions()}
+        </ScrollView>
+
+        <PageRefreshButton
+          onRefresh={onRefresh}
+          refreshing={refreshing || isSyncing}
+          color={colors.primary}
+        />
+      </View>
     </SafeAreaView>
   );
 };

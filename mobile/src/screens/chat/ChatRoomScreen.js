@@ -40,53 +40,94 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const typingDebounceRef = useRef(null);
   const swipeableRefs = useRef(new Map());
   const [openActionId, setOpenActionId] = useState(null);
-  const hasScrolledToBottomRef = useRef(false);
+  const rafIdRef = useRef(null);
+  const loadingRef = useRef(loading);
+  const messagesRef = useRef(messages);
+  const messageQueueRef = useRef([]);
+
+  messagesRef.current = messages;
+  loadingRef.current = loading;
+
+  const processMessageQueue = useCallback(() => {
+    if (messageQueueRef.current.length === 0) {
+      rafIdRef.current = null;
+      return;
+    }
+
+    const messagesToProcess = messageQueueRef.current;
+    messageQueueRef.current = [];
+
+    setMessages(prev => {
+      const seenIds = new Set();
+      const deduped = [];
+      for (const m of prev) {
+        if (m.id && seenIds.has(m.id)) continue;
+        if (m.id) seenIds.add(m.id);
+        deduped.push(m);
+      }
+
+      let updated = deduped;
+      for (const message of messagesToProcess) {
+        if (message.type === 'remove') {
+          updated = updated.filter(m => m.id !== message.id);
+          continue;
+        }
+        const idx = updated.findIndex(m => m.id === message.id);
+        if (idx !== -1) {
+          const newUpdated = [...updated];
+          newUpdated[idx] = { ...newUpdated[idx], ...message };
+          updated = newUpdated;
+        } else {
+          updated = [...updated, message];
+        }
+      }
+
+      return updated.sort((a, b) => {
+        const aTime = a.timestamp || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const bTime = b.timestamp || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return aTime - bTime;
+      });
+    });
+
+    rafIdRef.current = requestAnimationFrame(processMessageQueue);
+  }, []);
 
   useEffect(() => {
     if (!roomId) {
       console.error('ChatRoomScreen: roomId is required');
       navigation.goBack();
+      return;
     }
-  }, [roomId, navigation]);
 
-  useEffect(() => {
-    if (user && user.id) {
-      chatService.setCurrentUser(user);
-    }
-  }, [user]);
+    let isActive = true;
 
-  const loadData = useCallback(async () => {
-    if (!roomId) return;
+    const loadData = async () => {
+      try {
+        await Promise.all([
+          chatService.joinRoom(roomId),
+          chatService.getMessages(roomId, 100, 0),
+        ]);
+        if (!isActive) return;
 
-    try {
-      await Promise.all([
-        chatService.joinRoom(roomId),
-        chatService.getMessages(roomId, 100, 0),
-      ]);
-      const roomMessages = chatService.getRoomMessages(roomId);
-      setMessages(roomMessages);
-      await chatService.markRoomAsRead(roomId);
-      setError(null);
-    } catch (err) {
-      console.error('Load room error:', err);
-      setError('Failed to load messages');
-    } finally {
-      setLoading(false);
-    }
-  }, [roomId]);
-
-  useEffect(() => {
-    loadData();
-
-    return () => {
-      if (messageUnsubscribeRef.current) messageUnsubscribeRef.current();
-      if (typingUnsubscribeRef.current) typingUnsubscribeRef.current();
-      chatService.leaveRoom(roomId);
+        let roomMessages = chatService.getRoomMessages(roomId);
+        roomMessages = [...roomMessages].sort((a, b) => {
+          const aTime = a.timestamp || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+          const bTime = b.timestamp || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+          return aTime - bTime;
+        });
+        setMessages(roomMessages);
+        await chatService.markRoomAsRead(roomId);
+        setError(null);
+      } catch (err) {
+        if (!isActive) return;
+        console.error('Load room error:', err);
+        setError('Failed to load messages');
+      } finally {
+        if (isActive) setLoading(false);
+      }
     };
-  }, [roomId, loadData]);
 
-  useEffect(() => {
-    if (!roomId) return;
+    loadData();
 
     messageUnsubscribeRef.current = chatService.subscribeToMessages(roomId, (message) => {
       if (message.type === 'typing') {
@@ -97,15 +138,10 @@ const ChatRoomScreen = ({ route, navigation }) => {
         setMessages(prev => prev.filter(m => m.id !== message.id));
         return;
       }
-      setMessages(prev => {
-        const idx = prev.findIndex(m => m.id === message.id);
-        if (idx !== -1) {
-          const updated = [...prev];
-          updated[idx] = { ...updated[idx], ...message };
-          return updated;
-        }
-        return [...prev, message].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-      });
+      messageQueueRef.current.push(message);
+      if (!rafIdRef.current) {
+        rafIdRef.current = requestAnimationFrame(processMessageQueue);
+      }
     });
 
     typingUnsubscribeRef.current = chatService.subscribeToRoom(roomId, () => {
@@ -113,21 +149,29 @@ const ChatRoomScreen = ({ route, navigation }) => {
     });
 
     return () => {
+      isActive = false;
       if (messageUnsubscribeRef.current) messageUnsubscribeRef.current();
       if (typingUnsubscribeRef.current) typingUnsubscribeRef.current();
+      chatService.leaveRoom(roomId);
+      messageQueueRef.current = [];
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
     };
-  }, [roomId]);
+  }, [roomId, navigation, processMessageQueue]);
 
   useEffect(() => {
-    if (messages.length > 0 && flatListRef.current && !hasScrolledToBottomRef.current) {
-      hasScrolledToBottomRef.current = true;
+    if (user && user.id) {
+      chatService.setCurrentUser(user);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (messages.length > 0 && flatListRef.current) {
       flatListRef.current.scrollToEnd({ animated: false });
     }
   }, [messages.length]);
-
-  useEffect(() => {
-    hasScrolledToBottomRef.current = false;
-  }, [roomId]);
 
   const handleSend = useCallback(async (content, type, metadata, selectedImages) => {
     if (!content.trim() && selectedImages.length === 0) return;
@@ -156,7 +200,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType.Images,
         allowsMultipleSelection: true,
         quality: 0.8,
       });
@@ -232,11 +276,12 @@ const ChatRoomScreen = ({ route, navigation }) => {
   }, [openActionId]);
 
   const handleLoadMore = useCallback(async () => {
-    if (loadingMore || !roomId || messages.length === 0) return;
+    if (loadingMore || !roomId) return;
 
     try {
       setLoadingMore(true);
-      const oldestMessage = messages[messages.length - 1];
+      const oldestMessage = messagesRef.current[messagesRef.current.length - 1];
+      if (!oldestMessage) return;
       const olderMessages = await chatService.getMessages(roomId, 50, 0, oldestMessage?.id);
       if (olderMessages.length > 0) {
         setMessages(prev => [...prev, ...olderMessages]);
@@ -246,13 +291,13 @@ const ChatRoomScreen = ({ route, navigation }) => {
     } finally {
       setLoadingMore(false);
     }
-  }, [roomId, loadingMore, messages]);
+  }, [roomId, loadingMore]);
 
   if (error) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
         <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
-        <TouchableOpacity onPress={() => { setError(null); loadData(); }} style={[styles.retryButton, { backgroundColor: colors.primary }]}>
+        <TouchableOpacity onPress={() => { setError(null); }} style={[styles.retryButton, { backgroundColor: colors.primary }]}>
           <Text style={{ color: 'white' }}>Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -382,7 +427,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     flexGrow: 1,
-    justifyContent: 'flex-end',
     paddingBottom: 70,
   },
   errorText: {

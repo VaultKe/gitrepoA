@@ -259,7 +259,7 @@ func SetupWARoutes(
 				handleGetChats(c, waClient, c.Param("sessionId"))
 			})
 			waProtected.GET("/sessions/:sessionId/chats/:chatId/messages", func(c *gin.Context) {
-				handleGetMessages(c, waClient, c.Param("sessionId"), c.Param("chatId"), c.Query("limit"), c.Query("before"))
+				handleGetMessages(c, waClient, c.Param("sessionId"), c.Param("chatId"), c.Query("limit"), c.Query("offset"))
 			})
 			waProtected.POST("/sessions/:sessionId/messages/send-text", func(c *gin.Context) {
 				handleSendText(c, waClient, c.Param("sessionId"))
@@ -415,7 +415,11 @@ func SetupWARoutes(
 					c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": "no openwa session configured"})
 					return
 				}
-				messages, err := waClient.GetMessages(c.Request.Context(), sessionID, chatID, 50, c.Query("before"))
+				offset := 0
+				if o := c.Query("offset"); o != "" {
+					fmt.Sscanf(o, "%d", &offset)
+				}
+				messages, err := waClient.GetMessages(c.Request.Context(), sessionID, chatID, 50, offset)
 				if err != nil {
 					c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
 					return
@@ -752,13 +756,18 @@ func handleGetChats(c *gin.Context, client *wa.OpenWAClient, sessionID string) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": chats})
 }
 
-func handleGetMessages(c *gin.Context, client *wa.OpenWAClient, sessionID, chatID, limitStr, before string) {
+func handleGetMessages(c *gin.Context, client *wa.OpenWAClient, sessionID, chatID, limitStr, offsetStr string) {
 	limit := 50
 	if limitStr != "" {
 		fmt.Sscanf(limitStr, "%d", &limit)
 	}
 
-	messages, err := client.GetMessages(c.Request.Context(), sessionID, chatID, limit, before)
+	offset := 0
+	if offsetStr != "" {
+		fmt.Sscanf(offsetStr, "%d", &offset)
+	}
+
+	messages, err := client.GetMessages(c.Request.Context(), sessionID, chatID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": err.Error()})
 		return

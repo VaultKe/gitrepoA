@@ -24,6 +24,7 @@ import CreateMerryGoRound from '../screens/chama/merry-go-round/CreateMerryGoRou
 import InviteMembers from '../screens/chama/meeting/InviteMembers';
 import ChatScreen from '../screens/chat/ChatScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
+import WhatsAppLinkScreen from '../screens/user/whatsapp/WhatsAppLinkScreen';
 
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
 import AccountManagementScreen from '../screens/chama/accountmanagement/AccountManagementScreen';

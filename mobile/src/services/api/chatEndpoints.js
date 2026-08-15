@@ -112,7 +112,7 @@ export const uploadChatImage = async (imageUri) => {
       });
     }
     
-    const result = await makeRequest('/wa/chat/upload/image', {
+    const result = await makeRequest('/chat/upload/image', {
       method: 'POST',
       body: formData,
     });
@@ -143,7 +143,7 @@ export const markMessageAsRead = async (roomId, messageId) => {
  */
 export const getChatRoomMembers = async (roomId) => {
   try {
-    return await makeRequest(`/wa/chat/rooms/${roomId}/members`);
+    return await makeRequest(`/chat/rooms/${roomId}/members`);
   } catch (error) {
     console.error('getChatRoomMembers error:', error);
     return { success: false, error: error.message, data: [] };

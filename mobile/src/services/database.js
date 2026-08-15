@@ -16,8 +16,8 @@ class DatabaseService {
       wallets: '/wallets',
       transactions: '/transactions',
       notifications: '/notifications',
-      chat_rooms: '/wa/chat/rooms',
-      chat_messages: '/wa/chat/rooms',
+      chat_rooms: '/chat/rooms',
+      chat_messages: '/chat/rooms',
       loans: '/loans',
       sync_queue: '/sync' // Special handling for sync operations
     };
@@ -47,8 +47,8 @@ class DatabaseService {
       wallets: `/wallets/${id}`,
       transactions: `/transactions/${id}`,
       notifications: `/notifications/${id}`,
-      chat_rooms: `/wa/chat/rooms/${id}`,
-      chat_messages: `/wa/chat/rooms/${id}`,
+      chat_rooms: `/chat/rooms/${id}`,
+      chat_messages: `/chat/rooms/${id}`,
       loans: `/loans/${id}`,
       sync_queue: `/sync/${id}` // Special handling for sync operations
     };
@@ -95,8 +95,8 @@ class DatabaseService {
       wallets: `/wallets/${id}`,
       transactions: `/transactions/${id}`,
       notifications: `/notifications/${id}`,
-      chat_rooms: `/wa/chat/rooms/${id}`,
-      chat_messages: `/wa/chat/rooms/${id}`,
+      chat_rooms: `/chat/rooms/${id}`,
+      chat_messages: `/chat/rooms/${id}`,
       loans: `/loans/${id}`,
       sync_queue: `/sync/${id}` // Special handling for sync operations
     };
@@ -125,8 +125,8 @@ class DatabaseService {
       wallets: `/wallets/${id}`,
       transactions: `/transactions/${id}`,
       notifications: `/notifications/${id}`,
-      chat_rooms: `/wa/chat/rooms/${id}`,
-      chat_messages: `/wa/chat/rooms/${id}`,
+      chat_rooms: `/chat/rooms/${id}`,
+      chat_messages: `/chat/rooms/${id}`,
       loans: `/loans/${id}`,
       sync_queue: `/sync/${id}` // Special handling for sync operations
     };
@@ -155,8 +155,8 @@ class DatabaseService {
       wallets: '/wallets',
       transactions: '/transactions',
       notifications: '/notifications',
-      chat_rooms: '/wa/chat/rooms',
-      chat_messages: '/wa/chat/rooms',
+      chat_rooms: '/chat/rooms',
+      chat_messages: '/chat/rooms',
       loans: '/loans',
       sync_queue: '/sync' // Special handling for sync operations
     };

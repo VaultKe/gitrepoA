@@ -53,7 +53,7 @@ export default function CreatePrivateChatScreen({ navigation }) {
       // Parallelize member lookups for all private rooms instead of N+1
       // sequential requests.
       const memberPromises = privateRooms.map(room =>
-        ApiService.makeRequest(`/wa/chat/rooms/${room.id}/members`).catch(err => ({
+        ApiService.makeRequest(`/chat/rooms/${room.id}/members`).catch(err => ({
           success: false,
           data: [],
         }))

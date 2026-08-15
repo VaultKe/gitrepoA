@@ -43,7 +43,7 @@ class OptimisticUpdateService {
 
   async initiateDeposit(amount, paymentMethod, description) {
     const tempTransaction = {
-      id: `temp_${Date.now()}`,
+      id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       type: 'deposit',
       amount: amount,
       status: 'pending',
@@ -113,7 +113,7 @@ class OptimisticUpdateService {
 
   async sendMessage(roomId, messageData) {
     const tempMessage = {
-      id: `temp_${Date.now()}`,
+      id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       roomId,
       content: messageData.content,
       type: messageData.type || 'text',

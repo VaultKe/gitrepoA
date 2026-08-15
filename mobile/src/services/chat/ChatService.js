@@ -207,7 +207,7 @@ class ChatService {
         // For images, we still need the backend upload endpoint because OpenWA
         // expects a URL or base64. Keep the existing upload flow if available.
         const ApiService = (await import('../api')).default;
-        const uploadResp = await ApiService.makeRequest('/wa/chat/upload/image', {
+        const uploadResp = await ApiService.makeRequest('/chat/upload/image', {
           method: 'POST',
           body: { imageUri: metadata.imageUri },
         });
@@ -315,20 +315,6 @@ class ChatService {
     this._listenersAttached = false;
   }
 
-  _upsertMessage(roomId, message) {
-    if (!this.messages.has(roomId)) {
-      this.messages.set(roomId, []);
-    }
-    const list = this.messages.get(roomId);
-    const idx = list.findIndex(m => m.id === message.id);
-    if (idx >= 0) {
-      list[idx] = { ...list[idx], ...message };
-    } else {
-      list.push(message);
-    }
-    this._notifyMessageSubscribers(roomId, message);
-  }
-
   _updateMessageStatus(roomId, messageId, status) {
     const list = this.messages.get(roomId) || [];
     const msg = list.find(m => m.id === messageId);
@@ -345,17 +331,6 @@ class ChatService {
       list.splice(idx, 1);
       this._notifyMessageSubscribers(roomId, { type: 'remove', id: messageId });
     }
-  }
-
-  _notifyMessageSubscribers(roomId, message) {
-    const cbs = this.messageSubscribers.get(roomId);
-    if (cbs) cbs.forEach(cb => { try { cb(message); } catch (e) { console.error('Message subscriber error:', e); } });
-  }
-
-  _notifyRoomSubscribers(roomId) {
-    const cbs = this.roomSubscribers.get(roomId);
-    const room = this.getRoom(roomId);
-    if (cbs && room) cbs.forEach(cb => { try { cb(room); } catch (e) { console.error('Room subscriber error:', e); } });
   }
 
   _normalizeMessage(raw) {
@@ -393,6 +368,17 @@ class ChatService {
       list.push(normalized);
     }
     this._notifyMessageSubscribers(roomId, normalized);
+  }
+
+  _notifyMessageSubscribers(roomId, message) {
+    const cbs = this.messageSubscribers.get(roomId);
+    if (cbs) cbs.forEach(cb => { try { cb(message); } catch (e) { console.error('Message subscriber error:', e); } });
+  }
+
+  _notifyRoomSubscribers(roomId) {
+    const cbs = this.roomSubscribers.get(roomId);
+    const room = this.getRoom(roomId);
+    if (cbs && room) cbs.forEach(cb => { try { cb(room); } catch (e) { console.error('Room subscriber error:', e); } });
   }
 }
 

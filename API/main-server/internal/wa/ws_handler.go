@@ -244,12 +244,8 @@ func (h *WSHandler) handleGetMessages(ctx context.Context, userID, roomID string
 	if l, ok := msg["limit"].(float64); ok {
 		limit = int(l)
 	}
-	before := ""
-	if b, ok := msg["before"].(string); ok {
-		before = b
-	}
 
-	messages, err := h.client.GetMessages(ctx, h.resolveSessionID(userID), chatID, limit, before)
+	messages, err := h.client.GetMessages(ctx, h.resolveSessionID(userID), chatID, limit, 0)
 	if err != nil {
 		h.sendError(userID, "get_messages", fmt.Sprintf("failed to load messages: %v", err))
 		return

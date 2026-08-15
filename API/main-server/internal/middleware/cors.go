@@ -67,6 +67,8 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 		"https://localhost",
 		"https://127.0.0.1:8081",
 		"http://localhost:8085",
+		"http://localhost:2885",
+		"http://localhost:2886",
 		"http://localhost:3000",
 		"http://127.0.0.1:3000",
 		"https://vault-better1.vercel.app",
