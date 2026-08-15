@@ -120,6 +120,11 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         loadChamaStatistics(chama.id);
         loadChamaFeatures();
       }, 100); // Small delay to allow UI to update first
+    } else {
+      // Even with cached data, refresh features to ensure they are up to date
+      setTimeout(() => {
+        loadChamaFeatures();
+      }, 100);
     }
   };
 
@@ -133,8 +138,9 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
 
       try {
         // Load data for this chama without affecting UI
-        const [statsResponse] = await Promise.all([
-          ApiService.getChamaStatistics(chama.id)
+        const [statsResponse, chamaResponse] = await Promise.all([
+          ApiService.getChamaStatistics(chama.id),
+          ApiService.makeRequest(`/chamas/${chama.id}`)
         ]);
 
         if (statsResponse.success && statsResponse.data) {
@@ -162,15 +168,31 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
             lastUpdated: new Date().toISOString(),
           };
 
+          // Extract features from the chama data
+          let chamaFeatures = {
+            allowMerryGoRound: false,
+            allowWelfare: false,
+            activeWalletTypes: [],
+          };
+
+          if (chamaResponse.success && chamaResponse.data) {
+            const chama = chamaResponse.data;
+            const permissions = chama.permissions || {};
+            const activeWalletTypes = Array.isArray(permissions.activeWalletTypes)
+              ? permissions.activeWalletTypes
+              : [];
+            chamaFeatures = {
+              allowMerryGoRound: permissions.allowMerryGoRound ?? false,
+              allowWelfare: permissions.allowWelfare ?? false,
+              activeWalletTypes,
+            };
+          }
+
           // Cache the preloaded data
           setCachedChamaData(chama.id, {
             realTimeData: preloadedRealTimeData,
             chamaStats: statsResponse.data,
-            chamaFeatures: {
-              allowMerryGoRound: false,
-              allowWelfare: false,
-              activeWalletTypes: [],
-            }
+            chamaFeatures,
           });
         }
       } catch (error) {
@@ -191,12 +213,16 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
         setSelectedChama(null);
       } else {
         setSelectedChama(chamaFromParams);
+        // Load fresh chama features when selecting from route params
+        loadChamaFeatures();
       }
     } else if (route?.params?.chamaId && !selectedChama) {
       // If we have chamaId but no chama object, try to find it in userChamas
       const foundChama = userChamas.find(c => c.id === route.params.chamaId);
       if (foundChama) {
         setSelectedChama(foundChama);
+        // Load fresh chama features when selecting from route params
+        loadChamaFeatures();
       }
     }
   }, [route?.params, userChamas]);
@@ -250,6 +276,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
               setSelectedChama(null);
             } else {
               await loadMemberRole(currentChamaId);
+              await loadChamaFeatures();
             }
           }
 
@@ -838,6 +865,10 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
     ];
 
     // Filter actions based on feature toggles and chama type
+    const activeWalletTypes = chamaFeatures.activeWalletTypes && chamaFeatures.activeWalletTypes.length > 0
+      ? chamaFeatures.activeWalletTypes
+      : ['merry-go-round', 'welfare', 'savings', 'shares', 'dividends', 'loans'];
+
     const filteredActions = actions.filter(action => {
       // For contribution groups, only show specific actions
       if (isContributionGroup) {
@@ -861,7 +892,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
       };
 
       if (walletTypeMap[action.id]) {
-        return chamaFeatures.activeWalletTypes.includes(walletTypeMap[action.id]);
+        return activeWalletTypes.includes(walletTypeMap[action.id]);
       }
 
       // Legacy permission checks for backward compatibility

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Image, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors } from '../../../../utils/theme';
-import ApiService from '../../../../services/api';
+import { useApp } from '../context/AppContext';
+import { getThemeColors } from '../utils/theme';
+import ApiService from '../services/api';
 
 const useMemberHelpers = () => {
   const { theme } = useApp();

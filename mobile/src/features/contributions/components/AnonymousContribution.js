@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../../utils/theme';
+import { useApp } from '../../../context/AppContext';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 
 const AnonymousContribution = ({ isAnonymous, setIsAnonymous }) => {
   const { theme } = useApp();

@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../../utils/theme';
-import Card from '../../../../components/common/Card';
+import { useApp } from '../../../context/AppContext';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import Card from '../../../components/common/Card';
 
 const CurrentRecipientInfo = ({ 
   currentRecipient, 

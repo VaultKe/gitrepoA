@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../../utils/theme';
+import { useApp } from '../../../context/AppContext';
+import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 
 const PhoneNumberDisplay = ({ user }) => {
   const { theme } = useApp();
