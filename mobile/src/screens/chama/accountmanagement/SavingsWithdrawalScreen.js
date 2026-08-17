@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   RefreshControl,
   TouchableOpacity,
-  Alert,
   Modal,
   TextInput,
   ScrollView,
@@ -20,640 +19,82 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
-import ApiService from '../../../services/api';
-import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
-import { approveWelfareDisbursement, getChamaDisbursementApprovals } from '../../../services/api/welfareEndpoints';
-
-const createTableStyles = (colors, spacing, typography, shadows) => ({
-  tableContainer: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.primary + '10',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tableCell: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  nameCell: {
-    flex: 2,
-  },
-  amountCell: {
-    flex: 1.5,
-  },
-  dateCell: {
-    flex: 1.5,
-  },
-  statusCell: {
-    flex: 1.2,
-  },
-  actionsCell: {
-    flex: 1,
-  },
-  tableHeaderText: {
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  tableCellText: {
-    fontSize: 12,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  nameText: {
-    fontWeight: typography.fontWeight.medium,
-    textAlign: 'left',
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
-  },
-  statusText: {
-    fontSize: 7,
-    fontWeight: typography.fontWeight.bold,
-    textTransform: 'capitalize',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  actionButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
-
-const createHeaderStyles = (colors, spacing, typography, borderRadius) => ({
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
-    ...shadows.sm,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  filterContainer: {
-    marginLeft: 'auto',
-    position: 'relative',
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.xs,
-    minWidth: 100,
-    justifyContent: 'space-between',
-  },
-  filterButtonText: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-  dropdownContainer: {
-    minWidth: 200,
-    maxWidth: 250,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.text,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 20,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  dropdownItemSelected: {
-    backgroundColor: colors.primary,
-  },
-  dropdownItemIcon: {
-    width: 20,
-    textAlign: 'center',
-  },
-  dropdownItemText: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    color: colors.text,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    marginLeft: spacing.sm,
-  },
-});
+import useSavingsWithdrawalScreen from '../../../hooks/useSavingsWithdrawalScreen';
 
 const SavingsWithdrawalScreen = ({ route, navigation }) => {
-  const { theme, user } = useApp();
+  const { theme } = useApp();
   const { currentChamaId } = useChamaContext();
+  const hook = useSavingsWithdrawalScreen(navigation);
   const colors = getThemeColors(theme);
-  const tableStyles = createTableStyles(colors, spacing, typography, shadows);
-  const headerStyles = createHeaderStyles(colors, spacing, typography, borderRadius);
 
-  // State variables
-  const [savingsAccounts, setSavingsAccounts] = useState([]);
-  const [allSavingsAccounts, setAllSavingsAccounts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [userRole, setUserRole] = useState('member');
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const pageSize = 15;
-
-  // Modal states
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState(null);
-  const [showBulkWithdrawModal, setShowBulkWithdrawModal] = useState(false);
-  const [withdrawForm, setWithdrawForm] = useState({
-    amount: '',
-    reason: '',
-    privateNote: '',
-  });
-  const [bulkWithdrawData, setBulkWithdrawData] = useState({
-    selectedAccounts: [],
-    reason: '',
-  });
-
-  const [showOTPModal, setShowOTPModal] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [selectedApprovalItem, setSelectedApprovalItem] = useState(null);
-  const [approvalActionType, setApprovalActionType] = useState(null);
-
-  const filters = [
-    { id: 'all', name: 'All Accounts', icon: 'list' },
-    { id: 'eligible', name: 'Eligible', icon: 'checkmark-circle' },
-    { id: 'pending', name: 'Pending', icon: 'time' },
-    { id: 'locked', name: 'Locked', icon: 'lock-closed' },
-  ];
-
-  useEffect(() => {
-    if (currentChamaId) {
-      loadInitialData();
-    }
-  }, [currentChamaId]);
-
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      // When searching, filter from all data and show paginated results
-      const filteredData = filterSavingsAccountsData(allSavingsAccounts, searchQuery, selectedFilter);
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      setSavingsAccounts(filteredData.slice(startIndex, endIndex));
-      setTotalItems(filteredData.length);
-      setTotalPages(Math.ceil(filteredData.length / pageSize));
-    } else {
-      // When not searching, use server-side pagination
-      loadSavingsAccounts(currentPage);
-    }
-  }, [currentPage, selectedFilter]);
-
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      // Trigger search filtering
-      const filteredData = filterSavingsAccountsData(allSavingsAccounts, searchQuery, selectedFilter);
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      setSavingsAccounts(filteredData.slice(startIndex, endIndex));
-      setTotalItems(filteredData.length);
-      setTotalPages(Math.ceil(filteredData.length / pageSize));
-      setCurrentPage(1); // Reset to first page when searching
-    } else {
-      // Clear search and reload with pagination
-      loadSavingsAccounts(1);
-      setCurrentPage(1);
-    }
-  }, [searchQuery]);
-
-  const loadInitialData = async () => {
-    try {
-      setLoading(true);
-      await loadUserRole();
-      if (userRole === 'left') {
-        Alert.alert(
-          'Access Denied',
-          'You are no longer a member of this chama. You cannot access savings withdrawal features.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
-        return;
-      }
-      await loadSavingsAccounts();
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadUserRole = async () => {
-    try {
-      const response = await ApiService.getMemberRole(currentChamaId, user.id);
-      if (response.success) {
-        setUserRole(response.data?.role || 'member');
-      } else {
-        setUserRole('left');
-      }
-    } catch (error) {
-      console.error('Error loading user role:', error);
-      setUserRole('left');
-    }
-  };
-
-  const loadSavingsAccounts = async (page = 1, search = '') => {
-    try {
-      setLoading(true);
-      const response = await ApiService.getEligibleSavingsMembers(currentChamaId);
-
-      if (response.success) {
-        const accountsData = response.data || [];
-        setSavingsAccounts(accountsData);
-        setAllSavingsAccounts(accountsData);
-        setTotalItems(accountsData.length);
-        setTotalPages(Math.ceil(accountsData.length / pageSize));
-      } else {
-        console.error('Failed to load savings accounts:', response.error);
-        setSavingsAccounts([]);
-        setAllSavingsAccounts([]);
-        setTotalItems(0);
-        setTotalPages(1);
-      }
-    } catch (error) {
-      console.error('Error loading savings accounts:', error);
-      setSavingsAccounts([]);
-      setAllSavingsAccounts([]);
-      setTotalItems(0);
-      setTotalPages(1);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterSavingsAccountsData = (accountsData, search, filter) => {
-    let filtered = accountsData;
-
-    // Apply status filter
-    if (filter !== 'all') {
-      filtered = filtered.filter(account =>
-        account.status?.toLowerCase() === filter.toLowerCase()
-      );
-    }
-
-    // Apply search filter
-    if (search.trim()) {
-      filtered = filtered.filter(account =>
-        account.memberName?.toLowerCase().includes(search.toLowerCase()) ||
-        account.id?.toString().includes(search) ||
-        account.balance?.toString().includes(search)
-      );
-    }
-
-    return filtered;
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadSavingsAccounts();
-    setRefreshing(false);
-  };
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'eligible': return colors.success;
-      case 'pending': return colors.warning;
-      case 'locked': return colors.error;
-      default: return colors.textSecondary;
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || isNaN(amount)) {
-      return 'KES 0';
-    }
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown Date';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid Date';
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch (error) {
-      return 'Invalid Date';
-    }
-  };
-
-  const handleWithdraw = (account) => {
-    if (userRole === 'left') {
-      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot process savings withdrawals.');
-      return;
-    }
-    if (!canWithdrawSavings()) {
-      Alert.alert('Access Denied', 'You do not have permission to process savings withdrawals.');
-      return;
-    }
-    setSelectedAccount(account);
-    setWithdrawForm({
-      amount: '',
-      reason: `Savings withdrawal for ${account.memberName}`,
-      privateNote: '',
-    });
-    setShowWithdrawModal(true);
-  };
-
-  const handleBulkWithdraw = () => {
-    if (userRole === 'left') {
-      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot process savings withdrawals.');
-      return;
-    }
-    if (!canWithdrawSavings()) {
-      Alert.alert('Access Denied', 'You do not have permission to process savings withdrawals.');
-      return;
-    }
-    const eligibleAccounts = savingsAccounts.filter(account => account.status === 'eligible');
-    if (eligibleAccounts.length === 0) {
-      Alert.alert('No Accounts Available', 'No eligible savings accounts available for withdrawal.');
-      return;
-    }
-    setBulkWithdrawData({
-      selectedAccounts: eligibleAccounts,
-      reason: `Bulk savings withdrawal for ${eligibleAccounts.length} members`,
-    });
-    setShowBulkWithdrawModal(true);
-  };
-
-  const submitWithdrawal = async () => {
-    if (!selectedAccount) return;
-
-    // Validate amount
-    const withdrawAmount = parseFloat(withdrawForm.amount);
-    if (!withdrawAmount || withdrawAmount <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid withdrawal amount.');
-      return;
-    }
-
-    if (withdrawAmount > selectedAccount.balance) {
-      Alert.alert('Validation Error', 'Withdrawal amount cannot exceed available balance.');
-      return;
-    }
-
-    try {
-      const withdrawalData = {
-        accountId: selectedAccount.id,
-        memberId: selectedAccount.memberId,
-        memberName: selectedAccount.memberName,
-        amount: withdrawAmount,
-        reason: withdrawForm.reason,
-        privateNote: withdrawForm.privateNote,
-        processedBy: userRole,
-        processedById: user.id,
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await ApiService.processSavingsWithdrawal(currentChamaId, withdrawalData);
-
-      if (response.success) {
-        Alert.alert('Success', 'Savings withdrawal processed successfully.');
-        setShowWithdrawModal(false);
-        await loadSavingsAccounts();
-      } else {
-        Alert.alert('Error', response.error || 'Failed to process savings withdrawal.');
-      }
-    } catch (error) {
-      console.error('Withdrawal error:', error);
-      Alert.alert('Error', 'Failed to process withdrawal. Please try again.');
-    }
-  };
-
-  const submitBulkWithdrawal = async () => {
-    try {
-      const bulkData = {
-        withdrawals: bulkWithdrawData.selectedAccounts.map(account => ({
-          accountId: account.id,
-          memberId: account.memberId,
-          memberName: account.memberName,
-          amount: account.balance, // Full balance withdrawal for bulk
-        })),
-        reason: bulkWithdrawData.reason,
-        processedBy: userRole,
-        processedById: user.id,
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await ApiService.processBulkSavingsWithdrawal(currentChamaId, bulkData);
-
-      if (response.success) {
-        Alert.alert('Success', `Bulk withdrawal completed for ${bulkWithdrawData.selectedAccounts.length} accounts.`);
-        setShowBulkWithdrawModal(false);
-        await loadSavingsAccounts();
-      } else {
-        Alert.alert('Error', response.error || 'Failed to process bulk withdrawal.');
-      }
-    } catch (error) {
-      console.error('Bulk withdrawal error:', error);
-      Alert.alert('Error', 'Failed to process bulk withdrawal. Please try again.');
-    }
-  };
-
-  const canWithdrawSavings = () => {
-    if (userRole === 'left') return false;
-    return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
-  };
-
-  const canApproveSavings = () => {
-    if (userRole === 'left') return false;
-    return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
-  };
-
-  const handleInitiateApprove = (account) => {
-    if (userRole === 'left') {
-      Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot approve savings withdrawals.');
-      return;
-    }
-    if (!canApproveSavings()) {
-      Alert.alert('Access Denied', 'You do not have permission to approve savings withdrawals.');
-      return;
-    }
-    if (account.status === 'locked') {
-      Alert.alert('Info', 'This account is locked and cannot be processed.');
-      return;
-    }
-    setSelectedApprovalItem(account);
-    setApprovalActionType('approve');
-    setShowOTPModal(true);
-  };
-
-  const handleVerifyOTP = async (code) => {
-    if (!selectedApprovalItem) return;
-    setOtpLoading(true);
-    try {
-      const approvalData = {
-        action: approvalActionType,
-        otpCode: code,
-        approvedBy: userRole,
-        approvedById: user.id,
-        approvedByName: user?.fullName || user?.firstName || user?.email || 'Unknown',
-        timestamp: new Date().toISOString(),
-        chamaId: currentChamaId,
-        disbursementType: 'savings-withdrawal',
-        itemLabel: selectedApprovalItem.memberName || selectedApprovalItem.member_name || `Account #${selectedApprovalItem.id}`,
-        amount: selectedApprovalItem.balance,
-      };
-
-      const response = await approveWelfareDisbursement(currentChamaId, selectedApprovalItem.id, approvalData);
-
-      if (response.success) {
-        showInAppToast({
-          title: 'Success',
-          message: `Savings withdrawal ${approvalActionType}d successfully.`,
-          type: 'success',
-        });
-
-        await sendApprovalNotification({
-          chamaId: currentChamaId,
-          recipientUserId: selectedApprovalItem.memberId || selectedApprovalItem.id,
-          recipientName: selectedApprovalItem.memberName || selectedApprovalItem.member_name || 'Member',
-          recipientPhone: selectedApprovalItem.memberPhone || selectedApprovalItem.phone_number,
-          recipientEmail: selectedApprovalItem.memberEmail || selectedApprovalItem.email,
-          disbursementType: 'savings-withdrawal',
-          disbursementId: selectedApprovalItem.id,
-          entityLabel: selectedApprovalItem.memberName || selectedApprovalItem.member_name || `Account #${selectedApprovalItem.id}`,
-          amount: selectedApprovalItem.balance,
-          action: approvalActionType,
-          initiatedBy: userRole,
-          chamaName: '',
-        });
-
-        setShowOTPModal(false);
-        setSelectedApprovalItem(null);
-        setApprovalActionType(null);
-        await loadSavingsAccounts();
-      } else {
-        Alert.alert('Error', response.error || 'Failed to process approval.');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
-    } finally {
-      setOtpLoading(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    if (!selectedApprovalItem) return;
-    try {
-      await sendApprovalNotification({
-        chamaId: currentChamaId,
-        recipientUserId: user.id,
-        recipientName: user?.fullName || user?.firstName || 'You',
-        recipientPhone: user?.phone || user?.phone_number,
-        recipientEmail: user?.email,
-        disbursementType: 'savings-withdrawal',
-        disbursementId: selectedApprovalItem.id,
-        entityLabel: selectedApprovalItem.memberName || selectedApprovalItem.member_name || `Account #${selectedApprovalItem.id}`,
-        amount: selectedApprovalItem.balance,
-        action: 'otp_resend',
-        initiatedBy: userRole,
-        chamaName: '',
-      });
-      showInAppToast({
-        title: 'OTP Resent',
-        message: 'A new OTP has been sent to your phone.',
-        type: 'info',
-      });
-    } catch (error) {
-      showInAppToast({
-        title: 'Resend Failed',
-        message: 'Could not resend OTP. Please try again.',
-        type: 'error',
-      });
-    }
-  };
+  const {
+    savingsAccounts,
+    loading,
+    refreshing,
+    selectedFilter,
+    searchQuery,
+    showFilterDropdown,
+    userRole,
+    currentPage,
+    totalPages,
+    totalItems,
+    pageSize,
+    showWithdrawModal,
+    selectedAccount,
+    showBulkWithdrawModal,
+    withdrawForm,
+    bulkWithdrawData,
+    showOTPModal,
+    otpLoading,
+    selectedApprovalItem,
+    approvalActionType,
+    filters,
+    tableStyles,
+    headerStyles,
+    setSearchQuery,
+    setShowFilterDropdown,
+    setSelectedFilter,
+    setCurrentPage,
+    onRefresh,
+    formatCurrency,
+    formatDate,
+    getStatusColor,
+    handleWithdraw,
+    handleBulkWithdraw,
+    submitWithdrawal,
+    submitBulkWithdrawal,
+    handleInitiateApprove,
+    handleVerifyOTP,
+    handleResendOTP,
+    setShowWithdrawModal,
+    setShowBulkWithdrawModal,
+    setWithdrawForm,
+    setBulkWithdrawData,
+  } = hook;
 
   const renderTableRow = ({ item, index }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
     return (
       <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
-        {/* Member Name */}
         <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
           <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
             {item.name || 'Unknown Member'}
           </Text>
         </View>
 
-        {/* Balance */}
         <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
           <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium, color: colors.success }]}>
             {formatCurrency(item.balance)}
           </Text>
         </View>
 
-        {/* Last Activity */}
         <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
           <Text style={tableStyles.tableCellText}>
             {formatDate(item.lastActivity)}
           </Text>
         </View>
 
-        {/* Status */}
         <View style={[tableStyles.tableCell, tableStyles.statusCell]}>
           <View style={[tableStyles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
             <Text style={[tableStyles.statusText, { color: getStatusColor(item.status) }]}>
@@ -662,7 +103,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Actions */}
         <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
           <View style={tableStyles.actionButtons}>
             <TouchableOpacity
@@ -671,7 +111,7 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
             >
               <Ionicons name="eye" size={14} color={colors.info} />
             </TouchableOpacity>
-            {canApproveSavings() && (item.status === 'eligible' || item.status === 'pending') && (
+            {userRole !== 'left' && (item.status === 'eligible' || item.status === 'pending') && (
               <TouchableOpacity
                 style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
                 onPress={() => handleInitiateApprove(item)}
@@ -679,7 +119,7 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
                 <Ionicons name="checkmark-done" size={14} color={colors.primary} />
               </TouchableOpacity>
             )}
-            {canWithdrawSavings() && item.status === 'eligible' && (
+            {userRole !== 'left' && item.status === 'eligible' && (
               <TouchableOpacity
                 style={[tableStyles.actionButton, { backgroundColor: colors.warning + '20' }]}
                 onPress={() => handleWithdraw(item)}
@@ -711,7 +151,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
   const renderHeader = () => (
     <View style={[headerStyles.header, { backgroundColor: colors.surface }]}>
       <View style={headerStyles.headerContent}>
-        {/* Search Bar */}
         <View style={headerStyles.searchContainer}>
           <Ionicons name="search" size={16} color={colors.textSecondary} />
           <TextInput
@@ -728,7 +167,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
           ) : null}
         </View>
 
-        {/* Filter Dropdown */}
         <View style={headerStyles.filterContainer}>
           <TouchableOpacity
             style={headerStyles.filterButton}
@@ -758,7 +196,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {renderHeader()}
 
-        {/* Dropdown Overlay */}
         {showFilterDropdown && (
           <TouchableOpacity
             style={styles.dropdownOverlay}
@@ -767,10 +204,8 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
           />
         )}
 
-        {/* Table Container */}
         <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
           <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
-            {/* Table Header */}
             <View style={tableStyles.tableHeader}>
               <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
                 <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Member & Account</Text>
@@ -789,7 +224,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
               </View>
             </View>
 
-            {/* Table Body */}
             <FlatList
               data={savingsAccounts}
               renderItem={renderTableRow}
@@ -807,7 +241,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
               ListEmptyComponent={!loading && renderEmptyState()}
             />
 
-            {/* Pagination */}
             {totalItems > pageSize && (
               <View style={[styles.pagination, { borderTopColor: colors.border }]}>
                 <TouchableOpacity
@@ -834,8 +267,7 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
               </View>
             )}
 
-            {/* Bulk Actions */}
-            {canWithdrawSavings() && savingsAccounts.filter(account => account.status === 'eligible').length > 0 && (
+            {userRole !== 'left' && savingsAccounts.filter(account => account.status === 'eligible').length > 0 && (
               <View style={[styles.bulkActions, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
                 <Button
                   title={`Bulk Withdraw (${savingsAccounts.filter(account => account.status === 'eligible').length} eligible accounts)`}
@@ -851,7 +283,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
         {loading && <LoadingSpinner />}
       </SafeAreaView>
 
-      {/* Filter Dropdown */}
       {showFilterDropdown && (
         <View style={[headerStyles.dropdownContainer, {
           position: 'absolute',
@@ -890,7 +321,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      {/* Withdraw Modal */}
       <Modal
         visible={showWithdrawModal}
         transparent={true}
@@ -985,7 +415,6 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Bulk Withdraw Modal */}
       <Modal
         visible={showBulkWithdrawModal}
         transparent={true}
