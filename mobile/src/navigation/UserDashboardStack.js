@@ -38,7 +38,7 @@ import CreateChamaScreen from '../screens/user/chamaandgroups/CreateChamaScreen'
 import ChamaDetailsScreen from '../screens/user/chamaandgroups/ChamaDetailsScreen';
 import ChamaTransactionsScreen from '../screens/chama/transactions/ChamaTransactionsScreen';
 import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
-import ViewMember from '../screens/chama/chamamember/ViewMember';
+import ViewMember from '../features/chama-members/screens/ViewMember';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
 import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';

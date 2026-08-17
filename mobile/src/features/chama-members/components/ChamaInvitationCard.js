@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import { formatDate, getInvitationStatus } from './chamaMembersUtils';
+import { formatDate, getInvitationStatus } from '../utils/chamaMembersUtils';
 
 const ChamaInvitationCard = ({
   item,

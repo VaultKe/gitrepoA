@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ApiService from '../../../services/api';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import { formatRoleLabel, getMemberName, getRoleColor, getRoleIcon } from './chamaMembersUtils';
+import { formatRoleLabel, getMemberName, getRoleColor, getRoleIcon } from '../utils/chamaMembersUtils';
 
 const ChamaMemberRow = ({
   item,

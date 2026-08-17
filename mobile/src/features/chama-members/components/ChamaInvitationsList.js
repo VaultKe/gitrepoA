@@ -3,7 +3,7 @@ import { FlatList, StyleSheet } from 'react-native';
 import { getThemeColors, spacing } from '../../../utils/theme';
 import ChamaInvitationCard from './ChamaInvitationCard';
 import ChamaMembersEmptyState from './ChamaMembersEmptyState';
-import { getFilteredInvitations } from './chamaMembersUtils';
+import { getFilteredInvitations } from '../utils/chamaMembersUtils';
 
 const ChamaInvitationsList = ({
   invitations,

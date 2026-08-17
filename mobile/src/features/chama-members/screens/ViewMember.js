@@ -23,7 +23,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, breakpoints } from '../../../utils/theme';
 import api from '../../../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment, removeMemberFromChama, getChamaMember } from '../../../services/api/chamaEndpoints';
-import { getMemberName } from './chamaMembersUtils';
+import { getMemberName } from '../utils/chamaMembersUtils';
 import Button from '../../../components/common/Button';
 import OTPVerificationModal from '../../../components/common/OTPVerificationModal';
 import { sendApprovalNotification, showInAppToast } from '../../../services/disbursementNotificationService';
