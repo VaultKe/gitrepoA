@@ -254,6 +254,93 @@ export default function LoginScreen({ navigation }) {
     navigation.navigate('ForgotPassword');
   };
 
+  const loginFormContent = (
+    <>
+      {/* Email/Phone Input */}
+      <FormField
+        value={identifier}
+        onChangeText={(text) => {
+          setIdentifier(text);
+          if (errors.identifier) {
+            setErrors(prev => ({ ...prev, identifier: null }));
+          }
+        }}
+        placeholder="Email or phone"
+        icon="person-outline"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        showError={false}
+      />
+
+      {/* Password Input */}
+      <FormField
+        placeholder="Enter your password"
+        value={password}
+        onChangeText={(text) => {
+          setPassword(text);
+          if (errors.password) {
+            setErrors(prev => ({ ...prev, password: null }));
+          }
+        }}
+        icon="lock-closed-outline"
+        secureTextEntry={true}
+        showPassword={showPassword}
+        onTogglePassword={() => setShowPassword(!showPassword)}
+        showError={false}
+      />
+
+      {/* Forgot Password Card */}
+      <Card
+        variant="flat"
+        padding="sm"
+        style={styles.forgotPasswordCard}
+        onPress={handleForgotPassword}
+      >
+        <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>
+          Forgot Password?
+        </Text>
+      </Card>
+
+      {/* Login Button */}
+      <LoadingButton
+        title="Sign In"
+        onPress={handleLogin}
+        loading={isLoading}
+        loadingText="Signing In..."
+        style={[
+          styles.loginButton,
+          { backgroundColor: colors.primary },
+          isDesktop && styles.desktopLoginButton
+        ]}
+        disabled={!identifier.trim() || !password}
+      />
+
+      {/* Divider */}
+      <View style={styles.dividerContainer}>
+        <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+        <Text style={[styles.dividerText, { color: colors.textSecondary }]}>OR</Text>
+        <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+      </View>
+
+      {/* Sign Up Link Card */}
+      <Card
+        variant="flat"
+        padding="md"
+        style={styles.signUpCard}
+        onPress={() => navigation.navigate('Register')}
+      >
+        <View style={styles.signUpContainer}>
+          <Text style={[styles.signUpText, { color: colors.textSecondary }]}>
+            Don't have an account?{' '}
+          </Text>
+          <Text style={[styles.signUpLink, { color: colors.primary }]}>
+            Sign Up
+          </Text>
+        </View>
+      </Card>
+    </>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
@@ -314,88 +401,15 @@ export default function LoginScreen({ navigation }) {
                 Sign in to your account
               </Text>
 
-              {/* Email/Phone Input */}
-              <FormField
-                value={identifier}
-                onChangeText={(text) => {
-                  setIdentifier(text);
-                  if (errors.identifier) {
-                    setErrors(prev => ({ ...prev, identifier: null }));
-                  }
-                }}
-                placeholder="Email or phone"
-                icon="person-outline"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                showError={false}
-              />
-
-              {/* Password Input */}
-              <FormField
-                placeholder="Enter your password"
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (errors.password) {
-                    setErrors(prev => ({ ...prev, password: null }));
-                  }
-                }}
-                icon="lock-closed-outline"
-                secureTextEntry={true}
-                showPassword={showPassword}
-                onTogglePassword={() => setShowPassword(!showPassword)}
-                showError={false}
-              />
-
-              {/* Forgot Password Card */}
-              <Card
-                variant="flat"
-                padding="sm"
-                style={styles.forgotPasswordCard}
-                onPress={handleForgotPassword}
-              >
-                <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>
-                  Forgot Password?
-                </Text>
-              </Card>
-
-              {/* Login Button */}
-              <LoadingButton
-                title="Sign In"
-                onPress={handleLogin}
-                loading={isLoading}
-                loadingText="Signing In..."
-                style={[
-                  styles.loginButton,
-                  { backgroundColor: colors.primary },
-                  isDesktop && styles.desktopLoginButton
-                ]}
-                disabled={!identifier.trim() || !password}
-              />
-
-              {/* Divider */}
-              <View style={styles.dividerContainer}>
-                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-                <Text style={[styles.dividerText, { color: colors.textSecondary }]}>OR</Text>
-                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-              </View>
-
-              {/* Sign Up Link Card */}
-              <Card
-                variant="flat"
-                padding="md"
-                style={styles.signUpCard}
-                onPress={() => navigation.navigate('Register')}
-              >
-                <View style={styles.signUpContainer}>
-                  <Text style={[styles.signUpText, { color: colors.textSecondary }]}>
-                    Don't have an account?{' '}
-                  </Text>
-                  <Text style={[styles.signUpLink, { color: colors.primary }]}>
-                    Sign Up
-                  </Text>
+              {Platform.OS === 'web' ? (
+                <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+                  {loginFormContent}
+                </form>
+              ) : (
+                <View>
+                  {loginFormContent}
                 </View>
-              </Card>
+              )}
             </Card>
           </View>
         </ScrollView>

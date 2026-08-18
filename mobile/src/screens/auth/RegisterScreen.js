@@ -220,6 +220,249 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
+  const registerFormContent = (
+    <>
+      {/* First Name */}
+      <FormField
+        label="First Name"
+        value={formData.firstName}
+        onChangeText={(value) => {
+          handleInputChange('firstName', value);
+          if (errors.firstName) {
+            setErrors(prev => ({ ...prev, firstName: null }));
+          }
+        }}
+        placeholder="First name"
+        icon="person-outline"
+        autoCapitalize="words"
+        error={errors.firstName}
+      />
+
+      {/* Last Name */}
+      <FormField
+        label="Last Name"
+        value={formData.lastName}
+        onChangeText={(value) => {
+          handleInputChange('lastName', value);
+          if (errors.lastName) {
+            setErrors(prev => ({ ...prev, lastName: null }));
+          }
+        }}
+        placeholder="Last name"
+        icon="person-outline"
+        autoCapitalize="words"
+        error={errors.lastName}
+      />
+
+      {/* Email */}
+      <FormField
+        label="Email Address"
+        value={formData.email}
+        onChangeText={(value) => {
+          handleInputChange('email', value);
+          if (errors.email) {
+            setErrors(prev => ({ ...prev, email: null }));
+          }
+        }}
+        placeholder="Email address"
+        icon="mail-outline"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        error={errors.email}
+      />
+
+      {/* Phone */}
+      <FormField
+        label="Phone Number"
+        value={formData.phone}
+        onChangeText={(value) => {
+          handleInputChange('phone', value);
+          if (errors.phone) {
+            setErrors(prev => ({ ...prev, phone: null }));
+          }
+        }}
+        placeholder="Phone number"
+        icon="call-outline"
+        keyboardType="phone-pad"
+        autoCapitalize="none"
+        error={errors.phone}
+      />
+
+      {/* ID Number */}
+      <FormField
+        label="ID Number"
+        value={formData.idNumber}
+        onChangeText={(value) => {
+          handleInputChange('idNumber', value);
+          if (errors.idNumber) {
+            setErrors(prev => ({ ...prev, idNumber: null }));
+          }
+        }}
+        placeholder="National ID number"
+        icon="card-outline"
+        keyboardType="numeric"
+        error={errors.idNumber}
+      />
+
+      {/* Gender Selection Card */}
+      <Card
+        variant="outlined"
+        padding="md"
+        style={[
+          styles.genderCard,
+          { borderColor: errors.gender ? colors.error : colors.border }
+        ]}
+      >
+        <Text style={[styles.fieldLabel, { color: colors.text }]}>
+          Gender (Optional)
+        </Text>
+        <View style={styles.genderContainer}>
+          {[
+            { value: 'male', label: 'Male', icon: 'male' },
+            { value: 'female', label: 'Female', icon: 'female' },
+            { value: 'other', label: 'Other', icon: 'transgender' },
+          ].map((option) => (
+            <Card
+              key={option.value}
+              variant="flat"
+              padding="sm"
+              style={[
+                styles.genderOption,
+                { backgroundColor: colors.surface },
+                formData.gender === option.value && {
+                  backgroundColor: colors.primary + '20',
+                  borderColor: colors.primary,
+                  borderWidth: 2
+                }
+              ]}
+              onPress={() => {
+                handleInputChange('gender', option.value);
+                if (errors.gender) {
+                  setErrors(prev => ({ ...prev, gender: null }));
+                }
+              }}
+            >
+              <View style={styles.genderOptionContent}>
+                <Ionicons
+                  name={option.icon}
+                  size={20}
+                  color={formData.gender === option.value ? colors.primary : colors.textSecondary}
+                />
+                <Text style={[
+                  styles.genderOptionText,
+                  { color: formData.gender === option.value ? colors.primary : colors.textSecondary }
+                ]}>
+                  {option.label}
+                </Text>
+              </View>
+            </Card>
+          ))}
+        </View>
+        {errors.gender && (
+          <Text style={[styles.errorText, { color: colors.error }]}>
+            {errors.gender}
+          </Text>
+        )}
+      </Card>
+
+      {/* Password */}
+      <FormField
+        label="Password"
+        value={formData.password}
+        onChangeText={(value) => {
+          handleInputChange('password', value);
+          if (errors.password) {
+            setErrors(prev => ({ ...prev, password: null }));
+          }
+        }}
+        placeholder="Password"
+        icon="lock-closed-outline"
+        secureTextEntry={true}
+        showPassword={showPassword}
+        onTogglePassword={() => setShowPassword(!showPassword)}
+        error={errors.password}
+      />
+
+      {/* Confirm Password */}
+      <FormField
+        label="Confirm Password"
+        value={formData.confirmPassword}
+        onChangeText={(value) => {
+          handleInputChange('confirmPassword', value);
+          if (errors.confirmPassword) {
+            setErrors(prev => ({ ...prev, confirmPassword: null }));
+          }
+        }}
+        placeholder="Confirm password"
+        icon="lock-closed-outline"
+        secureTextEntry={true}
+        showPassword={showConfirmPassword}
+        onTogglePassword={() => setShowConfirmPassword(!showConfirmPassword)}
+        error={errors.confirmPassword}
+      />
+
+      {/* Enhanced Legal Agreement Section */}
+      <Card
+        variant="flat"
+        padding="md"
+        style={styles.legalCard}
+      >
+        <LegalAgreementSection
+          acceptedTerms={acceptedTerms}
+          onAcceptTerms={() => {
+            setAcceptedTerms(!acceptedTerms);
+            if (errors.terms) {
+              setErrors(prev => ({ ...prev, terms: null }));
+            }
+          }}
+          onNavigateToTerms={() => navigation.navigate('TermsOfService')}
+          onNavigateToPrivacy={() => navigation.navigate('PrivacyPolicy')}
+          error={errors.terms}
+        />
+      </Card>
+
+      {/* Register Button */}
+      <LoadingButton
+        title="Create Account"
+        onPress={handleRegister}
+        loading={isLoading}
+        loadingText="Creating Account..."
+        style={[
+          styles.registerButton,
+          { backgroundColor: colors.primary },
+          isDesktop && styles.desktopRegisterButton
+        ]}
+        disabled={!formData.firstName.trim() || !formData.lastName.trim() ||
+                 !formData.email.trim() || !formData.phone.trim() ||
+                 !formData.idNumber.trim() || !formData.password || !formData.confirmPassword || !acceptedTerms}
+      />
+
+      {/* Divider */}
+      <View style={styles.dividerContainer}>
+        <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+        <Text style={[styles.dividerText, { color: colors.textSecondary }]}>OR</Text>
+        <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+      </View>
+
+      {/* Sign In Link Card */}
+      <Card
+        variant="flat"
+        padding="md"
+        style={styles.signInCard}
+        onPress={() => navigation.navigate('Login')}
+      >
+        <View style={styles.signInContainer}>
+          <Text style={[styles.signInText, { color: colors.textSecondary }]}>
+            Already have an account?{' '}
+          </Text>
+          <Text style={[styles.signInLink, { color: colors.primary }]}>
+            Sign In
+          </Text>
+        </View>
+      </Card>
+    </>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
@@ -289,246 +532,17 @@ export default function RegisterScreen({ navigation }) {
                   Join thousands of users managing their finances
                 </Text>
               </View>
-          {/* First Name */}
-          <FormField
-            label="First Name"
-            value={formData.firstName}
-            onChangeText={(value) => {
-              handleInputChange('firstName', value);
-              if (errors.firstName) {
-                setErrors(prev => ({ ...prev, firstName: null }));
-              }
-            }}
-            placeholder="First name"
-            icon="person-outline"
-            autoCapitalize="words"
-            error={errors.firstName}
-          />
 
-          {/* Last Name */}
-          <FormField
-            label="Last Name"
-            value={formData.lastName}
-            onChangeText={(value) => {
-              handleInputChange('lastName', value);
-              if (errors.lastName) {
-                setErrors(prev => ({ ...prev, lastName: null }));
-              }
-            }}
-            placeholder="Last name"
-            icon="person-outline"
-            autoCapitalize="words"
-            error={errors.lastName}
-          />
-
-          {/* Email */}
-          <FormField
-            label="Email Address"
-            value={formData.email}
-            onChangeText={(value) => {
-              handleInputChange('email', value);
-              if (errors.email) {
-                setErrors(prev => ({ ...prev, email: null }));
-              }
-            }}
-            placeholder="Email address"
-            icon="mail-outline"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            error={errors.email}
-          />
-
-          {/* Phone */}
-          <FormField
-            label="Phone Number"
-            value={formData.phone}
-            onChangeText={(value) => {
-              handleInputChange('phone', value);
-              if (errors.phone) {
-                setErrors(prev => ({ ...prev, phone: null }));
-              }
-            }}
-            placeholder="Phone number"
-            icon="call-outline"
-            keyboardType="phone-pad"
-            error={errors.phone}
-          />
-
-          {/* ID Number */}
-          <FormField
-            label="ID Number"
-            value={formData.idNumber}
-            onChangeText={(value) => {
-              handleInputChange('idNumber', value);
-              if (errors.idNumber) {
-                setErrors(prev => ({ ...prev, idNumber: null }));
-              }
-            }}
-            placeholder="National ID number"
-            icon="card-outline"
-            keyboardType="number-pad"
-            error={errors.idNumber}
-          />
-
-          {/* Gender Selection Card */}
-          <Card
-            variant="outlined"
-            padding="md"
-            style={[
-              styles.genderCard,
-              { borderColor: errors.gender ? colors.error : colors.border }
-            ]}
-          >
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>
-              Gender (Optional)
-            </Text>
-            <View style={styles.genderContainer}>
-              {[
-                { value: 'male', label: 'Male', icon: 'male' },
-                { value: 'female', label: 'Female', icon: 'female' },
-                { value: 'other', label: 'Other', icon: 'transgender' },
-              ].map((option) => (
-                <Card
-                  key={option.value}
-                  variant="flat"
-                  padding="sm"
-                  style={[
-                    styles.genderOption,
-                    { backgroundColor: colors.surface },
-                    formData.gender === option.value && {
-                      backgroundColor: colors.primary + '20',
-                      borderColor: colors.primary,
-                      borderWidth: 2
-                    }
-                  ]}
-                  onPress={() => {
-                    handleInputChange('gender', option.value);
-                    if (errors.gender) {
-                      setErrors(prev => ({ ...prev, gender: null }));
-                    }
-                  }}
-                >
-                  <View style={styles.genderOptionContent}>
-                    <Ionicons
-                      name={option.icon}
-                      size={20}
-                      color={formData.gender === option.value ? colors.primary : colors.textSecondary}
-                    />
-                    <Text style={[
-                      styles.genderOptionText,
-                      { color: formData.gender === option.value ? colors.primary : colors.textSecondary }
-                    ]}>
-                      {option.label}
-                    </Text>
-                  </View>
-                </Card>
-              ))}
-            </View>
-            {errors.gender && (
-              <Text style={[styles.errorText, { color: colors.error }]}>
-                {errors.gender}
-              </Text>
-            )}
-          </Card>
-
-          {/* Password */}
-          <FormField
-            label="Password"
-            value={formData.password}
-            onChangeText={(value) => {
-              handleInputChange('password', value);
-              if (errors.password) {
-                setErrors(prev => ({ ...prev, password: null }));
-              }
-            }}
-            placeholder="Password"
-            icon="lock-closed-outline"
-            secureTextEntry={true}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
-            error={errors.password}
-          />
-
-          {/* Confirm Password */}
-          <FormField
-            label="Confirm Password"
-            value={formData.confirmPassword}
-            onChangeText={(value) => {
-              handleInputChange('confirmPassword', value);
-              if (errors.confirmPassword) {
-                setErrors(prev => ({ ...prev, confirmPassword: null }));
-              }
-            }}
-            placeholder="Confirm password"
-            icon="lock-closed-outline"
-            secureTextEntry={true}
-            showPassword={showConfirmPassword}
-            onTogglePassword={() => setShowConfirmPassword(!showConfirmPassword)}
-            error={errors.confirmPassword}
-          />
-
-          {/* Enhanced Legal Agreement Section */}
-          <Card
-            variant="flat"
-            padding="md"
-            style={styles.legalCard}
-          >
-            <LegalAgreementSection
-              acceptedTerms={acceptedTerms}
-              onAcceptTerms={() => {
-                setAcceptedTerms(!acceptedTerms);
-                if (errors.terms) {
-                  setErrors(prev => ({ ...prev, terms: null }));
-                }
-              }}
-              onNavigateToTerms={() => navigation.navigate('TermsOfService')}
-              onNavigateToPrivacy={() => navigation.navigate('PrivacyPolicy')}
-              error={errors.terms}
-            />
-          </Card>
-
-          {/* Register Button */}
-          <LoadingButton
-            title="Create Account"
-            onPress={handleRegister}
-            loading={isLoading}
-            loadingText="Creating Account..."
-            style={[
-              styles.registerButton,
-              { backgroundColor: colors.primary },
-              isDesktop && styles.desktopRegisterButton
-            ]}
-            disabled={!formData.firstName.trim() || !formData.lastName.trim() ||
-                     !formData.email.trim() || !formData.phone.trim() ||
-                     !formData.idNumber.trim() || !formData.password || !formData.confirmPassword || !acceptedTerms}
-          />
-
-          {/* Divider */}
-          <View style={styles.dividerContainer}>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-            <Text style={[styles.dividerText, { color: colors.textSecondary }]}>OR</Text>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          </View>
-
-          {/* Sign In Link Card */}
-          <Card
-            variant="flat"
-            padding="md"
-            style={styles.signInCard}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <View style={styles.signInContainer}>
-              <Text style={[styles.signInText, { color: colors.textSecondary }]}>
-                Already have an account?{' '}
-              </Text>
-              <Text style={[styles.signInLink, { color: colors.primary }]}>
-                Sign In
-              </Text>
-            </View>
-          </Card>
+              {Platform.OS === 'web' ? (
+                <form onSubmit={(e) => { e.preventDefault(); handleRegister(); }}>
+                  {registerFormContent}
+                </form>
+              ) : (
+                registerFormContent
+              )}
             </Card>
           </View>
-      </ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

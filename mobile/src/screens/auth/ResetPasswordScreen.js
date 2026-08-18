@@ -369,98 +369,197 @@ export default function ResetPasswordScreen({ navigation, route }) {
                 )}
               </Card>
 
-              {/* General Error */}
-              {errors.general && (
-                <Card
-                  variant="outlined"
-                  padding="md"
-                  style={[styles.errorCard, { backgroundColor: colors.error + '15', borderColor: colors.error }]}
-                >
-                  <View style={styles.errorContent}>
-                    <Ionicons name="alert-circle" size={20} color={colors.error} />
-                    <Text style={[styles.errorText, { color: colors.error }]}>{errors.general}</Text>
-                  </View>
-                </Card>
+              {Platform.OS === 'web' ? (
+                <form onSubmit={(e) => { e.preventDefault(); handleResetPassword(); }}>
+                  {/* General Error */}
+                  {errors.general && (
+                    <Card
+                      variant="outlined"
+                      padding="md"
+                      style={[styles.errorCard, { backgroundColor: colors.error + '15', borderColor: colors.error }]}
+                    >
+                      <View style={styles.errorContent}>
+                        <Ionicons name="alert-circle" size={20} color={colors.error} />
+                        <Text style={[styles.errorText, { color: colors.error }]}>{errors.general}</Text>
+                      </View>
+                    </Card>
+                  )}
+
+                  {/* Reset Code Input */}
+                  <FormField
+                    value={resetCode}
+                    onChangeText={setResetCode}
+                    placeholder="Reset code"
+                    icon="keypad-outline"
+                    keyboardType="numeric"
+                    maxLength={6}
+                    autoCapitalize="none"
+                    error={errors.resetCode}
+                  />
+
+                  {/* New Password Input */}
+                  <FormField
+                    placeholder="New password"
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    icon="lock-closed-outline"
+                    secureTextEntry={true}
+                    showPassword={showPassword}
+                    onTogglePassword={() => setShowPassword(!showPassword)}
+                    error={errors.newPassword}
+                  />
+
+                  {/* Confirm Password Input */}
+                  <FormField
+                    placeholder="Confirm password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    icon="lock-closed-outline"
+                    secureTextEntry={true}
+                    showPassword={showConfirmPassword}
+                    onTogglePassword={() => setShowConfirmPassword(!showConfirmPassword)}
+                    error={errors.confirmPassword}
+                  />
+
+                  {/* Reset Password Button */}
+                  <LoadingButton
+                    title="Reset Password"
+                    onPress={handleResetPassword}
+                    loading={isLoading}
+                    loadingText="Resetting Password..."
+                    style={[
+                      styles.resetButton,
+                      { backgroundColor: colors.primary },
+                      isDesktop && styles.desktopResetButton
+                    ]}
+                    disabled={!resetCode.trim() || !newPassword || !confirmPassword}
+                  />
+
+                  {/* Resend Code Card */}
+                  <Card
+                    variant="flat"
+                    padding="md"
+                    style={styles.resendCard}
+                    onPress={requestNewCode}
+                    disabled={isLoading}
+                  >
+                    <Text style={[styles.resendText, { color: colors.textSecondary }]}>
+                      Didn't receive the code?{' '}
+                      <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                        Resend Code
+                      </Text>
+                    </Text>
+                  </Card>
+
+                  {/* Back Button Card */}
+                  <Card
+                    variant="flat"
+                    padding="md"
+                    style={styles.backCard}
+                    onPress={() => navigation.goBack()}
+                  >
+                    <View style={styles.backButton}>
+                      <Ionicons name="arrow-back" size={20} color={colors.primary} />
+                      <Text style={[styles.backButtonText, { color: colors.primary }]}>Back</Text>
+                    </View>
+                  </Card>
+                </form>
+              ) : (
+                <>
+                  {/* General Error */}
+                  {errors.general && (
+                    <Card
+                      variant="outlined"
+                      padding="md"
+                      style={[styles.errorCard, { backgroundColor: colors.error + '15', borderColor: colors.error }]}
+                    >
+                      <View style={styles.errorContent}>
+                        <Ionicons name="alert-circle" size={20} color={colors.error} />
+                        <Text style={[styles.errorText, { color: colors.error }]}>{errors.general}</Text>
+                      </View>
+                    </Card>
+                  )}
+
+                  {/* Reset Code Input */}
+                  <FormField
+                    value={resetCode}
+                    onChangeText={setResetCode}
+                    placeholder="Reset code"
+                    icon="keypad-outline"
+                    keyboardType="numeric"
+                    maxLength={6}
+                    autoCapitalize="none"
+                    error={errors.resetCode}
+                  />
+
+                  {/* New Password Input */}
+                  <FormField
+                    placeholder="New password"
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    icon="lock-closed-outline"
+                    secureTextEntry={true}
+                    showPassword={showPassword}
+                    onTogglePassword={() => setShowPassword(!showPassword)}
+                    error={errors.newPassword}
+                  />
+
+                  {/* Confirm Password Input */}
+                  <FormField
+                    placeholder="Confirm password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    icon="lock-closed-outline"
+                    secureTextEntry={true}
+                    showPassword={showConfirmPassword}
+                    onTogglePassword={() => setShowConfirmPassword(!showConfirmPassword)}
+                    error={errors.confirmPassword}
+                  />
+
+                  {/* Reset Password Button */}
+                  <LoadingButton
+                    title="Reset Password"
+                    onPress={handleResetPassword}
+                    loading={isLoading}
+                    loadingText="Resetting Password..."
+                    style={[
+                      styles.resetButton,
+                      { backgroundColor: colors.primary },
+                      isDesktop && styles.desktopResetButton
+                    ]}
+                    disabled={!resetCode.trim() || !newPassword || !confirmPassword}
+                  />
+
+                  {/* Resend Code Card */}
+                  <Card
+                    variant="flat"
+                    padding="md"
+                    style={styles.resendCard}
+                    onPress={requestNewCode}
+                    disabled={isLoading}
+                  >
+                    <Text style={[styles.resendText, { color: colors.textSecondary }]}>
+                      Didn't receive the code?{' '}
+                      <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                        Resend Code
+                      </Text>
+                    </Text>
+                  </Card>
+
+                  {/* Back Button Card */}
+                  <Card
+                    variant="flat"
+                    padding="md"
+                    style={styles.backCard}
+                    onPress={() => navigation.goBack()}
+                  >
+                    <View style={styles.backButton}>
+                      <Ionicons name="arrow-back" size={20} color={colors.primary} />
+                      <Text style={[styles.backButtonText, { color: colors.primary }]}>Back</Text>
+                    </View>
+                  </Card>
+                </>
               )}
-
-              {/* Reset Code Input */}
-              <FormField
-                value={resetCode}
-                onChangeText={setResetCode}
-                placeholder="Reset code"
-                icon="keypad-outline"
-                keyboardType="numeric"
-                maxLength={6}
-                autoCapitalize="none"
-                error={errors.resetCode}
-              />
-
-              {/* New Password Input */}
-              <FormField
-                placeholder="New password"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                icon="lock-closed-outline"
-                secureTextEntry={true}
-                showPassword={showPassword}
-                onTogglePassword={() => setShowPassword(!showPassword)}
-                error={errors.newPassword}
-              />
-
-              {/* Confirm Password Input */}
-              <FormField
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                icon="lock-closed-outline"
-                secureTextEntry={true}
-                showPassword={showConfirmPassword}
-                onTogglePassword={() => setShowConfirmPassword(!showConfirmPassword)}
-                error={errors.confirmPassword}
-              />
-
-              {/* Reset Password Button */}
-              <LoadingButton
-                title="Reset Password"
-                onPress={handleResetPassword}
-                loading={isLoading}
-                loadingText="Resetting Password..."
-                style={[
-                  styles.resetButton,
-                  { backgroundColor: colors.primary },
-                  isDesktop && styles.desktopResetButton
-                ]}
-                disabled={!resetCode.trim() || !newPassword || !confirmPassword}
-              />
-
-              {/* Resend Code Card */}
-              <Card
-                variant="flat"
-                padding="md"
-                style={styles.resendCard}
-                onPress={requestNewCode}
-                disabled={isLoading}
-              >
-                <Text style={[styles.resendText, { color: colors.textSecondary }]}>
-                  Didn't receive the code?{' '}
-                  <Text style={{ color: colors.primary, fontWeight: '600' }}>
-                    Resend Code
-                  </Text>
-                </Text>
-              </Card>
-
-              {/* Back Button Card */}
-              <Card
-                variant="flat"
-                padding="md"
-                style={styles.backCard}
-                onPress={() => navigation.goBack()}
-              >
-                <View style={styles.backButton}>
-                  <Ionicons name="arrow-back" size={20} color={colors.primary} />
-                  <Text style={[styles.backButtonText, { color: colors.primary }]}>Back</Text>
-                </View>
-              </Card>
             </Card>
           </View>
         </ScrollView>
