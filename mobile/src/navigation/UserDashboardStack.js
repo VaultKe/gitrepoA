@@ -9,6 +9,7 @@ import EnhancedUserDashboard from '../screens/user/userdashboard/EnhancedUserDas
 import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
 import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
+import OnlineMeetingScreen from '../screens/chama/meeting/OnlineMeetingScreen';
 
 // Other User Screens
 import ProfileScreen from '../screens/user/profile/ProfileScreen';
@@ -418,6 +419,14 @@ function UserTabNavigator() {
         component={PhysicalMeetingScreen}
         options={{
           title: 'Physical Meeting',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+      />
+      <Tab.Screen
+        name="OnlineMeeting"
+        component={OnlineMeetingScreen}
+        options={{
+          title: 'Online Meeting',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />

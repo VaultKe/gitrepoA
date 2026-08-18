@@ -32,9 +32,9 @@ export const toEAT = (date) => {
     return d;
   }
 
-  // If it's already a Date object or doesn't need conversion, return as is
-  // The Date object will be formatted with the correct timezone in formatDate
-  return d;
+  // Convert to EAT (UTC+3)
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  return new Date(utc + (EAT_OFFSET * 60000));
 };
 
 /**

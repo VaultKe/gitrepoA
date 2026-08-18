@@ -121,7 +121,7 @@ const useChamaMeetingsScreen = ({ route, navigation }) => {
   };
 
   const getDynamicStatus = (meeting) => {
-    const meetingDate = toEAT(meeting.scheduledAt || meeting.date);
+    const meetingDate = toEAT(meeting.startTime || meeting.scheduledAt || meeting.date);
     const now = nowEAT();
     const end = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
     if (end <= now || meeting.status === 'completed' || meeting.status === 'ended') return 'ENDED';
@@ -148,33 +148,34 @@ const useChamaMeetingsScreen = ({ route, navigation }) => {
   };
 
   const handleAttend = (meeting) => {
-    const meetingType = meeting.meetingType || meeting.type || 'virtual';
-    const meetingDate = toEAT(meeting.scheduledAt || meeting.date);
-    const now = nowEAT();
-    const end = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
-    const isActive = now >= meetingDate && now <= end;
+    try {
+      console.log('Attend button pressed for meeting:', meeting.id, meeting.title);
+      const meetingType = meeting.meetingType || meeting.type || 'virtual';
+      const meetingDate = toEAT(meeting.startTime || meeting.scheduledAt || meeting.date);
+      const now = nowEAT();
+      const end = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
 
-    if (isActive) {
-      if (meetingType === 'virtual' || meetingType === 'hybrid') {
-        navigation.navigate('OnlineMeeting', {
-          meetingId: meeting.id,
-          meetingTitle: meeting.title,
-          userRole: userRole,
-          meetingData: meeting,
-        });
-      } else {
-        navigation.navigate('PhysicalMeeting', {
-          meetingId: meeting.id,
-          meetingTitle: meeting.title,
-          userRole: userRole,
-          meetingData: meeting,
-          chamaId: chamaId || meeting.chamaId,
-        });
+      const statusLower = (meeting.status || '').toLowerCase();
+      const isEnded = statusLower === 'completed' || statusLower === 'ended';
+
+      const screenName = meetingType === 'virtual' || meetingType === 'hybrid' ? 'OnlineMeeting' : 'PhysicalMeeting';
+      const params = {
+        meetingId: meeting.id,
+        meetingTitle: meeting.title,
+        userRole: userRole,
+        meetingData: meeting,
+        isReadOnly: isEnded,
+      };
+
+      if (meetingType === 'physical' || meetingType === 'hybrid') {
+        params.chamaId = chamaId || meeting.chamaId;
       }
-    } else if (end < now) {
-      Alert.alert('Meeting Ended', 'This meeting has already ended.');
-    } else {
-      Alert.alert('Meeting Not Started', 'This meeting has not started yet.');
+
+      console.log('Navigating to:', screenName, 'isEnded:', isEnded, 'status:', meeting.status, 'params:', params);
+      navigation.navigate(screenName, params);
+    } catch (error) {
+      console.error('Failed to attend meeting:', error);
+      Alert.alert('Navigation Error', `Failed to open meeting: ${error.message}`);
     }
   };
 

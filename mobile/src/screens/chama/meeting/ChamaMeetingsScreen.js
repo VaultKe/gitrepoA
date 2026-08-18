@@ -5,7 +5,7 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Button from '../../../components/common/Button';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
-import ChamaMeetingsTable from './ChamaMeetingsTable';
+import ChamaMeetingsTable from '../../../components/chama-meeting/ChamaMeetingsTable';
 import useChamaMeetingsScreen from '../../../hooks/useChamaMeetingsScreen';
 
 const ChamaMeetingsScreen = ({ route, navigation }) => {

@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Card from '../../../components/common/Card';
-import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import Card from '../common/Card';
+import { useApp } from '../../context/AppContext';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 
 const ChamaMeetingsTable = ({
   meetings,
@@ -58,18 +58,21 @@ const ChamaMeetingsTable = ({
           <TouchableOpacity
             style={[styles.actionButtonSmall, styles.actionButtonPrimary]}
             onPress={() => onViewSummary(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="eye" size={12} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButtonSmall, styles.actionButtonSuccess]}
             onPress={() => onAttend(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="play" size={12} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButtonSmall, styles.actionButtonError]}
             onPress={() => onDelete(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="trash" size={12} color={colors.white} />
           </TouchableOpacity>
@@ -85,6 +88,7 @@ const ChamaMeetingsTable = ({
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tableScrollContent}
+          pointerEvents="box-none"
         >
           <View style={styles.tableContent}>
             <View style={styles.tableHeader}>
@@ -112,6 +116,7 @@ const ChamaMeetingsTable = ({
               style={styles.tableList}
               contentContainerStyle={styles.tableListContent}
               showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
