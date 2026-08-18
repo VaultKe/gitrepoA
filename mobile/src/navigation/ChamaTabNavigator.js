@@ -43,7 +43,7 @@ import DividendsManagementScreen from '../screens/chama/accountmanagement/Divide
 import MaryGoRoundDetails from '../screens/chama/merry-go-round/MaryGoRoundDetails';
 import WelfareDetails from '../screens/chama/welfare/WelfareDetails';
 import LoanDetails from '../screens/chama/loans/LoanDetails';
-import ViewMember from '../features/chama-members/screens/ViewMember';
+import ViewMember from '../screens/chama/chamamember/ViewMember';
 import PhysicalMeetingScreen from '../screens/chama/meeting/PhysicalMeetingScreen';
 import MeetingSummaryScreen from '../screens/chama/meeting/MeetingSummaryScreen';
 import WelfareContributionsScreen from '../screens/chama/welfare/WelfareContributionsScreen';

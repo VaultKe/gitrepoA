@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from '../services/api';
-import { getFilteredMembers } from '../features/chama-members/utils/chamaMembersUtils';
+import { getFilteredMembers } from '../utils/chamaMembersUtils';
 
 const useChamaMembersScreen = ({ route, navigation, onRouteChange, user }) => {
   const { chamaId } = route.params;

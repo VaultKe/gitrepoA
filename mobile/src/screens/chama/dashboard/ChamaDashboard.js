@@ -4,10 +4,10 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors } from '../../../utils/theme';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import useChamaDashboard from '../../../hooks/useChamaDashboard';
-import ChamaSelectorCard from '../../../features/chama-dashboard/components/ChamaSelectorCard';
-import QuickStatsCard from '../../../features/chama-dashboard/components/QuickStatsCard';
-import QuickActionsCard from '../../../features/chama-dashboard/components/QuickActionsCard';
-import EmptyState from '../../../features/chama-dashboard/components/EmptyState';
+import ChamaSelectorCard from '../../../components/chama-dashboard/ChamaSelectorCard';
+import QuickStatsCard from '../../../components/chama-dashboard/QuickStatsCard';
+import QuickActionsCard from '../../../components/chama-dashboard/QuickActionsCard';
+import EmptyState from '../../../components/chama-dashboard/EmptyState';
 
 const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   const dashboard = useChamaDashboard({ route, navigation, onRouteChange });

@@ -14,11 +14,11 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing } from '../../../utils/theme';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import useChamaMembersScreen from '../../../hooks/useChamaMembersScreen';
-import { roles } from '../../../features/chama-members/utils/chamaMembersUtils';
-import ChamaMembersHeaderCard from '../../../features/chama-members/components/ChamaMembersHeaderCard';
-import ChamaMembersTable from '../../../features/chama-members/components/ChamaMembersTable';
-import ChamaInvitationsList from '../../../features/chama-members/components/ChamaInvitationsList';
-import ChamaMemberRoleModal from '../../../features/chama-members/components/ChamaMemberRoleModal';
+import { roles } from '../../../utils/chamaMembersUtils';
+import ChamaMembersHeaderCard from '../../../components/chama-members/ChamaMembersHeaderCard';
+import ChamaMembersTable from '../../../components/chama-members/ChamaMembersTable';
+import ChamaInvitationsList from '../../../components/chama-members/ChamaInvitationsList';
+import ChamaMemberRoleModal from '../../../components/chama-members/ChamaMemberRoleModal';
 
 const ChamaMembersScreen = ({ route, navigation, onRouteChange }) => {
   const { theme, user } = useApp();

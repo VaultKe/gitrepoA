@@ -15,15 +15,15 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
-import ContributionTypeSelector from '../../../features/contributions/components/ContributionTypeSelector';
-import PaymentMethodSelector from '../../../features/contributions/components/PaymentMethodSelector';
-import MemberListingSection from '../../../features/contributions/components/MemberListingSection';
-import CurrentRecipientInfo from '../../../features/contributions/components/CurrentRecipientInfo';
-import PaymentConfirmationModal from '../../../features/contributions/components/PaymentConfirmationModal';
-import MerryGoRoundRules from '../../../features/contributions/components/MerryGoRoundRules';
-import AnonymousContribution from '../../../features/contributions/components/AnonymousContribution';
-import ValidationMessage from '../../../features/contributions/components/ValidationMessage';
-import PhoneNumberDisplay from '../../../features/contributions/components/PhoneNumberDisplay';
+import ContributionTypeSelector from '../../../components/contributions/ContributionTypeSelector';
+import PaymentMethodSelector from '../../../components/contributions/PaymentMethodSelector';
+import MemberListingSection from '../../../components/contributions/MemberListingSection';
+import CurrentRecipientInfo from '../../../components/contributions/CurrentRecipientInfo';
+import PaymentConfirmationModal from '../../../components/contributions/PaymentConfirmationModal';
+import MerryGoRoundRules from '../../../components/contributions/MerryGoRoundRules';
+import AnonymousContribution from '../../../components/contributions/AnonymousContribution';
+import ValidationMessage from '../../../components/contributions/ValidationMessage';
+import PhoneNumberDisplay from '../../../components/contributions/PhoneNumberDisplay';
 import useContributionScreen from '../../../hooks/useContributionScreen';
 
 const ContributeScreen = ({ route, navigation }) => {
