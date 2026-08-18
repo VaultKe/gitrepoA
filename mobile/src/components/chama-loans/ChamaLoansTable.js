@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Card from '../../../components/common/Card';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import Card from '../common/Card';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 import ChamaLoansEmptyState from './ChamaLoansEmptyState';
 import {
   formatCurrency,
@@ -11,7 +11,7 @@ import {
   getLoanName,
   getLoanStatusStyles,
   getStatusColor,
-} from './chamaLoansUtils';
+} from '../../utils/chamaLoansUtils';
 
 const ChamaLoansTable = ({
   loans,

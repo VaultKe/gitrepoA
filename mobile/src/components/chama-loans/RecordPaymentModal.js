@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
-import Button from '../../../components/common/Button';
+import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../utils/theme';
+import Button from '../common/Button';
 
 const RecordPaymentModal = ({
   visible,

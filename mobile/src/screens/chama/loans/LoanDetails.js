@@ -1,15 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-  Alert,
-  FlatList,
-  TextInput,
-} from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, FlatList, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
@@ -17,405 +7,91 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
-import ApiService from '../../../services/api';
-import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanFines } from '../../../services/api/loanEndpoints';
-import RecordPaymentModal from './RecordPaymentModal';
+import RecordPaymentModal from '../../../components/chama-loans/RecordPaymentModal';
+import useLoanDetails from '../../../hooks/useLoanDetails';
 
 const LoanDetails = ({ route, navigation }) => {
+  const screen = useLoanDetails({ route, navigation });
   const { theme } = useApp();
-  const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
-  const { loanId, chamaId } = route?.params || {};
 
-  const [loan, setLoan] = useState(null);
-  const [loanType, setLoanType] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [payments, setPayments] = useState([]);
-  const [allPayments, setAllPayments] = useState([]);
-  const [repaymentHistory, setRepaymentHistory] = useState(null);
-  const [disbursement, setDisbursement] = useState(null);
-  const [schedule, setSchedule] = useState([]);
-  const [guarantors, setGuarantors] = useState([]);
-  const [fines, setFines] = useState([]);
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('mobile_money');
-  const [submittingPayment, setSubmittingPayment] = useState(false);
-  const [approvalComment, setApprovalComment] = useState('');
-  const [approvalOTP, setApprovalOTP] = useState('');
-  const [approvalStep, setApprovalStep] = useState('idle'); // idle, initiate, confirm
-  const [approving, setApproving] = useState(false);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const pageSize = 10;
-  const scrollViewRef = useRef(null);
-
-  useEffect(() => {
-    if (loanId) {
-      loadLoanDetails();
-    } else {
-      setLoading(false);
-    }
-  }, [loanId]);
-
-  useEffect(() => {
-    if (allPayments.length > 0) {
-      const start = (currentPage - 1) * pageSize;
-      setPayments(allPayments.slice(start, start + pageSize));
-    } else {
-      setPayments([]);
-    }
-  }, [currentPage, allPayments]);
-
-  const loadLoanDetails = async () => {
-    try {
-      setLoading(true);
-      const loansResponse = await ApiService.getLoans(chamaId || currentChamaId);
-      if (loansResponse.success) {
-        const foundLoan = loansResponse.data?.find(l => l.id === loanId);
-        setLoan(foundLoan);
-      }
-
-      try {
-        const historyResponse = await getLoanRepaymentHistory(loanId);
-        if (historyResponse?.success && historyResponse?.data) {
-          setRepaymentHistory(historyResponse.data);
-          setDisbursement(historyResponse.data.disbursement || null);
-          setSchedule(Array.isArray(historyResponse.data.schedule) ? historyResponse.data.schedule : []);
-          const paymentList = Array.isArray(historyResponse.data.payments) ? historyResponse.data.payments : [];
-          setAllPayments(paymentList);
-          setTotalItems(paymentList.length);
-          setTotalPages(Math.max(1, Math.ceil(paymentList.length / pageSize)));
-          setCurrentPage(1);
-        }
-      } catch (historyError) {
-        console.error('Failed to load repayment history:', historyError);
-        setAllPayments([]);
-        setTotalItems(0);
-        setTotalPages(1);
-        setCurrentPage(1);
-      }
-
-      try {
-        const guarantorsResponse = await getLoanGuarantors(loanId);
-        if (guarantorsResponse?.success) {
-          setGuarantors(Array.isArray(guarantorsResponse.data) ? guarantorsResponse.data : []);
-        } else {
-          setGuarantors([]);
-        }
-      } catch (guarantorError) {
-        console.error('Failed to load guarantors:', guarantorError);
-        setGuarantors([]);
-      }
-
-      try {
-        const finesResponse = await getLoanFines(loanId);
-        if (finesResponse?.success) {
-          setFines(Array.isArray(finesResponse.data) ? finesResponse.data : []);
-        } else {
-          setFines([]);
-        }
-      } catch (finesError) {
-        console.error('Failed to load fines:', finesError);
-        setFines([]);
-      }
-    } catch (error) {
-      console.error('Error loading loan details:', error);
-      Alert.alert('Error', 'Failed to load loan details');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (loan?.loanTypeId) {
-      ApiService.getLoanType(loan.loanTypeId).then(response => {
-        if (response?.success) {
-          setLoanType(response.data);
-        }
-      }).catch(err => console.error('Failed to load loan type:', err));
-    }
-  }, [loan]);
-
-  const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || isNaN(amount)) return 'KES 0';
-    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown Date';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid Date';
-      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch (error) {
-      return 'Invalid Date';
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'disbursed':
-      case 'completed':
-        return colors.success;
-      case 'partial':
-      case 'processing':
-        return colors.warning;
-      case 'delinquent':
-      case 'failed':
-        return colors.error;
-      case 'recovery active':
-        return colors.info;
-      case 'collections':
-        return colors.secondary;
-      default:
-        return colors.textSecondary;
-    }
-  };
-
-  const getLoanStatusStyles = (status) => {
-    const normalized = status?.toLowerCase();
-    switch (normalized) {
-      case 'approved':
-      case 'completed':
-      case 'disbursed':
-        return [[styles.statusBadge, styles.statusBadgeSuccess], [styles.statusText, styles.statusTextSuccess]];
-      case 'pending':
-        return [[styles.statusBadge, styles.statusBadgeWarning], [styles.statusText, styles.statusTextWarning]];
-      case 'rejected':
-      case 'failed':
-        return [[styles.statusBadge, styles.statusBadgeError], [styles.statusText, styles.statusTextError]];
-      default:
-        return [[styles.statusBadge, styles.statusBadgeMuted], [styles.statusText, styles.statusTextMuted]];
-    }
-  };
-
-  const renderStatusBadge = (status) => {
-    const badgeStyle = getLoanStatusStyles(status);
+  if (screen.loading && !screen.loan) {
     return (
-      <View style={badgeStyle[0]}>
-        <Text style={badgeStyle[1]}>{status?.toUpperCase()}</Text>
-      </View>
+      <SafeAreaView style={[styles.container, styles.containerBackground]}>
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading loan details...</Text>
+        </View>
+      </SafeAreaView>
     );
-  };
+  }
 
-  const handleDisburseLoan = async () => {
-    Alert.alert('Disburse Loan', 'Are you sure you want to disburse this loan?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Disburse',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            const response = await disburseLoan(loanId);
-            if (response?.success) {
-              Alert.alert('Success', 'Loan disbursed successfully');
-              loadLoanDetails();
-            } else {
-              Alert.alert('Error', response?.error || 'Failed to disburse loan');
-            }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to disburse loan');
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
-  };
+  if (!screen.loan) {
+    return (
+      <SafeAreaView style={[styles.container, styles.containerBackground]}>
+        <View style={styles.errorState}>
+          <Ionicons name="card-outline" size={64} color={colors.textSecondary} />
+          <Text style={[styles.errorTitle, { color: colors.text }]}>Loan Not Found</Text>
+          <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>Unable to load loan details</Text>
+          <Button title="Go Back" onPress={() => navigation.goBack()} style={{ marginTop: spacing.lg }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const getNextApprovalRole = () => {
-    if (!loan) return null;
-    const stage = loan.approvalStage || loan.status;
-    if (stage === 'pending' || stage === 'guarantors_approved') return 'secretary';
-    if (stage === 'secretary_approved') return 'treasurer';
-    if (stage === 'treasurer_approved') return 'chairperson';
-    return null;
-  };
-
-  const handleInitiateApproval = async () => {
-    if (!approvalComment.trim()) {
-      Alert.alert('Comment Required', 'Please enter a comment before approving.');
-      return;
-    }
-    try {
-      setApproving(true);
-      const response = await initiateLoanApproval(loanId, approvalComment.trim());
-      if (response?.success) {
-        setApprovalStep('confirm');
-        Alert.alert('OTP Sent', response.message || 'Please enter the OTP sent to your phone.');
-      } else {
-        Alert.alert('Error', response?.error || 'Failed to initiate approval');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to initiate approval');
-    } finally {
-      setApproving(false);
-    }
-  };
-
-  const handleConfirmApproval = async () => {
-    if (!approvalOTP.trim() || approvalOTP.trim().length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter the 6-digit OTP sent to your phone.');
-      return;
-    }
-    if (!approvalComment.trim()) {
-      Alert.alert('Comment Required', 'Please enter a comment before confirming approval.');
-      return;
-    }
-    try {
-      setApproving(true);
-      const response = await confirmLoanApproval(loanId, approvalOTP.trim(), approvalComment.trim());
-      if (response?.success) {
-        Alert.alert('Success', response.message || 'Loan approved successfully');
-        setApprovalStep('idle');
-        setApprovalComment('');
-        setApprovalOTP('');
-        loadLoanDetails();
-      } else {
-        Alert.alert('Error', response?.error || 'Failed to confirm approval');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to confirm approval');
-    } finally {
-      setApproving(false);
-    }
-  };
-
-  const handleRejectLoan = async () => {
-    if (!approvalComment.trim()) {
-      Alert.alert('Comment Required', 'Please enter a reason for rejecting this loan.');
-      return;
-    }
-    Alert.alert('Reject Loan', 'Are you sure you want to reject this loan?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reject',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setApproving(true);
-            const response = await ApiService.rejectLoan(loanId, approvalComment.trim());
-            if (response?.success) {
-              Alert.alert('Success', 'Loan rejected successfully');
-              setApprovalComment('');
-              loadLoanDetails();
-            } else {
-              Alert.alert('Error', response?.error || 'Failed to reject loan');
-            }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to reject loan');
-          } finally {
-            setApproving(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleRecordPayment = async () => {
-    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
-      return;
-    }
-    try {
-      setSubmittingPayment(true);
-      const response = await makeLoanPayment(loanId, parseFloat(paymentAmount), paymentMethod);
-      if (response?.success) {
-        Alert.alert('Success', 'Payment recorded successfully');
-        setPaymentModalVisible(false);
-        setPaymentAmount('');
-        setPaymentMethod('mobile_money');
-        loadLoanDetails();
-      } else {
-        Alert.alert('Error', response?.error || 'Failed to record payment');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to record payment');
-    } finally {
-      setSubmittingPayment(false);
-    }
-  };
-
-  const borrowerName = loan?.borrower?.fullName || loan?.memberName || 'Unknown Borrower';
-
+  const borrowerName = screen.loan?.borrower?.fullName || screen.loan?.memberName || 'Unknown Borrower';
   const detailsHeaders = ['Field', 'Value'];
   const detailsData = [
-    { id: 'status', cells: ['Status', renderStatusBadge(loan?.status)] },
-    { id: 'type', cells: ['Type', loan?.type || 'N/A'] },
-    { id: 'purpose', cells: ['Purpose', loan?.purpose || 'N/A'] },
+    { id: 'status', cells: ['Status', screen.renderStatusBadge(screen.loan?.status)] },
+    { id: 'type', cells: ['Type', screen.loan?.type || 'N/A'] },
+    { id: 'purpose', cells: ['Purpose', screen.loan?.purpose || 'N/A'] },
     { id: 'borrower', cells: ['Borrower', borrowerName] },
-    { id: 'amount', cells: ['Loan Amount', formatCurrency(loan?.amount)] },
-    { id: 'rate', cells: ['Interest Rate', `${loan?.interestRate || 0}%`] },
-    { id: 'duration', cells: ['Duration', `${loan?.duration || 0} months`] },
-    { id: 'total', cells: ['Total Amount', formatCurrency(loan?.totalAmount)] },
-    { id: 'paid', cells: ['Paid Amount', formatCurrency(loan?.paidAmount)] },
-    { id: 'remaining', cells: ['Remaining', formatCurrency(loan?.remainingAmount)] },
-    { id: 'due', cells: ['Due Date', formatDate(loan?.dueDate)] },
-    { id: 'reqGuarantors', cells: ['Required Guarantors', loan?.requiredGuarantors?.toString() || '0'] },
-    { id: 'appGuarantors', cells: ['Approved Guarantors', loan?.approvedGuarantors?.toString() || '0'] },
-    { id: 'approvalStage', cells: ['Approval Stage', loan?.approvalStage?.toUpperCase().replace('_', ' ') || 'N/A'] },
-    { id: 'secretary', cells: ['Secretary Approval', loan?.secretaryApprovedBy ? formatDate(loan?.secretaryApprovedAt) : 'Pending'] },
-    { id: 'treasurer', cells: ['Treasurer Approval', loan?.treasurerApprovedBy ? formatDate(loan?.treasurerApprovedAt) : 'Pending'] },
-    { id: 'chairperson', cells: ['Chairperson Approval', loan?.chairpersonApprovedBy ? formatDate(loan?.chairpersonApprovedAt) : 'Pending'] },
-    { id: 'loanType', cells: ['Loan Type', loanType?.name || loan?.loanTypeId || 'N/A'] },
-    { id: 'gracePeriod', cells: ['Grace Period', loanType ? `${loanType.gracePeriodDays || 0} days` : 'N/A'] },
-    { id: 'defaultThreshold', cells: ['Default Threshold', loanType ? `${loanType.defaultThresholdDays || 30} days` : 'N/A'] },
-    { id: 'netDisbursement', cells: ['Net Disbursement', loanType ? formatCurrency(loanType.netDisbursement || 0) : 'N/A'] },
-    { id: 'installmentPenalty', cells: ['Installment Penalty', loanType ? `${loanType.installmentPenaltyType || 'fixed'} · ${formatCurrency(loanType.installmentPenaltyAmount || 0)}` : 'N/A'] },
-    { id: 'loanPenalty', cells: ['Loan Penalty', loanType ? formatCurrency(loanType.loanPenaltyAmount || 0) : 'N/A'] },
-    { id: 'created', cells: ['Created At', formatDate(loan?.createdAt)] },
+    { id: 'amount', cells: ['Loan Amount', screen.formatCurrency(screen.loan?.amount)] },
+    { id: 'rate', cells: ['Interest Rate', `${screen.loan?.interestRate || 0}%`] },
+    { id: 'duration', cells: ['Duration', `${screen.loan?.duration || 0} months`] },
+    { id: 'total', cells: ['Total Amount', screen.formatCurrency(screen.loan?.totalAmount)] },
+    { id: 'paid', cells: ['Paid Amount', screen.formatCurrency(screen.loan?.paidAmount)] },
+    { id: 'remaining', cells: ['Remaining', screen.formatCurrency(screen.loan?.remainingAmount)] },
+    { id: 'due', cells: ['Due Date', screen.formatDate(screen.loan?.dueDate)] },
+    { id: 'reqGuarantors', cells: ['Required Guarantors', screen.loan?.requiredGuarantors?.toString() || '0'] },
+    { id: 'appGuarantors', cells: ['Approved Guarantors', screen.loan?.approvedGuarantors?.toString() || '0'] },
+    { id: 'approvalStage', cells: ['Approval Stage', screen.loan?.approvalStage?.toUpperCase().replace('_', ' ') || 'N/A'] },
+    { id: 'secretary', cells: ['Secretary Approval', screen.loan?.secretaryApprovedBy ? screen.formatDate(screen.loan?.secretaryApprovedAt) : 'Pending'] },
+    { id: 'treasurer', cells: ['Treasurer Approval', screen.loan?.treasurerApprovedBy ? screen.formatDate(screen.loan?.treasurerApprovedAt) : 'Pending'] },
+    { id: 'chairperson', cells: ['Chairperson Approval', screen.loan?.chairpersonApprovedBy ? screen.formatDate(screen.loan?.chairpersonApprovedAt) : 'Pending'] },
+    { id: 'loanType', cells: ['Loan Type', screen.loanType?.name || screen.loan?.loanTypeId || 'N/A'] },
+    { id: 'gracePeriod', cells: ['Grace Period', screen.loanType ? `${screen.loanType.gracePeriodDays || 0} days` : 'N/A'] },
+    { id: 'defaultThreshold', cells: ['Default Threshold', screen.loanType ? `${screen.loanType.defaultThresholdDays || 30} days` : 'N/A'] },
+    { id: 'netDisbursement', cells: ['Net Disbursement', screen.loanType ? screen.formatCurrency(screen.loanType.netDisbursement || 0) : 'N/A'] },
+    { id: 'installmentPenalty', cells: ['Installment Penalty', screen.loanType ? `${screen.loanType.installmentPenaltyType || 'fixed'} · ${screen.formatCurrency(screen.loanType.installmentPenaltyAmount || 0)}` : 'N/A'] },
+    { id: 'loanPenalty', cells: ['Loan Penalty', screen.loanType ? screen.formatCurrency(screen.loanType.loanPenaltyAmount || 0) : 'N/A'] },
+    { id: 'created', cells: ['Created At', screen.formatDate(screen.loan?.createdAt)] },
   ];
 
   const scheduleHeaders = ['Month', 'Amount', 'Status'];
-  const scheduleData = schedule.map((item) => ({
+  const scheduleData = screen.schedule.map((item) => ({
     id: String(item.number),
-    cells: [
-      `Month ${item.number}`,
-      formatCurrency(item.amount),
-      item.status?.toUpperCase(),
-    ],
+    cells: [`Month ${item.number}`, screen.formatCurrency(item.amount), item.status?.toUpperCase()],
   }));
 
   const paymentHeaders = ['Date', 'Amount', 'Status'];
-  const paymentData = payments.map((payment) => {
+  const paymentData = screen.payments.map((payment) => {
     const paymentDate = payment.paidAt || payment.date || payment.createdAt;
     const paymentStatus = payment.status || 'completed';
-    return {
-      id: payment.id,
-      cells: [
-        formatDate(paymentDate),
-        formatCurrency(payment.amount),
-        renderStatusBadge(paymentStatus),
-      ],
-    };
+    return { id: payment.id, cells: [screen.formatDate(paymentDate), screen.formatCurrency(payment.amount), screen.renderStatusBadge(paymentStatus)] };
   });
 
   const guarantorHeaders = ['Guarantor', 'Amount', 'Status'];
-  const guarantorData = guarantors.map((g) => {
+  const guarantorData = screen.guarantors.map((g) => {
     const fullName = g.user ? `${g.user.firstName || ''} ${g.user.lastName || ''}`.trim() : 'Unknown';
-    return {
-      id: g.id,
-      cells: [
-        fullName,
-        formatCurrency(g.amount),
-        renderStatusBadge(g.status),
-      ],
-    };
+    return { id: g.id, cells: [fullName, screen.formatCurrency(g.amount), screen.renderStatusBadge(g.status)] };
   });
 
   const fineHeaders = ['Date', 'Reason', 'Amount', 'Status'];
-  const fineData = fines.map((f) => ({
+  const fineData = screen.fines.map((f) => ({
     id: f.id,
-    cells: [
-      formatDate(f.createdAt),
-      f.reason,
-      formatCurrency(f.amount),
-      renderStatusBadge(f.status),
-    ],
+    cells: [screen.formatDate(f.createdAt), f.reason, screen.formatCurrency(f.amount), screen.renderStatusBadge(f.status)],
   }));
 
   const renderCell = (cell, index, totalCells) => {
@@ -473,10 +149,9 @@ const LoanDetails = ({ route, navigation }) => {
 
   const renderDetailsCell = (cell, index, totalCells) => {
     const isFirst = index === 0;
-    const isLast = index === totalCells - 1;
     const flex = isFirst ? 0.8 : 2;
     return (
-      <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex, alignItems: 'flex-start' }]}>
+      <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, { flex, alignItems: 'flex-start' }]}>
         <Text style={[styles.tableCellText, isFirst && styles.nameText, { textAlign: 'left' }]}>{cell}</Text>
       </View>
     );
@@ -490,10 +165,9 @@ const LoanDetails = ({ route, navigation }) => {
             <View style={styles.tableHeader}>
               {headers.map((header, index) => {
                 const isFirst = index === 0;
-                const isLast = index === headers.length - 1;
                 const flex = isFirst ? 0.8 : 2;
                 return (
-                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex, alignItems: 'flex-start' }]}>
+                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, { flex, alignItems: 'flex-start' }]}>
                     <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft, { textAlign: 'left' }]}>{header}</Text>
                   </View>
                 );
@@ -517,33 +191,9 @@ const LoanDetails = ({ route, navigation }) => {
     </View>
   );
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, styles.containerBackground]}>
-        <View style={styles.loadingContainer}>
-          <LoadingSpinner />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading loan details...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!loan) {
-    return (
-      <SafeAreaView style={[styles.container, styles.containerBackground]}>
-        <View style={styles.errorState}>
-          <Ionicons name="card-outline" size={64} color={colors.textSecondary} />
-          <Text style={[styles.errorTitle, { color: colors.text }]}>Loan Not Found</Text>
-          <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>Unable to load loan details</Text>
-          <Button title="Go Back" onPress={() => navigation.goBack()} style={{ marginTop: spacing.lg }} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
-      <ScrollView ref={scrollViewRef} style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={screen.scrollViewRef} style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={[styles.header, { backgroundColor: colors.surface }]}>
           <View style={styles.headerContent}>
             <View style={styles.loanIcon}>
@@ -551,7 +201,7 @@ const LoanDetails = ({ route, navigation }) => {
             </View>
             <View style={styles.loanInfo}>
               <Text style={[styles.loanTitle, { color: colors.text }]}>
-                Loan #{loan.createdAt ? new Date(loan.createdAt).toISOString().slice(0, 7).replace('-', '') : ''}-{loan.id?.slice(-8)}
+                Loan #{screen.loan.createdAt ? new Date(screen.loan.createdAt).toISOString().slice(0, 7).replace('-', '') : ''}-{screen.loan.id?.slice(-8)}
               </Text>
               <Text style={[styles.loanMember, { color: colors.textSecondary }]}>{borrowerName}</Text>
             </View>
@@ -560,7 +210,7 @@ const LoanDetails = ({ route, navigation }) => {
 
         {renderDetailsTable({ title: 'Loan Details', headers: detailsHeaders, data: detailsData, emptyMessage: 'No loan details available' })}
 
-        {disbursement && (
+        {screen.disbursement && (
           <Card variant="outlined" style={styles.amountCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
               <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.success + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
@@ -568,17 +218,17 @@ const LoanDetails = ({ route, navigation }) => {
               </View>
               <View>
                 <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Disbursement</Text>
-                <Text style={[styles.amountValue, { color: getStatusColor(disbursement.status), fontSize: typography.fontSize.lg }]}>{formatCurrency(disbursement.amount)}</Text>
-                {disbursement.reference ? (
+                <Text style={[styles.amountValue, { color: screen.getStatusColor(screen.disbursement.status), fontSize: typography.fontSize.lg }]}>{screen.formatCurrency(screen.disbursement.amount)}</Text>
+                {screen.disbursement.reference ? (
                   <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }}>
-                    Ref: {disbursement.reference}
+                    Ref: {screen.disbursement.reference}
                   </Text>
                 ) : null}
               </View>
             </View>
             <View style={styles.statusRow}>
-              {renderStatusBadge(disbursement.status)}
-              <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.xs, marginLeft: spacing.sm }}>{formatDate(disbursement.updatedAt || disbursement.createdAt)}</Text>
+              {screen.renderStatusBadge(screen.disbursement.status)}
+              <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.xs, marginLeft: spacing.sm }}>{screen.formatDate(screen.disbursement.updatedAt || screen.disbursement.createdAt)}</Text>
             </View>
           </Card>
         )}
@@ -588,90 +238,68 @@ const LoanDetails = ({ route, navigation }) => {
         {renderLoanTable({ title: 'Guarantors', headers: guarantorHeaders, data: guarantorData, emptyMessage: 'No guarantors for this loan' })}
         {renderLoanTable({ title: 'Fines / Penalties', headers: fineHeaders, data: fineData, emptyMessage: 'No fines for this loan' })}
 
-        {totalItems > pageSize && (
+        {screen.totalItems > screen.pageSize && (
           <View style={styles.paginationContainer}>
             <TouchableOpacity
-              style={[styles.paginationArrow, currentPage === 1 && styles.paginationArrowDisabled]}
-              onPress={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-              disabled={currentPage === 1}
+              style={[styles.paginationArrow, screen.currentPage === 1 && styles.paginationArrowDisabled]}
+              onPress={() => screen.currentPage > 1 && screen.setCurrentPage(screen.currentPage - 1)}
+              disabled={screen.currentPage === 1}
             >
-              <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? '#9ca3af' : '#2563eb'} />
+              <Ionicons name="chevron-back" size={20} color={screen.currentPage === 1 ? '#9ca3af' : '#2563eb'} />
             </TouchableOpacity>
-            <Text style={styles.paginationInfo}>{currentPage} / {totalPages}</Text>
+            <Text style={styles.paginationInfo}>{screen.currentPage} / {screen.totalPages}</Text>
             <TouchableOpacity
-              style={[styles.paginationArrow, currentPage === totalPages && styles.paginationArrowDisabled]}
-              onPress={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
+              style={[styles.paginationArrow, screen.currentPage === screen.totalPages && styles.paginationArrowDisabled]}
+              onPress={() => screen.currentPage < screen.totalPages && screen.setCurrentPage(screen.currentPage + 1)}
+              disabled={screen.currentPage === screen.totalPages}
             >
-              <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? '#9ca3af' : '#2563eb'} />
+              <Ionicons name="chevron-forward" size={20} color={screen.currentPage === screen.totalPages ? '#9ca3af' : '#2563eb'} />
             </TouchableOpacity>
           </View>
         )}
 
         <View style={styles.actions}>
-          {(loan?.approvalStage === 'pending' || loan?.approvalStage === 'secretary_approved' || loan?.approvalStage === 'treasurer_approved') && (
+          {(screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && (
             <View style={{ marginBottom: spacing.md }}>
               <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Approval Comment (Required)</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-                value={approvalComment}
-                onChangeText={setApprovalComment}
+                value={screen.approvalComment}
+                onChangeText={screen.setApprovalComment}
                 placeholder="Enter your approval comment"
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
           )}
 
-          {approvalStep === 'idle' && (loan?.approvalStage === 'pending' || loan?.approvalStage === 'secretary_approved' || loan?.approvalStage === 'treasurer_approved') && (
+          {screen.approvalStep === 'idle' && (screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && (
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
-              <Button
-                title="Approve"
-                onPress={handleInitiateApproval}
-                loading={approving}
-                style={{ backgroundColor: colors.success, flex: 1 }}
-                icon={<Ionicons name="checkmark" size={16} color={colors.white} />}
-              />
-              <Button
-                title="Reject"
-                onPress={handleRejectLoan}
-                loading={approving}
-                style={{ backgroundColor: colors.error, flex: 1 }}
-                icon={<Ionicons name="close" size={16} color={colors.white} />}
-              />
+              <Button title="Approve" onPress={screen.handleInitiateApproval} loading={screen.approving} style={{ backgroundColor: colors.success, flex: 1 }} icon={<Ionicons name="checkmark" size={16} color={colors.white} />} />
+              <Button title="Reject" onPress={screen.handleRejectLoan} loading={screen.approving} style={{ backgroundColor: colors.error, flex: 1 }} icon={<Ionicons name="close" size={16} color={colors.white} />} />
             </View>
           )}
 
-          {approvalStep === 'confirm' && (
+          {screen.approvalStep === 'confirm' && (
             <View style={{ marginBottom: spacing.md }}>
               <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Enter OTP sent to your phone</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, color: colors.text, marginBottom: spacing.sm }]}
-                value={approvalOTP}
-                onChangeText={setApprovalOTP}
+                value={screen.approvalOTP}
+                onChangeText={screen.setApprovalOTP}
                 placeholder="123456"
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="numeric"
                 maxLength={6}
               />
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <Button
-                  title="Verify & Approve"
-                  onPress={handleConfirmApproval}
-                  loading={approving}
-                  style={{ backgroundColor: colors.success, flex: 1 }}
-                  icon={<Ionicons name="checkmark" size={16} color={colors.white} />}
-                />
-                <Button
-                  title="Cancel"
-                  onPress={() => { setApprovalStep('idle'); setApprovalOTP(''); }}
-                  style={{ backgroundColor: colors.textSecondary, flex: 1 }}
-                />
+                <Button title="Verify & Approve" onPress={screen.handleConfirmApproval} loading={screen.approving} style={{ backgroundColor: colors.success, flex: 1 }} icon={<Ionicons name="checkmark" size={16} color={colors.white} />} />
+                <Button title="Cancel" onPress={() => { screen.setApprovalStep('idle'); screen.setApprovalOTP(''); }} style={{ backgroundColor: colors.textSecondary, flex: 1 }} />
               </View>
             </View>
           )}
 
-          {['active', 'delinquent', 'partial', 'recovery_active'].includes(loan?.status?.toLowerCase()) && (
-            <Button title="Record Payment" onPress={() => setPaymentModalVisible(true)} style={{ backgroundColor: colors.success, marginBottom: spacing.md }} icon={<Ionicons name="cash" size={16} color={colors.white} />} />
+          {['active', 'delinquent', 'partial', 'recovery_active'].includes(screen.loan?.status?.toLowerCase()) && (
+            <Button title="Record Payment" onPress={() => screen.setPaymentModalVisible(true)} style={{ backgroundColor: colors.success, marginBottom: spacing.md }} icon={<Ionicons name="cash" size={16} color={colors.white} />} />
           )}
           <Button title="View Schedule" onPress={() => {}} style={{ backgroundColor: colors.info, marginBottom: spacing.md }} icon={<Ionicons name="calendar" size={16} color={colors.white} />} />
           <Button title="Loan Report" onPress={() => Alert.alert('Coming Soon', 'Loan reports will be available in the next update.')} style={{ backgroundColor: colors.secondary, marginBottom: spacing.md }} icon={<Ionicons name="document-text" size={16} color={colors.white} />} />
@@ -679,15 +307,15 @@ const LoanDetails = ({ route, navigation }) => {
       </ScrollView>
 
       <RecordPaymentModal
-        visible={paymentModalVisible}
-        onClose={() => setPaymentModalVisible(false)}
+        visible={screen.paymentModalVisible}
+        onClose={() => screen.setPaymentModalVisible(false)}
         colors={colors}
-        paymentAmount={paymentAmount}
-        setPaymentAmount={setPaymentAmount}
-        paymentMethod={paymentMethod}
-        setPaymentMethod={setPaymentMethod}
-        submittingPayment={submittingPayment}
-        handleRecordPayment={handleRecordPayment}
+        paymentAmount={screen.paymentAmount}
+        setPaymentAmount={screen.setPaymentAmount}
+        paymentMethod={screen.paymentMethod}
+        setPaymentMethod={screen.setPaymentMethod}
+        submittingPayment={screen.submittingPayment}
+        handleRecordPayment={screen.handleRecordPayment}
       />
     </SafeAreaView>
   );
@@ -696,7 +324,12 @@ const LoanDetails = ({ route, navigation }) => {
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   containerBackground: { backgroundColor: colors.background },
-  scrollView: { flex: 1, padding: spacing.md },
+  scrollView: { flex: 1 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  loadingText: { fontSize: typography.fontSize.base },
+  errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  errorTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.md, marginBottom: spacing.xs },
+  errorSubtitle: { fontSize: typography.fontSize.sm, textAlign: 'center' },
   header: { borderRadius: borderRadius.lg, padding: spacing.lg, marginBottom: spacing.md, ...shadows.sm },
   headerContent: { flexDirection: 'row', alignItems: 'center' },
   loanIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(59, 130, 246, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: spacing.lg },
@@ -736,7 +369,7 @@ const createStyles = (colors) => StyleSheet.create({
   amountCard: { padding: spacing.lg, alignItems: 'center', marginBottom: spacing.md, ...shadows.sm },
   amountLabel: { fontSize: typography.fontSize.sm, marginBottom: spacing.xs },
   amountValue: { fontSize: typography.fontSize.xxxl, fontWeight: typography.fontWeight.bold, marginBottom: spacing.sm },
-  label: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginBottom: spacing.xs, color: colors.text },
+  label: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginBottom: spacing.xs },
   input: { borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: typography.fontSize.base, borderColor: colors.border, color: colors.text },
   statusRow: { flexDirection: 'row', alignItems: 'center' },
   paginationContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md, backgroundColor: '#f5f5f5', borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: spacing.sm },
@@ -744,11 +377,6 @@ const createStyles = (colors) => StyleSheet.create({
   paginationArrowDisabled: { opacity: 0.5 },
   paginationInfo: { fontSize: typography.fontSize.sm, color: '#6b7280', fontWeight: typography.fontWeight.medium, minWidth: 60, textAlign: 'center' },
   actions: { marginBottom: spacing.xxxl },
-  errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
-  errorTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.md, marginBottom: spacing.xs, color: colors.text },
-  errorSubtitle: { fontSize: typography.fontSize.sm, textAlign: 'center', color: colors.textSecondary },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
-  loadingText: { fontSize: typography.fontSize.base },
 });
 
 export default LoanDetails;
