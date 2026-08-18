@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Alert, ActivityIndicator } from 'react-native';
+import { Alert, ActivityIndicator, Image, View, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
@@ -416,6 +416,45 @@ const useViewMember = ({ route, navigation }) => {
 
   const handleImagePress = () => setImageExpanded(!imageExpanded);
 
+  const renderMemberAvatar = (isExpanded = false) => {
+    const memberUser = memberData?.user || {};
+    const avatarUrl = memberUser?.avatar_url || memberUser?.avatar || memberUser?.profile_image || memberData?.avatar;
+    const firstName = memberUser?.first_name || memberData?.first_name;
+    const lastName = memberUser?.last_name || memberData?.last_name;
+
+    const avatarStyle = isExpanded ? { width: '100%', height: 350, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, backgroundColor: colors.surface } : { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.surface };
+    const placeholderStyle = isExpanded ? { width: '100%', height: 350, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary } : { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary };
+    const textStyle = isExpanded ? { fontSize: 120, fontWeight: '600', color: colors.white } : { fontSize: 32, fontWeight: '600', color: colors.white };
+
+    if (avatarUrl && !failedAvatars.has(avatarUrl)) {
+      let fullAvatarUrl;
+      if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
+        fullAvatarUrl = avatarUrl;
+      } else {
+        fullAvatarUrl = `${api.uploadBaseUrl}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+      }
+
+      return (
+        <Image
+          source={{ uri: fullAvatarUrl }}
+          style={avatarStyle}
+          resizeMode="cover"
+          onError={() => {
+            setFailedAvatars(prev => new Set([...prev, avatarUrl]));
+          }}
+        />
+      );
+    }
+
+    return (
+      <View style={placeholderStyle}>
+        <Text style={textStyle}>
+          {firstName?.[0]?.toUpperCase() || 'M'}{lastName?.[0]?.toUpperCase() || ''}
+        </Text>
+      </View>
+    );
+  };
+
   return {
     loading, memberData, memberStats, loadError, imageExpanded, serviceFeePayments,
     feePaymentsLoading, payingFee, cooldownActive, cooldownRemaining, serviceFeePaid,
@@ -426,6 +465,7 @@ const useViewMember = ({ route, navigation }) => {
     loadMemberDetails, loadServiceFeePayments, loadApprovalHistory,
     handleRemoveMember, confirmRemoveMember, handlePayServiceFee, handlePayMemberServiceFee,
     handleDownloadReceipt, handleInitiateApprove, handleVerifyOTP, handleResendOTP, handleImagePress,
+    renderMemberAvatar,
     formatDate, formatCurrency, maskPhone, maskLocation, maskOccupation,
     getFeeStatusColor, getFeeStatusIcon, getRoleColor, getRoleIcon, getMemberName,
   };
