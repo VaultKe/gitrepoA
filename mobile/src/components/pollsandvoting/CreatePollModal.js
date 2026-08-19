@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Animated } from 'react-native';
@@ -28,45 +28,79 @@ const CreatePollModal = ({
   getMemberName,
   getMemberEmail,
 }) => {
-  if (!visible) return null;
+  const [modalVisible, setModalVisible] = React.useState(false);
+  const [animating, setAnimating] = React.useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setModalVisible(true);
+      setAnimating(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: false,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: false,
+        }),
+      ]).start(() => setAnimating(false));
+    } else if (modalVisible) {
+      setAnimating(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: false,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.8,
+          duration: 200,
+          useNativeDriver: false,
+        }),
+      ]).start(() => {
+        setAnimating(false);
+        setModalVisible(false);
+      });
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  if (!modalVisible && !animating) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <Animated.View
-        style={[
-          styles.modalBackdrop,
-          {
-            opacity: new Animated.Value(0).interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.5],
-            }),
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdropTouchable}
-          onPress={onClose}
-          activeOpacity={1}
-        />
-      </Animated.View>
-
-      {/* Modal Content */}
+    <Animated.View
+      style={[
+        styles.modalBackdrop,
+        {
+          opacity: fadeAnim,
+          zIndex: animating ? 1001 : 1000,
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.modalBackdropTouchable}
+        onPress={handleClose}
+        activeOpacity={1}
+      />
+      
       <Animated.View
         style={[
           styles.modalContainer,
           { backgroundColor: colors.surface },
           {
-            transform: [
-              {
-                scale: new Animated.Value(0).interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.8, 1],
-                }),
-              },
-            ],
-            opacity: new Animated.Value(0),
+            transform: [{ scale: scaleAnim }],
+            opacity: fadeAnim,
           },
+          isDesktop && styles.modalContainerDesktop,
         ]}
       >
         <View style={[
@@ -83,7 +117,7 @@ const CreatePollModal = ({
             Create New Poll
           </Text>
           <TouchableOpacity
-            onPress={onClose}
+            onPress={handleClose}
             style={[styles.modalCloseButton, isDesktop && styles.modalCloseButtonDesktop]}
           >
             <Ionicons name={isDesktop ? "close-circle" : "close"} size={isDesktop ? 28 : 24} color={colors.text} />
@@ -109,19 +143,21 @@ const CreatePollModal = ({
           getMemberEmail={getMemberEmail}
         />
 
-        <Button
-          title="Create Poll"
-          onPress={onSubmit}
-          style={[
-            styles.submitButton,
-            { backgroundColor: colors.primary },
-            isDesktop && styles.submitButtonDesktop
-          ]}
-          accessibilityLabel="Create poll button"
-          accessibilityHint="Tap to create your poll with the entered information"
-        />
+        <View style={styles.submitContainer}>
+          <Button
+            title="Create Poll"
+            onPress={onSubmit}
+            style={[
+              styles.submitButton,
+              { backgroundColor: colors.primary },
+              isDesktop && styles.submitButtonDesktop
+            ]}
+            accessibilityLabel="Create poll button"
+            accessibilityHint="Tap to create your poll with the entered information"
+          />
+        </View>
       </Animated.View>
-    </>
+    </Animated.View>
   );
 };
 
@@ -134,17 +170,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalBackdropTouchable: {
     flex: 1,
   },
   modalContainer: {
-    position: 'absolute',
-    top: '5%',
-    bottom: '5%',
-    left: 20,
-    right: 20,
-    zIndex: 1001,
+    width: '90%',
+    maxWidth: 600,
+    maxHeight: '80%',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)',
@@ -153,6 +188,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 10,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalContainerDesktop: {
+    width: 600,
+    maxWidth: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -182,11 +223,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  submitContainer: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
   submitButton: {
-    marginTop: 24,
+    marginTop: 0,
   },
   submitButtonDesktop: {
-    marginTop: 32,
     paddingVertical: 16,
     paddingHorizontal: 32,
   },

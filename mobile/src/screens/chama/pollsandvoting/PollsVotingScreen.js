@@ -41,7 +41,6 @@ const PollsVotingScreen = ({ route, navigation }) => {
   const [numColumns, setNumColumns] = useState(Dimensions.get('window').width >= 768 ? 2 : 1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
-  const modalAnimation = useRef(new Animated.Value(0)).current;
   const [floatingButtonPosition, setFloatingButtonPosition] = useState({ x: Dimensions.get('window').width - 80, y: Dimensions.get('window').height - 160 });
 
   const panResponder = useRef(
@@ -142,21 +141,10 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
   const openCreateModal = () => {
     setShowCreateModal(true);
-    Animated.timing(modalAnimation, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
   };
 
   const closeCreateModal = () => {
-    Animated.timing(modalAnimation, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowCreateModal(false);
-    });
+    setShowCreateModal(false);
   };
 
   const handleRoleEscalationSubmit = async () => {
