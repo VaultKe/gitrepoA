@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Card from '../../../components/common/Card';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import Card from '../common/Card';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 import ChamaTransactionRow from './ChamaTransactionRow';
 import ChamaTransactionsEmptyState from './ChamaTransactionsEmptyState';
 

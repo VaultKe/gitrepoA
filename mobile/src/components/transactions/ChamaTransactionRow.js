@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 import {
   formatCurrency,
   formatAmountOnly,
@@ -9,7 +9,7 @@ import {
   getTransactionAmount,
   getTransactionColor,
   getTransactionUserName,
-} from './chamaTransactionsUtils';
+} from '../../utils/transactionsHelpers';
 
 const ChamaTransactionRow = ({
   item,

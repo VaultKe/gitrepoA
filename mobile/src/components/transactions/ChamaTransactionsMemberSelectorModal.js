@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import { getMemberEmail, getMemberName } from './chamaTransactionsUtils';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import { getMemberEmail, getMemberName } from '../../utils/transactionsHelpers';
 
 const ChamaTransactionsMemberSelectorModal = ({
   visible,

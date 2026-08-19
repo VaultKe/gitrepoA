@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 
 const ChamaTransactionsNoChama = ({ navigation, theme }) => {
   const colors = getThemeColors(theme);

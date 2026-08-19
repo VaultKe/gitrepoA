@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import { filters } from './chamaTransactionsUtils';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import { filters } from '../../utils/transactionsHelpers';
 
 const ChamaTransactionsFilterDropdown = ({
   selectedFilter,

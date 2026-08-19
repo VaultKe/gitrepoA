@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Card from '../../../components/common/Card';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import { filters } from './chamaTransactionsUtils';
+import Card from '../common/Card';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import { filters } from '../../utils/transactionsHelpers';
 
 const ChamaTransactionsHeader = ({
   viewMode,
