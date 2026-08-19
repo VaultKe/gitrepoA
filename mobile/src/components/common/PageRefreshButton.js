@@ -51,13 +51,13 @@ const PageRefreshButton = ({
 
   const startSpin = useCallback(() => {
     spinAnim.setValue(0);
-    Animated.loop(
-      Animated.timing(spinAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ).start();
+      Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: false,
+        }),
+      ).start();
   }, [spinAnim]);
 
   const stopSpin = useCallback(() => {
