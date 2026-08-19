@@ -189,6 +189,9 @@ const useChamaTransactionsScreen = ({ navigation, route }) => {
     try {
       setIsLoadingAll(true);
       setLoading(true);
+      setAllRecords([]);
+      setTransactions([]);
+      setCurrentPage(1);
 
       const membersPromise = loadChamaMembers();
 
@@ -409,7 +412,6 @@ const useChamaTransactionsScreen = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Export error:', error);
-      Alert.alert('Error', 'Failed to export records');
     } finally {
       setExportLoading(false);
     }
