@@ -55,15 +55,6 @@ const PhysicalMeetingScreen = ({ route, navigation }) => {
     colors,
   } = screen;
 
-  console.log('PhysicalMeetingScreen render:', {
-    meetingId: screen.meetingId,
-    isReadOnly,
-    canMarkAttendance,
-    canTakeNotes,
-    userRole: screen.userRole,
-    meetingStatus: meetingData?.status,
-  });
-
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>

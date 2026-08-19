@@ -210,8 +210,6 @@ const AppContext = createContext();
         AsyncStorage.getItem('language'),
       ]);
 
-      console.debug('[AppInit] authToken present?', !!authToken, 'userData present?', !!userData);
-
       // Set theme and language
       if (theme) {
         dispatch({ type: ActionTypes.SET_THEME, payload: theme });
@@ -247,8 +245,6 @@ const AppContext = createContext();
           // Re-store compressed data to prevent future quota errors
           const compressedSize = JSON.stringify(compressedUser).length;
           if (compressedSize > 1024) {
-            console.warn('⚠️ Session restore data too large (', compressedSize, 'bytes), using ultra-minimal fallback');
-            // Ultra-minimal data - only absolutely essential fields
             const ultraMinimalUserData = {
               id: user.id,
               firstName: user.firstName,
@@ -261,7 +257,6 @@ const AppContext = createContext();
             // Final check - if even this is too large, use absolute minimum
             const ultraMinimalSize = JSON.stringify(ultraMinimalUserData).length;
             if (ultraMinimalSize > 512) {
-              console.warn('⚠️ Even ultra-minimal data too large (session restore) (', ultraMinimalSize, 'bytes), using absolute minimum');
               const absoluteMinimalData = {
                 id: user.id,
                 firstName: user.firstName,

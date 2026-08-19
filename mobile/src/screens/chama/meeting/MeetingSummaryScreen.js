@@ -190,7 +190,6 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
   };
 
   if (loading && !dataReady) {
-    console.log('MeetingSummaryScreen: showing loading spinner, loading=', loading, 'dataReady=', dataReady);
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
@@ -202,14 +201,6 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
       </SafeAreaView>
     );
   }
-
-  console.log('MeetingSummaryScreen render state:', {
-    loading,
-    dataReady,
-    hasMeetingDetails: !!meetingDetails,
-    meetingTitle: meetingDetails?.title,
-    meetingStatus: meetingDetails?.status,
-  });
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
