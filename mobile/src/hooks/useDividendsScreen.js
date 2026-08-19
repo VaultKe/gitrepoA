@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { View, Text, Alert, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, FlatList, Modal, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { useChamaContext } from '../context/ChamaContext';
 import ApiService from '../services/api';
 import { getWalletBalance, transferMoney } from '../services/api/walletEndpoints';
 import stkPushService from '../services/stkPushService';
 import { getChamaDividendDeclarations } from '../services/api/settingsEndpoints';
+import { getThemeColors } from '../utils/theme';
+import { spacing, typography, borderRadius } from '../utils/theme';
+import Button from '../components/common/Button';
 
 const useDividendsScreen = ({ navigation, route }) => {
   const { theme } = useApp();
@@ -294,6 +298,74 @@ const useDividendsScreen = ({ navigation, route }) => {
       </Text>
     </View>
   );
+
+  const styles = StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      alignItems: 'center',
+      gap: 12,
+    },
+    declarationCell: {
+      flex: 2,
+    },
+    rowTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      marginBottom: 2,
+    },
+    rowSub: {
+      fontSize: 12,
+    },
+    amountCell: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    rowAmount: {
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    actionsCell: {
+      flex: 1.5,
+      alignItems: 'flex-end',
+      gap: 8,
+    },
+    statusBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      alignSelf: 'flex-end',
+    },
+    statusText: {
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    descriptionCell: {
+      flex: 2,
+    },
+    dateCell: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      paddingVertical: 64,
+      paddingHorizontal: 32,
+      gap: 12,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+  });
 
   return {
     colors,
