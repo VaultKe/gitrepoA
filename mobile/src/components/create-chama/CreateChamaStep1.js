@@ -1,9 +1,9 @@
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import Card from '../../../components/common/Card';
-import Input from '../../../components/common/Input';
-import Dropdown from '../../../components/common/Dropdown';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import Card from '../../components/common/Card';
+import Input from '../../components/common/Input';
+import Dropdown from '../../components/common/Dropdown';
 
 const creationOptions = [
   {

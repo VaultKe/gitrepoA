@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import Card from '../../../components/common/Card';
-import Input from '../../../components/common/Input';
-import Dropdown from '../../../components/common/Dropdown';
-import KENYA_COUNTIES from '../../../utils/kenyaCounties';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import Card from '../../components/common/Card';
+import Input from '../../components/common/Input';
+import Dropdown from '../../components/common/Dropdown';
+import KENYA_COUNTIES from '../../utils/kenyaCounties';
 
 const CreateChamaStep2 = ({
   chamaData,

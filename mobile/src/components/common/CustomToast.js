@@ -66,10 +66,30 @@ const CustomInfoToast = (props) => {
   );
 };
 
+const CustomWarningToast = (props) => {
+  const { theme } = useApp();
+  const colors = getThemeColors(theme);
+  const warningColor = colors.warning || '#F59E0B';
+
+  return (
+    <BaseToast
+      style={styles.base}
+      contentContainerStyle={styles.contentContainer}
+      renderLeadingIcon={() => (
+        <View style={[styles.indicator, { backgroundColor: warningColor + '20' }]}>
+          <Ionicons name="warning" size={TOAST_ICON_SIZE} color={warningColor} />
+        </View>
+      )}
+      {...props}
+    />
+  );
+};
+
 const toastConfig = {
   success: (props) => <CustomSuccessToast {...props} />,
   error: (props) => <CustomErrorToast {...props} />,
   info: (props) => <CustomInfoToast {...props} />,
+  warning: (props) => <CustomWarningToast {...props} />,
 };
 
 export default toastConfig;

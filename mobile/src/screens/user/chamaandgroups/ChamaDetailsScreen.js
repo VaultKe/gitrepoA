@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   SafeAreaView,
   RefreshControl,
   Alert,
-  Image,
   Linking,
   Dimensions,
   Platform,
@@ -25,1550 +24,206 @@ import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
 import DestructiveConfirmModal from '../../../components/common/DestructiveConfirmModal';
 import getResponsiveStyles from '../../../styles/ChamaDetailsScreenStyles';
+import useChamaDetails from '../../../hooks/useChamaDetails';
+import ChamaHeader from '../../../components/chama-details/ChamaHeader';
+import ChamaStats from '../../../components/chama-details/ChamaStats';
+import ChamaMembers from '../../../components/chama-details/ChamaMembers';
+import ChamaMeetings from '../../../components/chama-details/ChamaMeetings';
+import ChamaTransactions from '../../../components/chama-details/ChamaTransactions';
+import ChamaPolls from '../../../components/chama-details/ChamaPolls';
+import ChamaRules from '../../../components/chama-details/ChamaRules';
+import ChamaUploadRules from '../../../components/chama-details/ChamaUploadRules';
+import ChamaGroupChat from '../../../components/chama-details/ChamaGroupChat';
+import ChamaMembershipActions from '../../../components/chama-details/ChamaMembershipActions';
+import SmartResponsiveLayout from '../../../components/chama-details/SmartResponsiveLayout';
+import MemberAvatar from '../../../components/chama-details/MemberAvatar';
 
 const ChamaDetailsScreen = ({ route, navigation }) => {
-  const { chamaId } = route.params;
   const { theme, user, setSelectedChama, switchToChamaDashboard } = useApp();
   const colors = getThemeColors(theme);
-
-  // Get current screen dimensions for responsive design
-  const [screenData, setScreenData] = useState(Dimensions.get('window'));
-
-  useEffect(() => {
-    const onChange = (result) => {
-      setScreenData(result.window);
-    };
-
-    const subscription = Dimensions.addEventListener('change', onChange);
-    return () => subscription?.remove();
-  }, []);
-
-  // Responsive configuration
-  const { width: screenWidth } = screenData;
-  const getResponsiveConfig = () => {
-    if (screenWidth < 600) {
-      return { isLargeScreen: false, screenType: 'mobile' };
-    } else if (screenWidth < 900) {
-      return { isLargeScreen: true, screenType: 'tablet' };
-    } else {
-      return { isLargeScreen: true, screenType: 'desktop' };
-    }
-  };
-
-  const { isLargeScreen, screenType } = getResponsiveConfig();
-
-  // Responsive text sizing helper
-  const getResponsiveTextSize = (baseSize) => {
-    const sizeMultiplier = screenType === 'desktop' ? 1.2 : screenType === 'tablet' ? 1.1 : 1;
-    return baseSize * sizeMultiplier;
-  };
-
-  // Create responsive styles
-  const styles = getResponsiveStyles(screenType, screenWidth, colors);
-
-  // Smart responsive layout component
-  const SmartResponsiveLayout = ({ children }) => {
-    if (!isLargeScreen) {
-      // Mobile: all cards take full width
-      return <View>{children}</View>;
-    }
-
-    // Define which cards can share a row (compact cards)
-    const cardConfigs = [
-      { component: 'members', canShare: true, priority: 1 },
-      { component: 'meetings', canShare: true, priority: 2 },
-      { component: 'transactions', canShare: false, priority: 3 }, // Full width (has transaction list)
-      { component: 'polls', canShare: false, priority: 4 }, // Full width (has poll details)
-    ];
-
-    const childrenArray = React.Children.toArray(children);
-    const rows = [];
-    let currentRow = [];
-
-    childrenArray.forEach((child, index) => {
-      const config = cardConfigs[index] || { canShare: false };
-
-      if (!config.canShare || currentRow.length === 0) {
-        // Start new row
-        if (currentRow.length > 0) {
-          // Finish previous row
-          rows.push(
-            <View key={`row-${rows.length}`} style={styles.flexibleRow}>
-              {currentRow.map((item, idx) => (
-                <View key={idx} style={[styles.flexibleCard, { flex: 1 / currentRow.length }]}>
-                  {item}
-                </View>
-              ))}
-            </View>
-          );
-          currentRow = [];
-        }
-
-        if (config.canShare) {
-          currentRow.push(child);
-        } else {
-          // Full width card
-          rows.push(
-            <View key={`row-${rows.length}`} style={styles.fullWidthRow}>
-              {child}
-            </View>
-          );
-        }
-      } else if (config.canShare && currentRow.length === 1) {
-        // Add to current row (max 2 cards per row)
-        currentRow.push(child);
-
-        // Finish the row
-        rows.push(
-          <View key={`row-${rows.length}`} style={styles.flexibleRow}>
-            {currentRow.map((item, idx) => (
-              <View key={idx} style={[styles.flexibleCard, { flex: 0.5 }]}>
-                {item}
-              </View>
-            ))}
-          </View>
-        );
-        currentRow = [];
-      }
-    });
-
-    // Handle any remaining cards in currentRow
-    if (currentRow.length > 0) {
-      rows.push(
-        <View key={`row-${rows.length}`} style={styles.flexibleRow}>
-          {currentRow.map((item, idx) => (
-            <View key={idx} style={[styles.flexibleCard, { flex: 1 / currentRow.length }]}>
-              {item}
-            </View>
-          ))}
-        </View>
-      );
-    }
-
-    return <View>{rows}</View>;
-  };
-
-  const [chama, setChama] = useState(null);
-  const [members, setMembers] = useState([]);
-  const [meetings, setMeetings] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [loans, setLoans] = useState([]);
-  const [polls, setPolls] = useState([]);
-  const [pollsLoading, setPollsLoading] = useState(false);
-  const [statistics, setStatistics] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [userMembership, setUserMembership] = useState(null);
-  const [chatRoomLoading, setChatRoomLoading] = useState(false);
-  const [uploadingRules, setUploadingRules] = useState(false);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [userLeft, setUserLeft] = useState(false);
-
-  // Guard against concurrent / repeated loads (focus + param changes can fire rapidly)
-  const loadingRef = useRef(false);
-  const lastLoadedAtRef = useRef(0);
-  const creatingChatRoomRef = useRef(false);
-
-  // Reset state and reload data when chamaId changes
-  useEffect(() => {
-    if (chamaId) {
-      // Reset all state to prevent showing previous chama data
-      setChama(null);
-      setMembers([]);
-      setMeetings([]);
-      setTransactions([]);
-      setLoans([]);
-      setPolls([]);
-      setPollsLoading(false);
-      setStatistics(null);
-      setUserMembership(null);
-
-      // Load new chama data
-      loadChamaDetails();
-    }
-  }, [chamaId]);
-
-  // Also reload when screen comes into focus
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      // Skip if a load just happened (avoids duplicate reloads on rapid focus events)
-      if (Date.now() - lastLoadedAtRef.current < 2000) {
-        return;
-      }
-      if (chamaId) {
-        loadChamaDetails();
-      }
-    });
-
-    return unsubscribe;
-  }, [navigation, chamaId]);
-
-  const loadChamaDetails = async (targetChamaId = chamaId) => {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
-    try {
-      // Ensure we have a valid chamaId
-      if (!targetChamaId) {
-        return;
-      }
-
-      // Load basic chama data and members first (critical for page display)
-      // Use independent calls so a failure on one doesn't block the other
-      let memberIsLeft = false;
-      let chamaResponse;
-      let membersResponse;
-      try {
-        chamaResponse = await ApiService.getChamaById(targetChamaId);
-      } catch (chamaError) {
-        chamaResponse = { success: false, data: null };
-      }
-
-      try {
-        membersResponse = await ApiService.getChamaMembers(targetChamaId, { include_inactive: 'true' });
-      } catch (membersError) {
-        membersResponse = { success: false, data: [] };
-      }
-
-      if (chamaResponse.success && chamaResponse.data) {
-        setChama(chamaResponse.data);
-        setSelectedChama(chamaResponse.data);
-      }
-
-      // Determine membership through multiple fallbacks
-      let membership = null;
-      let currentUserIsLeft = false;
-
-      // Fallback 1: Try to find user in chama members list
-      if (membersResponse.success) {
-        const membersData = Array.isArray(membersResponse.data) ? membersResponse.data : [];
-        const uniqueMembers = Array.from(
-          new Map(membersData.map((m) => [m.id, m])).values()
-        );
-
-        // Filter out inactive members from display
-        const activeMembers = uniqueMembers.filter(member => {
-          const isActive = member?.is_active;
-          return isActive !== false && isActive !== 0 && isActive !== '0' && isActive !== 'false';
-        });
-        setMembers(activeMembers);
-
-        const currentUserId = String(user?.id);
-
-        membership = uniqueMembers.find(member => {
-          const memberUserId = String(
-            member.user_id ||
-            member.userId ||
-            member.user?.id ||
-            member.user?.userId ||
-            ''
-          );
-          const matches = memberUserId === currentUserId;
-          if (!matches) {
-               }
-          return matches;
-        });
-
-        // Check if current user has left the chama
-        if (membership) {
-          const memberIsActive = membership?.is_active;
-          if (memberIsActive === false || memberIsActive === 0 || memberIsActive === '0' || memberIsActive === 'false') {
-            currentUserIsLeft = true;
-          }
-        }
-      } else {
-        setMembers([]);
-      }
-
-      // Fallback 2: If not found in members list, check user's chamas via /chamas/my
-      if (!membership && chamaResponse.data) {
-        const currentUserId = String(user?.id);
-        try {
-          const myChamasResponse = await ApiService.getUserChamas(50, 0);
-          if (myChamasResponse.success && Array.isArray(myChamasResponse.data)) {
-            const myChama = myChamasResponse.data.find(c => String(c.id) === String(chamaResponse.data.id));
-            if (myChama) {
-              membership = {
-                id: myChama.memberId || myChama.id,
-                user_id: currentUserId,
-                role: myChama.memberRole || myChama.role || 'member',
-                joined_at: myChama.createdAt || new Date().toISOString(),
-              };
-            } else {
-            }
-          } else {
-          }
-        } catch (myChamasError) {
-        }
-      }
-
-      // Fallback 3: If still not found, check if user is the chama creator
-      if (!membership && chamaResponse.data) {
-        const currentUserId = String(user?.id);
-        const creatorId = String(chamaResponse.data.createdBy);
-        if (creatorId === currentUserId) {
-          membership = {
-            id: 'creator',
-            user_id: currentUserId,
-            role: 'chairperson',
-            joined_at: chamaResponse.data.createdAt || new Date().toISOString(),
-          };
-        }
-      }
-
-       setUserMembership(membership);
-       setUserLeft(currentUserIsLeft);
-       if (currentUserIsLeft) {
-         Alert.alert(
-           'Membership Expired',
-           'You have left this chama. You can no longer access its details.',
-           [{ text: 'OK', onPress: () => navigation.goBack() }]
-         );
-       }
-       // Load additional data in background (non-blocking)
-       setPollsLoading(true);
-       Promise.all([
-        // Load user transactions
-        ApiService.getChamaTransactions(targetChamaId).then(response => {
-          if (response.success) {
-            const allTransactions = response.data || [];
-            const userTransactions = allTransactions.filter(transaction => {
-              return transaction.user_id === user?.id ||
-                     transaction.initiated_by === user?.id ||
-                     transaction.member_id === user?.id ||
-                     transaction.sender_id === user?.id ||
-                     transaction.recipient_id === user?.id ||
-                     (transaction.user && transaction.user.id === user?.id) ||
-                     (transaction.member && transaction.member.user_id === user?.id);
-            });
-            setTransactions(userTransactions);
-          }
-        }).catch(error => {
-          setTransactions([]);
-        }),
-
-        // Load all polls (active and past) up to 10 total
-        ApiService.getChamaVotes(targetChamaId, 10, 0).then(response => {
-          if (response.success && Array.isArray(response.data)) {
-            const allPolls = response.data || [];
-
-            // Normalize user_voted field (backend returns 0/1 integer)
-            const normalized = allPolls.map(poll => ({
-              ...poll,
-              userVoted: poll.user_voted === 1 || poll.user_voted === true,
-              user_has_voted: poll.user_voted === 1 || poll.user_voted === true,
-            }));
-
-            // Sort: active first, then by date descending
-            const sorted = normalized.sort((a, b) => {
-              const aActive = a.status === 'active' && (!a.ends_at || new Date(a.ends_at) > new Date());
-              const bActive = b.status === 'active' && (!b.ends_at || new Date(b.ends_at) > new Date());
-              if (aActive && !bActive) return -1;
-              if (!aActive && bActive) return 1;
-              return new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0);
-            });
-
-            setPolls(sorted);
-          } else {
-            setPolls([]);
-          }
-        }).catch(() => {
-          setPolls([]);
-        }).finally(() => {
-          setPollsLoading(false);
-        }),
-
-        // Load meetings (like ChamaMeetingsScreen does)
-        ApiService.getMeetings(targetChamaId).then(response => {
-          if (response.success) {
-            const meetingsData = response.data || [];
-            setMeetings(meetingsData);
-            if (meetingsData.length > 0) {
-            }
-          }
-        }).catch(error => {
-          setMeetings([]);
-        }),
-
-        // Load statistics
-        ApiService.getChamaStatistics(targetChamaId).then(response => {
-          if (response.success) {
-            setStatistics(response.data);
-          }
-        }).catch(error => {
-          setStatistics(null);
-        })
-      ]);
-
-      // Set empty array for loans (API not implemented yet)
-      setLoans([]);
-
-    } catch (error) {
-    } finally {
-      loadingRef.current = false;
-      lastLoadedAtRef.current = Date.now();
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await loadChamaDetails(chamaId);
-    } catch (error) {
-      console.warn('Chama details refresh failed:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const handleJoinChama = async () => {
-    try {
-      const response = await ApiService.joinChama(chamaId);
-      if (response.success) {
-        Alert.alert('Success', 'You have successfully joined the chama!');
-        await loadChamaDetails();
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to join chama');
-    }
-  };
-
-  const handleLeaveChama = () => setShowLeaveModal(true);
-
-  const confirmLeaveChama = async () => {
-    try {
-      const response = await ApiService.leaveChama(chamaId);
-      if (response.success) {
-        setShowLeaveModal(false);
-        Alert.alert('Success', 'You have left the chama');
-        navigation.goBack();
-      } else {
-        setShowLeaveModal(false);
-        Alert.alert('Unable to Leave', response.error || 'Failed to leave chama');
-      }
-    } catch (error) {
-      setShowLeaveModal(false);
-      Alert.alert('Error', error?.message || 'Failed to leave chama');
-    }
-  };
-
-  const getExistingChatRoomId = () => {
-    return chama?.chat_room_id || chama?.chat_room?.id || chama?.chatRoom?.id;
-  };
-
-  const getGroupLabel = () => {
-    return chama?.category === 'contribution' ? 'Group' : 'Chama';
-  };
-
-  const navigateToChatRoom = (roomId) => {
-    navigation.navigate('ChatRoom', {
-      roomId,
-      roomName: `${chama?.name || getGroupLabel()} Group Chat`,
-      roomType: 'group',
-      chamaId,
-    });
-  };
-
-  const handleCreateChatRoom = () => {
-    if (creatingChatRoomRef.current) {
-      return;
-    }
-
-    const existingChatRoomId = getExistingChatRoomId();
-    if (existingChatRoomId) {
-      navigateToChatRoom(existingChatRoomId);
-      return;
-    }
-
-    const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
-    if (!canCreateChatRoom) {
-        Alert.alert(
-          'Access Denied',
-          'Only chairperson, secretary, and treasurer can create a chat room for this group.'
-        );
-      return;
-    }
-
-    confirmCreateChatRoom();
-  };
-
-  const confirmCreateChatRoom = async () => {
-    if (creatingChatRoomRef.current) {
-      return;
-    }
-
-    try {
-      creatingChatRoomRef.current = true;
-      setChatRoomLoading(true);
-
-      const response = await ApiService.createChamaChatRoom(chamaId);
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to create chat room');
-      }
-
-      const roomId = response.data?.roomId || response.data?.id || getExistingChatRoomId();
-      if (!roomId) {
-        throw new Error('Chat room was created but no room ID was returned');
-      }
-
-      setChama(prev => prev ? { ...prev, chat_room_id: roomId } : prev);
-      setSelectedChama(prev => prev && prev.id === chamaId ? { ...prev, chat_room_id: roomId } : prev);
-
-      // Reload chama details from the server so the chat_room_id and any
-      // other backend changes are fully synced before we navigate away.
-      await loadChamaDetails();
-
-      Alert.alert(
-        'Chat Room Created',
-        'Chat room has been created for this group.'
-      );
-
-      navigateToChatRoom(roomId);
-    } catch (error) {
-      console.error('[ChamaDetails] Error creating chat room:', error);
-      Alert.alert('Error', error.message || 'Failed to create chat room');
-    } finally {
-      creatingChatRoomRef.current = false;
-      setChatRoomLoading(false);
-    }
-  };
-
-  const handleUploadRulesFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || !result.assets || result.assets.length === 0) return;
-      const document = result.assets[0];
-      // Accept only real PDFs. Some platforms misreport mimeType, so also
-      // validate by extension — a .docx renamed to .pdf can't be rendered
-      // in-app and would just download.
-      const docName = document.name || '';
-      const isPdf = document.mimeType === 'application/pdf' || docName.toLowerCase().endsWith('.pdf');
-      if (!isPdf) {
-        Toast.show({ type: 'error', text1: 'Invalid file type', text2: 'Only PDF files are accepted for rules' });
-        return;
-      }
-      setUploadingRules(true);
-      const formData = new FormData();
-
-      // On web, FormData.append requires a Blob/File. A plain { uri, type, name }
-      // object is serialized to "[object Object]" and the server receives no file
-      // (→ 400 "No updatable fields provided"). Fetch the picked file into a Blob
-      // and wrap it as a File when running on web so the part is sent correctly.
-      let fileToUpload;
-      if (Platform.OS === 'web') {
-        const fileResponse = await fetch(document.uri);
-        const blob = await fileResponse.blob();
-        fileToUpload = new File([blob], document.name || 'rules.pdf', {
-          type: document.mimeType || 'application/pdf',
-        });
-      } else if (document.uri.startsWith('data:')) {
-        const fileResponse = await fetch(document.uri);
-        const blob = await fileResponse.blob();
-        fileToUpload = new File([blob], document.name, { type: document.mimeType });
-      } else {
-        fileToUpload = {
-          uri: document.uri,
-          type: document.mimeType || 'application/pdf',
-          name: document.name || 'rules.pdf',
-        };
-      }
-
-      formData.append('rules_file', fileToUpload);
-      formData.append('rules_file_name', document.name || 'rules.pdf');
-      const response = await ApiService.makeRequest(`/chamas/${chamaId}`, {
-        method: 'PUT',
-        body: formData,
-      });
-      if (response.success) {
-        Toast.show({ type: 'success', text1: 'Rules PDF updated' });
-        await loadChamaDetails();
-      } else {
-        Toast.show({ type: 'error', text1: 'Upload failed', text2: response.error });
-      }
-    } catch (error) {
-      Toast.show({ type: 'error', text1: 'Upload failed', text2: error.message });
-    } finally {
-      setUploadingRules(false);
-    }
-  };
-
-  const handleRemoveRulesFile = async () => {
-    try {
-      setUploadingRules(true);
-      const response = await ApiService.updateChama(chamaId, {
-        rules_file_path: '',
-        rules_file_name: '',
-      });
-      if (response.success) {
-        Toast.show({ type: 'success', text1: 'Rules PDF removed' });
-        await loadChamaDetails();
-      } else {
-        Toast.show({ type: 'error', text1: 'Remove failed', text2: response.error });
-      }
-    } catch (error) {
-      Toast.show({ type: 'error', text1: 'Remove failed', text2: error.message });
-    } finally {
-      setUploadingRules(false);
-    }
-  };
-
-  const renderChamaHeader = () => {
-    const isContributionGroup = chama?.category === 'contribution';
-    const typeConfig = isContributionGroup ? {
-      color: colors.success,
-      icon: 'heart',
-      label: 'Fund Group', // Shorter for mobile
-      fullLabel: 'Contribution Group',
-      bgColor: colors.success + '15'
-    } : {
-      color: colors.primary,
-      icon: 'people',
-      label: 'Chama',
-      fullLabel: 'Chama',
-      bgColor: colors.primary + '15'
-    };
-
-    return (
-      <Card style={styles.section} variant="outlined">
-        {/* Category Badge */}
-        <View style={[styles.categoryBadge, { backgroundColor: typeConfig.color }]}>
-          <Ionicons name={typeConfig.icon} size={12} color={colors.white} />
-          <Text style={[styles.categoryBadgeText, { color: colors.white }]}>
-            {typeConfig.label.toUpperCase()}
-          </Text>
-        </View>
-
-        <View style={styles.chamaHeader}>
-          <View style={[styles.chamaAvatar, { backgroundColor: typeConfig.color }]}>
-            <Ionicons name={typeConfig.icon} size={40} color={colors.white} />
-          </View>
-
-          <View style={styles.chamaInfo}>
-            <Text style={[styles.chamaName, { color: colors.text }]}>
-              {chama?.name}
-            </Text>
-            <Text style={[styles.chamaType, { color: colors.textSecondary }]}>
-              {chama?.type} • {chama?.county}, {chama?.town}
-            </Text>
-            <View style={[styles.statusBadge, { backgroundColor: colors.success + '20' }]}>
-              <Text style={[styles.statusText, { color: colors.success }]}>
-                {chama?.status?.toUpperCase()}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Improved Description Section */}
-        {chama?.description && (
-          <View style={styles.descriptionContainer}>
-            <Text style={[styles.descriptionLabel, { color: colors.text }]}>
-              About this {typeConfig.fullLabel}
-            </Text>
-            <Text
-              style={[styles.chamaDescription, { color: colors.textSecondary }]}
-              numberOfLines={0}
-              allowFontScaling={true}
-            >
-              {chama.description}
-            </Text>
-          </View>
-        )}
-      </Card>
-    );
-  };
-
-  const renderStats = () => {
-    const financialStats = statistics?.financial_stats || {};
-    const memberStats = statistics?.member_stats || {};
-    const activityStats = statistics?.activity_stats || {};
-    const chamaInfo = statistics?.chama_info || {};
-    const walletBalance = chamaInfo.wallet_balance || chamaInfo.total_funds || chama?.total_funds || 0;
-    const totalMembers = memberStats.active_members || memberStats.total_members || chamaInfo.current_members || members.length || 0;
-    const maxMembers = chama?.max_members || chamaInfo.max_members || 50;
-    const totalMeetings = activityStats.total_meetings || 0;
-    const contributionAmount = chama?.contribution_amount || 0;
-    const contributionFrequency = chama?.contribution_frequency || 'Monthly';
-    const totalContributions = financialStats.total_contributions || 0;
-    const activePolls = polls.length || 0; // Polls from API call
-
-    return (
-      <Card style={styles.section} variant="outlined">
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Chama Statistics
-        </Text>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Ionicons name="people" size={24} color={colors.primary} />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {totalMembers}/{maxMembers}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Members
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="wallet" size={24} color={colors.secondary} />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {formatCurrency(walletBalance)}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Total Balance
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="trending-up" size={24} color={colors.success} />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {formatCurrency(contributionAmount)}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              {contributionFrequency} Contribution
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="cash" size={24} color={colors.warning} />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {totalContributions}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Total Accounts
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="calendar-outline" size={24} color={colors.info} />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {totalMeetings}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Total Meetings
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="checkmark-circle" size={24} color={colors.accent} />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {activePolls}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              Active Polls
-            </Text>
-          </View>
-        </View>
-      </Card>
-    );
-  };
+  const details = useChamaDetails({ route, navigation });
+  const styles = getResponsiveStyles(details.screenType, details.screenWidth, colors);
 
   const handleAvatarPress = (member) => {
     navigation.navigate('ViewMember', {
       memberId: member?.user_id || member?.id,
-      chamaId,
-      userRole: userMembership?.role,
+      chamaId: details.chamaId,
+      userRole: details.userMembership?.role,
     });
   };
 
-  const AVATAR_COLORS = ['#00D4AA', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#EC4899', '#6366F1'];
-  const getAvatarColor = (seed) => {
-    const str = String(seed || '');
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
-    }
-    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-  };
-
-  // Map a user's gender to a local avatar icon. Falls back to a neutral person
-  // icon when gender is unknown / non-binary. No network request involved.
-  const getAvatarGenderIcon = (gender) => {
-    if (gender === 'female') return 'female';
-    if (gender === 'male') return 'male';
-    return 'person';
-  };
-
-  // Helper function to render member avatar with real profile photo
-  const renderMemberAvatar = (member) => {
-    if (!member) {
-      return (
-        <View style={[styles.memberAvatar, { backgroundColor: colors.primary }]}>
-          <Text style={[styles.memberInitials, { color: colors.white }]}>?</Text>
-        </View>
-      );
-    }
-
-    // Access data from nested user object
-    const user = member?.user || {};
-    const email = user?.email || member?.email;
-
-    // Try multiple avatar sources from user object
-    const avatarUrl = user?.avatar_url || user?.avatar || user?.profile_image || member?.avatar || member?.avatarUrl;
-
-    // Try to use provided avatar URL first
-    if (avatarUrl && avatarUrl.trim()) {
-      let fullAvatarUrl;
-      if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
-        fullAvatarUrl = avatarUrl;
+  const handleOpenRulesFile = async () => {
+    const rawRulesFilePath = (details.chama?.rules_file_path && details.chama.rules_file_path.trim()) ||
+      (details.chama?.permissions && details.chama.permissions.rules_file_path);
+    const rulesFilePath = rawRulesFilePath ? rawRulesFilePath.trim() : null;
+    if (!rulesFilePath) return;
+    const fullUrl = rulesFilePath.startsWith('http')
+      ? rulesFilePath
+      : `${ApiService.uploadBaseUrl}${rulesFilePath.startsWith('/') ? '' : '/'}${rulesFilePath}`;
+    try {
+      const supported = await Linking.canOpenURL(fullUrl);
+      if (supported) {
+        await Linking.openURL(fullUrl);
       } else {
-        fullAvatarUrl = `${ApiService.uploadBaseUrl}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+        Alert.alert('Unable to open', 'No application is available to open the rules document.');
       }
-
-      return (
-        <TouchableOpacity onPress={() => handleAvatarPress(member)}>
-          <Image
-            source={{ uri: fullAvatarUrl }}
-            style={styles.memberAvatar}
-            onError={(error) => {
-              // Will fallback to local initials avatar
-            }}
-          />
-        </TouchableOpacity>
-      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open the rules document.');
     }
+  };
 
-    // No profile photo: render a local gender-based avatar (no network request).
-    const avatarColor = getAvatarColor(member?.id || user?.id || member?.user_id || email);
-    const genderIcon = getAvatarGenderIcon(user?.gender);
+  const renderMemberAvatar = (member) => {
     return (
-      <TouchableOpacity onPress={() => handleAvatarPress(member)}>
-        <View style={[styles.memberAvatar, { backgroundColor: avatarColor }]}>
-          <Ionicons name={genderIcon} size={36} color={colors.white} />
-        </View>
-      </TouchableOpacity>
+      <MemberAvatar
+        member={member}
+        colors={colors}
+        onAvatarPress={handleAvatarPress}
+        apiUploadBaseUrl={ApiService.uploadBaseUrl}
+      />
     );
   };
 
-  const renderMembers = () => (
-    <Card style={styles.section} variant="outlined">
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Members ({members.length})
-        </Text>
-        {members.length > 5 && (
-          <TouchableOpacity onPress={() => navigation.navigate('ChamaMembersScreen', { chamaId })}>
-            <Text style={[styles.viewMoreText, { color: colors.primary }]}>
-              View All
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView
+          key={details.chamaId}
+          style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={details.refreshing}
+              onRefresh={details.onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <ChamaHeader chama={details.chama} colors={colors} getGroupLabel={details.getGroupLabel} />
+          <ChamaStats
+            statistics={details.statistics}
+            chama={details.chama}
+            members={details.members}
+            polls={details.polls}
+            formatCurrency={details.formatCurrency}
+            colors={colors}
+          />
 
-      {members.length === 0 ? (
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          No members found
-        </Text>
-      ) : (
-        <View style={styles.membersList}>
-          {members.slice(0, 5).map((member, index) => {
-            const firstName = member.first_name || member.user?.first_name || '';
-            const lastName = member.last_name || member.user?.last_name || '';
-            const fullName = `${firstName} ${lastName}`.trim() || 'Unknown Member';
+          <SmartResponsiveLayout isLargeScreen={details.isLargeScreen}>
+            <ChamaMembers
+              members={details.members}
+              colors={colors}
+              navigation={navigation}
+              chamaId={details.chamaId}
+              renderMemberAvatar={renderMemberAvatar}
+              handleAvatarPress={handleAvatarPress}
+              userMembership={details.userMembership}
+            />
+            <ChamaMeetings
+              meetings={details.meetings}
+              colors={colors}
+              navigation={navigation}
+              chamaId={details.chamaId}
+              getResponsiveTextSize={details.getResponsiveTextSize}
+            />
+            <ChamaTransactions
+              transactions={details.transactions}
+              colors={colors}
+              navigation={navigation}
+              chamaId={details.chamaId}
+              chama={details.chama}
+              setSelectedChama={setSelectedChama}
+              formatCurrency={details.formatCurrency}
+              getResponsiveTextSize={details.getResponsiveTextSize}
+            />
+            <ChamaPolls
+              polls={details.polls}
+              pollsLoading={details.pollsLoading}
+              colors={colors}
+              navigation={navigation}
+              chamaId={details.chamaId}
+              getResponsiveTextSize={details.getResponsiveTextSize}
+            />
+          </SmartResponsiveLayout>
 
-            // Parse join date safely
-            let joinDate = 'Unknown Date';
-            try {
-              if (member.joined_at) {
-                const date = new Date(member.joined_at);
-                if (!isNaN(date.getTime())) {
-                  joinDate = date.toLocaleDateString();
-                }
-              }
-            } catch (error) {
-            }
-
-            // Get status safely
-            const memberStatus = member.status || member.user?.status || 'active';
-            const isActive = memberStatus === 'active';
-
-            return (
-              <View key={[member.user_id, member.id, index].filter(Boolean).join('-')} style={[styles.memberItem, { borderBottomColor: colors.border }]}>
-                {renderMemberAvatar(member)}
-                <View style={styles.memberInfo}>
-                  <Text style={[styles.memberName, { color: colors.text }]}>
-                    {fullName}
-                  </Text>
-                  <Text style={[styles.memberRole, { color: colors.textSecondary }]}>
-                    {member.role || 'Member'} • Joined {joinDate}
-                  </Text>
-                </View>
-                <View style={[styles.memberStatus, { backgroundColor: isActive ? colors.success + '20' : colors.warning + '20' }]}>
-                  <Text style={[styles.memberStatusText, { color: isActive ? colors.success : colors.warning }]}>
-                    {memberStatus}
-                  </Text>
-                </View>
+          {details.isLargeScreen ? (
+            <View style={styles.desktopBottomRow}>
+              <View style={styles.desktopRulesColumn}>
+                <ChamaRules chama={details.chama} colors={colors} handleOpenRulesFile={handleOpenRulesFile} />
               </View>
-            );
-          })}
-        </View>
-      )}
-    </Card>
-  );
-
-  const renderMeetings = () => (
-    <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Recent Meetings
-        </Text>
-        {meetings.length > 5 && (
-          <TouchableOpacity onPress={() => navigation.navigate('ChamaMeetingsScreen', { chamaId })}>
-            <Text style={[styles.viewMoreText, { color: colors.primary }]}>
-              View All
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {meetings.length === 0 ? (
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          No meetings scheduled
-        </Text>
-      ) : (
-        <View>
-          {/* Table Header */}
-          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Title</Text>
-            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Date & Time</Text>
-            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
-          </View>
-
-          {/* Table Rows */}
-          {meetings.slice(0, 5).map((meeting, index) => {
-            let meetingDate = 'Unknown Date';
-            let meetingTime = '';
-
-            try {
-              const dateStr = meeting.scheduledAt || meeting.scheduled_date || meeting.date;
-              if (dateStr) {
-                const date = new Date(dateStr);
-                if (!isNaN(date.getTime())) {
-                  meetingDate = date.toLocaleDateString();
-                  meetingTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                }
-              }
-            } catch (error) {
-            }
-
-            const meetingStatus = meeting.status || 'scheduled';
-            const isCompleted = meetingStatus === 'completed' || meetingStatus === 'ended';
-            const isPast = new Date(meeting.scheduledAt || meeting.scheduled_date || meeting.date) < new Date();
-
-            return (
-              <View key={`meeting-${meeting.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{meeting.title || 'Chama Meeting'}</Text>
-                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{meetingDate} {meetingTime}</Text>
-                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: isCompleted ? colors.success : isPast ? colors.textSecondary : colors.info, textAlign: 'center' }}>
-                  {isCompleted ? 'Completed' : isPast ? 'Past' : 'Scheduled'}
-                </Text>
+              <View style={styles.desktopSideColumn}>
+                <ChamaUploadRules
+                  userMembership={details.userMembership}
+                  colors={colors}
+                  handleUploadRulesFile={details.handleUploadRulesFile}
+                  handleRemoveRulesFile={details.handleRemoveRulesFile}
+                  uploadingRules={details.uploadingRules}
+                  rulesFilePath={details.chama?.rules_file_path}
+                />
+                <ChamaGroupChat
+                  userMembership={details.userMembership}
+                  chama={details.chama}
+                  colors={colors}
+                  getExistingChatRoomId={details.getExistingChatRoomId}
+                  getGroupLabel={details.getGroupLabel}
+                  handleCreateChatRoom={details.handleCreateChatRoom}
+                  navigateToChatRoom={details.navigateToChatRoom}
+                  chatRoomLoading={details.chatRoomLoading}
+                />
+                <ChamaMembershipActions
+                  userMembership={details.userMembership}
+                  chama={details.chama}
+                  colors={colors}
+                  handleJoinChama={details.handleJoinChama}
+                  handleLeaveChama={details.handleLeaveChama}
+                  switchToChamaDashboard={switchToChamaDashboard}
+                />
               </View>
-            );
-          })}
-        </View>
-      )}
-    </Card>
-  );
- 
-
-  const renderTransactions = () => (
-    <Card style={[styles.section, { borderWidth: 1, borderColor: colors.border }]} variant="flat">
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          My Transactions
-        </Text>
-        {transactions.length > 5 && (
-          <TouchableOpacity onPress={() => {
-            if (chama) {
-              setSelectedChama(chama);
-            }
-            navigation.navigate('ChamaTransactionsScreen', { chamaId, chama });
-          }}>
-            <Text style={[styles.viewMoreText, { color: colors.primary }]}>
-              View All
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {transactions.length === 0 ? (
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          No transactions found for your account
-        </Text>
-      ) : (
-        <View>
-          {/* Table Header */}
-          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
-            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Description</Text>
-            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Date</Text>
-            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'right', textTransform: 'uppercase' }}>Amount</Text>
-          </View>
-
-          {/* Table Rows */}
-          {transactions.slice(0, 5).map((transaction, index) => {
-            let contributionDate = 'Unknown Date';
-
-            try {
-              const dateValue = transaction.createdAt || transaction.created_at || transaction.date || transaction.transaction_date;
-
-              if (dateValue) {
-                const date = new Date(dateValue);
-                if (!isNaN(date.getTime()) && date.getFullYear() > 1900) {
-                  contributionDate = date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                  });
-                }
-              }
-            } catch (error) {
-            }
-
-            const transactionType = transaction.type || 'transaction';
-            const isContribution = transactionType === 'contribution' || transactionType === 'deposit' || transaction.description?.toLowerCase().includes('contribution');
-            const transactionDescription = transaction.description || (isContribution ? 'Chama Contribution' : 'Transaction') || transactionType;
-
-            return (
-              <View key={`transaction-${transaction.id || index}`} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{transactionDescription}</Text>
-                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>{contributionDate}</Text>
-                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.medium, color: isContribution ? colors.success : colors.primary, textAlign: 'right' }}>
-                  {formatCurrency(transaction.amount)}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </Card>
-  );
-
-   const renderActivePolls = () => {
-      const getPollStatus = (poll) => {
-        const pollStatus = (poll.status || '').toLowerCase();
-        const endDate = poll.endDate || poll.end_date || poll.endsAt;
-        const hasEnded = endDate && new Date(endDate) < new Date();
-        const isActive = (pollStatus === 'active') && !hasEnded;
-        return { isActive, hasEnded };
-      };
-
-      const activePolls = polls.filter(p => getPollStatus(p).isActive).slice(0, 5);
-      const pastPolls = polls.filter(p => !getPollStatus(p).isActive).slice(0, 5);
-      const totalDisplayed = activePolls.length + pastPolls.length;
-
-      const newPollsCount = activePolls.filter(poll => !(poll.userVoted || poll.user_has_voted)).length;
-
-      return (
-        <Card style={styles.section} variant="outlined">
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Polls & Voting
-            </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
-              <Text style={[styles.viewMoreText, { color: colors.primary }]}>
-                View All
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {pollsLoading ? (
-            <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: spacing.sm }]}>
-                Loading polls...
-              </Text>
-            </View>
-          ) : totalDisplayed === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-              <Ionicons name="bar-chart" size={48} color={colors.primary} />
-              <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
-                No polls & vote available
-              </Text>
             </View>
           ) : (
-            <View>
-              {newPollsCount > 0 && (
-                <View style={[styles.newPollsNotification, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
-                  <Ionicons name="notifications" size={20} color={colors.warning} />
-                  <Text style={[styles.newPollsText, { color: colors.warning }]}>
-                    You have {newPollsCount} new poll{newPollsCount !== 1 ? 's' : ''} waiting for your vote!
-                  </Text>
-                </View>
-              )}
-
-              {/* Active Polls */}
-              {activePolls.map((poll, index) => {
-                const hasUserVoted = poll.userVoted || poll.user_has_voted;
-                return (
-                  <View key={'active-poll-' + (poll.id || index)} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                    <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name={hasUserVoted ? 'checkmark-circle' : 'close-circle'} size={16} color={hasUserVoted ? colors.success : colors.error} />
-                    </View>
-                    <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.success, textAlign: 'center', fontWeight: '600' }}>Active</Text>
-                  </View>
-                );
-              })}
-
-              {/* Past Polls */}
-              {pastPolls.length > 0 && (
-                <View>
-                  <View style={{ flexDirection: 'row', paddingVertical: spacing.xs, paddingHorizontal: spacing.md, backgroundColor: colors.textSecondary + '10' }}>
-                    <Text style={{ flex: 2, fontSize: getResponsiveTextSize(12), fontWeight: typography.fontWeight.bold, color: colors.textSecondary, textTransform: 'uppercase' }}>Past Polls</Text>
-                    <Text style={{ flex: 1, fontSize: getResponsiveTextSize(12), fontWeight: typography.fontWeight.bold, color: colors.textSecondary, textAlign: 'center', textTransform: 'uppercase' }}>You Voted</Text>
-                    <Text style={{ flex: 1, fontSize: getResponsiveTextSize(12), fontWeight: typography.fontWeight.bold, color: colors.textSecondary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
-                  </View>
-                  {pastPolls.map((poll, index) => {
-                    const hasUserVoted = poll.userVoted || poll.user_has_voted;
-                    return (
-                      <View key={'past-poll-' + (poll.id || index)} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
-                        <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.textSecondary }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                          <Ionicons name={hasUserVoted ? 'checkmark-circle' : 'close-circle'} size={16} color={hasUserVoted ? colors.success : colors.error} />
-                        </View>
-                        <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'center' }}>Closed</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          )}
-        </Card>
-      );
-    };
-
-  const renderChamaRules = () => {
-    const rawRulesFilePath = (chama?.rules_file_path && chama.rules_file_path.trim()) ||
-      (chama?.permissions && chama.permissions.rules_file_path);
-    const rulesFilePath = rawRulesFilePath ? rawRulesFilePath.trim() : null;
-    const rulesFileName = (chama?.rules_file_name && chama.rules_file_name.trim()) ||
-      (chama?.permissions && chama.permissions.rules_file_name) || null;
-
-    const handleOpenRulesFile = async () => {
-      if (!rulesFilePath) return;
-      const fullUrl = rulesFilePath.startsWith('http')
-        ? rulesFilePath
-        : `${ApiService.uploadBaseUrl}${rulesFilePath.startsWith('/') ? '' : '/'}${rulesFilePath}`;
-      try {
-        const supported = await Linking.canOpenURL(fullUrl);
-        if (supported) {
-          await Linking.openURL(fullUrl);
-        } else {
-          Alert.alert('Unable to open', 'No application is available to open the rules document.');
-        }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to open the rules document.');
-      }
-    };
-
-    // Parse rules - they might be a JSON string, object, or plain string
-    let rules = [];
-    if (chama?.rules) {
-      try {
-        if (typeof chama.rules === 'string') {
-          // Try to parse as JSON first
-          try {
-            const parsed = JSON.parse(chama.rules);
-            if (Array.isArray(parsed)) {
-              rules = parsed;
-            } else if (typeof parsed === 'object') {
-              rules = Object.entries(parsed).map(([key, value]) => ({
-                title: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
-                description: typeof value === 'string' ? value : JSON.stringify(value)
-              }));
-            } else {
-              // If parsed result is not array/object, treat as single rule
-              rules = [{ title: 'Chama Rule', description: String(parsed) }];
-            }
-          } catch (jsonError) {
-            // If JSON parsing fails, treat as plain text rule
-            rules = [{ title: 'Chama Rule', description: chama.rules }];
-          }
-        } else if (Array.isArray(chama.rules)) {
-          rules = chama.rules;
-        } else if (typeof chama.rules === 'object') {
-          // Convert object to array format
-          rules = Object.entries(chama.rules).map(([key, value]) => ({
-            title: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
-            description: typeof value === 'string' ? value : JSON.stringify(value)
-          }));
-        }
-      } catch (error) {
-        // Fallback: treat as plain text
-        if (typeof chama.rules === 'string') {
-          rules = [{ title: 'Chama Rule', description: chama.rules }];
-        }
-      }
-    }
-
-    return (
-      <Card style={styles.section} variant="outlined">
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Chama Rules & Regulations
-        </Text>
-
-        {/* Attached rules document (uploaded PDF) */}
-        {rulesFilePath && (
-          <TouchableOpacity
-            style={[styles.rulesFileCard, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
-            onPress={handleOpenRulesFile}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="document-text" size={24} color={colors.primary} />
-            <View style={styles.rulesFileInfo}>
-              <Text style={[styles.rulesFileTitle, { color: colors.text }]} numberOfLines={1}>
-                {rulesFileName || 'Chama Rules Document'}
-              </Text>
-              <Text style={[styles.rulesFileSubtitle, { color: colors.textSecondary }]}>
-                Tap to view the attached rules PDF
-              </Text>
-            </View>
-            <Ionicons name="open-outline" size={20} color={colors.primary} />
-          </TouchableOpacity>
-        )}
-
-        <View style={styles.rulesList}>
-          {/* Show custom rules first if they exist */}
-          {rules.length > 0 && (
             <>
-              <Text style={[styles.rulesSubtitle, { color: colors.text }]}>
-                Chama-Specific Rules:
-              </Text>
-              {rules.map((rule, index) => (
-                <View key={`custom-${index}`}>
-                  <View style={[styles.ruleItem, { borderLeftColor: colors.primary }]}>
-                    <View style={styles.ruleHeader}>
-                      <Text style={[styles.ruleNumber, { color: colors.primary }]}>
-                        {index + 1}
-                      </Text>
-                      <Text style={[styles.ruleTitle, { color: colors.text }]}>
-                        {rule.title || `Rule ${index + 1}`}
-                      </Text>
-                    </View>
-                    <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                      {rule.description || rule}
-                    </Text>
-                    {rule.penalty && (
-                      <Text style={[styles.rulePenalty, { color: colors.warning }]}>
-                        Penalty: {rule.penalty}
-                      </Text>
-                    )}
-                  </View>
-                  {index < rules.length - 1 && <View style={[styles.horizontalSeparator, { backgroundColor: colors.border }]} />}
-                </View>
-              ))}
+              <ChamaRules chama={details.chama} colors={colors} handleOpenRulesFile={handleOpenRulesFile} />
+              <ChamaUploadRules
+                userMembership={details.userMembership}
+                colors={colors}
+                handleUploadRulesFile={details.handleUploadRulesFile}
+                handleRemoveRulesFile={details.handleRemoveRulesFile}
+                uploadingRules={details.uploadingRules}
+                rulesFilePath={details.chama?.rules_file_path}
+              />
+              <ChamaGroupChat
+                userMembership={details.userMembership}
+                chama={details.chama}
+                colors={colors}
+                getExistingChatRoomId={details.getExistingChatRoomId}
+                getGroupLabel={details.getGroupLabel}
+                handleCreateChatRoom={details.handleCreateChatRoom}
+                navigateToChatRoom={details.navigateToChatRoom}
+                chatRoomLoading={details.chatRoomLoading}
+              />
+              <ChamaMembershipActions
+                userMembership={details.userMembership}
+                chama={details.chama}
+                colors={colors}
+                handleJoinChama={details.handleJoinChama}
+                handleLeaveChama={details.handleLeaveChama}
+                switchToChamaDashboard={switchToChamaDashboard}
+              />
             </>
           )}
+        </ScrollView>
+        <PageRefreshButton onRefresh={details.onRefresh} refreshing={details.refreshing} color={colors.primary} bottom={64} />
+      </View>
 
-          {/* Always show standard guidelines */}
-          <Text style={[styles.rulesSubtitle, { color: colors.text, marginTop: rules.length > 0 ? spacing.lg : 0 }]}>
-            Standard Chama Guidelines:
-          </Text>
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleHeader}>
-              <Text style={[styles.ruleNumber, { color: colors.secondary }]}>
-                {rules.length + 1}
-              </Text>
-              <Text style={[styles.ruleTitle, { color: colors.text }]}>
-                Regular Contributions
-              </Text>
-            </View>
-            <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-              Members must make their contributions on time as per the agreed schedule
-            </Text>
-          </View>
-          <View style={[styles.horizontalSeparator, { backgroundColor: colors.border }]} />
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleHeader}>
-              <Text style={[styles.ruleNumber, { color: colors.secondary }]}>
-                {rules.length + 2}
-              </Text>
-              <Text style={[styles.ruleTitle, { color: colors.text }]}>
-                Meeting Attendance
-              </Text>
-            </View>
-            <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-              Members are expected to attend scheduled meetings or provide advance notice
-            </Text>
-          </View>
-          <View style={[styles.horizontalSeparator, { backgroundColor: colors.border }]} />
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleHeader}>
-              <Text style={[styles.ruleNumber, { color: colors.secondary }]}>
-                {rules.length + 3}
-              </Text>
-              <Text style={[styles.ruleTitle, { color: colors.text }]}>
-                Respectful Communication
-              </Text>
-            </View>
-            <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-              All members should maintain respectful and professional communication
-            </Text>
-          </View>
-          <View style={[styles.horizontalSeparator, { backgroundColor: colors.border }]} />
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleHeader}>
-              <Text style={[styles.ruleNumber, { color: colors.secondary }]}>
-                {rules.length + 4}
-              </Text>
-              <Text style={[styles.ruleTitle, { color: colors.text }]}>
-                Financial Transparency
-              </Text>
-            </View>
-            <Text style={[ { color: colors.textSecondary }]}>
-              All financial transactions and decisions must be transparent and documented
-            </Text>
-          </View>
-          <View style={[styles.horizontalSeparator, { backgroundColor: colors.border }]} />
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleHeader}>
-              <Text style={[styles.ruleNumber, { color: colors.secondary }]}>
-                {rules.length + 5}
-              </Text>
-              <Text style={[styles.ruleTitle, { color: colors.text }]}>
-                Confidentiality
-              </Text>
-            </View>
-            <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-              Members must maintain confidentiality of chama matters and member information
-            </Text>
-          </View>
-         </View>
-       </Card>
-     );
-   };
-
-   const renderUploadRulesButton = () => {
-     const rawRulesFilePath = (chama?.rules_file_path && chama.rules_file_path.trim()) ||
-       (chama?.permissions && chama.permissions.rules_file_path);
-     const rulesFilePath = rawRulesFilePath ? rawRulesFilePath.trim() : null;
-
-     return (
-       <Card style={styles.section} variant="outlined">
-         <Text style={[styles.sectionTitle, { color: colors.text }]}>
-           Rules Document
-         </Text>
-         {userMembership?.role?.toLowerCase() === 'chairperson' ? (
-           <View style={styles.rulesFileActions}>
-             <Button
-               title={rulesFilePath ? 'Replace Rules PDF' : 'Upload Rules PDF'}
-               variant="outline"
-               onPress={handleUploadRulesFile}
-               loading={uploadingRules}
-               icon={<Ionicons name="document-attach-outline" size={18} color={colors.primary} />}
-               style={styles.rulesFileActionButton}
-             />
-             {rulesFilePath && !uploadingRules && (
-               <TouchableOpacity
-                 onPress={handleRemoveRulesFile}
-                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                 style={styles.rulesFileRemoveButton}
-               >
-                 <Text style={[styles.rulesFileRemoveText, { color: colors.error }]}>
-                   Remove
-                 </Text>
-               </TouchableOpacity>
-             )}
-           </View>
-         ) : (
-           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-             No rules document uploaded
-           </Text>
-         )}
-       </Card>
-     );
-    };
-
-   const renderGroupChat = () => {
-    const existingChatRoomId = getExistingChatRoomId();
-    const canCreateChatRoom = ['chairperson', 'treasurer', 'secretary'].includes(userMembership?.role?.toLowerCase());
-    const groupLabel = getGroupLabel();
-
-    return (
-      <Card style={styles.section} variant="outlined">
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Group Communication
-        </Text>
-
-        {!userMembership ? (
-          <Text style={[styles.emptyText, { color: colors.textSecondary, paddingVertical: spacing.md }]}>
-            Join this {groupLabel.toLowerCase()} to access group chat.
-          </Text>
-        ) : (
-          <>
-            {existingChatRoomId ? (
-              <Button
-                title="Open Group Chat"
-                onPress={() => navigateToChatRoom(existingChatRoomId)}
-                disabled={chatRoomLoading}
-                loading={chatRoomLoading}
-                icon={
-                  <Ionicons
-                    name="chatbubbles"
-                    size={20}
-                    color={colors.white}
-                  />
-                }
-                style={[
-                  styles.chatButton,
-                  { backgroundColor: colors.success, borderColor: colors.success }
-                ]}
-                textStyle={{ color: colors.white }}
-              />
-            ) : canCreateChatRoom ? (
-              <Button
-                title={`Create Chat Room`}
-                onPress={handleCreateChatRoom}
-                disabled={chatRoomLoading}
-                loading={chatRoomLoading}
-                icon={
-                  <Ionicons
-                    name="add-circle"
-                    size={20}
-                    color={colors.white}
-                  />
-                }
-                style={[
-                  styles.chatButton,
-                  { backgroundColor: colors.success, borderColor: colors.success }
-                ]}
-                textStyle={{ color: colors.white }}
-              />
-            ) : null}
-          </>
-        )}
-      </Card>
-    );
-  };
-
-   const renderMembershipActions = () => {
-     if (!userMembership) {
-       return (
-         <Card style={styles.section} variant="outlined">
-           <Button
-             title="Join This Chama"
-             onPress={handleJoinChama}
-             disabled={chama?.current_members >= chama?.max_members}
-             icon={<Ionicons name="person-add" size={20} color={colors.white} />}
-           />
-         </Card>
-       );
-     }
-
-     return (
-       <View>
-         <Card style={styles.section} variant="outlined">
-           <View style={styles.membershipInfo}>
-             <Text style={[styles.membershipTitle, { color: colors.text }]}>
-               Your Membership
-             </Text>
-             <Text style={[styles.membershipRole, { color: colors.primary }]}>
-               {userMembership.role?.toUpperCase()}
-             </Text>
-             <Text style={[styles.membershipDate, { color: colors.textSecondary }]}>
-               Joined {new Date(userMembership.joined_at).toLocaleDateString()}
-             </Text>
-           </View>
-         </Card>
-
-         <Card style={[styles.section, { marginTop: spacing.md }]} variant="outlined">
-           <Button
-             title="Switch to Chama Dashboard"
-             onPress={() => {
-               switchToChamaDashboard(chama);
-             }}
-             style={styles.membershipButton}
-           />
-         </Card>
-
-         <Card style={[styles.section, { marginTop: spacing.md }]} variant="outlined">
-           <Button
-             title="Leave Chama"
-             variant="outline"
-             onPress={handleLeaveChama}
-             style={[styles.membershipButton, { borderColor: colors.error }]}
-             textStyle={{ color: colors.error }}
-           />
-         </Card>
-       </View>
-     );
-   };
-
-   return (
-     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-       <View style={{ flex: 1, position: 'relative' }}>
-         <ScrollView
-           key={chamaId} // Force re-render when chamaId changes
-           style={styles.scrollView}
-           refreshControl={
-             <RefreshControl
-               refreshing={refreshing}
-               onRefresh={onRefresh}
-               colors={[colors.primary]}
-               tintColor={colors.primary}
-             />
-           }
-           showsVerticalScrollIndicator={false}
-         >
-           {/* Always single column - Header and Stats */}
-           {renderChamaHeader()}
-           {renderStats()}
-
-           {/* Smart responsive layout for content cards */}
-           <SmartResponsiveLayout>
-             {renderMembers()}
-             {renderMeetings()}
-             {renderTransactions()}
-             {renderActivePolls()}
-           </SmartResponsiveLayout>
-
-           {isLargeScreen ? (
-             <View style={styles.desktopBottomRow}>
-               <View style={styles.desktopRulesColumn}>
-                 {renderChamaRules()}
-               </View>
-               <View style={styles.desktopSideColumn}>
-                 {renderUploadRulesButton()}
-                 {renderGroupChat()}
-                 {renderMembershipActions()}
-               </View>
-             </View>
-           ) : (
-             <>
-               {renderChamaRules()}
-               {renderUploadRulesButton()}
-               {renderGroupChat()}
-               {renderMembershipActions()}
-             </>
-           )}
-         </ScrollView>
-          <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
-       </View>
-
-       <DestructiveConfirmModal
-         visible={showLeaveModal}
-         onClose={() => setShowLeaveModal(false)}
-         onConfirm={confirmLeaveChama}
-         chamaName={chama?.name}
-         action="leave"
-       />
-
-     </SafeAreaView>
-   );
+      <DestructiveConfirmModal
+        visible={details.showLeaveModal}
+        onClose={() => details.setShowLeaveModal(false)}
+        onConfirm={details.confirmLeaveChama}
+        chamaName={details.chama?.name}
+        action="leave"
+      />
+    </SafeAreaView>
+  );
 };
 
 export default ChamaDetailsScreen;

@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, Switch, TouchableOpacity, Alert } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import Toast from 'react-native-toast-message';
-import ApiService from '../../../services/api';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import Card from '../../../components/common/Card';
-import Button from '../../../components/common/Button';
-import Input from '../../../components/common/Input';
+import ApiService from '../../services/api';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import Card from '../../components/common/Card';
+import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
 
 const WALLET_TYPES = [
   { id: 'merry-go-round', label: 'Merry-go-round Contribution', icon: 'swap-horizontal' },

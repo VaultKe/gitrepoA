@@ -213,7 +213,7 @@ const ContributeScreen = ({ route, navigation }) => {
                   <View style={[styles.cashNotice, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
                     <Ionicons name="information-circle" size={20} color={colors.warning} />
                     <Text style={[styles.cashNoticeText, { color: colors.text }]}>
-                      You are paying for a member. The amount will be deducted from your VaultKe wallet and the selected member will appear to have paid.
+                      You are paying for a member. The amount will be deducted from your VaultKe wallet and the selected member's records will be updated.
                     </Text>
                   </View>
                 </View>

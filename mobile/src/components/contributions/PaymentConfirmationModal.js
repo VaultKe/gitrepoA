@@ -117,7 +117,7 @@ const PaymentConfirmationModal = ({
                 <View style={[styles.cashConfirmationNotice, { backgroundColor: colors.info + '20', borderColor: colors.info }]}>
                   <Ionicons name="information-circle" size={16} color={colors.info} />
                   <Text style={[styles.cashConfirmationNoticeText, { color: colors.text }]}>
-                    KES {formatCurrency(parseFloat(amount || 0))} will be deducted from your wallet. {selectedContributor?.fullName || 'The selected member'} will appear to have paid this amount.
+                    KES {formatCurrency(parseFloat(amount || 0))} will be deducted from your wallet. {selectedContributor?.fullName || 'The selected member'} records will be updated.
                   </Text>
                 </View>
               </>
