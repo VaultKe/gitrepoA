@@ -194,17 +194,27 @@ const useChamaDetails = ({ route, navigation }) => {
        }
        setPollsLoading(true);
        Promise.all([
-        ApiService.getChamaTransactions(targetChamaId).then(response => {
-          if (response.success) {
+        ApiService.getTransactions(1000, 0).then(response => {
+          if (response.success && Array.isArray(response.data)) {
             const allTransactions = response.data || [];
+            const userId = String(user?.id);
+            const chamaId = String(targetChamaId || '');
             const userTransactions = allTransactions.filter(transaction => {
-              return transaction.user_id === user?.id ||
-                     transaction.initiated_by === user?.id ||
-                     transaction.member_id === user?.id ||
-                     transaction.sender_id === user?.id ||
-                     transaction.recipient_id === user?.id ||
-                     (transaction.user && transaction.user.id === user?.id) ||
-                     (transaction.member && transaction.member.user_id === user?.id);
+              const txChamaId = String(transaction.chamaId || '');
+              const initiatedBy = String(transaction.initiatedBy || '');
+              const memberId = String(transaction.memberId || '');
+              const recipientId = String(transaction.recipientId || '');
+              const fromWalletId = String(transaction.fromWalletId || '');
+              const toWalletId = String(transaction.toWalletId || '');
+              const transactionUserId = String(transaction.user?.id || transaction.member?.user_id || '');
+              const belongsToChama = txChamaId === chamaId;
+              const belongsToUser = initiatedBy === userId ||
+                     memberId === userId ||
+                     recipientId === userId ||
+                     fromWalletId === userId ||
+                     toWalletId === userId ||
+                     transactionUserId === userId;
+              return belongsToChama && belongsToUser;
             });
             setTransactions(userTransactions);
           }

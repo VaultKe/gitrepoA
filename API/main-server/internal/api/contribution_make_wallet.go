@@ -99,6 +99,7 @@ func makeWalletContribution(c *gin.Context, db *sql.DB, tx *sql.Tx, req *MakeCon
 	transferTx := &models.TransactionCreation{
 		FromWalletID:  &senderWallet.ID,
 		ToWalletID:    &recipientWallet.ID,
+		ChamaID:       req.ChamaID,
 		Type:          models.TransactionTypeTransfer,
 		Amount:        req.Amount,
 		Description:   &description,

@@ -225,6 +225,7 @@ func (s *WalletService) CreateTransaction(transaction *models.TransactionCreatio
 		Metadata:         transaction.Metadata,
 		Fees:             0, // Calculate fees based on transaction type
 		InitiatedBy:      initiatedBy,
+		ChamaID:          transaction.ChamaID,
 		RequiresApproval: false, // Set based on business rules
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
@@ -246,14 +247,14 @@ func (s *WalletService) CreateTransaction(transaction *models.TransactionCreatio
 		INSERT INTO transactions (
 			id, from_wallet_id, to_wallet_id, type, status, amount, currency,
 			description, reference, payment_method, metadata, fees, initiated_by,
-			requires_approval, created_at, updated_at
+			chama_id, requires_approval, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	_, err = s.db.Exec(query,
 		tx.ID, tx.FromWalletID, tx.ToWalletID, tx.Type, tx.Status, tx.Amount,
 		tx.Currency, tx.Description, tx.Reference, tx.PaymentMethod, metadataJSON,
-		tx.Fees, tx.InitiatedBy, tx.RequiresApproval, tx.CreatedAt, tx.UpdatedAt,
+		tx.Fees, tx.InitiatedBy, tx.ChamaID, tx.RequiresApproval, tx.CreatedAt, tx.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)

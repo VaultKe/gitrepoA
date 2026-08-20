@@ -136,6 +136,8 @@ func GetUserTransactions(c *gin.Context) {
 		chamaNameCache := make(map[string]string)
 		// Round-info cache: mgrID → {name, round, totalRounds, amount}
 		mgrCache := make(map[string]map[string]interface{})
+		// Recipient-name cache for merry-go-round recipients
+		recipientCache := make(map[string]string)
 
 		for contribTxnRows.Next() {
 			var id, type_, status, currency, initiatedBy, recipientID sql.NullString
@@ -197,7 +199,7 @@ func GetUserTransactions(c *gin.Context) {
 						errM := db.(*sql.DB).QueryRow(`
 							SELECT name, current_round, total_rounds, amount_per_round
 							FROM merry_go_rounds WHERE id = $1
-						`, mgrId).Scan(&mgrName, &totalRounds, mgrId)
+						`, mgrId).Scan(&mgrName, &totalRounds, &mgrAmount)
 						if errM != nil {
 							mgrName = ""
 						}
@@ -209,11 +211,16 @@ func GetUserTransactions(c *gin.Context) {
 					}
 				}
 
-				recipientId := safeMeta(meta, "recipientId")
-				recipientName := ""
-				if recipientId != "" {
-					db.(*sql.DB).QueryRow("SELECT first_name FROM users WHERE id = $1", recipientId).Scan(&recipientName)
+			recipientId := safeMeta(meta, "recipientId")
+			recipientName := ""
+			if recipientId != "" {
+				if rn, ok := recipientCache[recipientId]; ok {
+					recipientName = rn
+				} else {
+					_ = db.(*sql.DB).QueryRow("SELECT first_name FROM users WHERE id = $1", recipientId).Scan(&recipientName)
+					recipientCache[recipientId] = recipientName
 				}
+			}
 
 				roundInfo := ""
 				if roundNum > 0 {
@@ -284,6 +291,8 @@ func GetUserTransactions(c *gin.Context) {
 	// Merge: convert wallet transactions to maps, then de-duplicate by id
 	walletTxns := make([]map[string]interface{}, 0, len(walletTransactions)+len(contribTxns))
 	existingIDs := make(map[string]bool, len(walletTransactions)+len(contribTxns))
+	// User-info cache for wallet transaction initiators
+	userCache := make(map[string]map[string]interface{})
 	for _, tx := range walletTransactions {
 		desc := ""
 		if tx.Description != nil {
@@ -298,18 +307,23 @@ func GetUserTransactions(c *gin.Context) {
 		// Get user information for the transaction initiator
 		var userInfo map[string]interface{}
 		if tx.InitiatedBy != "" {
-			var uID, firstName, lastName, email, phone string
-			errRow := db.(*sql.DB).QueryRow(`
-				SELECT id, first_name, last_name, email, phone FROM users WHERE id = $1
-			`, tx.InitiatedBy).Scan(&uID, &firstName, &lastName, &email, &phone)
-			if errRow == nil {
-				userInfo = map[string]interface{}{
-					"id":        uID,
-					"firstName": firstName,
-					"lastName":  lastName,
-					"fullName":  firstName + " " + lastName,
-					"email":     email,
-					"phone":     phone,
+			if info, ok := userCache[tx.InitiatedBy]; ok {
+				userInfo = info
+			} else {
+				var uID, firstName, lastName, email, phone string
+				errRow := db.(*sql.DB).QueryRow(`
+					SELECT id, first_name, last_name, email, phone FROM users WHERE id = $1
+				`, tx.InitiatedBy).Scan(&uID, &firstName, &lastName, &email, &phone)
+				if errRow == nil {
+					userInfo = map[string]interface{}{
+						"id":        uID,
+						"firstName": firstName,
+						"lastName":  lastName,
+						"fullName":  firstName + " " + lastName,
+						"email":     email,
+						"phone":     phone,
+					}
+					userCache[tx.InitiatedBy] = userInfo
 				}
 			}
 		}
@@ -369,5 +383,4 @@ func GetUserTransactions(c *gin.Context) {
 			"count":  total,
 		},
 	})
-		c.Abort()
 }

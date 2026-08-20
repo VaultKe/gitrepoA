@@ -219,6 +219,7 @@ func (h *SubWalletHandlers) PayToSubWallet(c *gin.Context) {
 		transferTx := &models.TransactionCreation{
 			FromWalletID:  &senderWallet.ID,
 			ToWalletID:    &targetWallet.ID,
+			ChamaID:       chamaID,
 			Type:          models.TransactionTypeTransfer,
 			Amount:        req.Amount,
 			Description:   &description,

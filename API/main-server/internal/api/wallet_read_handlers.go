@@ -272,5 +272,4 @@ func GetWalletTransactions(c *gin.Context) {
 			"count":  len(transactions),
 		},
 	})
-		c.Abort()
 }
