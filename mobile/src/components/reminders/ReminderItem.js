@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors, spacing } from '../../../../utils/theme';
-import { formatDate } from '../../../../utils/dateUtils';
+import { useApp } from '../../context/AppContext';
+import { getThemeColors, spacing } from '../../utils/theme';
+import { formatDate } from '../../utils/dateUtils';
 
 const ReminderItem = ({
   reminder,
@@ -40,10 +40,8 @@ const ReminderItem = ({
   const isPast = isReminderPast(reminder.dateTime);
   const reminderDate = new Date(reminder.dateTime);
 
-  // Zebra design: alternate background colors
   const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
-  // Table row layout
   return (
     <View style={{
       flexDirection: 'row',
@@ -54,7 +52,6 @@ const ReminderItem = ({
       borderBottomColor: colors.border,
       alignItems: 'center',
     }}>
-      {/* Title & Description */}
       <View style={{ flex: 3 }}>
         <Text style={{
           fontSize: 14,
@@ -74,7 +71,6 @@ const ReminderItem = ({
         )}
       </View>
 
-      {/* Type */}
       <View style={{
         flex: 1,
         alignItems: 'center',
@@ -103,7 +99,6 @@ const ReminderItem = ({
         </View>
       </View>
 
-      {/* Date & Time */}
       <View style={{
         flex: 2,
         alignItems: 'center',
@@ -116,7 +111,6 @@ const ReminderItem = ({
           </Text>
       </View>
 
-      {/* Status */}
       <View style={{
         flex: 1,
         alignItems: 'center',
@@ -151,7 +145,6 @@ const ReminderItem = ({
         )}
       </View>
 
-      {/* Actions */}
       <View style={{
         flex: 1.5,
         flexDirection: 'row',

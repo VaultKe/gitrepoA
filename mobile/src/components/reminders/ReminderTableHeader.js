@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors, spacing } from '../../../../utils/theme';
+import { useApp } from '../../context/AppContext';
+import { getThemeColors, spacing } from '../../utils/theme';
 
 const ReminderTableHeader = ({
   isDesktop,
@@ -18,7 +18,7 @@ const ReminderTableHeader = ({
   const { theme } = useApp();
   const colors = getThemeColors(theme);
 
-  if (!isDesktop) return null; // Only show on desktop
+  if (!isDesktop) return null;
 
   const getFilterLabel = (value) => {
     switch (value) {
@@ -35,7 +35,6 @@ const ReminderTableHeader = ({
     <View>
     {showSearchFilter && (
       <>
-        {/* Search and Filter Row */}
         <View style={{
         flexDirection: 'row',
         paddingHorizontal: 12,
@@ -45,7 +44,6 @@ const ReminderTableHeader = ({
         borderBottomColor: colors.border,
         gap: 12,
       }}>
-        {/* Search Input */}
         <View style={{
           flex: 1,
           flexDirection: 'row',
@@ -72,7 +70,6 @@ const ReminderTableHeader = ({
           />
         </View>
 
-        {/* Filter Dropdown */}
         <View style={{
           flex: 1,
           flexDirection: 'row',
@@ -109,7 +106,6 @@ const ReminderTableHeader = ({
           </TouchableOpacity>
         </View>
 
-        {/* Create Button */}
         {onCreate && (
           <TouchableOpacity
             style={{

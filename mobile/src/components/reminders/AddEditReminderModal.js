@@ -9,8 +9,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors, spacing, borderRadius } from '../../../../utils/theme';
+import { useApp } from '../../context/AppContext';
+import { getThemeColors, spacing, borderRadius } from '../../utils/theme';
 import ReminderTypeSelector from './ReminderTypeSelector';
 
 const AddEditReminderModal = ({
@@ -24,32 +24,23 @@ const AddEditReminderModal = ({
   const { theme } = useApp();
   const colors = getThemeColors(theme);
 
-  // Input formatting helpers
   const formatDateInput = (text) => {
-    // Remove non-numeric characters except hyphens
     let cleaned = text.replace(/[^\d-]/g, '');
-
-    // Auto-format as YYYY-MM-DD
     if (cleaned.length >= 4 && cleaned.charAt(4) !== '-') {
       cleaned = cleaned.slice(0, 4) + '-' + cleaned.slice(4);
     }
     if (cleaned.length >= 7 && cleaned.charAt(7) !== '-') {
       cleaned = cleaned.slice(0, 7) + '-' + cleaned.slice(7);
     }
-
-    return cleaned.slice(0, 10); // Limit to YYYY-MM-DD
+    return cleaned.slice(0, 10);
   };
 
   const formatTimeInput = (text) => {
-    // Remove non-numeric characters except colons
     let cleaned = text.replace(/[^\d:]/g, '');
-
-    // Auto-format as HH:MM
     if (cleaned.length >= 2 && cleaned.charAt(2) !== ':') {
       cleaned = cleaned.slice(0, 2) + ':' + cleaned.slice(2);
     }
-
-    return cleaned.slice(0, 5); // Limit to HH:MM
+    return cleaned.slice(0, 5);
   };
 
   const updateFormData = (key, value) => {
@@ -181,7 +172,6 @@ const AddEditReminderModal = ({
             />
           </View>
 
-          {/* Date Input */}
           <View style={{ marginBottom: 24 }}>
             <Text style={{
               fontSize: 16,
@@ -221,7 +211,6 @@ const AddEditReminderModal = ({
             </View>
           </View>
 
-          {/* Time Input */}
           <View style={{ marginBottom: 24 }}>
             <Text style={{
               fontSize: 16,

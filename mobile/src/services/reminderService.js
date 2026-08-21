@@ -1,6 +1,9 @@
 import ApiService from './api';
 
 class ReminderService {
+  static #availabilityCache = { available: null, checkedAt: 0 };
+  static #AVAILABILITY_TTL = 30000;
+
   async createReminder(reminderData) {
     const requestBody = {
       title: reminderData.title,
@@ -139,10 +142,18 @@ class ReminderService {
   }
 
   async isServiceAvailable() {
+    const now = Date.now();
+    if (ReminderService.#availabilityCache.available !== null &&
+        now - ReminderService.#availabilityCache.checkedAt < ReminderService.#AVAILABILITY_TTL) {
+      return ReminderService.#availabilityCache.available;
+    }
+
     try {
       await this.getUserReminders(1, 0);
+      ReminderService.#availabilityCache = { available: true, checkedAt: now };
       return true;
     } catch {
+      ReminderService.#availabilityCache = { available: false, checkedAt: now };
       return false;
     }
   }

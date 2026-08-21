@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../../../context/AppContext';
-import { getThemeColors } from '../../../../utils/theme';
-import Button from '../../../../components/common/Button';
+import { useApp } from '../../context/AppContext';
+import { getThemeColors } from '../../utils/theme';
+import Button from '../common/Button';
 
 const EmptyRemindersState = ({ onAddReminder }) => {
   const { theme } = useApp();
