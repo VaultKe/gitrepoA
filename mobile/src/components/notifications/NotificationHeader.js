@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 
 const { width: screenWidth } = Dimensions.get('window');
-import { Ionicons } from '@expo/vector-icons';
-import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 
-const NotificationHeader = React.memo(({ colors, screenWidth, filters, selectedFilter, setSelectedFilter, invitationsCount, smartNavigate, displayNotifications, markAllAsRead }) => {
+const NotificationHeader = memo(({ colors, screenWidth, filters, selectedFilter, setSelectedFilter, invitationsCount, smartNavigate, displayNotifications, markAllAsRead }) => {
   const unreadCount = displayNotifications.filter(n => !n.isRead).length;
 
   return (

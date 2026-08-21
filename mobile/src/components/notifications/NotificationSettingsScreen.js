@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { VaultKeTheme } from '../theme/VaultKeTheme';
-import { notificationService } from '../services/NotificationService';
-import { audioService } from '../services/AudioService';
+import { VaultKeTheme } from '../../theme/theme';
+import { notificationService } from '../../services/notificationService';
+import { audioService } from '../../services/AudioService';
 
 const NotificationSettingsScreen = ({ navigation }) => {
   const { colors } = useTheme();
