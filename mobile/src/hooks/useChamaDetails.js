@@ -195,30 +195,36 @@ const useChamaDetails = ({ route, navigation }) => {
        setPollsLoading(true);
        Promise.all([
         ApiService.getTransactions(1000, 0).then(response => {
+          console.log('[DEBUG] getTransactions response:', response);
           if (response.success && Array.isArray(response.data)) {
             const allTransactions = response.data || [];
+            console.log('[DEBUG] allTransactions count:', allTransactions.length);
             const userId = String(user?.id);
-            const chamaId = String(targetChamaId || '');
             const userTransactions = allTransactions.filter(transaction => {
-              const txChamaId = String(transaction.chamaId || '');
               const initiatedBy = String(transaction.initiatedBy || '');
               const memberId = String(transaction.memberId || '');
               const recipientId = String(transaction.recipientId || '');
               const fromWalletId = String(transaction.fromWalletId || '');
               const toWalletId = String(transaction.toWalletId || '');
               const transactionUserId = String(transaction.user?.id || transaction.member?.user_id || '');
-              const belongsToChama = txChamaId === chamaId;
-              const belongsToUser = initiatedBy === userId ||
+              const matches = initiatedBy === userId ||
                      memberId === userId ||
                      recipientId === userId ||
                      fromWalletId === userId ||
                      toWalletId === userId ||
                      transactionUserId === userId;
-              return belongsToChama && belongsToUser;
+              if (matches) {
+                console.log('[DEBUG] matching transaction:', transaction.id, transaction.type, transaction.chamaId);
+              }
+              return matches;
             });
+            console.log('[DEBUG] userTransactions count:', userTransactions.length);
             setTransactions(userTransactions);
+          } else {
+            console.log('[DEBUG] getTransactions failed or no data');
           }
         }).catch(error => {
+          console.log('[DEBUG] getTransactions error:', error);
           setTransactions([]);
         }),
 

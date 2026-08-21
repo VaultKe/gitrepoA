@@ -1,8 +1,14 @@
 import { makeRequest, makeRequestWithRetry } from './client';
 import { storeUserData, removeAuthToken, setRefreshToken, getRefreshToken, removeRefreshToken } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { resetLoggingOut } from '../../utils/authLogout';
 
 const login = async (credentials) => {
+  // Clear any stale "logging out" guard so a login attempt is never blocked
+  // after a previous logout. This is what allows re-authentication (phone or
+  // email) within the same app session.
+  resetLoggingOut();
+
   const response = await makeRequest('/auth/login', {
     method: 'POST',
     body: credentials,
@@ -53,6 +59,9 @@ const login = async (credentials) => {
 };
 
 const register = async (userData) => {
+  // Same guard reset as login — allow fresh registration after a logout.
+  resetLoggingOut();
+
   const response = await makeRequest('/auth/register', {
     method: 'POST',
     body: userData,

@@ -74,6 +74,28 @@ const UNMASKED_ENDPOINTS = [
 const isUnmaskedEndpoint = (endpoint) =>
   UNMASKED_ENDPOINTS.some((pattern) => endpoint.includes(pattern));
 
+/**
+ * Pre-authentication entry points. These endpoints are how a user gets INTO the
+ * app (login, register, password recovery, email verification) and therefore
+ * must never be blocked by the "logging out" guard. Blocking them would
+ * permanently trap a user on the login screen after a logout, because once
+ * `isLoggingOut` is set it stays true for the rest of the session unless
+ * explicitly reset.
+ */
+const PRE_AUTH_ENDPOINTS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/check-token-status',
+  '/auth/send-email-verification',
+  '/auth/verify-email-code',
+  '/auth/check-email-verification-status',
+];
+
+const isPreAuthEndpoint = (endpoint) =>
+  PRE_AUTH_ENDPOINTS.some((prefix) => endpoint.startsWith(prefix));
+
 const refreshAccessToken = async () => {
   if (isRefreshing) {
     return refreshPromise;
@@ -165,8 +187,10 @@ const refreshAccessToken = async () => {
 
   const makeRequest = async (endpoint, options = {}) => {
     // Bail out early if a logout is already in progress — prevents a cascade
-    // of failed requests that would each independently call triggerAppLogout
-    if (getLoggingOut()) {
+    // of failed requests that would each independently call triggerAppLogout.
+    // Pre-authentication endpoints (login/register/etc.) are exempt so a user
+    // can always re-authenticate, even if a logout is momentarily in flight.
+    if (getLoggingOut() && !isPreAuthEndpoint(endpoint)) {
       throw new Error('Request cancelled — user is logging out');
     }
 
@@ -275,10 +299,13 @@ const refreshAccessToken = async () => {
             if (response.status === 401) {
               const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
               if (isAuthEndpoint) {
-                if (!getLoggingOut()) {
-                  await triggerAppLogout();
-                }
-                throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+                // A 401 on login/register is a failed authentication attempt
+                // (wrong credentials, unverified account, etc.), NOT an expired
+                // session. We must NOT trigger a logout here: the user is not
+                // authenticated yet, and doing so would wipe state, navigate
+                // away from the login screen, and re-arm the "logging out" guard
+                // that blocks any further login attempts.
+                throw new Error(data?.error || response.statusText || 'Login failed. Please check your credentials and try again.');
               }
 
               try {
@@ -405,10 +432,9 @@ const refreshAccessToken = async () => {
       if (response.status === 401) {
         const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
         if (isAuthEndpoint) {
-          if (!getLoggingOut()) {
-            await triggerAppLogout();
-          }
-          throw new Error(data?.error || response.statusText || 'Your session has expired. Please log in again.');
+          // A 401 on login/register is a failed authentication attempt, NOT an
+          // expired session. Do not trigger a logout (see GET path above).
+          throw new Error(data?.error || response.statusText || 'Login failed. Please check your credentials and try again.');
         }
 
         try {

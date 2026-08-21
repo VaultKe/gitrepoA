@@ -43,3 +43,21 @@ export const triggerAppLogout = async () => {
 };
 
 export const getLoggingOut = () => isLoggingOut;
+
+/**
+ * Clears the "logging out" guard so a user can authenticate again after a
+ * logout (or after a logout was triggered for any reason).
+ *
+ * The `isLoggingOut` flag is intentionally sticky to prevent a logout cascade
+ * from re-entrant requests. However, leaving it set permanently also blocks a
+ * fresh login/register within the same app session — once you log out you can
+ * never log back in. Authentication entry points (login/register) must clear
+ * this flag so a new session can be established. This is safe: a completed
+ * logout should not prevent the user from re-authenticating, and an in-flight
+ * logout that races with a login is benign (the login simply establishes a new
+ * session).
+ */
+export const resetLoggingOut = () => {
+  isLoggingOut = false;
+  lastLogoutTime = 0;
+};

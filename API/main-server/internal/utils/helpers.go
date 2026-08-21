@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	phonenorm "vaultke-backend/internal/utils/phone"
 )
 
 // East African Time timezone
@@ -61,31 +63,17 @@ func FormatCurrency(amount float64) string {
 // 254712..., +254712...) are normalized to this single canonical form so
 // that DB storage and lookup are always consistent.
 func FormatPhoneNumber(phone string) string {
-	// Remove all non-digit characters (including +)
-	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
-
-	// Strip leading zeros that were used as local dialing prefix
-	cleaned = strings.TrimLeft(cleaned, "0")
-
-	// At this point `cleaned` should be 9 or 12 digits:
-	//   9 digits  → missing country code (e.g. 712345678)
-	//  12 digits  → already includes 254 prefix (e.g. 254712345678)
-	// Any other length means the input is not a valid Kenyan phone number;
-	// return the original value so callers can decide how to handle it.
-	if len(cleaned) == 9 {
-		cleaned = "254" + cleaned
-	} else if len(cleaned) == 12 {
-		// Already in 254XXXXXXXXXX form — keep as-is
-	} else {
+	// Delegate to libphonenumber (Google's libphonenumber, via the internal
+	// phone package) for canonical E.164 formatting. This keeps every phone
+	// normalization path in one well-tested place instead of relying on
+	// hand-written regex.
+	formatted, err := phonenorm.NormalizeKenyanPhone(phone)
+	if err != nil {
+		// Preserve previous behavior: return the original value when the input
+		// cannot be normalized, so callers can decide how to handle it.
 		return phone
 	}
-
-	// Ensure the number starts with 254 (Kenya country code)
-	if !strings.HasPrefix(cleaned, "254") {
-		return phone
-	}
-
-	return "+" + cleaned
+	return formatted
 }
 
 // ParsePhoneNumber extracts the phone number without country code

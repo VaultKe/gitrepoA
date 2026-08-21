@@ -13,6 +13,7 @@ import (
 
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/utils"
+	phonenorm "vaultke-backend/internal/utils/phone"
 )
 
 // UserService handles user-related business logic
@@ -232,48 +233,68 @@ func (s *UserService) GetUserByID(userID string) (*models.User, error) {
 	return user, nil
 }
 
-// GetUserByEmailOrPhone retrieves a user by email or phone
+// normalizePhoneColumnExpr returns a SQL expression that canonicalizes a phone
+// column to the E.164 "+254XXXXXXXXXX" form (matching phone.NormalizeKenyanPhone)
+// so lookups succeed regardless of how the value was originally stored — with
+// spaces ("+254 712 345 678"), with/without a leading "+", with a local "0"
+// prefix ("0712345678"), or as a bare 9-digit number. This keeps login working
+// for legacy data even before a one-time data migration normalizes the column.
+func normalizePhoneColumnExpr(col string) string {
+	d := fmt.Sprintf("regexp_replace(%s, '\\D', '', 'g')", col)
+	return fmt.Sprintf(
+		"CASE WHEN length(%s) = 9 THEN '+254' || %s WHEN %s LIKE '0%%' THEN '+254' || substr(%s, 2) ELSE '+' || %s END",
+		d, d, d, d, d,
+	)
+}
+
+// GetUserByEmailOrPhone retrieves a user by email or phone.
+//
+// For emails we compare case-insensitively. For phones we normalize BOTH the
+// supplied identifier and the stored phone column to the canonical
+// "254XXXXXXXXXX" digit form before comparing, so login succeeds no matter
+// which format the account was registered or stored with (07…, 01…, 254…,
+// +254…, or legacy space-separated values). This is what allows a user to log
+// in with a local "07…"/"01…" number even when their stored phone was saved
+// in a different (e.g. spaced) format.
 func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, error) {
-	// Normalize identifier if it's an email
-	normalizedIdentifier := identifier
-	if strings.Contains(identifier, "@") {
-		normalizedIdentifier = strings.ToLower(strings.TrimSpace(identifier))
-	} else {
-		normalizedIdentifier = strings.TrimSpace(identifier)
-	}
+	normalizedIdentifier := strings.TrimSpace(identifier)
+	isEmail := strings.Contains(normalizedIdentifier, "@")
 
-	// If the identifier does not contain "@", treat it as a phone number and
-	// always attempt to format it to the canonical +254 international form.
-	// This is more robust than relying on IsPhoneNumber, which strips only
-	// a limited set of separators and can miss formats like +254.712.345.678.
-	formattedIdentifier := normalizedIdentifier
-	formattedWithoutPlus := normalizedIdentifier
-	if !strings.Contains(identifier, "@") {
-		formattedIdentifier = utils.FormatPhoneNumber(normalizedIdentifier)
-		// Strip the leading "+" so we can also match phones stored without it
-		// (e.g. legacy data stored as "254712345678" instead of "+254712345678")
-		formattedWithoutPlus = strings.TrimPrefix(formattedIdentifier, "+")
-	}
-
-	// Use both direct comparison (for normalized emails) and LOWER() for legacy data.
-	// For phone lookups, search by multiple formats to handle legacy data:
-	//   $3 → formatted phone with + (e.g. +254712345678)
-	//   $4 → raw identifier as typed by user (e.g. 0712345678)
-	//   $5 → formatted phone without + (e.g. 254712345678) for legacy storage
-	query := `
-		SELECT id, email, phone, first_name, last_name, password_hash, avatar, role, status,
-			   is_email_verified, is_phone_verified, language, theme, county, town,
-			   latitude, longitude, business_type, business_description, bio, occupation,
-			   date_of_birth, gender, id_number, rating, total_ratings, token_version,
-			   created_at, updated_at
-		FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3 OR phone = $4 OR phone = $5
+	const selectColumns = `
+		id, email, phone, first_name, last_name, password_hash, avatar, role, status,
+		is_email_verified, is_phone_verified, language, theme, county, town,
+		latitude, longitude, business_type, business_description, bio, occupation,
+		date_of_birth, gender, id_number, rating, total_ratings, token_version,
+		created_at, updated_at
 	`
 
+	var query string
+	var args []interface{}
+
+	if isEmail {
+		emailLower := strings.ToLower(normalizedIdentifier)
+		query = `
+			SELECT ` + selectColumns + `
+			FROM users WHERE email = $1 OR LOWER(TRIM(email)) = $2
+		`
+		args = []interface{}{emailLower, emailLower}
+	} else {
+		// Canonical E.164 "+254XXXXXXXXXX" form of the supplied phone.
+		// Any unparseable value is treated as "no such user" so the login
+		// path returns a generic invalid-credentials error.
+		canonical, err := phonenorm.NormalizeKenyanPhone(normalizedIdentifier)
+		if err != nil {
+			return nil, fmt.Errorf("user not found")
+		}
+		query = `
+			SELECT ` + selectColumns + `
+			FROM users WHERE ` + normalizePhoneColumnExpr("phone") + ` = $1
+		`
+		args = []interface{}{canonical}
+	}
+
 	user := &models.User{}
-	err := s.db.QueryRow(query,
-		normalizedIdentifier, normalizedIdentifier,
-		formattedIdentifier, normalizedIdentifier, formattedWithoutPlus,
-	).Scan(
+	err := s.db.QueryRow(query, args...).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.FirstName, &user.LastName,
 		&user.PasswordHash, &user.Avatar, &user.Role, &user.Status,
 		&user.IsEmailVerified, &user.IsPhoneVerified, &user.Language, &user.Theme,
@@ -287,6 +308,17 @@ func (s *UserService) GetUserByEmailOrPhone(identifier string) (*models.User, er
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Return the phone in canonical E.164 form regardless of how it was stored.
+	// This keeps the client (and any downstream M-Pesa/comparison logic) working
+	// uniformly even for legacy accounts whose stored phone has spaces or other
+	// separators. If a stored value can't be parsed we keep it as-is rather than
+	// dropping it.
+	if user.Phone != "" {
+		if formatted, ferr := phonenorm.NormalizeKenyanPhone(user.Phone); ferr == nil {
+			user.Phone = formatted
+		}
 	}
 
 	if user.IDNumber != nil {
@@ -409,13 +441,22 @@ func (s *UserService) UserExists(email, phone string) (bool, error) {
 	// Normalize email for consistent comparison
 	// This handles: 'User@Gmail.COM' -> 'user@gmail.com'
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	formattedPhone := utils.FormatPhoneNumber(phone)
+	// Canonical E.164 form so the duplicate check matches regardless of how the
+	// stored phone was formatted (spaces, leading 0, +254, etc.). On an
+	// unparseable value we fall back to the raw string so existing behavior is
+	// preserved; registration will still fail downstream validation.
+	canonicalPhone, err := phonenorm.NormalizeKenyanPhone(phone)
+	if err != nil {
+		canonicalPhone = phone
+	}
 
 	// Since we now store all emails in lowercase, we can do direct comparison
-	// But we also check with LOWER() for existing data that might not be normalized
-	query := "SELECT COUNT(*) FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR phone = $3"
+	// But we also check with LOWER() for existing data that might not be normalized.
+	// Phone is compared in canonical digit form against the normalized column.
+	query := "SELECT COUNT(*) FROM users WHERE (email = $1 OR LOWER(TRIM(email)) = $2) OR " +
+		normalizePhoneColumnExpr("phone") + " = $3"
 	var count int
-	err := s.db.QueryRow(query, normalizedEmail, normalizedEmail, formattedPhone).Scan(&count)
+	err = s.db.QueryRow(query, normalizedEmail, normalizedEmail, canonicalPhone).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check user existence: %w", err)
 	}
