@@ -22,8 +22,8 @@ import ChamaFilterDropdown from '../../../components/my-chamas/ChamaFilterDropdo
 
 const categoryOptions = [
   { id: 'all', name: 'All', icon: 'list' },
-  { id: 'chama', name: 'Chamas', icon: 'people' },
-  { id: 'contribution', name: 'Contribution Groups', icon: 'heart' },
+  { id: 'chama', name: 'Chamas'},
+  { id: 'contribution', name: 'Contribution Groups'},
 ];
 
 const createTableStyles = createThemedStyles((colors, spacing, typography, shadows) => ({
@@ -292,7 +292,7 @@ const MyChamasScreen = ({ navigation, route }) => {
 
 const renderEmptyState = (hook) => (
   <View style={styles.emptyState}>
-    <Ionicons name="people-outline" size={64} color={getThemeColors(hook.theme).textTertiary} />
+    <Ionicons size={64} color={getThemeColors(hook.theme).textTertiary} />
     <Text style={[styles.emptyTitle, { color: getThemeColors(hook.theme).text }]}>
       No chamas found
     </Text>

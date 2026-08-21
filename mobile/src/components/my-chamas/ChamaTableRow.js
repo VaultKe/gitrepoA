@@ -11,26 +11,32 @@ const ChamaTableRow = ({ item, index, colors, themedStyles, navigation, onPressD
 
   const typeConfig = isContributionGroup ? {
     color: colors.success,
-    icon: 'heart',
+    // icon: 'heart',
     label: 'Contribution',
   } : {
     color: colors.primary,
-    icon: 'people',
+    // icon: 'people',
     label: 'Chama',
   };
 
   const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
+  const getDisplayName = (name) => {
+    if (!name) return 'Unnamed Chama';
+    if (name.length > 10) return `${name.substring(0, 10)}...`;
+    return name;
+  };
+
   return (
     <View style={[themedStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
       <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
         <View style={themedStyles.nameContainer}>
-          <View style={[themedStyles.typeIcon, { backgroundColor: typeConfig.color + '20' }]}>
+          {/* <View style={[themedStyles.typeIcon, { backgroundColor: typeConfig.color + '20' }]}>
             <Ionicons name={typeConfig.icon} size={16} color={typeConfig.color} />
-          </View>
+          </View> */}
           <View>
             <Text style={[themedStyles.tableCellText, themedStyles.nameText]} numberOfLines={1}>
-              {item.name || 'Unnamed Chama'}
+              {getDisplayName(item.name)}
             </Text>
             <Text style={[themedStyles.tableCellText, themedStyles.subText]}>
               {item.type || 'Unknown Type'}
