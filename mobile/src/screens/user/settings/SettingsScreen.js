@@ -93,13 +93,18 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  // Load all user settings
+  // Load all user settings in parallel to avoid freezing the UI
   const loadUserSettings = async () => {
     try {
       setLoading(true);
 
-      // Load notification preferences
-      const notificationResponse = await ApiService.getNotificationPreferences();
+      const [notificationResponse, privacyResponse, securityResponse, preferencesResponse] = await Promise.all([
+        ApiService.getNotificationPreferences(),
+        ApiService.getPrivacySettings(),
+        ApiService.getSecuritySettings(),
+        ApiService.getUserPreferences(),
+      ]);
+
       if (notificationResponse.success) {
         const prefs = notificationResponse.data.preferences;
         setSettings(prev => ({
@@ -121,8 +126,6 @@ const SettingsScreen = ({ navigation }) => {
         setAvailableSounds(notificationResponse.data.available_sounds || []);
       }
 
-      // Load privacy settings
-      const privacyResponse = await ApiService.getPrivacySettings();
       if (privacyResponse.success) {
         setSettings(prev => ({
           ...prev,
@@ -133,8 +136,6 @@ const SettingsScreen = ({ navigation }) => {
         }));
       }
 
-      // Load security settings
-      const securityResponse = await ApiService.getSecuritySettings();
       if (securityResponse.success) {
         setSettings(prev => ({
           ...prev,
@@ -145,8 +146,6 @@ const SettingsScreen = ({ navigation }) => {
         }));
       }
 
-      // Load user preferences
-      const preferencesResponse = await ApiService.getUserPreferences();
       if (preferencesResponse.success) {
         setSettings(prev => ({
           ...prev,
@@ -203,17 +202,9 @@ const SettingsScreen = ({ navigation }) => {
     loadUserSettings();
     checkGoogleDriveConnection();
   }, []);
-  useFocusEffect(
-    React.useCallback(() => {
-      setTimeout(() => {
-        checkGoogleDriveConnection();
-      }, 1000);
-    }, [])
-  );
 
   const checkGoogleDriveConnection = async (forceRefresh = false) => {
     try {
-
       if (forceRefresh) {
         setGoogleDriveConnected(false);
         setShowAuthLink(false);
@@ -251,9 +242,9 @@ const SettingsScreen = ({ navigation }) => {
           Alert.alert('Success', 'Google Drive connection detected! You are now connected.');
         }
       } else {
-
        // If we've tried multiple times and still not connected, offer manual override
-        if (connectionCheckAttempts >= 3 && !forceRefresh) {
+        const attempts = connectionCheckAttempts;
+        if (attempts >= 3 && !forceRefresh) {
           Alert.alert(
             'Connection Check Issue',
             'Having trouble detecting your Google Drive connection. Would you like to manually verify the connection?',
@@ -270,7 +261,8 @@ const SettingsScreen = ({ navigation }) => {
       setGoogleDriveConnected(false);
 
       // If error persists after multiple attempts, offer manual override
-      if (connectionCheckAttempts >= 2) {
+      const attempts = connectionCheckAttempts;
+      if (attempts >= 2) {
         Alert.alert(
           'Connection Error',
           'Unable to verify Google Drive connection. Would you like to manually set the connection status?',

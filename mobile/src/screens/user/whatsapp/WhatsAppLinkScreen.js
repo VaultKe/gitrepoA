@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,40 +20,131 @@ import { API_BASE_URL } from '../../../config/environment';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
-import apiService from '../../../services/api';
+import { useApp } from '../../../context/AppContext';
 
-const WhatsAppLinkScreen = () => {
+const MAX_LOGS = 40;
+const POLL_INTERVAL_MS = 3000;
+
+const WhatsAppLinkScreen = React.memo(() => {
   const navigation = useNavigation();
-  const colors = getThemeColors('light');
+  const { theme } = useApp();
+  const colors = getThemeColors(theme);
 
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [qrBase64, setQrBase64] = useState(null);
-  const [status, setStatus] = useState('idle'); // idle | scanning | ready | logged_out | failed
+  const [status, setStatus] = useState('idle');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showPhoneInput, setShowPhoneInput] = useState(false);
-  const [polling, setPolling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [logs, setLogs] = useState([]);
   const pollRef = useRef(null);
+  const mountedRef = useRef(true);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await startLink();
-    } catch (error) {
-      console.warn('WhatsApp link refresh failed:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const addLog = (msg) => {
+  const addLog = useCallback((msg) => {
+    if (!mountedRef.current) return;
     const ts = new Date().toLocaleTimeString();
-    setLogs(prev => [...prev.slice(-40), `[${ts}] ${msg}`]);
-  };
+    setLogs(prev => {
+      const next = [...prev, `[${ts}] ${msg}`];
+      return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next;
+    });
+  }, []);
 
-  const startLink = async () => {
+  const clearPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback((sid) => {
+    clearPolling();
+    setPolling(true);
+    setStatus('scanning');
+    addLog(`Polling QR for session ${sid}`);
+    fetchQR(sid);
+    pollRef.current = setInterval(() => {
+      fetchQR(sid);
+    }, POLL_INTERVAL_MS);
+  }, [clearPolling, addLog]);
+
+  const fetchQR = useCallback(async (sid) => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session/${sid}/qr`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data && data.data) {
+        if (data.data.qr) setQrBase64(data.data.qr);
+        if (data.data.status) {
+          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
+          setStatus(normalizedStatus);
+        }
+        if (data.data.status === 'ready') {
+          clearPolling();
+          setPolling(false);
+          Alert.alert('Success', 'WhatsApp linked successfully');
+        }
+      } else {
+        addLog(`QR poll error: status=${res.status} body=${text.slice(0, 120)}`);
+        if (data && data.data && data.data.status) {
+          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
+          setStatus(normalizedStatus);
+        }
+      }
+    } catch (e) {
+      addLog(`QR poll error: ${e.message}`);
+    }
+  }, [addLog, clearPolling]);
+
+  const checkStatus = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session/${sessionId}/status`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const text = await res.text();
+      addLog(`Status check status=${res.status} body=${text.slice(0, 200)}`);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.success && data.data) {
+        if (data.data.status) {
+          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
+          setStatus(normalizedStatus);
+        }
+        if (data.data.status === 'ready') {
+          Alert.alert('Success', 'WhatsApp linked successfully');
+        }
+      } else {
+        addLog(`Status check unexpected response: ${text.slice(0, 200)}`);
+      }
+    } catch (error) {
+      addLog(`Status error: ${error.message}`);
+      console.error('Status check failed:', error);
+    }
+  }, [sessionId, addLog]);
+
+  const startLink = useCallback(async () => {
     try {
       setLoading(true);
       setStatus('idle');
@@ -93,129 +184,9 @@ const WhatsAppLinkScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [addLog, startPolling]);
 
-  const fetchQR = async (sid) => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      const url = `${API_BASE_URL}/wa/link/session/${sid}/qr`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = {};
-      }
-      if (res.ok && data && data.data) {
-        if (data.data.qr) setQrBase64(data.data.qr);
-        if (data.data.status) {
-          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
-          setStatus(normalizedStatus);
-        }
-        if (data.data.status === 'ready') {
-          clearInterval(pollRef.current);
-          setPolling(false);
-          Alert.alert('Success', 'WhatsApp linked successfully');
-        }
-      } else {
-        addLog(`QR poll error: status=${res.status} body=${text.slice(0, 120)}`);
-        if (data && data.data && data.data.status) {
-          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
-          setStatus(normalizedStatus);
-        }
-      }
-    } catch (e) {
-      addLog(`QR poll error: ${e.message}`);
-    }
-  };
-
-  const startPolling = (sid) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    setPolling(true);
-    setStatus('scanning');
-    addLog(`Polling QR for session ${sid}`);
-    fetchQR(sid);
-    pollRef.current = setInterval(() => {
-      fetchQR(sid);
-    }, 3000);
-  };
-
-  const checkStatus = async () => {
-    if (!sessionId) return;
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      const url = `${API_BASE_URL}/wa/link/session/${sessionId}/status`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-      const text = await res.text();
-      addLog(`Status check status=${res.status} body=${text.slice(0, 200)}`);
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = {};
-      }
-      if (res.ok && data.success && data.data) {
-        if (data.data.status) {
-          const normalizedStatus = data.data.status === 'qr_ready' ? 'scanning' : data.data.status;
-          setStatus(normalizedStatus);
-        }
-        if (data.data.status === 'ready') {
-          Alert.alert('Success', 'WhatsApp linked successfully');
-        }
-      } else {
-        addLog(`Status check unexpected response: ${text.slice(0, 200)}`);
-      }
-    } catch (error) {
-      addLog(`Status error: ${error.message}`);
-      console.error('Status check failed:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    if (!sessionId) return;
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      const url = `${API_BASE_URL}/wa/link/session/${sessionId}/logout`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-      const text = await res.text();
-      addLog(`Logout status=${res.status} body=${text.slice(0, 200)}`);
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = {};
-      }
-      if (res.ok && data.success) {
-        setStatus('logged_out');
-        setQrBase64(null);
-        Alert.alert('Logged out', 'WhatsApp session has been logged out');
-      } else {
-        Alert.alert('Error', data.error || 'Failed to logout WhatsApp session');
-      }
-    } catch (error) {
-      addLog(`Logout error: ${error.message}`);
-      Alert.alert('Error', error.message || 'Failed to logout WhatsApp session');
-    }
-  };
-
-  const handlePhoneLink = async () => {
+  const handlePhoneLink = useCallback(async () => {
     if (!phoneNumber.trim()) {
       Alert.alert('Error', 'Please enter a phone number');
       return;
@@ -256,15 +227,61 @@ const WhatsAppLinkScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [phoneNumber, addLog, startPolling]);
+
+  const handleLogout = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const url = `${API_BASE_URL}/wa/link/session/${sessionId}/logout`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      const text = await res.text();
+      addLog(`Logout status=${res.status} body=${text.slice(0, 200)}`);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+      if (res.ok && data.success) {
+        setStatus('logged_out');
+        setQrBase64(null);
+        Alert.alert('Logged out', 'WhatsApp session has been logged out');
+      } else {
+        Alert.alert('Error', data.error || 'Failed to logout WhatsApp session');
+      }
+    } catch (error) {
+      addLog(`Logout error: ${error.message}`);
+      Alert.alert('Error', error.message || 'Failed to logout WhatsApp session');
+    }
+  }, [sessionId, addLog]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await startLink();
+    } catch (error) {
+      console.warn('WhatsApp link refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [startLink]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      mountedRef.current = false;
+      clearPolling();
     };
-  }, []);
+  }, [clearPolling]);
 
-  const renderQR = () => {
+  const renderQR = useMemo(() => {
     if (status === 'ready') {
       return (
         <View style={styles.qrContainer}>
@@ -348,11 +365,20 @@ const WhatsAppLinkScreen = () => {
         </Text>
       </View>
     );
-  };
+  }, [status, qrBase64, colors]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={{ flex: 1, position: 'relative' }}>
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingOverlayText, { color: colors.text }]}>
+              Starting WhatsApp session...
+            </Text>
+          </View>
+        )}
+
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <Ionicons name="logo-whatsapp" size={48} color={colors.success || '#25D366'} />
@@ -363,7 +389,7 @@ const WhatsAppLinkScreen = () => {
           </View>
 
           <Card variant="outlined" style={styles.qrCard}>
-            {renderQR()}
+            {renderQR}
           </Card>
 
           {status === 'scanning' && (
@@ -383,7 +409,7 @@ const WhatsAppLinkScreen = () => {
               <Button
                 title="Cancel"
                 onPress={() => {
-                  if (pollRef.current) clearInterval(pollRef.current);
+                  clearPolling();
                   setPolling(false);
                   setStatus('idle');
                   setSessionId(null);
@@ -424,15 +450,6 @@ const WhatsAppLinkScreen = () => {
             </View>
           )}
 
-          {/* {logs.length > 0 && (
-            <Card variant="outlined" style={styles.logCard}>
-              <Text style={[styles.logTitle, { color: colors.text }]}>Debug Logs</Text>
-              {logs.map((log, idx) => (
-                <Text key={idx} style={[styles.logLine, { color: colors.textSecondary }]}>{log}</Text>
-              ))}
-            </Card>
-          )} */}
-
           <View style={styles.infoSection}>
             <Text style={[styles.infoTitle, { color: colors.text }]}>How it works</Text>
             <View style={styles.infoItem}>
@@ -455,7 +472,8 @@ const WhatsAppLinkScreen = () => {
             </View>
           </View>
         </ScrollView>
-         <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+
+        <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
       </View>
 
       <Modal visible={showPhoneInput} transparent animationType="fade" onRequestClose={() => setShowPhoneInput(false)}>
@@ -480,7 +498,7 @@ const WhatsAppLinkScreen = () => {
       </Modal>
     </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -489,6 +507,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+    gap: spacing.md,
+  },
+  loadingOverlayText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
   },
   header: {
     alignItems: 'center',
@@ -563,20 +597,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.fontSize.sm,
     lineHeight: 18,
-  },
-  logCard: {
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  logTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  logLine: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    marginBottom: 2,
   },
   modalOverlay: {
     flex: 1,
