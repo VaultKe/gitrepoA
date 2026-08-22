@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,119 +7,35 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
-  Linking,
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
-import ApiService from '../../../services/api';
+import useContactSupportScreen from '../../../hooks/useContactSupportScreen';
 
 const ContactSupportScreen = ({ navigation }) => {
-  const { theme, user } = useApp();
+  const { theme } = useApp();
   const colors = getThemeColors(theme);
-  
-  const [selectedIssue, setSelectedIssue] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState('medium');
-  const [contactMethod, setContactMethod] = useState('email');
 
-  const issueTypes = [
-    { id: 'account', label: 'Account Issues', icon: 'person-circle' },
-    { id: 'payment', label: 'Payment Problems', icon: 'card' },
-    { id: 'chama', label: 'Chama Related', icon: 'people' },
-    { id: 'technical', label: 'Technical Issues', icon: 'bug' },
-    { id: 'security', label: 'Security Concerns', icon: 'shield-checkmark' },
-    { id: 'other', label: 'Other', icon: 'help-circle' },
-  ];
-
-  const priorityLevels = [
-    { id: 'low', label: 'Low', color: colors.success, description: 'General inquiry' },
-    { id: 'medium', label: 'Medium', color: colors.warning, description: 'Issue affecting usage' },
-    { id: 'high', label: 'High', color: colors.error, description: 'Urgent issue' },
-  ];
-
-  const contactMethods = [
-    { id: 'email', label: 'Email', icon: 'mail', description: 'Response within 24 hours' },
-    { id: 'phone', label: 'Phone Call', icon: 'call', description: 'Business hours only' },
-  ];
-
-  const handleSubmitTicket = async () => {
-    if (!selectedIssue) {
-      Alert.alert('Error', 'Please select an issue type.');
-      return;
-    }
-    
-    if (!description.trim()) {
-      Alert.alert('Error', 'Please describe your issue.');
-      return;
-    }
-
-    try {
-      const supportRequest = {
-        category: selectedIssue,
-        subject: `${issueTypes.find(t => t.id === selectedIssue)?.label || 'Support Request'}`,
-        description: description.trim(),
-        priority,
-        userInfo: {
-          userId: user?.id,
-          email: user?.email,
-          firstName: user?.firstName || user?.first_name,
-          lastName: user?.lastName || user?.last_name,
-        },
-      };
-      const response = await ApiService.createSupportRequest(supportRequest);
-      if (response.success) {
-        Alert.alert(
-          'Support Request Submitted',
-          `Your support request has been submitted successfully!\n\nRequest ID: #${response.data?.requestId || Date.now()}\n\nWe'll get back to you within 24 hours.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setSelectedIssue('');
-                setDescription('');
-                setPriority('medium');
-                setContactMethod('email');
-                navigation.goBack();
-              },
-            },
-          ]
-        );
-      } else {
-        throw new Error(response.error || 'Failed to submit support request');
-      }
-    } catch (error) {
-      console.error('Failed to create support request:', error);
-      Alert.alert('Error', error.message || 'Failed to create support request. Please try again.');
-    }
-  };
-
-  const handleDirectContact = (method) => {
-    switch (method) {
-      case 'email':
-        const email = 'support@vaultke.com';
-        const subject = `VaultKe Support - ${issueTypes.find(t => t.id === selectedIssue)?.label || 'General Inquiry'}`;
-        const body = `Issue Type: ${selectedIssue}\nPriority: ${priority}\n\nDescription:\n${description}\n\nUser ID: ${user?.id}\nApp Version: 1.0.0`;
-        
-        Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`)
-          .catch(() => Alert.alert('Error', 'Unable to open email app'));
-        break;
-        
-       case 'phone':
-         const phoneNumber = '+254700000000';
-         Alert.alert(
-           'Call Support',
-           `Call ${phoneNumber}?\n\nBusiness Hours: Mon-Fri 8AM-6PM EAT`,
-           [
-             { text: 'Cancel', style: 'cancel' },
-             { text: 'Call', onPress: () => Linking.openURL(`tel:${phoneNumber}`) },
-           ]
-         );
-         break;
-    }
-  };
+  const {
+    theme: _theme,
+    user: _user,
+    selectedIssue,
+    description,
+    priority,
+    contactMethod,
+    issueTypes,
+    priorityLevels,
+    contactMethods,
+    setSelectedIssue,
+    setDescription,
+    setPriority,
+    setContactMethod,
+    handleSubmitTicket,
+    handleDirectContact,
+  } = useContactSupportScreen({ navigation });
 
   const renderIssueType = (issue) => (
     <TouchableOpacity
@@ -157,8 +73,8 @@ const ContactSupportScreen = ({ navigation }) => {
       style={[
         styles.priorityLevel,
         {
-          backgroundColor: priority === level.id ? level.color + '20' : colors.surface,
-          borderColor: priority === level.id ? level.color : colors.border,
+          backgroundColor: priority === level.id ? colors.primary + '20' : colors.surface,
+          borderColor: priority === level.id ? colors.primary : colors.border,
         },
       ]}
       onPress={() => setPriority(level.id)}
@@ -167,7 +83,7 @@ const ContactSupportScreen = ({ navigation }) => {
         <Text
           style={[
             styles.priorityLabel,
-            { color: priority === level.id ? level.color : colors.text },
+            { color: priority === level.id ? colors.primary : colors.text },
           ]}
         >
           {level.label}
@@ -175,7 +91,7 @@ const ContactSupportScreen = ({ navigation }) => {
         <Text
           style={[
             styles.priorityDescription,
-            { color: priority === level.id ? level.color : colors.textSecondary },
+            { color: priority === level.id ? colors.primary : colors.textSecondary },
           ]}
         >
           {level.description}

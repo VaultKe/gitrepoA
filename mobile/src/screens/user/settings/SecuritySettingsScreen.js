@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,60 +10,24 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
-import Button from '../../../components/common/Button';
-import ApiService from '../../../services/api';
-import WhatsAppLinkScreen from '../whatsapp/WhatsAppLinkScreen';
+import useSecuritySettingsScreen from '../../../hooks/useSecuritySettingsScreen';
 
 const SecuritySettingsScreen = ({ navigation }) => {
-  const { theme, user } = useApp();
+  const { theme } = useApp();
   const colors = getThemeColors(theme);
-  const nav = useNavigation();
 
-  const [securitySettings, setSecuritySettings] = useState({
-    biometric_login: false,
-    two_factor_auth: false,
-    auto_logout: true,
-    login_notifications: true,
-    suspicious_activity_alerts: true,
-    device_management: true,
-  });
-
-  const handleSettingChange = (setting, value) => {
-    setSecuritySettings(prev => ({
-      ...prev,
-      [setting]: value,
-    }));
-  };
-
-  const handleSaveSettings = async () => {
-    try {
-      const response = await ApiService.updateSecuritySettings(securitySettings);
-      if (response.success) {
-        Alert.alert('Success', 'Security settings updated successfully!');
-      } else {
-        Alert.alert('Error', response.error || 'Failed to update security settings');
-      }
-    } catch (error) {
-      console.error('Failed to save security settings:', error);
-      Alert.alert('Error', 'Failed to update security settings. Please try again.');
-    }
-  };
-
-  const handleChangePassword = () => {
-    navigation.navigate('ChangePassword');
-  };
-
-  const handleViewLoginHistory = () => {
-    navigation.navigate('LoginHistory');
-  };
-
-  const handleWhatsAppLink = () => {
-    nav.navigate('WhatsAppLink');
-  };
+  const {
+    theme: _theme,
+    user: _user,
+    securitySettings,
+    handleSettingChange,
+    handleChangePassword,
+    handleViewLoginHistory,
+    handleWhatsAppLink,
+  } = useSecuritySettingsScreen({ navigation });
 
   const renderSecuritySetting = (key, title, description, requiresConfirmation = false) => (
     <View style={[styles.settingItem, { borderBottomColor: colors.border }]}>
@@ -213,16 +177,6 @@ const SecuritySettingsScreen = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </Card>
-
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: colors.primary }]}
-          onPress={handleSaveSettings}
-        >
-          <Text style={[styles.saveButtonText, { color: colors.white }]}>
-            Save Security Settings
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -305,17 +259,6 @@ const styles = StyleSheet.create({
   },
   actionDescription: {
     fontSize: typography.fontSize.sm,
-  },
-  saveButton: {
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  saveButtonText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
   },
 });
 

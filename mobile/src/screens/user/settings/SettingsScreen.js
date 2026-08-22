@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,790 +9,111 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
-  Linking,
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
-import ApiService from '../../../services/api';
-import GoogleDriveService from '../../../services/GoogleDriveService';
-import Toast from 'react-native-toast-message';
+import SettingItem from '../../../components/settings/SettingItem';
+import MenuSection from '../../../components/settings/MenuSection';
+import useSettingsScreen from '../../../hooks/useSettingsScreen';
 
 const SettingsScreen = ({ navigation }) => {
-  const { theme, setTheme, user, userRole, logout } = useApp();
+  const { theme } = useApp();
   const colors = getThemeColors(theme);
 
-  const [settings, setSettings] = useState({
-    notifications: {
-      push: true,
-      email: true,
-      sms: false,
-      chama_updates: true,
-      financial_alerts: true,
-      sound_enabled: true,
-      vibration_enabled: true,
-      notification_sound_id: 1,
-      volume_level: 80,
-    },
-    privacy: {
-      profile_visibility: 'chama_members',
-      transaction_privacy: true,
-      location_sharing: false,
-    },
-    security: {
-      biometric_login: false,
-      two_factor_auth: false,
-      auto_logout: true,
-    },
-    preferences: {
-      language: 'en',
-      currency: 'KES',
-      date_format: 'dd/mm/yyyy',
-    },
-  });
-
-  const [availableSounds, setAvailableSounds] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Google Drive backup state
-  const [googleDriveConnected, setGoogleDriveConnected] = useState(false);
-  const [lastBackupDate, setLastBackupDate] = useState(null);
-  const [backupInProgress, setBackupInProgress] = useState(false);
-  const [restoreInProgress, setRestoreInProgress] = useState(false);
-  const [authUrl, setAuthUrl] = useState(null);
-  const [showAuthLink, setShowAuthLink] = useState(false);
-  const [connectionCheckAttempts, setConnectionCheckAttempts] = useState(0);
-  const [debugInfo, setDebugInfo] = useState(null);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
-  const [lastApiResponse, setLastApiResponse] = useState(null);
-
-  const handleSettingChange = (category, setting, value) => {
-    setSettings(prev => ({
-      ...prev,
-      [category]: {
-        ...prev[category],
-        [setting]: value,
-      },
-    }));
-  };
-
-  const handleSaveSettings = async () => {
-    try {
-      const response = await ApiService.updateUserSettings(settings);
-      if (response.success) {
-        Alert.alert('Success', 'Settings updated successfully');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update settings');
-    }
-  };
-
-  // Load all user settings in parallel to avoid freezing the UI
-  const loadUserSettings = async () => {
-    try {
-      setLoading(true);
-
-      const [notificationResponse, privacyResponse, securityResponse, preferencesResponse] = await Promise.all([
-        ApiService.getNotificationPreferences(),
-        ApiService.getPrivacySettings(),
-        ApiService.getSecuritySettings(),
-        ApiService.getUserPreferences(),
-      ]);
-
-      if (notificationResponse.success) {
-        const prefs = notificationResponse.data.preferences;
-        setSettings(prev => ({
-          ...prev,
-          notifications: {
-            ...prev.notifications,
-            push: prefs.sound_enabled,
-            email: prefs.system_notifications,
-            sms: prefs.sms_notifications,
-            chama_updates: prefs.chama_notifications,
-            financial_alerts: prefs.transaction_notifications,
-            sound_enabled: prefs.sound_enabled,
-            vibration_enabled: prefs.vibration_enabled,
-            notification_sound_id: prefs.notification_sound_id,
-            volume_level: prefs.volume_level,
-          }
-        }));
-
-        setAvailableSounds(notificationResponse.data.available_sounds || []);
-      }
-
-      if (privacyResponse.success) {
-        setSettings(prev => ({
-          ...prev,
-          privacy: {
-            ...prev.privacy,
-            ...privacyResponse.data
-          }
-        }));
-      }
-
-      if (securityResponse.success) {
-        setSettings(prev => ({
-          ...prev,
-          security: {
-            ...prev.security,
-            ...securityResponse.data
-          }
-        }));
-      }
-
-      if (preferencesResponse.success) {
-        setSettings(prev => ({
-          ...prev,
-          preferences: {
-            ...prev.preferences,
-            ...preferencesResponse.data
-          }
-        }));
-      }
-
-    } catch (error) {
-      console.error('Failed to load user settings:', error);
-      Alert.alert('Error', 'Failed to load settings. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([
-        loadUserSettings(),
-        checkGoogleDriveConnection(),
-      ]);
-    } catch (error) {
-      console.warn('SettingsScreen refresh failed:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // Update notification preferences
-  const updateNotificationPreference = async (key, value) => {
-    try {
-      const updateData = { [key]: value };
-      const response = await ApiService.updateNotificationPreferences(updateData);
-
-      if (response.success) {
-        handleSettingChange('notifications', key, value);
-      } else {
-        Alert.alert('Error', 'Failed to update notification preference');
-      }
-    } catch (error) {
-      console.error('Failed to update notification preference:', error);
-      Alert.alert('Error', 'Failed to update notification preference');
-    }
-  };
-
-
-
-  // Load data on component mount
-  useEffect(() => {
-    loadUserSettings();
-    checkGoogleDriveConnection();
-  }, []);
-
-  const checkGoogleDriveConnection = async (forceRefresh = false) => {
-    try {
-      if (forceRefresh) {
-        setGoogleDriveConnected(false);
-        setShowAuthLink(false);
-        setAuthUrl(null);
-        setConnectionCheckAttempts(0);
-      }
-
-      const result = await GoogleDriveService.isConnected();
-      const connected = result.connected !== undefined ? result.connected : false;
-      const rawResponse = result.rawResponse || result;
-
-      // Store debug information
-      setDebugInfo({
-        timestamp: new Date().toISOString(),
-        connected,
-        attempts: connectionCheckAttempts + 1,
-        userId: user?.id,
-        userRole: userRole,
-        rawResponse: JSON.stringify(rawResponse, null, 2)
-      });
-
-      setLastApiResponse(rawResponse);
-
-      setGoogleDriveConnected(connected);
-      setConnectionCheckAttempts(prev => prev + 1);
-
-      if (connected) {
-        // Hide auth link if connection is successful
-        setShowAuthLink(false);
-        setAuthUrl(null);
-        await checkLastBackup();
-
-        // Show success message if this was a forced refresh (user manually checked)
-        if (forceRefresh) {
-          Alert.alert('Success', 'Google Drive connection detected! You are now connected.');
-        }
-      } else {
-       // If we've tried multiple times and still not connected, offer manual override
-        const attempts = connectionCheckAttempts;
-        if (attempts >= 3 && !forceRefresh) {
-          Alert.alert(
-            'Connection Check Issue',
-            'Having trouble detecting your Google Drive connection. Would you like to manually verify the connection?',
-            [
-              { text: 'Try Again', onPress: () => checkGoogleDriveConnection(true) },
-              { text: 'Manual Override', onPress: () => setGoogleDriveConnected(true) },
-              { text: 'Cancel', style: 'cancel' }
-            ]
-          );
-        }
-      }
-    } catch (error) {
-      console.error('❌ Failed to check Google Drive connection:', error);
-      setGoogleDriveConnected(false);
-
-      // If error persists after multiple attempts, offer manual override
-      const attempts = connectionCheckAttempts;
-      if (attempts >= 2) {
-        Alert.alert(
-          'Connection Error',
-          'Unable to verify Google Drive connection. Would you like to manually set the connection status?',
-          [
-            { text: 'Try Again', onPress: () => checkGoogleDriveConnection(true) },
-            { text: 'Manual Override', onPress: () => setGoogleDriveConnected(true) },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
-      }
-    }
-  };
-
-
-
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This action cannot be undone. All your data will be permanently deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Final Confirmation',
-              'Type "DELETE" to confirm account deletion',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Confirm', style: 'destructive', onPress: confirmDeleteAccount },
-              ]
-            );
-          }
-        },
-      ]
-    );
-  };
-
-  const confirmDeleteAccount = async () => {
-    try {
-      const response = await ApiService.deleteAccount();
-      if (response.success) {
-        Alert.alert('Account Deleted', 'Your account has been permanently deleted');
-        logout();
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to delete account');
-    }
-  };
-
-  // Privacy settings helpers
-  const updatePrivacySetting = async (key, value) => {
-    try {
-      const updateData = { [key]: value };
-      const response = await ApiService.updatePrivacySettings(updateData);
-
-      if (response.success) {
-        handleSettingChange('privacy', key, value);
-      } else {
-        Alert.alert('Error', 'Failed to update privacy setting');
-      }
-    } catch (error) {
-      console.error('Failed to update privacy setting:', error);
-      Alert.alert('Error', 'Failed to update privacy setting');
-    }
-  };
-
-  // Security settings helpers
-  const updateSecuritySetting = async (key, value) => {
-    try {
-      const updateData = { [key]: value };
-      const response = await ApiService.updateSecuritySettings(updateData);
-
-      if (response.success) {
-        handleSettingChange('security', key, value);
-      } else {
-        Alert.alert('Error', 'Failed to update security setting');
-      }
-    } catch (error) {
-      console.error('Failed to update security setting:', error);
-      Alert.alert('Error', 'Failed to update security setting');
-    }
-  };
-
-  // Preferences helpers
-  const updatePreference = async (key, value) => {
-    try {
-      const updateData = { [key]: value };
-      const response = await ApiService.updateUserPreferences(updateData);
-
-      if (response.success) {
-        handleSettingChange('preferences', key, value);
-      } else {
-        Alert.alert('Error', 'Failed to update preference');
-      }
-    } catch (error) {
-      console.error('Failed to update preference:', error);
-      Alert.alert('Error', 'Failed to update preference');
-    }
-  };
-
-  // Option selection functions
-  const showProfileVisibilityOptions = () => {
-    const options = [
-      { label: 'Everyone', value: 'everyone' },
-      { label: 'Chama Members Only', value: 'chama_members' },
-      { label: 'Private', value: 'private' }
-    ];
-
-    Alert.alert(
-      'Profile Visibility',
-      'Choose who can see your profile',
-      [
-        ...options.map(option => ({
-          text: option.label,
-          onPress: () => updatePrivacySetting('profile_visibility', option.value)
-        })),
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
-  const showLanguageOptions = () => {
-    const options = [
-      { label: 'English', value: 'en' },
-      { label: 'Kiswahili', value: 'sw' },
-      { label: 'Kikuyu', value: 'ki' }
-    ];
-
-    Alert.alert(
-      'Language',
-      'Choose your preferred language',
-      [
-        ...options.map(option => ({
-          text: option.label,
-          onPress: () => updatePreference('language', option.value)
-        })),
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
-  const showCurrencyOptions = () => {
-    const options = [
-      { label: 'KES (Kenyan Shilling)', value: 'KES' },
-      { label: 'USD (US Dollar)', value: 'USD' },
-      { label: 'EUR (Euro)', value: 'EUR' }
-    ];
-
-    Alert.alert(
-      'Currency',
-      'Choose your preferred currency',
-      [
-        ...options.map(option => ({
-          text: option.label,
-          onPress: () => updatePreference('currency', option.value)
-        })),
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
-  const showDateFormatOptions = () => {
-    const options = [
-      { label: 'DD/MM/YYYY', value: 'dd/mm/yyyy' },
-      { label: 'MM/DD/YYYY', value: 'mm/dd/yyyy' },
-      { label: 'YYYY-MM-DD', value: 'yyyy-mm-dd' }
-    ];
-
-    Alert.alert(
-      'Date Format',
-      'Choose how dates are displayed',
-      [
-        ...options.map(option => ({
-          text: option.label,
-          onPress: () => updatePreference('date_format', option.value)
-        })),
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
-  const showVolumeOptions = () => {
-    const options = [
-      { label: 'Low (25%)', value: 25 },
-      { label: 'Medium (50%)', value: 50 },
-      { label: 'High (75%)', value: 75 },
-      { label: 'Maximum (100%)', value: 100 }
-    ];
-
-    Alert.alert(
-      'Volume Level',
-      'Choose notification volume level',
-      [
-        ...options.map(option => ({
-          text: option.label,
-          onPress: () => updateNotificationPreference('volume_level', option.value)
-        })),
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
-  // Google Drive backup functions
-  const connectGoogleDrive = async () => {
-    try {
-      setLoading(true);
-
-      // Start OAuth flow with user ID
-      const authResult = await GoogleDriveService.authenticate(user?.id);
-
-      if (authResult.success && authResult.requiresBrowserAuth) {
-        // Store the auth URL and show the authentication link
-        setAuthUrl(authResult.authUrl);
-        setShowAuthLink(true);
-
-        Alert.alert(
-          'Connect Google Drive',
-          'To complete the connection, you need to authenticate with Google Drive. Click the "Authenticate with Google" button below to continue.',
-          [
-            { text: 'OK', style: 'default' }
-          ]
-        );
-      } else if (authResult.success) {
-        setGoogleDriveConnected(true);
-        Alert.alert('Success', 'Google Drive connected successfully!');
-        await checkLastBackup();
-      } else {
-        Alert.alert('Error', authResult.error || 'Failed to connect to Google Drive');
-      }
-    } catch (error) {
-      console.error('Google Drive connection error:', error);
-      Alert.alert('Error', 'Failed to connect to Google Drive');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle opening the authentication URL
-  const handleAuthenticateWithGoogle = async () => {
-    try {
-      if (authUrl) {
-        // Open the authentication URL in the browser
-        const supported = await Linking.canOpenURL(authUrl);
-        if (supported) {
-          await Linking.openURL(authUrl);
-
-          // Show instructions to user with multiple check options
-          Alert.alert(
-            'Authentication Started',
-            'Complete the authentication in your browser, then return to the app.\n\nThe connection status will be automatically checked, but you can also manually refresh it.',
-            [
-              {
-                text: 'Check Now',
-                onPress: () => {
-                  // Immediate check
-                  checkGoogleDriveConnection(true);
-                }
-              },
-              {
-                text: 'Auto Check',
-                onPress: () => {
-                  // Delayed check to give user time to complete auth
-                  setTimeout(() => {
-                    checkGoogleDriveConnection(true);
-                  }, 3000);
-                }
-              },
-              { text: 'Cancel', style: 'cancel' }
-            ]
-          );
-        } else {
-          Alert.alert('Error', 'Cannot open authentication URL');
-        }
-      }
-    } catch (error) {
-      console.error('Failed to open authentication URL:', error);
-      Alert.alert('Error', 'Failed to open authentication URL');
-    }
-  };
-
-  const disconnectGoogleDrive = async () => {
-    Alert.alert(
-      'Disconnect Google Drive',
-      'Are you sure you want to disconnect Google Drive? This will stop automatic backups.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await GoogleDriveService.disconnect();
-              setGoogleDriveConnected(false);
-              setLastBackupDate(null);
-              setAuthUrl(null);
-              setShowAuthLink(false);
-              Alert.alert('Success', 'Google Drive disconnected');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to disconnect Google Drive');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const performBackup = async () => {
-    try {
-      setBackupInProgress(true);
-
-      const result = await GoogleDriveService.createBackup();
-
-      if (result.success) {
-        setLastBackupDate(new Date().toISOString());
-        Alert.alert('Success', 'Backup completed successfully!');
-      } else {
-        Alert.alert('Error', result.error || 'Backup failed');
-      }
-    } catch (error) {
-      console.error('Backup error:', error);
-      Alert.alert('Error', 'Failed to create backup');
-    } finally {
-      setBackupInProgress(false);
-    }
-  };
-
-  const performRestore = async () => {
-    Alert.alert(
-      'Restore from Backup',
-      'This will replace your current data with the backup from Google Drive. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setRestoreInProgress(true);
-
-              const result = await GoogleDriveService.restoreBackup();
-
-              if (result.success) {
-                Alert.alert('Success', 'Data restored successfully! Please restart the app.');
-              } else {
-                Alert.alert('Error', result.error || 'Restore failed');
-              }
-            } catch (error) {
-              console.error('Restore error:', error);
-              Alert.alert('Error', 'Failed to restore backup');
-            } finally {
-              setRestoreInProgress(false);
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const checkLastBackup = async () => {
-    try {
-      const backupInfo = await GoogleDriveService.getBackupInfo();
-      if (backupInfo.success && backupInfo.lastBackup) {
-        setLastBackupDate(backupInfo.lastBackup);
-      }
-    } catch (error) {
-      console.error('Failed to check last backup:', error);
-    }
-  };
-
-
-
-  const renderSettingItem = (title, description, value, onValueChange, type = 'switch') => (
-    <View style={[styles.settingItem, { borderBottomColor: colors.border }]}>
-      <View style={styles.settingInfo}>
-        <Text style={[styles.settingTitle, { color: colors.text }]}>
-          {title}
-        </Text>
-        {description && (
-          <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
-            {description}
-          </Text>
-        )}
-      </View>
-
-      {type === 'switch' ? (
-        <Switch
-          value={value}
-          onValueChange={onValueChange}
-          trackColor={{ false: colors.border, true: colors.primary }}
-          thumbColor={colors.white}
-        />
-      ) : (
-        <TouchableOpacity onPress={onValueChange}>
-          <View style={styles.settingValue}>
-            <Text style={[styles.settingValueText, { color: colors.textSecondary }]}>
-              {value}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </View>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  const renderMenuSection = (title, items) => (
-    <Card variant="outlined" style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        {title}
-      </Text>
-
-      {items.map((item, index) => (
-        <TouchableOpacity
-          key={index}
-          style={[
-            styles.menuItem,
-            { borderBottomColor: colors.border },
-            index === items.length - 1 && styles.lastMenuItem
-          ]}
-          onPress={item.onPress}
-          activeOpacity={0.7}
-          delayPressIn={0}
-        >
-          <View style={[styles.menuIcon, { backgroundColor: item.color + '20' }]}>
-            <Ionicons name={item.icon} size={20} color={item.color} />
-          </View>
-
-          <View style={styles.menuContent}>
-            <Text style={[styles.menuTitle, { color: colors.text }]}>
-              {item.title}
-            </Text>
-            {item.subtitle && (
-              <Text style={[styles.menuSubtitle, { color: colors.textSecondary }]}>
-                {item.subtitle}
-              </Text>
-            )}
-          </View>
-
-          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-        </TouchableOpacity>
-      ))}
-    </Card>
-  );
+  const screen = useSettingsScreen({ navigation });
+
+  const {
+    settings,
+    availableSounds,
+    loading,
+    refreshing,
+    handleSettingChange,
+    loadUserSettings,
+    onRefresh,
+    updateNotificationPreference,
+    handleDeleteAccount,
+    confirmDeleteAccount,
+    updatePrivacySetting,
+    updateSecuritySetting,
+    updatePreference,
+    showProfileVisibilityOptions,
+    showLanguageOptions,
+    showCurrencyOptions,
+    showDateFormatOptions,
+  } = screen;
+
+  const selectedSound = availableSounds.find(s => s.id === settings.notifications.notification_sound_id);
 
   const renderNotificationSettings = () => {
-    const selectedSound = availableSounds.find(s => s.id === settings.notifications.notification_sound_id);
-
     return (
       <Card variant="outlined" style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Notifications
         </Text>
 
-        {renderSettingItem(
-          'Push Notifications',
-          'Receive notifications on your device',
-          settings.notifications.push,
-          (value) => updateNotificationPreference('sound_enabled', value)
-        )}
+        <SettingItem
+          title="Push Notifications"
+          description="Receive notifications on your device"
+          value={settings.notifications.push}
+          onValueChange={(value) => updateNotificationPreference('sound_enabled', value)}
+          colors={colors}
+        />
 
-        {renderSettingItem(
-          'Email Notifications',
-          'Receive notifications via email',
-          settings.notifications.email,
-          (value) => updateNotificationPreference('system_notifications', value)
-        )}
+        <SettingItem
+          title="Email Notifications"
+          description="Receive notifications via email"
+          value={settings.notifications.email}
+          onValueChange={(value) => updateNotificationPreference('system_notifications', value)}
+          colors={colors}
+        />
 
-        {renderSettingItem(
-          'Chama Updates',
-          'Notifications about chama activities',
-          settings.notifications.chama_updates,
-          (value) => updateNotificationPreference('chama_notifications', value)
-        )}
+        <SettingItem
+          title="Chama Updates"
+          description="Notifications about chama activities"
+          value={settings.notifications.chama_updates}
+          onValueChange={(value) => updateNotificationPreference('chama_notifications', value)}
+          colors={colors}
+        />
 
-        {renderSettingItem(
-          'Financial Alerts',
-          'Notifications about transactions and balances',
-          settings.notifications.financial_alerts,
-          (value) => updateNotificationPreference('transaction_notifications', value)
-        )}
+        <SettingItem
+          title="Financial Alerts"
+          description="Notifications about transactions and balances"
+          value={settings.notifications.financial_alerts}
+          onValueChange={(value) => updateNotificationPreference('transaction_notifications', value)}
+          colors={colors}
+        />
 
-        {renderSettingItem(
-          'SMS Notifications',
-          'Receive notifications via SMS',
-          settings.notifications.sms,
-          (value) => updateNotificationPreference('sms_notifications', value)
-        )}
+        <SettingItem
+          title="SMS Notifications"
+          description="Receive notifications via SMS"
+          value={settings.notifications.sms}
+          onValueChange={(value) => updateNotificationPreference('sms_notifications', value)}
+          colors={colors}
+        />
 
-        {/* Sound and Vibration Settings */}
         {settings.notifications.push && (
           <>
-            {renderSettingItem(
-              'Sound Enabled',
-              'Play sound for notifications',
-              settings.notifications.sound_enabled,
-              (value) => updateNotificationPreference('sound_enabled', value)
-            )}
+            <SettingItem
+              title="Sound Enabled"
+              description="Play sound for notifications"
+              value={settings.notifications.sound_enabled}
+              onValueChange={(value) => updateNotificationPreference('sound_enabled', value)}
+              colors={colors}
+            />
 
-            {renderSettingItem(
-              'Vibration Enabled',
-              'Vibrate for notifications',
-              settings.notifications.vibration_enabled,
-              (value) => updateNotificationPreference('vibration_enabled', value)
-            )}
+            <SettingItem
+              title="Vibration Enabled"
+              description="Vibrate for notifications"
+              value={settings.notifications.vibration_enabled}
+              onValueChange={(value) => updateNotificationPreference('vibration_enabled', value)}
+              colors={colors}
+            />
 
-            {/* Volume Level Setting */}
-            {settings.notifications.sound_enabled && (
-              <TouchableOpacity
-                style={[styles.settingRow, { borderBottomColor: colors.border }]}
-                onPress={() => showVolumeOptions()}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingContent}>
-                  <View style={styles.settingInfo}>
-                    <Text style={[styles.settingTitle, { color: colors.text }]}>
-                      Volume Level
-                    </Text>
-                    <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
-                      {settings.notifications.volume_level}%
-                    </Text>
-                  </View>
-                  <View style={styles.settingAction}>
-                    <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-
-            {/* Notification Tone Selection */}
             {settings.notifications.sound_enabled && (
               <TouchableOpacity
                 style={[styles.settingRow, { borderBottomColor: colors.border }]}
@@ -816,34 +137,34 @@ const SettingsScreen = ({ navigation }) => {
             )}
           </>
         )}
-
-
       </Card>
     );
   };
 
-   const renderSecuritySettings = () => (
+  const renderSecuritySettings = () => (
     <Card variant="outlined" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>
         Security
       </Text>
 
+      <SettingItem
+        title="Two-Factor Authentication"
+        description="Add an extra layer of security"
+        value={settings.security.two_factor_auth}
+        onValueChange={(value) => updateSecuritySetting('two_factor_auth', value)}
+        colors={colors}
+      />
 
-      {renderSettingItem(
-        'Two-Factor Authentication',
-        'Add an extra layer of security',
-        settings.security.two_factor_auth,
-        (value) => updateSecuritySetting('two_factor_auth', value)
-      )}
-
-      {renderSettingItem(
-        'Auto Logout',
-        'Automatically logout after inactivity',
-        settings.security.auto_logout,
-        (value) => updateSecuritySetting('auto_logout', value)
-      )}
+      <SettingItem
+        title="Auto Logout"
+        description="Automatically logout after inactivity"
+        value={settings.security.auto_logout}
+        onValueChange={(value) => updateSecuritySetting('auto_logout', value)}
+        colors={colors}
+      />
     </Card>
   );
+
   const accountMenuItems = [
     {
       title: 'Profile',
@@ -892,7 +213,7 @@ const SettingsScreen = ({ navigation }) => {
     },
   ];
 
-   return (
+  return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={{ flex: 1, position: 'relative' }}>
         <ScrollView
@@ -924,16 +245,10 @@ const SettingsScreen = ({ navigation }) => {
         )}
         {renderNotificationSettings()}
         {renderSecuritySettings()}
-        {renderMenuSection('Account', accountMenuItems)}
-        {renderMenuSection('Support', supportMenuItems)}
+        <MenuSection title="Account" items={accountMenuItems} colors={colors} />
+        <MenuSection title="Support" items={supportMenuItems} colors={colors} />
 
         <Card variant="outlined" style={styles.section}>
-          <Button
-            title="Save Settings"
-            onPress={handleSaveSettings}
-            style={styles.saveButton}
-          />
-
           <Button
             title="Delete Account"
             variant="outline"
@@ -967,132 +282,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: spacing.xl * 2, // Extra padding at bottom for easy scrolling
+    paddingBottom: spacing.xl * 2,
   },
   section: {
     margin: spacing.md,
-    marginBottom: spacing.lg, // More space between sections
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.md,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.lg, // Increased touch area
-    paddingHorizontal: spacing.sm, // Added horizontal padding
-    borderBottomWidth: 1,
-    minHeight: 60, // Minimum touch target size
-  },
-  settingInfo: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  settingTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs,
-  },
-  settingDescription: {
-    fontSize: typography.fontSize.sm,
-  },
-  settingValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingValueText: {
-    fontSize: typography.fontSize.base,
-    marginRight: spacing.sm,
-  },
-  themeContainer: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  themeOption: {
-    flex: 1,
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-  },
-  themeText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginTop: spacing.sm,
-  },
-  adminButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-  },
-  adminButtonText: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  adminButtonTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  adminButtonSubtitle: {
-    fontSize: typography.fontSize.sm,
-    marginTop: 2,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.lg, // Increased touch area
-    paddingHorizontal: spacing.sm, // Added horizontal padding
-    borderBottomWidth: 1,
-    minHeight: 64, // Larger touch target for menu items
-  },
-  lastMenuItem: {
-    borderBottomWidth: 0,
-  },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  menuContent: {
-    flex: 1,
-  },
-  menuTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    marginBottom: spacing.xs,
-  },
-  menuSubtitle: {
-    fontSize: typography.fontSize.sm,
-  },
-  saveButton: {
-    marginBottom: spacing.md,
-  },
-
-  deleteButton: {
-    marginBottom: spacing.md,
-  },
-  appInfo: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.lg, // Extra space before app info
-    marginBottom: spacing.xl, // Extra space at bottom
-  },
-  appVersion: {
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.xs,
-  },
-  buildNumber: {
-    fontSize: typography.fontSize.xs,
   },
   settingRow: {
     flexDirection: 'row',
@@ -1107,29 +306,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  settingInfo: {
+    flex: 1,
+  },
+  settingTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing.xs,
+  },
+  settingSubtitle: {
+    fontSize: typography.fontSize.sm,
+  },
   settingAction: {
     marginLeft: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingSubtitle: {
-    fontSize: typography.fontSize.sm,
+  deleteButton: {
+    marginBottom: spacing.md,
   },
-
-  // Status badge styles
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
+  appInfo: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
   },
-  statusText: {
+  appVersion: {
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.xs,
+  },
+  buildNumber: {
     fontSize: typography.fontSize.xs,
-    fontWeight: '600',
   },
-
-  // Loading styles
   inlineLoadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1140,91 +349,6 @@ const styles = StyleSheet.create({
   inlineLoadingText: {
     fontSize: typography.fontSize.sm,
   },
-
-  // Google Drive backup styles
-  backupActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  backupButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md,
-    borderRadius: 8,
-    gap: spacing.xs,
-  },
-  backupButtonText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: '600',
-  },
-  backupInfo: {
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderRadius: 6,
-  },
-  backupInfoText: {
-    fontSize: typography.fontSize.xs,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
-
-  // Authentication link styles
-  authLinkContainer: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.02)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  authButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md,
-    borderRadius: 8,
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  authButtonText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
-  },
-  authInstructions: {
-    fontSize: typography.fontSize.xs,
-    textAlign: 'center',
-    lineHeight: 16,
-    fontStyle: 'italic',
-  },
-
-  // Debug information styles
-  debugInfo: {
-    marginTop: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  debugTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-  debugText: {
-    fontSize: typography.fontSize.xs,
-    lineHeight: 16,
-    marginBottom: spacing.xs,
-    fontFamily: 'monospace',
-  },
-
 });
 
 export default SettingsScreen;

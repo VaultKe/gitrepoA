@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,286 +10,30 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
-
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import ApiService from '../../../services/api';
-import notificationService from '../../../services/notificationService';
-import { API_BASE_URL } from '../../../config/environment';
+import useNotificationToneScreen from '../../../hooks/useNotificationToneScreen';
 
 const NotificationToneScreen = ({ navigation }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
 
-  const [availableSounds, setAvailableSounds] = useState([]);
-  const [selectedSoundId, setSelectedSoundId] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [testingSound, setTestingSound] = useState(null);
-  const [playingSound, setPlayingSound] = useState(null);
-  const [currentSoundObject, setCurrentSoundObject] = useState(null);
-
-  useEffect(() => {
-    loadNotificationData();
-
-    // Cleanup function to stop and unload any playing sound when component unmounts
-    return () => {
-      if (currentSoundObject) {
-        currentSoundObject.unloadAsync().catch(console.error);
-      }
-    };
-  }, []); // Empty dependency array - only run on mount/unmount
-
-  const loadNotificationData = async () => {
-    try {
-      setLoading(true);
-      
-      // Load notification preferences to get current selection
-      const preferencesResponse = await ApiService.getNotificationPreferences();
-      if (preferencesResponse.success) {
-        setSelectedSoundId(preferencesResponse.data.preferences.notification_sound_id);
-        setAvailableSounds(preferencesResponse.data.available_sounds || []);
-      } else {
-        // Fallback to just getting available sounds
-        const soundsResponse = await ApiService.getAvailableNotificationSounds();
-        if (soundsResponse.success) {
-          setAvailableSounds(soundsResponse.data.sounds || []);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load notification data:', error);
-      Alert.alert('Error', 'Failed to load notification sounds');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const playSound = async (sound) => {
-    try {
-      // Stop any currently playing sound
-      if (currentSoundObject) {
-        await currentSoundObject.stopAsync();
-        await currentSoundObject.unloadAsync();
-        setCurrentSoundObject(null);
-        setPlayingSound(null);
-      }
-
-      // Handle silent sound
-      if (!sound.file_path || sound.file_path === '') {
-        Alert.alert('Silent Tone', 'This is a silent notification tone - no sound will play.');
-        return;
-      }
-
-      setPlayingSound(sound.id);
-
-      // Create new sound object
-      const soundObject = new Audio.Sound();
-      setCurrentSoundObject(soundObject);
-
-      // Configure audio mode for playback with error handling
-      try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        });
-      } catch (audioModeError) {
-        console.warn('⚠️ Audio mode setup failed:', audioModeError);
-        // Continue anyway - audio might still work
-      }
-
-// Load and play the sound - fix URI construction
-      let soundUri;
-      if (sound.file_path.startsWith('http://') || sound.file_path.startsWith('https://')) {
-        // Already a full URL
-        soundUri = sound.file_path;
-      } else if (sound.file_path.startsWith('/')) {
-        // Absolute path - remove /api/v1 suffix if present since notification_sound is a static route
-        const baseUrl = API_BASE_URL.replace(/\/api\/v1$/, '');
-        soundUri = `${baseUrl}${sound.file_path}`;
-      } else {
-        // Relative path
-        const baseUrl = API_BASE_URL.replace(/\/api\/v1$/, '');
-        soundUri = `${baseUrl}/${sound.file_path}`;
-      }
-
-      await soundObject.loadAsync({
-        uri: soundUri,
-        shouldPlay: false, // Don't auto-play, we'll control it
-        isLooping: false,
-      });
-
-      // Set up playback status listener with better error handling
-      soundObject.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          setPlayingSound(null);
-          soundObject.unloadAsync().catch(console.error);
-          setCurrentSoundObject(null);
-        } else if (status.error) {
-          console.error('🎵 Sound playback error:', status.error);
-          setPlayingSound(null);
-          soundObject.unloadAsync().catch(console.error);
-          setCurrentSoundObject(null);
-        }
-      });
-
-      await soundObject.playAsync();
-    } catch (error) {
-      console.error('❌ Failed to play sound:', error);
-
-      // Clean up state to prevent issues
-      setPlayingSound(null);
-      if (currentSoundObject) {
-        try {
-          await currentSoundObject.unloadAsync();
-        } catch (unloadError) {
-          console.warn('Warning unloading sound:', unloadError);
-        }
-      }
-      setCurrentSoundObject(null);
-
-      // Show user-friendly error message
-      const duration = sound.duration_seconds ? ` (${sound.duration_seconds.toFixed(1)}s)` : '';
-      Alert.alert(
-        'Audio Preview Unavailable',
-        `Sound: ${sound.name}${duration}\n\nThe audio file could not be loaded. This might be due to network issues or an invalid file path.\n\nUse the test button to hear it as a real notification.`,
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-  const stopSound = async () => {
-    if (currentSoundObject) {
-      try {
-        await currentSoundObject.stopAsync();
-        await currentSoundObject.unloadAsync();
-      } catch (error) {
-        console.error('Error stopping sound:', error);
-      }
-      setCurrentSoundObject(null);
-      setPlayingSound(null);
-    }
-  };
-
-  const selectNotificationTone = async (soundId) => {
-    try {
-      if (currentSoundObject) {
-        try {
-          await currentSoundObject.stopAsync();
-          await currentSoundObject.unloadAsync();
-        } catch (stopError) {
-          console.warn('Warning stopping sound during selection:', stopError);
-        }
-        setCurrentSoundObject(null);
-        setPlayingSound(null);
-      }
-
-      const response = await ApiService.updateNotificationPreferences({
-        notification_sound_id: soundId
-      });
-
-      if (response.success) {
-        setSelectedSoundId(soundId);
-        Alert.alert(
-          'Success',
-          'Notification tone updated successfully',
-          [{ text: 'OK' }]
-        );
-      } else {
-        console.error('❌ Failed to update notification tone:', response);
-        Alert.alert(
-          'Error',
-          'Failed to update notification tone. Please try again.',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('❌ Failed to update notification tone:', error);
-      Alert.alert(
-        'Error',
-        'Failed to update notification tone. Please check your connection and try again.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-  const testNotificationSound = async (soundId) => {
-    try {
-      setTestingSound(soundId);
-
-      // Check if notifications are enabled first
-      const permissionStatus = await notificationService.getPermissionStatus();
-
-      if (!permissionStatus.enabled) {
-        Alert.alert(
-          'Notification Permissions Required',
-          'To test notification sounds, please enable notifications for this app. Would you like to enable them now?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Enable',
-              onPress: async () => {
-                const granted = await notificationService.requestPermissionsFromUser();
-                if (granted) {
-                  // Retry the test after permissions are granted
-                  setTimeout(() => testNotificationSound(soundId), 1000);
-                } else {
-                  Alert.alert(
-                    'Permissions Required',
-                    'Please enable notifications in your device settings to test notification sounds.',
-                    [{ text: 'OK' }]
-                  );
-                }
-              }
-            }
-          ]
-        );
-        return;
-      }
-
-      // Use the enhanced notification service to test the sound
-      const success = await notificationService.testNotificationWithSound(soundId);
-
-      if (success) {
-        Alert.alert(
-          'Test Notification Sent',
-          'A test notification has been sent with your selected sound and vibration. You should hear it shortly!',
-          [{ text: 'OK' }]
-        );
-      } else {
-        // Fallback: try to play the sound directly
-        const sound = availableSounds.find(s => s.id === soundId);
-        if (sound && sound.file_path) {
-          const directPlay = await notificationService.forcePlayNotificationSound(soundId, sound.file_path);
-          if (directPlay) {
-            Alert.alert(
-              'Sound Test',
-              'The notification sound was played directly. If you didn\'t hear it, check your device volume and notification settings.',
-              [{ text: 'OK' }]
-            );
-          } else {
-            Alert.alert(
-              'Test Failed',
-              'Unable to test the notification sound. Please check your device settings and try again.',
-              [{ text: 'OK' }]
-            );
-          }
-        }
-      }
-
-    } catch (error) {
-      console.error('Failed to test notification sound:', error);
-      Alert.alert(
-        'Error',
-        'Failed to test notification sound. Please check your device settings and try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setTimeout(() => setTestingSound(null), 3000); // Give time for the test to complete
-    }
-  };
+  const {
+    availableSounds,
+    selectedSoundId,
+    loading,
+    testingSound,
+    playingSound,
+    currentSoundObject,
+    loadNotificationData,
+    playSound,
+    stopSound,
+    selectNotificationTone,
+    testNotificationSound,
+    setPlayingSound,
+    setCurrentSoundObject,
+    setTestingSound,
+  } = useNotificationToneScreen({ navigation });
 
   const renderSoundItem = (sound) => {
     const isSelected = selectedSoundId === sound.id;
@@ -395,7 +139,6 @@ const NotificationToneScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
        {/* Instructions */}
       <View style={[styles.instructionsContainer, { backgroundColor: colors.surface }]}>
         <Ionicons name="information-circle" size={20} color={colors.primary} />
@@ -426,24 +169,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: spacing.md,
     fontSize: typography.fontSize.base,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    padding: spacing.xs,
-  },
-  headerTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  headerRight: {
-    width: 32, // Same as back button for centering
   },
   instructionsContainer: {
     flexDirection: 'row',
@@ -491,7 +216,7 @@ const styles = StyleSheet.create({
   defaultBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
+    borderRadius: 12,
   },
   defaultText: {
     fontSize: typography.fontSize.xs,

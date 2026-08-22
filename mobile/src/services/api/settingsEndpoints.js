@@ -177,6 +177,13 @@ const logSecurityEvent = async (eventData) => {
   });
 };
 
+const createSupportRequest = async (supportData) => {
+  return await makeRequest('/support/requests', {
+    method: 'POST',
+    body: supportData
+  });
+};
+
 export {
   getNotificationPreferences,
   updateNotificationPreferences,
@@ -207,4 +214,5 @@ export {
   declareChamaDividends,
   validateSystemSecurity,
   logSecurityEvent,
+  createSupportRequest,
 };
