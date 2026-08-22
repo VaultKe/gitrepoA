@@ -116,7 +116,7 @@ export const darkTheme = {
 };
 
 // Get theme colors based on theme mode
-export const getThemeColors = (themeMode = 'dark') => {
+export const getThemeColors = (themeMode = 'light') => {
   return themeMode === 'dark' ? darkTheme : lightTheme;
 };
 

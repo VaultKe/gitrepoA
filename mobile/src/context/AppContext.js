@@ -27,7 +27,7 @@ const initialState = {
   loans: [],
 
   // UI state
-  theme: 'dark',
+  theme: 'light',
   language: 'en',
   currentDashboard: 'user', // 'user', 'chama', 'admin'
   selectedChama: null,
