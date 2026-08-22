@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, Image, Appearance } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Navigation Stacks
 import AuthStack from './AuthStack';
@@ -14,14 +15,62 @@ import { getThemeColors } from '../utils/theme';
 
 const Stack = createStackNavigator();
 
+const DEFAULT_THEME = 'light';
+
+function getSystemTheme() {
+  try {
+    const scheme = Appearance.getColorScheme();
+    return scheme === 'light' ? 'light' : 'dark';
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+function getInitialTheme() {
+  try {
+    if (typeof window !== 'undefined' && window.__THEME__) {
+      return window.__THEME__;
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_THEME;
+}
+
 // Loading Screen Component
 function LoadingScreen() {
-  const { theme } = useApp();
+  const [theme, setTheme] = useState(getInitialTheme);
   const colors = getThemeColors(theme);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem('theme');
+        if (mounted && savedTheme) {
+          setTheme(savedTheme);
+        }
+      } catch {
+        // keep current theme
+      }
+    };
+
+    loadTheme();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-      <ActivityIndicator size="large" color={colors.primary} />
+      <Image
+        source={require('../../assets/chama_logo.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 24 }} />
       <Text style={[styles.loadingText, { color: colors.text }]}>
         Loading VaultKe...
       </Text>
@@ -101,6 +150,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  logo: {
+    width: 120,
+    height: 120,
   },
   loadingText: {
     marginTop: 16,
