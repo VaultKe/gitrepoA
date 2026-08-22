@@ -263,7 +263,7 @@ func GetProfile(c *gin.Context) {
 	}
 
 	if user.Phone.Valid {
-		userMap["phone"] = utils.MaskPhone(user.Phone.String)
+		userMap["phone"] = user.Phone.String
 	}
 	if user.Avatar.Valid {
 		userMap["avatar"] = user.Avatar.String

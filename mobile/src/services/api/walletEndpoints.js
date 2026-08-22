@@ -12,15 +12,21 @@ const getSubWalletTransactions = async (chamaId, walletType) => {
   return await makeRequest(`/chamas/${chamaId}/subwallets/${walletType}/transactions`);
 };
 
-const initiateDeposit = async (amount, paymentMethod = 'mpesa', description = '', reference = '') => {
+const initiateDeposit = async (amount, paymentMethod = 'mpesa', description = '', reference = '', phoneNumber = '') => {
+  const body = {
+    amount,
+    paymentMethod,
+    description: description || `Deposit via ${paymentMethod}`,
+    reference,
+  };
+
+  if (paymentMethod === 'mpesa' && phoneNumber) {
+    body.phoneNumber = phoneNumber;
+  }
+
   return await makeRequest('/wallets/deposit', {
     method: 'POST',
-    body: {
-      amount,
-      paymentMethod,
-      description: description || `Deposit via ${paymentMethod}`,
-      reference
-    },
+    body,
   });
 };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,144 +9,102 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { useOptimisticUpdate } from '../../../hooks/useLightningData';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
-import ApiService from '../../../services/api';
+import AmountInput from '../../../components/wallet/AmountInput';
+import useDepositScreen from '../../../hooks/useDepositScreen';
 
-export default function DepositScreen() {
+const DepositScreen = ({ navigation }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
 
-  const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('mpesa');
-  const [loading, setLoading] = useState(false);
-
-
-
-  const paymentMethods = [
-    { id: 'mpesa', name: 'M-Pesa', icon: 'phone-portrait' },
-    { id: 'bank', name: 'Bank Transfer', icon: 'card' },
-    { id: 'card', name: 'Credit/Debit Card', icon: 'card-outline' },
-  ];
+  const {
+    amount,
+    setAmount,
+    phoneNumber,
+    setPhoneNumber,
+    loading,
+    lastTransactionId,
+    handleDeposit,
+  } = useDepositScreen({ navigation });
 
   return (
     <View style={[{ flex: 1, backgroundColor: colors.background }]}>
-      {/* Scrollable Content */}
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-      <View style={{ padding: spacing.xl }}>
-        <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm, marginTop: spacing.md, color: colors.text }]}>Amount (KES)</Text>
-        <TextInput
-          style={[{
-            borderRadius: borderRadius.lg,
-            padding: spacing.md,
-            fontSize: typography.fontSize['2xl'],
-            fontWeight: typography.fontWeight.bold,
-            textAlign: 'center',
-            borderWidth: 2,
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            color: colors.text
-          }]}
-          value={amount}
-          onChangeText={setAmount}
-          placeholder="0.00"
-          keyboardType="numeric"
-          placeholderTextColor={colors.textTertiary}
-        />
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={{ padding: spacing.lg }}>
+          <Card variant="outlined" style={{ padding: spacing.lg }}>
+            <AmountInput
+              value={amount}
+              onChangeText={setAmount}
+              label="Amount (KES)"
+              colors={colors}
+            />
+          </Card>
 
-        <Card style={{ marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border }}>
-          <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md, color: colors.text }]}>Payment Method</Text>
-          {paymentMethods.map((method) => (
-            <TouchableOpacity
-              key={method.id}
+          <Card variant="outlined" style={{ marginTop: spacing.lg, padding: spacing.lg }}>
+            <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md, color: colors.text }]}>
+              M-Pesa Number
+            </Text>
+            <TextInput
               style={[
                 {
-                  flexDirection: 'row',
-                  alignItems: 'center',
                   borderRadius: borderRadius.lg,
                   padding: spacing.md,
-                  marginBottom: spacing.sm,
-                  borderWidth: 2,
-                  backgroundColor: colors.surface,
-                  borderColor: paymentMethod === method.id ? colors.primary : colors.border
-                },
-                paymentMethod === method.id && { backgroundColor: colors.primary + '20' },
-              ]}
-              onPress={() => setPaymentMethod(method.id)}
-            >
-              <Ionicons
-                name={method.icon}
-                size={24}
-                color={paymentMethod === method.id ? colors.primary : colors.textSecondary}
-              />
-              <Text style={[
-                {
-                  flex: 1,
                   fontSize: typography.fontSize.base,
-                  marginLeft: spacing.sm,
-                  color: paymentMethod === method.id ? colors.text : colors.textSecondary
+                  borderWidth: 1,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  color: colors.text,
                 },
-                paymentMethod === method.id && { fontWeight: '600' },
-              ]}>
-                {method.name}
-              </Text>
-              <Ionicons
-                name={paymentMethod === method.id ? 'radio-button-on' : 'radio-button-off'}
-                size={20}
-                color={paymentMethod === method.id ? colors.primary : colors.textSecondary}
-              />
-            </TouchableOpacity>
-          ))}
-        </Card>
-
-        {/* Main Deposit Button */}
-        <TouchableOpacity
-          style={[{ borderRadius: borderRadius.lg, padding: spacing.md, alignItems: 'center', marginTop: spacing.xl, backgroundColor: colors.primary }]}
-          onPress={async () => {
-            const depositAmount = parseFloat(amount) || 0;
-
-            if (!depositAmount || depositAmount <= 0) {
-              Alert.alert('Invalid Amount', 'Please enter a valid amount');
-              return;
-            }
-
-            try {
-              setLoading(true);
-              const response = await ApiService.initiateDeposit(depositAmount, paymentMethod);
-
-              Alert.alert(
-                'Deposit Initiated',
-                `M-Pesa STK push sent to your phone for KES ${depositAmount.toLocaleString()}`,
-                [{ text: 'OK' }]
-              );
-
-              // Clear the amount after successful deposit
-              setAmount('');
-            } catch (error) {
-              Alert.alert('Deposit Failed', error.message);
-            } finally {
-              setLoading(false);
-            }
-          }}
-          disabled={loading}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            {loading && (
-              <Ionicons
-                name="refresh"
-                size={20}
-                color={colors.white}
-                style={{ marginRight: spacing.sm }}
-              />
-            )}
-            <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.white }]}>
-              {loading ? 'Processing...' : `Deposit KES ${amount || '0.00'}`}
+              ]}
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              placeholder="254712345678"
+              keyboardType="phone-pad"
+              placeholderTextColor={colors.textTertiary}
+            />
+            <Text style={[{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }]}>
+              STK push will be sent to this number
             </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+          </Card>
+
+          {lastTransactionId ? (
+            <Card variant="outlined" style={{ marginTop: spacing.lg, padding: spacing.lg, borderColor: colors.warning }}>
+              <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.warning, marginBottom: spacing.xs }]}>
+                M-Pesa Transaction Code
+              </Text>
+              <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, color: colors.text }]}>
+                {lastTransactionId}
+              </Text>
+              <Text style={[{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }]}>
+                Use this code to track your deposit status
+              </Text>
+            </Card>
+          ) : null}
+
+          <TouchableOpacity
+            style={[{ borderRadius: borderRadius.lg, padding: spacing.md, alignItems: 'center', marginTop: spacing.xl, backgroundColor: colors.primary }]}
+            onPress={handleDeposit}
+            disabled={loading}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              {loading && (
+                <Ionicons
+                  name="refresh"
+                  size={20}
+                  color={colors.white}
+                  style={{ marginRight: spacing.sm }}
+                />
+              )}
+              <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.white }]}>
+                {loading ? 'Processing...' : `Deposit KES ${amount || '0.00'}`}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
-}
+};
+
+export default DepositScreen;

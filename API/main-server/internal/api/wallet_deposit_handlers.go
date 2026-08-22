@@ -33,6 +33,7 @@ func DepositMoney(c *gin.Context) {
 		PaymentMethod string  `json:"paymentMethod" validate:"alphanumeric,max=50"`
 		Reference     string  `json:"reference" validate:"max=100,no_sql_injection,no_xss"`
 		Description   string  `json:"description" validate:"max=200,safe_text,no_sql_injection,no_xss"`
+		PhoneNumber   string  `json:"phoneNumber" validate:"max=20,no_sql_injection,no_xss"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -65,22 +66,34 @@ func DepositMoney(c *gin.Context) {
 			return
 		}
 
-		var userPhone string
-		err := db.(*sql.DB).QueryRow("SELECT phone FROM users WHERE id = $1", userID).Scan(&userPhone)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "User phone number not found",
-			})
-			return
+		userPhone := strings.TrimSpace(req.PhoneNumber)
+		if userPhone == "" {
+			err := db.(*sql.DB).QueryRow("SELECT phone FROM users WHERE id = $1", userID).Scan(&userPhone)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"error":   "User phone number not found. Please add a phone number to your profile.",
+				})
+				return
+			}
 		}
 
 		// Convert phone number to M-Pesa format
 		phoneNumber := regexp.MustCompile(`\D`).ReplaceAllString(userPhone, "")
+		if phoneNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid phone number provided",
+			})
+			return
+		}
+
 		if strings.HasPrefix(phoneNumber, "07") || strings.HasPrefix(phoneNumber, "01") {
 			phoneNumber = "254" + phoneNumber[1:]
 		} else if strings.HasPrefix(phoneNumber, "+254") {
 			phoneNumber = phoneNumber[1:]
+		} else if !strings.HasPrefix(phoneNumber, "254") {
+			phoneNumber = "254" + phoneNumber
 		}
 
 		// Generate unique reference if not provided
