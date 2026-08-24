@@ -213,6 +213,7 @@ const MyChamasScreen = ({ navigation, route }) => {
           <Card
             variant="outlined"
             style={{
+              flex: 1,
               borderRadius: 8,
               overflow: 'hidden',
               borderWidth: 1,

@@ -275,7 +275,7 @@ const useCreateChama = ({ navigation, loadUserChamas }) => {
       const payload = {
         name: chamaData.name.trim(),
         description: chamaData.description.trim(),
-        group_type: chamaData.group_type,
+        category: chamaData.group_type,
         type: chamaData.type,
         county: chamaData.county,
         town: chamaData.town,
@@ -284,7 +284,8 @@ const useCreateChama = ({ navigation, loadUserChamas }) => {
         is_public: chamaData.is_public,
         requires_approval: chamaData.requires_approval,
         meeting_schedule: chamaData.meeting_schedule,
-        registration_fee_status: chamaData.registration_fee_status,
+        registration_fee_paid: chamaData.registration_fee_status === 'paid',
+        monthly_subscription_fee: chamaData.group_type === 'chama' ? 1000 : 0,
       };
 
       if (chamaData.group_type === 'chama') {
@@ -293,7 +294,8 @@ const useCreateChama = ({ navigation, loadUserChamas }) => {
         payload.rules = chamaData.rules;
       } else {
         payload.target_amount = parseFloat(chamaData.target_amount);
-        payload.contribution_rules = chamaData.contribution_rules;
+        payload.target_deadline = chamaData.target_deadline;
+        payload.rules = chamaData.contribution_rules;
       }
 
       if (members.length > 0) {
