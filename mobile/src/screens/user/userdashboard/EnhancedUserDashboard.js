@@ -300,7 +300,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
       const hasSignal = trendData && trendData[trendData.length - 1] > 0;
 
       return (
-        <View style={{ flex: 1, marginHorizontal: spacing.xs, marginBottom: spacing.sm }}>
+        <View style={{ flex: 1, marginHorizontal: spacing.xs, marginBottom: spacing.sm, height: 152 }}>
           <View style={{ padding: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, height: '100%' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
               <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>

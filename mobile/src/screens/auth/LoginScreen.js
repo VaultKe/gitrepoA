@@ -203,7 +203,7 @@ export default function LoginScreen({ navigation }) {
         Toast.show({
           type: 'error',
           text1: 'Connection issue',
-          text2: ` ${API_BASE_URL}:unreachable`,
+          text2: `Please check your email or phone number and password.`,
           position: 'bottom',
           visibilityTime: 3000,
         });
@@ -233,7 +233,7 @@ export default function LoginScreen({ navigation }) {
         Toast.show({
           type: 'error',
           text1: 'Connection issue',
-          text2: `Unable to reach login server: ${API_BASE_URL}`,
+          text2: `Server is unreachable.Please check your internet connection.`,
           position: 'bottom',
           visibilityTime: 3000,
         });
