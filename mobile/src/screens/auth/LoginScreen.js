@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, breakpoints } from '../../utils/theme';
 import apiService from '../../services/api';
+import { API_BASE_URL } from '../../config/environment';
 import Toast from 'react-native-toast-message';
 import FormField from '../../components/FormField';
 import LoadingButton from '../../components/LoadingButton';
@@ -202,7 +203,7 @@ export default function LoginScreen({ navigation }) {
         Toast.show({
           type: 'error',
           text1: 'Connection issue',
-          text2: 'Unable to reach the login server. Please check your internet connection and try again.',
+          text2: ` ${API_BASE_URL}:unreachable`,
           position: 'bottom',
           visibilityTime: 3000,
         });
@@ -232,7 +233,7 @@ export default function LoginScreen({ navigation }) {
         Toast.show({
           type: 'error',
           text1: 'Connection issue',
-          text2: 'Unable to reach the login server. Please check your internet connection and try again.',
+          text2: `Unable to reach login server: ${API_BASE_URL}`,
           position: 'bottom',
           visibilityTime: 3000,
         });
