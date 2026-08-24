@@ -204,7 +204,7 @@ const createStyles = (colors) => StyleSheet.create({
     alignSelf: 'stretch',
   },
   tableCard: {
-    minHeight: 360,
+    minHeight: 520,
     borderRadius: 8,
     width: '100%',
     alignSelf: 'stretch',
