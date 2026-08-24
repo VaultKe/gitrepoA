@@ -105,7 +105,7 @@ out/
 *.aar
 *.dex
 *.class
-*.jar
+
 backend/upload/
 # TypeScript
 *.tsbuildinfo
