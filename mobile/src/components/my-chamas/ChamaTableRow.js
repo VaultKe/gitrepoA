@@ -47,7 +47,6 @@ const ChamaTableRow = ({ item, index, colors, themedStyles, navigation, onPressD
 
       <View style={[themedStyles.tableCell, themedStyles.categoryCell]}>
         <View style={[themedStyles.typeBadge, { backgroundColor: typeConfig.color + '15' }]}>
-          <Ionicons name={typeConfig.icon} size={12} color={typeConfig.color} />
           <Text style={[themedStyles.typeBadgeText, { color: typeConfig.color }]}>
             {typeConfig.label}
           </Text>
