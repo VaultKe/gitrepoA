@@ -83,11 +83,11 @@ local.properties
 .vscode/settings.json
 
 # Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# .env
+# .env.local
+# .env.development.local
+# .env.test.local
+# .env.production.local
 
 # OS files
 Thumbs.db
