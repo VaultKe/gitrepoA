@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+web-build/
+*.apk
+*.aab
+*.aar
+*.dex
+*.class
+*.jar
+out/
+
+# Gradle
+android/.gradle/
+.gradle/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+npm-debug.*
+
+# Environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+tmp/
+temp/
+.temp/
+.cache/
+*.cache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+docs/
+README_FRONTEND_STARTUP.md
+REAL_BACKEND_SETUP.md
+
+# Test files
+test_admin_button.js
+web-test.html
+
+# Expo
+.expo-shared/
+expo-env.d.ts
