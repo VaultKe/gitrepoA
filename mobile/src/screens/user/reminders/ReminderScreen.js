@@ -26,6 +26,8 @@ const ReminderScreen = () => {
 
   const screen = useReminderScreen();
 
+  const isDesktop = width >= 768;
+
   const {
     loading,
     refreshing,
@@ -86,7 +88,7 @@ const ReminderScreen = () => {
               }}
             >
               <ReminderTableHeader
-                isDesktop={true}
+                isDesktop={isDesktop}
                 searchValue={searchValue}
                 onSearchChange={setSearchValue}
                 filterValue={filterValue}
@@ -108,6 +110,7 @@ const ReminderScreen = () => {
                 shadowRadius: 0,
                 shadowOffset: { width: 0, height: 0 },
                 elevation: 0,
+                minHeight: 400,
               }}
             >
               <ScrollView
@@ -117,7 +120,7 @@ const ReminderScreen = () => {
               >
                 <View style={{ width: '100%' }}>
                   <ReminderTableHeader
-                    isDesktop={true}
+                    isDesktop={isDesktop}
                     searchValue={searchValue}
                     onSearchChange={setSearchValue}
                     filterValue={filterValue}
@@ -126,20 +129,22 @@ const ReminderScreen = () => {
                     showSearchFilter={false}
                   />
 
-                  {filteredReminders.length > 0 ? (
-                    filteredReminders.map((item, index) => (
-                      <ReminderItem
-                        key={item.id}
-                        reminder={item}
-                        onToggle={handleToggleReminder}
-                        onEdit={openEditModal}
-                        onDelete={handleDeleteReminder}
-                        index={index}
-                      />
-                    ))
-                  ) : (
-                    <EmptyRemindersState onAddReminder={openAddModal} />
-                  )}
+                  <View style={{ width: '100%', flex: 1, minHeight: 380 }}>
+                    {filteredReminders.length > 0 ? (
+                      filteredReminders.map((item, index) => (
+                        <ReminderItem
+                          key={item.id}
+                          reminder={item}
+                          onToggle={handleToggleReminder}
+                          onEdit={openEditModal}
+                          onDelete={handleDeleteReminder}
+                          index={index}
+                        />
+                      ))
+                    ) : (
+                      <EmptyRemindersState onAddReminder={openAddModal} />
+                    )}
+                  </View>
                 </View>
               </ScrollView>
             </Card>

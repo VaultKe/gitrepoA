@@ -6,7 +6,7 @@ import {
   Modal,
   TextInput,
   Switch,
-  SafeAreaView,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
@@ -74,50 +74,51 @@ const AddEditReminderModal = ({
           shadowOpacity: 0.25,
           shadowRadius: 4,
           elevation: 5,
+          flexDirection: 'column',
         }}>
-          <SafeAreaView style={{ flex: 1 }}>
-        <View style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingVertical: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-        }}>
-          <TouchableOpacity onPress={onCancel}>
-            <Text style={{
-              fontSize: 16,
-              fontWeight: '500',
-              color: colors.primary,
-            }}>Cancel</Text>
-          </TouchableOpacity>
-
-          <Text style={{
-            fontSize: 18,
-            fontWeight: '600',
-            color: colors.text,
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
           }}>
-            {editingReminder ? 'Edit Reminder' : 'Add Reminder'}
-          </Text>
+            <TouchableOpacity onPress={onCancel}>
+              <Text style={{
+                fontSize: 16,
+                fontWeight: '500',
+                color: colors.primary,
+              }}>Cancel</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={onSave}>
             <Text style={{
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: '600',
-              color: colors.primary,
+              color: colors.text,
             }}>
-              {editingReminder ? 'Update' : 'Save'}
+              {editingReminder ? 'Edit Reminder' : 'Add Reminder'}
             </Text>
-          </TouchableOpacity>
-        </View>
 
-        <View style={{
-          flex: 1,
-          padding: 20,
-        }}>
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{
+            <TouchableOpacity onPress={onSave}>
+              <Text style={{
+                fontSize: 16,
+                fontWeight: '600',
+                color: colors.primary,
+              }}>
+                {editingReminder ? 'Update' : 'Save'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 20 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{
               fontSize: 16,
               fontWeight: '600',
               marginBottom: 8,
@@ -291,8 +292,7 @@ const AddEditReminderModal = ({
               />
             </View>
           </View>
-        </View>
-        </SafeAreaView>
+          </ScrollView>
         </View>
       </View>
     </Modal>
