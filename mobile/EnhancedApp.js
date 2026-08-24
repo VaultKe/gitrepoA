@@ -17,8 +17,6 @@ import RootNavigator from './src/navigation/RootNavigator';
 // Notification Service
 import notificationService from './src/services/notificationService';
 
-// Auto Update
-import useAutoUpdate from './src/hooks/useAutoUpdate';
 
 // Ignore specific warnings
 LogBox.ignoreLogs([
@@ -32,7 +30,6 @@ function AppContent() {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
 
-  useAutoUpdate();
 
   // Initialize notification service
   useEffect(() => {
