@@ -189,20 +189,19 @@ const ContributeScreen = ({ route, navigation }) => {
                 availablePaymentMethods={availablePaymentMethods}
               />
 
-              {paymentMethod === 'pay_for' && (
-                <MemberListingSection
-                  chamaMembers={chamaMembers}
-                  selectedContributor={selectedContributor}
-                  memberSearchQuery={memberSearchQuery}
-                  setMemberSearchQuery={setMemberSearchQuery}
-                  contributionType={contributionType}
-                  roundName={roundName}
-                  setSelectedContributor={setSelectedContributor}
-                  getMemberName={getMemberName}
-                  renderMemberAvatar={renderMemberAvatar}
-                  validateMemberSelection={validateMemberSelection}
-                />
-              )}
+              <MemberListingSection
+                chamaMembers={chamaMembers}
+                selectedContributor={selectedContributor}
+                memberSearchQuery={memberSearchQuery}
+                setMemberSearchQuery={setMemberSearchQuery}
+                contributionType={contributionType}
+                roundName={roundName}
+                setSelectedContributor={setSelectedContributor}
+                getMemberName={getMemberName}
+                renderMemberAvatar={renderMemberAvatar}
+                validateMemberSelection={validateMemberSelection}
+                required={paymentMethod === 'pay_for'}
+              />
 
               {paymentMethod === 'mpesa' && (
                 <PhoneNumberDisplay user={screen.user} />

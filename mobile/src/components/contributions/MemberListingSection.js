@@ -15,6 +15,7 @@ const MemberListingSection = ({
   getMemberName,
   renderMemberAvatar,
   validateMemberSelection,
+  required = false,
 }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
@@ -62,17 +63,20 @@ const MemberListingSection = ({
             ? `Select ${roundName || 'Merry-Go-Round'} Participant`
             : `Select Member to Pay For`
           }
+          {required && <Text style={[styles.requiredIndicator, { color: colors.error }]}> *</Text>}
         </Text>
         <Text style={[styles.memberListingSubtitle, { color: colors.textSecondary }]}>
           {contributionType === 'merry-go-round'
             ? `Only members of this merry-go-round circle can be paid for`
-            : `Choose the member you want to pay for. The amount will be deducted from your wallet.`
+            : required
+              ? `Choose the member you want to pay for. The amount will be deducted from your wallet.`
+              : `Members list for reference`
           }
         </Text>
       </View>
 
       {chamaMembers.length > 0 ? (
-        <View style={styles.memberPickerContainer}>
+        <View style={[styles.memberPickerContainer, { backgroundColor: colors.surface }]}>
           <View style={styles.memberSearchContainer}>
             <Ionicons name="search" size={16} color={colors.textSecondary} />
             <TextInput
@@ -149,7 +153,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(0,0,0,0.2)',
   },
   memberSearchContainer: {
     flexDirection: 'row',
@@ -235,6 +238,10 @@ const styles = StyleSheet.create({
   noMembersSubtext: {
     fontSize: typography.fontSize.sm,
     textAlign: 'center',
+  },
+  requiredIndicator: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
 });
 
