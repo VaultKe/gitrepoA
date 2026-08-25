@@ -23,7 +23,6 @@ import Button from '../../../components/common/Button';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import usePollsVotingScreen from '../../../hooks/usePollsVotingScreen';
 import PollItem from '../../../components/pollsandvoting/PollItem';
-import CompletedPollsTable from '../../../components/pollsandvoting/CompletedPollsTable';
 import PollVisualizations from '../../../components/pollsandvoting/PollVisualizations';
 import CreatePollModal from '../../../components/pollsandvoting/CreatePollModal';
 import RoleEscalationModal from '../../../components/pollsandvoting/RoleEscalationModal';
@@ -91,8 +90,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
     setActiveTab,
     polls,
     votes,
+    allPolls,
     chamaDetails,
-    completedPolls,
     currentPage,
     setCurrentPage,
     pageSize,
@@ -112,9 +111,6 @@ const PollsVotingScreen = ({ route, navigation }) => {
     setRoleForm,
     onRefresh,
     handleRetry,
-    getPaginatedCompletedPolls,
-    getTotalPages,
-    handlePageChange,
     openVisualizationModal,
     closeVisualizationModal,
     handleCreatePoll,
@@ -137,7 +133,11 @@ const PollsVotingScreen = ({ route, navigation }) => {
     getTotalEligibleVoters,
     getVotePercentage,
     isPollFullyVoted,
-  } = usePollsVotingScreen({ route, navigation });
+  } = usePollsVotingScreen({ 
+    route, 
+    navigation,
+    onCreateSuccess: () => setShowCreateModal(false)
+  });
 
   const openCreateModal = () => {
     setShowCreateModal(true);
@@ -177,87 +177,54 @@ const PollsVotingScreen = ({ route, navigation }) => {
 
       {/* Content */}
       <View style={{ flex: 1, position: 'relative' }}>
-        {activeTab === 'completed' ? (
-          <ScrollView
-            style={{ flex: 1 }}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-          >
-            <View style={{ padding: spacing.sm }}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Completed Polls - {chamaDetails?.name || `Chama ${chamaId?.slice(-8) || 'Unknown'}`}
-              </Text>
-              <CompletedPollsTable
-                colors={colors}
-                paginatedPolls={getPaginatedCompletedPolls()}
-                totalPages={getTotalPages()}
-                currentPage={currentPage}
-                onPageChange={handlePageChange}
-                onOpenVisualization={openVisualizationModal}
-                formatTableDate={formatTableDate}
-                getPollTypeColor={getPollTypeColor}
-                getStatusColor={getStatusColor}
-                getTotalVotesCast={getTotalVotesCast}
-                getTotalEligibleVoters={getTotalEligibleVoters}
-              />
-            </View>
-          </ScrollView>
-        ) : (
-          <FlatList
-            data={polls}
-            renderItem={({ item, index }) => (
-              <PollItem
-                item={item}
-                colors={colors}
-                isDesktop={isDesktop}
-                screenWidth={screenWidth}
-                numColumns={numColumns}
-                getMemberName={getMemberName}
-                getMemberEmail={getMemberEmail}
-                formatTableDate={formatTableDate}
-                getPollTypeColor={getPollTypeColor}
-                getStatusColor={getStatusColor}
-                getTotalVotesCast={getTotalVotesCast}
-                getTotalEligibleVoters={getTotalEligibleVoters}
-                getVotePercentage={getVotePercentage}
-                isPollFullyVoted={isPollFullyVoted}
-                onVote={handleVote}
-                onOpenVisualization={openVisualizationModal}
-              />
-            )}
-            keyExtractor={(item) => item.id}
-            style={styles.list}
-            contentContainerStyle={[
-              styles.listContent,
-              isDesktop && styles.listContentDesktop
-            ]}
-            numColumns={numColumns}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            ListEmptyComponent={
-              <EmptyState
-                colors={colors}
-                isDesktop={isDesktop}
-                loading={loading}
-                loadError={loadError}
-                activeTab={activeTab}
-                onRetry={handleRetry}
-              />
-            }
-          />
-        )}
+        <FlatList
+          data={allPolls}
+          renderItem={({ item, index }) => (
+            <PollItem
+              item={item}
+              colors={colors}
+              isDesktop={isDesktop}
+              screenWidth={screenWidth}
+              numColumns={numColumns}
+              getMemberName={getMemberName}
+              getMemberEmail={getMemberEmail}
+              formatTableDate={formatTableDate}
+              getPollTypeColor={getPollTypeColor}
+              getStatusColor={getStatusColor}
+              getTotalVotesCast={getTotalVotesCast}
+              getTotalEligibleVoters={getTotalEligibleVoters}
+              getVotePercentage={getVotePercentage}
+              isPollFullyVoted={isPollFullyVoted}
+              onVote={handleVote}
+              onOpenVisualization={openVisualizationModal}
+            />
+          )}
+          keyExtractor={(item) => item.id}
+          style={styles.list}
+          contentContainerStyle={[
+            styles.listContent,
+            isDesktop && styles.listContentDesktop
+          ]}
+          numColumns={numColumns}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              colors={colors}
+              isDesktop={isDesktop}
+              loading={loading}
+              loadError={loadError}
+              activeTab={activeTab}
+              onRetry={handleRetry}
+            />
+          }
+        />
 
         {/* Floating Action Buttons */}
         <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>

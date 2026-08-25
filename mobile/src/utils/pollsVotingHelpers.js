@@ -49,7 +49,7 @@ const getTotalVotesCast = (poll) => {
 };
 
 const getTotalEligibleVoters = (poll, chamaMembers) => {
-  return chamaMembers.length;
+  return (chamaMembers || []).length;
 };
 
 const getVotePercentage = (voteCount, totalVotes) => {

@@ -122,37 +122,37 @@ const getChamaVotes = async (chamaId, limit = 50, offset = 0) => {
 };
 
 const getChamaPolls = async (chamaId, limit = 50, offset = 0) => {
-  return await makeRequest(`/chamas/${chamaId}/polls?limit=${limit}&offset=${offset}`);
+  return await makeRequest(`/chamas/${chamaId}/votes?limit=${limit}&offset=${offset}`);
 };
 
 const getActivePolls = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}/polls/active`);
+  return await makeRequest(`/chamas/${chamaId}/votes/active`);
 };
 
 const getPollResults = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}/polls/results`);
+  return await makeRequest(`/chamas/${chamaId}/votes/results`);
 };
 
 const getPollDetails = async (chamaId, pollId) => {
-  return await makeRequest(`/chamas/${chamaId}/polls/${pollId}`);
+  return await makeRequest(`/chamas/${chamaId}/votes/${pollId}`);
 };
 
 const createPoll = async (chamaId, data) => {
-  return await makeRequest(`/chamas/${chamaId}/polls`, {
+  return await makeRequest(`/chamas/${chamaId}/votes`, {
     method: 'POST',
     body: data,
   });
 };
 
 const castPollVote = async (chamaId, pollId, optionId) => {
-  return await makeRequest(`/chamas/${chamaId}/polls/${pollId}/vote`, {
+  return await makeRequest(`/chamas/${chamaId}/votes/${pollId}/vote`, {
     method: 'POST',
     body: { optionId },
   });
 };
 
 const createRoleEscalationPoll = async (chamaId, data) => {
-  return await makeRequest(`/chamas/${chamaId}/polls/role-escalation`, {
+  return await makeRequest(`/chamas/${chamaId}/votes/role-escalation`, {
     method: 'POST',
     body: data,
   });

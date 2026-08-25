@@ -69,6 +69,8 @@ const UNMASKED_ENDPOINTS = [
   '/groups',
   '/activity',
   '/dashboard',
+  '/polls',
+  '/votes',
 ];
 
 const isUnmaskedEndpoint = (endpoint) =>

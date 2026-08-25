@@ -12,11 +12,9 @@ import {
   getTotalEligibleVoters,
   getVotePercentage,
   isPollFullyVoted,
-  normalizePollItem,
-  processPollItem,
 } from '../utils/pollsVotingHelpers';
 
-const usePollsVotingScreen = ({ route, navigation }) => {
+const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
   const { chamaId } = route.params;
   const { theme, user } = useApp();
   const colors = theme;
@@ -57,92 +55,91 @@ const usePollsVotingScreen = ({ route, navigation }) => {
   });
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [filteredMembers, setFilteredMembers] = useState([]);
+  const [allPolls, setAllPolls] = useState([]);
 
   const isRefreshingRef = useRef(false);
 
-   const loadData = async (isTabSwitch = false) => {
-    try {
-      if (!isTabSwitch) setLoading(true);
-      setLoadError(null);
-      await loadVotes();
-
-      Promise.all([
-        loadUserRole(),
-        loadChamaMembers(),
-        loadChamaDetails(),
-      ]).catch(() => {});
-    } catch (error) {
-      setLoadError(error?.message || 'Failed to load polls and votes');
-    } finally {
-      if (!isTabSwitch) {
-        setLoading(false);
+  const normalizePolls = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items.map((poll) => {
+      const endsAt = poll.ends_at ? new Date(poll.ends_at).getTime() : null;
+      const now = Date.now();
+      let status = poll.status || 'active';
+      if (status === 'active' && endsAt && endsAt < now) {
+        status = 'completed';
       }
-    }
+      const totalVotes = getTotalVotesCast(poll);
+      const isFullyVoted = isPollFullyVoted(poll, chamaMembers);
+      let timeRemaining = null;
+      if (endsAt && status === 'active') {
+        timeRemaining = Math.max(0, Math.floor((endsAt - now) / 1000));
+      }
+      return {
+        ...poll,
+        status,
+        isFullyVoted,
+        completionStatus: isFullyVoted ? 'All votes cast' : null,
+        timeRemaining,
+        totalVotes,
+        userVoted: poll.user_voted === 1 || poll.user_voted === true,
+        user_has_voted: poll.user_voted === 1 || poll.user_voted === true,
+      };
+    });
   };
 
-  const loadVotes = useCallback(async () => {
+  const loadPolls = useCallback(async () => {
     if (!chamaId || typeof chamaId !== 'string') {
       Alert.alert('Error', 'Invalid chama access. Please try again.');
       return;
     }
 
     try {
-      const [activeResult, completedResult, activePollsResult, completedPollsResult] = await Promise.allSettled([
-        ApiService.getActiveVotes(chamaId),
-        ApiService.getVoteResults(chamaId),
-        ApiService.getActivePolls(chamaId),
-        ApiService.getPollResults(chamaId),
-      ]);
+      const votesResponse = await ApiService.getChamaVotes(chamaId, 50, 0);
 
-      const voteMap = new Map();
-      if (activeResult.status === 'fulfilled' && activeResult.value?.success && Array.isArray(activeResult.value?.data)) {
-        activeResult.value.data.forEach(item => voteMap.set(item.id, { ...item, source: 'vote' }));
-      }
-      if (completedResult.status === 'fulfilled' && completedResult.value?.success && Array.isArray(completedResult.value?.data)) {
-        completedResult.value.data.forEach(item => voteMap.set(item.id, { ...item, source: 'vote' }));
+      const allItems = [];
+
+      if (votesResponse?.success && Array.isArray(votesResponse?.data)) {
+        allItems.push(...votesResponse.data);
       }
 
-      const pollMap = new Map();
-      if (activePollsResult.status === 'fulfilled' && activePollsResult.value?.success && Array.isArray(activePollsResult.value?.data)) {
-        activePollsResult.value.data.forEach(item => pollMap.set(item.id, { ...item, source: 'poll' }));
-      }
-      if (completedPollsResult.status === 'fulfilled' && completedPollsResult.value?.success && Array.isArray(completedPollsResult.value?.data)) {
-        completedPollsResult.value.data.forEach(item => pollMap.set(item.id, { ...item, source: 'poll' }));
-      }
+      const uniqueById = new Map();
+      allItems.forEach((item) => {
+        if (item && item.id) {
+          uniqueById.set(item.id, item);
+        }
+      });
 
-      const merged = new Map();
-      for (const item of [...voteMap.values(), ...pollMap.values()]) {
-        merged.set(item.id, item);
-      }
+      const merged = Array.from(uniqueById.values());
+      const normalized = normalizePolls(merged);
 
-      const validItems = [...merged.values()].filter(item => item.id);
-      const normalizedItems = validItems.map(normalizePollItem);
-      const processedItems = normalizedItems.map(item => processPollItem(item, chamaMembers));
+      const sorted = normalized.sort((a, b) => {
+        const aActive = a.status === 'active';
+        const bActive = b.status === 'active';
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        const aTime = a.ends_at ? new Date(a.ends_at).getTime() : 0;
+        const bTime = b.ends_at ? new Date(b.ends_at).getTime() : 0;
+        return aTime - bTime;
+      });
 
-      setCompletedPolls(processedItems.filter(item => item.status === 'completed'));
+      const activeItems = sorted.filter((item) => item.status === 'active');
+      const completedItems = sorted.filter((item) => item.status === 'completed');
 
-      let filtered;
-      if (activeTab === 'active') filtered = processedItems.filter(item => item.status === 'active');
-      else if (activeTab === 'completed') filtered = processedItems.filter(item => item.status === 'completed');
-      else filtered = processedItems;
-
-      setVotes(filtered);
-      setPolls(filtered);
+      setPolls(activeItems);
+      setVotes(activeItems);
+      setCompletedPolls(completedItems);
+      setAllPolls(sorted);
       setLoadError(null);
     } catch (error) {
       setLoadError(error?.message || 'Failed to load polls and votes');
     }
-  }, [chamaId, activeTab, chamaMembers]);
-
-  useEffect(() => {
-    if (chamaId) loadData(false);
-  }, [chamaId, activeTab]);
+  }, [chamaId, chamaMembers]);
 
   useEffect(() => {
     if (!autoRefreshEnabled) return;
-    const interval = setInterval(loadVotes, 30000);
+    const interval = setInterval(loadPolls, 30000);
     return () => clearInterval(interval);
-  }, [chamaId, activeTab, autoRefreshEnabled, loadVotes]);
+  }, [chamaId, autoRefreshEnabled, loadPolls]);
 
   useEffect(() => {
     if (showSuccessBanner) {
@@ -179,6 +176,25 @@ const usePollsVotingScreen = ({ route, navigation }) => {
       if (response.success) setChamaDetails(response.data);
     } catch {}
   };
+
+  const loadData = async (isTabSwitch = false) => {
+    try {
+      if (!isTabSwitch) setLoading(true);
+      setLoadError(null);
+      await loadPolls();
+      Promise.all([loadUserRole(), loadChamaMembers(), loadChamaDetails()]).catch(() => {});
+    } catch (error) {
+      setLoadError(error?.message || 'Failed to load polls and votes');
+    } finally {
+      if (!isTabSwitch) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (chamaId) loadData(false);
+  }, [chamaId, activeTab]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -245,7 +261,7 @@ const usePollsVotingScreen = ({ route, navigation }) => {
       setFilteredMembers(chamaMembers);
       return;
     }
-    const filtered = chamaMembers.filter(member => {
+    const filtered = chamaMembers.filter((member) => {
       const fullName = getMemberName(member);
       const email = getMemberEmail(member);
       const role = member.role || '';
@@ -258,13 +274,13 @@ const usePollsVotingScreen = ({ route, navigation }) => {
 
   const handleSelectCandidate = (member) => {
     const memberId = member.user_id || member.userId;
-    setRoleForm(prev => {
+    setRoleForm((prev) => {
       const isAlreadySelected = prev.candidateIds.includes(memberId);
       if (isAlreadySelected) {
         return {
           ...prev,
-          candidateIds: prev.candidateIds.filter(id => id !== memberId),
-          selectedCandidates: prev.selectedCandidates.filter(candidate =>
+          candidateIds: prev.candidateIds.filter((id) => id !== memberId),
+          selectedCandidates: prev.selectedCandidates.filter((candidate) =>
             (candidate.user_id || candidate.userId) !== memberId
           ),
         };
@@ -281,18 +297,18 @@ const usePollsVotingScreen = ({ route, navigation }) => {
 
   const addPollOption = () => {
     if (pollForm.options.length < 10) {
-      setPollForm(prev => ({ ...prev, options: [...prev.options, ''] }));
+      setPollForm((prev) => ({ ...prev, options: [...prev.options, ''] }));
     }
   };
 
   const removePollOption = (index) => {
     if (pollForm.options.length > 2) {
-      setPollForm(prev => ({ ...prev, options: prev.options.filter((_, i) => i !== index) }));
+      setPollForm((prev) => ({ ...prev, options: prev.options.filter((_, i) => i !== index) }));
     }
   };
 
   const updatePollOption = (index, value) => {
-    setPollForm(prev => ({ ...prev, options: prev.options.map((opt, i) => i === index ? value : opt) }));
+    setPollForm((prev) => ({ ...prev, options: prev.options.map((opt, i) => (i === index ? value : opt)) }));
   };
 
   const handleCreatePoll = async () => {
@@ -306,7 +322,7 @@ const usePollsVotingScreen = ({ route, navigation }) => {
         return;
       }
     } else {
-      if (!pollForm.title || pollForm.options.some(opt => !opt.trim())) {
+      if (!pollForm.title || pollForm.options.some((opt) => !opt.trim())) {
         Alert.alert('Error', 'Please fill in all required fields');
         return;
       }
@@ -314,7 +330,7 @@ const usePollsVotingScreen = ({ route, navigation }) => {
 
     try {
       if (pollForm.type === 'Election / Voting') {
-        const candidateNames = roleForm.selectedCandidates.map(candidate => getMemberName(candidate)).join(', ');
+        const candidateNames = roleForm.selectedCandidates.map((candidate) => getMemberName(candidate)).join(', ');
         const pollTitle = `${roleForm.requestedRole.charAt(0).toUpperCase() + roleForm.requestedRole.slice(1)} Election`;
         const pollDescription = `Election for ${roleForm.requestedRole} position. ${roleForm.selectedCandidates.length} candidate(s): ${candidateNames}`;
 
@@ -323,16 +339,16 @@ const usePollsVotingScreen = ({ route, navigation }) => {
           description: pollDescription,
           type: 'Election / Voting',
           ends_at: pollForm.endDate,
-          options: roleForm.selectedCandidates.map(candidate => ({
+          options: roleForm.selectedCandidates.map((candidate) => ({
             option_text: getMemberName(candidate),
             candidateId: candidate.user_id || candidate.userId,
-            candidateInfo: candidate
+            candidateInfo: candidate,
           })),
           isAnonymous: true,
           requiresMajority: true,
           majorityPercentage: 50,
           requestedRole: roleForm.requestedRole,
-          justification: roleForm.justification || `Election for ${roleForm.requestedRole} position with ${roleForm.selectedCandidates.length} candidates`
+          justification: roleForm.justification || `Election for ${roleForm.requestedRole} position with ${roleForm.selectedCandidates.length} candidates`,
         };
 
         const response = await ApiService.createPoll(chamaId, pollData);
@@ -340,7 +356,8 @@ const usePollsVotingScreen = ({ route, navigation }) => {
           setSuccessMessage(`Role election poll created successfully with ${roleForm.selectedCandidates.length} candidates! Members can now vote for their preferred candidate.`);
           setShowSuccessBanner(true);
           resetPollForm();
-          loadVotes();
+          loadPolls();
+          if (typeof onCreateSuccess === 'function') onCreateSuccess();
         } else {
           Alert.alert('Error', response.error || 'Failed to create role election poll');
         }
@@ -350,7 +367,7 @@ const usePollsVotingScreen = ({ route, navigation }) => {
           description: pollForm.description,
           type: pollForm.type,
           ends_at: pollForm.endDate,
-          options: pollForm.options.map(optionText => ({ option_text: optionText.trim() })),
+          options: pollForm.options.map((optionText) => ({ option_text: optionText.trim() })),
         };
 
         const response = await ApiService.createPoll(chamaId, voteData);
@@ -358,7 +375,8 @@ const usePollsVotingScreen = ({ route, navigation }) => {
           setSuccessMessage('Poll created successfully! Members can now vote.');
           setShowSuccessBanner(true);
           resetPollForm();
-          await loadVotes();
+          await loadPolls();
+          if (typeof onCreateSuccess === 'function') onCreateSuccess();
         } else {
           Alert.alert('Error', response.error || 'Failed to create vote');
         }
@@ -383,7 +401,7 @@ const usePollsVotingScreen = ({ route, navigation }) => {
     }
 
     try {
-      setVotes(prevVotes => prevVotes.map(vote => vote.id === pollId ? { ...vote, userVoted: true } : vote));
+      setVotes((prevVotes) => prevVotes.map((vote) => (vote.id === pollId ? { ...vote, userVoted: true } : vote)));
 
       const response = await ApiService.castPollVote(chamaId, pollId, optionId);
 
@@ -395,42 +413,46 @@ const usePollsVotingScreen = ({ route, navigation }) => {
             Alert.alert(
               'Congratulations!',
               `${candidateName} has been successfully elected to the ${newRole} position!`,
-              [{ text: 'OK', onPress: () => loadVotes() }]
+              [{ text: 'OK', onPress: () => loadPolls() }]
             );
           } else {
             Alert.alert('Vote Complete', 'The role escalation vote has been completed. The role change was not approved.', [
-              { text: 'OK', onPress: () => loadVotes() }
+              { text: 'OK', onPress: () => loadPolls() },
             ]);
           }
         } else {
-          setVotes(prevVotes => prevVotes.map(vote => {
-            if (vote.id === pollId) {
-              return {
-                ...vote,
-                options: vote.options.map(opt => opt.id === optionId ? { ...opt, voteCount: opt.voteCount + 1 } : opt),
-                totalVotes: (vote.totalVotes || 0) + 1
-              };
-            }
-            return vote;
-          }));
-          setPolls(prevPolls => prevPolls.map(poll => {
-            if (poll.id === pollId) {
-              return {
-                ...poll,
-                options: poll.options.map(opt => opt.id === optionId ? { ...opt, voteCount: opt.voteCount + 1 } : opt),
-                totalVotes: (poll.totalVotes || 0) + 1
-              };
-            }
-            return poll;
-          }));
+          setVotes((prevVotes) =>
+            prevVotes.map((vote) => {
+              if (vote.id === pollId) {
+                return {
+                  ...vote,
+                  options: vote.options.map((opt) => (opt.id === optionId ? { ...opt, voteCount: opt.voteCount + 1 } : opt)),
+                  totalVotes: (vote.totalVotes || 0) + 1,
+                };
+              }
+              return vote;
+            })
+          );
+          setPolls((prevPolls) =>
+            prevPolls.map((poll) => {
+              if (poll.id === pollId) {
+                return {
+                  ...poll,
+                  options: poll.options.map((opt) => (opt.id === optionId ? { ...opt, voteCount: opt.voteCount + 1 } : opt)),
+                  totalVotes: (poll.totalVotes || 0) + 1,
+                };
+              }
+              return poll;
+            })
+          );
           Alert.alert('Vote Cast Successfully!', 'Your vote has been recorded and vote counts updated!', [{ text: 'OK' }]);
         }
       } else {
-        setVotes(prevVotes => prevVotes.map(vote => vote.id === pollId ? { ...vote, userVoted: false } : vote));
+        setVotes((prevVotes) => prevVotes.map((vote) => (vote.id === pollId ? { ...vote, userVoted: false } : vote)));
         Alert.alert('Error', response.error || 'Failed to cast vote');
       }
     } catch (error) {
-      setVotes(prevVotes => prevVotes.map(vote => vote.id === pollId ? { ...vote, userVoted: false } : vote));
+      setVotes((prevVotes) => prevVotes.map((vote) => (vote.id === pollId ? { ...vote, userVoted: false } : vote)));
       Alert.alert('Error', 'Failed to cast vote');
     }
   };
@@ -449,6 +471,7 @@ const usePollsVotingScreen = ({ route, navigation }) => {
     setActiveTab,
     polls,
     votes,
+    allPolls,
     chamaDetails,
     completedPolls,
     currentPage,
