@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Card from '../../components/common/Card';
 import { getThemeColors, spacing, typography } from '../../utils/theme';
 
@@ -20,44 +19,60 @@ const ChamaPolls = ({ polls, pollsLoading, colors, navigation, chamaId, getRespo
   });
   const latestPolls = sortedPolls.slice(0, 5);
 
+  const formatPollDate = (poll) => {
+    const dateValue = poll.endDate || poll.end_date || poll.endsAt || poll.created_at || poll.createdAt;
+    if (!dateValue) return 'Unknown Date';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime()) || date.getFullYear() <= 1900) return 'Unknown Date';
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'Unknown Date';
+    }
+  };
+
   return (
-    <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
+    <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs, borderWidth: 1, borderColor: colors.border }} variant="flat">
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Polls & Voting
         </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
-          <Text style={[styles.viewMoreText, { color: colors.primary }]}>
-            View All
-          </Text>
-        </TouchableOpacity>
+        {polls.length > 5 && (
+          <TouchableOpacity onPress={() => navigation.navigate('PollsVotingScreen', { chamaId })}>
+            <Text style={[styles.viewMoreText, { color: colors.primary }]}>
+              View All
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {pollsLoading ? (
-        <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            Loading polls...
-          </Text>
-        </View>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          Loading polls...
+        </Text>
       ) : latestPolls.length === 0 ? (
-        <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
-          <Ionicons name="bar-chart" size={48} color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.primary, marginTop: spacing.sm, fontWeight: '500' }]}>
-            No polls & vote available
-          </Text>
-        </View>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          No polls & vote available
+        </Text>
       ) : (
         <View>
+          <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
+            <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textTransform: 'uppercase' }}>Poll</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'center', textTransform: 'uppercase' }}>Status</Text>
+            <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), fontWeight: typography.fontWeight.bold, color: colors.primary, textAlign: 'right', textTransform: 'uppercase' }}>Date</Text>
+          </View>
+
           {latestPolls.map((poll, index) => {
-            const hasUserVoted = poll.userVoted || poll.user_has_voted;
             const pollStatus = getPollStatus(poll);
             return (
               <View key={'poll-' + (poll.id || index)} style={[{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border }, index % 2 === 0 ? { backgroundColor: colors.background } : { backgroundColor: colors.surface }]}>
                 <Text style={{ flex: 2, fontSize: getResponsiveTextSize(14), color: colors.text }} numberOfLines={1}>{poll.title || 'Poll'}</Text>
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={hasUserVoted ? 'checkmark-circle' : 'close-circle'} size={16} color={hasUserVoted ? colors.success : colors.error} />
-                </View>
                 <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: pollStatus.isActive ? colors.success : colors.textSecondary, textAlign: 'center', fontWeight: '600' }}>{pollStatus.isActive ? 'Active' : 'Closed'}</Text>
+                <Text style={{ flex: 1, fontSize: getResponsiveTextSize(14), color: colors.textSecondary, textAlign: 'right' }}>{formatPollDate(poll)}</Text>
               </View>
             );
           })}
