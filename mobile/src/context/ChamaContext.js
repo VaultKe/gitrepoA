@@ -22,11 +22,12 @@ export const ChamaProvider = ({ children, chamaId, chama }) => {
   // Set the selected chama from props when the provider is initialized
   useEffect(() => {
     // Prevent setting a chama where the user has left
-    if (chama?.membership_is_active === false) {
-      setSelectedChama(null);
-      return;
-    }
     if (chama) {
+      const active = chama.membership_is_active;
+      if (active === false || active === 0 || active === '0' || active === 'false') {
+        setSelectedChama(null);
+        return;
+      }
       setSelectedChama(chama);
     } else if (chamaId && !selectedChama) {
       // Create a basic chama object if we only have the ID
@@ -88,8 +89,11 @@ export const ChamaProvider = ({ children, chamaId, chama }) => {
 
   const switchChama = async (chama) => {
     // Prevent switching to a chama where the user has left
-    if (chama?.membership_is_active === false) {
-      return;
+    if (chama) {
+      const active = chama.membership_is_active;
+      if (active === false || active === 0 || active === '0' || active === 'false') {
+        return;
+      }
     }
     setSelectedChama(chama);
   };

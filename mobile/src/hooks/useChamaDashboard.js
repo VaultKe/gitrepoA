@@ -57,13 +57,16 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
   const switchToChama = (chama) => {
     // Prevent switching to a chama where the user has left — check only
     // the per-chama membership flag.
-    if (chama.membership_is_active === false) {
-      Alert.alert(
-        'Not a Member',
-        `You have left "${chama.name}". You can no longer access this chama.`,
-        [{ text: 'OK' }]
-      );
-      return;
+    if (chama) {
+      const active = chama.membership_is_active;
+      if (active === false || active === 0 || active === '0' || active === 'false') {
+        Alert.alert(
+          'Not a Member',
+          `You have left "${chama.name}". You can no longer access this chama.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
     }
 
     // Immediately update the selected chama for instant UI response
@@ -187,47 +190,6 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-  // Handle chama selection from navigation params (when coming from chama list)
-  useEffect(() => {
-    if (route?.params?.chamaId && route?.params?.chama) {
-      const chamaFromParams = route.params.chama;
-      // Prevent selecting a chama where the user has left
-      if (chamaFromParams.membership_is_active === false) {
-        setSelectedChama(null);
-      } else {
-        setSelectedChama(chamaFromParams);
-        // Load fresh chama features when selecting from route params
-        loadChamaFeatures();
-      }
-    } else if (route?.params?.chamaId && !selectedChama) {
-      // If we have chamaId but no chama object, try to find it in userChamas
-      const foundChama = userChamas.find(c => c.id === route.params.chamaId);
-      if (foundChama) {
-        setSelectedChama(foundChama);
-        // Load fresh chama features when selecting from route params
-        loadChamaFeatures();
-      }
-    }
-  }, [route?.params, userChamas]);
-
-  useEffect(() => {
-    loadUserChamas();
-  }, []);
-
-  // Auto-refresh statistics every 30 seconds when screen is active
-  useEffect(() => {
-    if (!selectedChama) return;
-
-    // Get the current chama ID to prevent stale closures
-    const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
-
-    const interval = setInterval(() => {
-      loadChamaStatistics(currentChamaId);
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [selectedChama?.id || selectedChama?.chamaId || selectedChama]);
-
   const loadMemberRole = async (targetChamaId) => {
     const chamaId = targetChamaId || selectedChama?.id || selectedChama?.chamaId || selectedChama;
     if (!chamaId || !user?.id) return;
@@ -249,7 +211,10 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
       setLoading(true);
       const response = await ApiService.getUserChamas(20, 0);
       if (response.success) {
-        const userChamasData = (response.data || []).filter(chama => chama.membership_is_active !== false);
+        const userChamasData = (response.data || []).filter(chama => {
+          const active = chama.membership_is_active;
+          return active !== false && active !== 0 && active !== '0' && active !== 'false';
+        });
         setUserChamas(userChamasData);
 
         // If the currently selected chama is no longer in the active list, clear it
@@ -442,6 +407,25 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
 
     return 'Member';
   };
+
+  // Auto-refresh statistics every 30 seconds when screen is active
+  useEffect(() => {
+    if (!selectedChama) return;
+
+    // Get the current chama ID to prevent stale closures
+    const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
+
+    const interval = setInterval(() => {
+      loadChamaStatistics(currentChamaId);
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedChama?.id || selectedChama?.chamaId || selectedChama]);
+
+  // Load user chamas on mount
+  useEffect(() => {
+    loadUserChamas();
+  }, []);
 
   return {
     // State

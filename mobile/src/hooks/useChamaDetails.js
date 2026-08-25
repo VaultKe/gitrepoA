@@ -51,7 +51,6 @@ const useChamaDetails = ({ route, navigation }) => {
   const [chatRoomLoading, setChatRoomLoading] = useState(false);
   const [uploadingRules, setUploadingRules] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [userLeft, setUserLeft] = useState(false);
 
   const loadingRef = useRef(false);
   const lastLoadedAtRef = useRef(0);
@@ -183,16 +182,18 @@ const useChamaDetails = ({ route, navigation }) => {
         }
       }
 
-       setUserMembership(membership);
-       setUserLeft(currentUserIsLeft);
-       if (currentUserIsLeft) {
-         Alert.alert(
-           'Membership Expired',
-           'You have left this chama. You can no longer access its details.',
-           [{ text: 'OK', onPress: () => navigation.goBack() }]
-         );
-       }
-       setPollsLoading(true);
+        setUserMembership(membership);
+        if (currentUserIsLeft) {
+          setTimeout(() => {
+            if (navigation?.canGoBack?.()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('MyChamas');
+            }
+          }, 50);
+          return;
+        }
+        setPollsLoading(true);
        Promise.all([
         ApiService.getTransactions(1000, 0).then(response => {
           console.log('[DEBUG] getTransactions response:', response);
@@ -506,7 +507,6 @@ const useChamaDetails = ({ route, navigation }) => {
     uploadingRules,
     showLeaveModal,
     setShowLeaveModal,
-    userLeft,
     loadChamaDetails,
     onRefresh,
     formatCurrency,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
@@ -33,46 +33,31 @@ const ChamaSelectorCard = ({ userChamas, selectedChama, getUserRole, switchToCha
         Select Chama
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {userChamas.map((chama) => {
-          const chamaLeft = chama.membership_is_active === false;
-          return (
-            <TouchableOpacity
-              key={chama.id}
+        {userChamas.map((chama) => (
+          <TouchableOpacity
+            key={chama.id}
+            style={[
+              styles.chamaChip,
+              {
+                backgroundColor: selectedChama?.id === chama.id ? colors.primary : colors.surface,
+                borderColor: selectedChama?.id === chama.id ? colors.primary : colors.border,
+              }
+            ]}
+            onPress={() => switchToChama(chama)}
+            activeOpacity={0.7}
+          >
+            <Text
               style={[
-                styles.chamaChip,
+                styles.chamaChipText,
                 {
-                  backgroundColor: selectedChama?.id === chama.id ? colors.primary : chamaLeft ? colors.error + '10' : colors.surface,
-                  borderColor: selectedChama?.id === chama.id ? colors.primary : chamaLeft ? colors.error : colors.border,
+                  color: selectedChama?.id === chama.id ? colors.white : colors.text,
                 }
               ]}
-              onPress={() => {
-                if (chamaLeft) {
-                  Alert.alert(
-                    'Not a Member',
-                    `You have left "${chama.name}". You can no longer access this chama.`,
-                    [{ text: 'OK' }]
-                  );
-                  return;
-                }
-                switchToChama(chama);
-              }}
-              disabled={chamaLeft}
-              activeOpacity={chamaLeft ? 1 : 0.7}
             >
-              <Text
-                style={[
-                  styles.chamaChipText,
-                  {
-                    color: selectedChama?.id === chama.id ? colors.white : chamaLeft ? colors.error : colors.text,
-                    textDecorationLine: chamaLeft ? 'line-through' : 'none',
-                  }
-                ]}
-              >
-                {chama.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+              {chama.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
     </Card>
   );

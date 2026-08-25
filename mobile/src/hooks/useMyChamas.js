@@ -24,7 +24,11 @@ const useMyChamas = ({ navigation, route }) => {
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CHAMAS_CACHE_TTL) {
-          setChamas(data || []);
+          const activeOnly = (data || []).filter(chama => {
+            const active = chama.membership_is_active;
+            return active !== false && active !== 0 && active !== '0' && active !== 'false';
+          });
+          setChamas(activeOnly);
           return true;
         }
       }
@@ -72,7 +76,10 @@ const useMyChamas = ({ navigation, route }) => {
       const response = await ApiService.getUserChamas(50, 0);
 
       if (response.success) {
-        const data = response.data || [];
+        const data = (response.data || []).filter(chama => {
+          const active = chama.membership_is_active;
+          return active !== false && active !== 0 && active !== '0' && active !== 'false';
+        });
         setChamas(data);
         await cacheChamas(data);
       } else {
@@ -101,7 +108,10 @@ const useMyChamas = ({ navigation, route }) => {
     let filtered = [...chamas];
 
     // Filter out chamas where the user has left (membership is inactive)
-    filtered = filtered.filter(chama => chama.membership_is_active !== false);
+    filtered = filtered.filter(chama => {
+      const active = chama.membership_is_active;
+      return active !== false && active !== 0 && active !== '0' && active !== 'false';
+    });
 
     // Apply category filter
     if (selectedCategory !== 'all') {
