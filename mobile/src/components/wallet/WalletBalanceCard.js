@@ -14,7 +14,7 @@ const WalletBalanceCard = ({
   colors,
 }) => {
   return (
-    <Card style={{ margin: spacing.md }} variant="outlined">
+    <Card style={{ margin: spacing.sm }} variant="outlined">
       <View style={{ alignItems: 'center', marginBottom: spacing.xl }}>
         <Text style={[{ fontSize: typography.fontSize.base, marginBottom: spacing.sm }, { color: colors.textSecondary }]}>
           Total Balance

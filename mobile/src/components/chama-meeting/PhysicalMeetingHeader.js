@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const PhysicalMeetingHeader = ({ meetingTitle, isPreview, meetingData, getStatusColor, getStatusIcon, colors }) => {
   return (
-    <View style={[styles.header, { backgroundColor: colors.surface }]}>
+    <View style={[styles.header, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
       {isPreview && (
         <View style={[styles.previewBadge, { backgroundColor: colors.warning + '20' }]}>
           <Ionicons name="eye" size={16} color={colors.warning} />

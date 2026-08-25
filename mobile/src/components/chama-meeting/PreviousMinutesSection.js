@@ -14,7 +14,7 @@ const PreviousMinutesSection = ({
   colors,
 }) => {
   return (
-    <View style={[styles.section, { backgroundColor: colors.surface }]}>
+    <View style={[styles.section, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
       <View style={styles.prevHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Previous Meeting Minutes</Text>
         {prevLoading && (

@@ -147,7 +147,7 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
     const attendanceRate = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
 
     return (
-      <View style={{ gap: 12 }}>
+      <View style={{ gap: spacing.md }}>
         <Card variant="outlined" style={styles.overviewCard}>
           <Text style={[styles.detailsTitle, { color: colors.text }]}>Attendance Summary</Text>
           <View style={styles.attendanceStats}>
@@ -281,14 +281,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.sm,
   },
   allCardsContainer: {
-    gap: 12,
+    gap: spacing.md,
   },
   meetingHeaderCard: {
-    marginBottom: 12,
-    padding: 16,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   meetingHeader: {
     flexDirection: 'row',
@@ -373,11 +374,12 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   detailsContainer: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
   },
   overviewCard: {
-    marginBottom: spacing.sm,
-    marginHorizontal: -spacing.sm,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   detailsTitle: {
     fontSize: typography.fontSize['2xl'],
@@ -400,9 +402,6 @@ const styles = StyleSheet.create({
   metadataText: {
     fontSize: typography.fontSize.sm,
   },
-  attendanceCard: {
-    marginBottom: spacing.md,
-  },
   attendanceStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -423,9 +422,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   attendanceCard: {
-    marginBottom: spacing.sm,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
     padding: spacing.md,
-    marginHorizontal: -spacing.sm,
   },
   attendanceList: {
     marginTop: spacing.md,
@@ -467,8 +466,9 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
   },
   minutesCard: {
-    marginBottom: spacing.sm,
-    marginHorizontal: -spacing.sm,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   minutesContent: {
     fontSize: typography.fontSize.base,
@@ -491,8 +491,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   documentsCard: {
-    marginBottom: spacing.sm,
-    marginHorizontal: -spacing.sm,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   documentItem: {
     flexDirection: 'row',
@@ -577,11 +578,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
   inlineTableLoadingText: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
   },
 });
 

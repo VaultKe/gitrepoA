@@ -32,7 +32,7 @@ const ViewMemberActionsSection = ({
   return (
     <>
       {canRemove && (
-        <Card variant="outlined" padding="none" style={styles.actionsCard}>
+        <Card variant="outlined" padding="none" style={[styles.actionsCard, { borderWidth: 1, borderColor: colors.border }]}>
           <View style={styles.actionsCardContent}>
             <Text style={[styles.sectionTitle, styles.sectionTitleText]}>Actions</Text>
             <TouchableOpacity style={[styles.actionButton, styles.removeButton, styles.removeButtonOutline]} onPress={onRemoveMember} disabled={removeLoading}>

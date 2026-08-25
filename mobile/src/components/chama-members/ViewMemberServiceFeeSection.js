@@ -22,7 +22,7 @@ const ViewMemberServiceFeeSection = ({
 }) => {
   if (feePaymentsLoading) {
     return (
-      <Card variant="outlined" padding="none" style={styles.feeCard}>
+      <Card variant="outlined" padding="none" style={[styles.feeCard, { borderWidth: 1, borderColor: colors.border }]}>
         <View style={styles.feeCardContent}>
           <Text style={styles.feeCardTitle}>Service Fee Payments</Text>
           <Text style={{ padding: 16, color: colors.textSecondary }}>Loading...</Text>
@@ -109,7 +109,7 @@ const ViewMemberServiceFeeSection = ({
   );
 
   return (
-    <Card variant="outlined" padding="none" style={styles.feeCard}>
+    <Card variant="outlined" padding="none" style={[styles.feeCard, { borderWidth: 1, borderColor: colors.border }]}>
       <View style={styles.feeCardContent}>
         <Text style={styles.feeCardTitle}>Service Fee Payments</Text>
         {serviceFeePayments.length === 0 && !hasPaidServiceFee ? renderPendingRow() : serviceFeePayments.length === 0 && hasPaidServiceFee ? renderPaidRow() : renderPaymentsList()}

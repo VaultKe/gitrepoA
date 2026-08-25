@@ -262,7 +262,7 @@ const TransactionHistoryScreen = ({ navigation }) => {
   return (
     <View style={[{ flex: 1, backgroundColor: colors.background }]}>
       <View style={{ flex: 1, position: 'relative' }}>
-        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
+         <View style={{ flex: 1, paddingHorizontal: spacing.sm, paddingTop: spacing.md }}>
           <Card variant="outlined" style={{ flex: 1, borderRadius: 8, overflow: 'hidden' }}>
             {loading && (
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md }}>

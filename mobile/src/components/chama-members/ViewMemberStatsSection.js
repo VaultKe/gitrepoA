@@ -6,7 +6,7 @@ import Card from '../common/Card';
 const ViewMemberStatsSection = ({ memberStats, formatCurrency, styles, colors }) => {
   if (!memberStats) return null;
   return (
-    <Card variant="outlined" padding="none" style={styles.statsCard}>
+    <Card variant="outlined" padding="none" style={[styles.statsCard, { borderWidth: 1, borderColor: colors.border }]}>
       <View style={styles.statsContent}>
         <Text style={styles.statsTitle}>Member Statistics</Text>
         <View style={styles.statsGrid}>

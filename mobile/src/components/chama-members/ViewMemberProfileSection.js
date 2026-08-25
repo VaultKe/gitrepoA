@@ -14,7 +14,7 @@ const ViewMemberProfileSection = ({
 }) => {
   if (!memberData) return null;
   return (
-    <Card variant="outlined" padding="none" style={[styles.profileCard, imageExpanded && styles.framelessCard]}>
+    <Card variant="outlined" padding="none" style={[styles.profileCard, imageExpanded && styles.framelessCard, { borderWidth: 1, borderColor: colors.border }]}>
       {imageExpanded ? (
         <View style={styles.framelessProfileLayout}>
           <TouchableOpacity onPress={handleImagePress} style={styles.minimizeButton}>

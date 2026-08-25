@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   receiptContainer: {
-    margin: spacing.md,
+    margin: spacing.sm,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     ...shadows.md,

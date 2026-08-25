@@ -27,7 +27,7 @@ const ChamaMembersTable = ({
   const pageMembers = filteredMembers.slice(startIndex, endIndex);
 
   return (
-    <View style={{ marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' }}>
+    <View style={{ marginHorizontal: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' }}>
       <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, width: '100%' }}>
           <View style={{ minWidth: 320, width: '100%' }}>

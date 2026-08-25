@@ -198,7 +198,7 @@ const getStatusTextStyle = (status, styles) => {
 
 const createStyles = (colors) => StyleSheet.create({
   tableContainer: {
-    marginHorizontal: spacing.md,
+    marginHorizontal: spacing.sm,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
     alignSelf: 'stretch',

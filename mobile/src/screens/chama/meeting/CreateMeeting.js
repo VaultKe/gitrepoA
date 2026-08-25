@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   content: {
-    padding: 16,
+    padding: spacing.sm,
   },
 });
 

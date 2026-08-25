@@ -11,7 +11,7 @@ const AttendanceSection = ({
   isReadOnly = false,
 }) => {
   return (
-    <View style={[styles.section, { backgroundColor: colors.surface }]}>
+    <View style={[styles.section, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
       <View style={styles.attendanceHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Meeting Attendance

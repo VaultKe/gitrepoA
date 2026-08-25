@@ -92,7 +92,7 @@ const ChamaMembersHeaderCard = ({
 const createStyles = (colors) => StyleSheet.create({
   headerCard: {
     padding: spacing.md,
-    marginHorizontal: spacing.md,
+    marginHorizontal: spacing.sm,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
     borderRadius: 8,

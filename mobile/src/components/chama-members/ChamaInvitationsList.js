@@ -41,7 +41,7 @@ const ChamaInvitationsList = ({
 
 const createStyles = (colors) => StyleSheet.create({
   membersList: {
-    padding: spacing.md,
+    padding: spacing.sm,
   },
 });
 

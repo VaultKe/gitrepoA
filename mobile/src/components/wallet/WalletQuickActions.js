@@ -6,7 +6,7 @@ import Card from '../common/Card';
 
 const WalletQuickActions = ({ onHistory, onAIAdvisor, colors }) => {
   return (
-    <Card style={{ margin: spacing.md }} variant="outlined">
+    <Card style={{ margin: spacing.sm }} variant="outlined">
       <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md }, { color: colors.text }]}>
         Quick Actions
       </Text>

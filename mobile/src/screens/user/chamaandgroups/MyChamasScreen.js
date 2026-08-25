@@ -209,7 +209,7 @@ const MyChamasScreen = ({ navigation, route }) => {
           colors={getThemeColors(hook.theme)}
         />
 
-        <View style={{ flex: 1, paddingHorizontal: spacing.md }}>
+        <View style={{ flex: 1, paddingHorizontal: spacing.sm }}>
           <Card
             variant="outlined"
             style={{

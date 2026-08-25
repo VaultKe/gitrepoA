@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../common/Card';
+import { spacing, typography } from '../../utils/theme';
 
 const MeetingDocumentsCard = ({ meetingDocuments, onDocumentPress, downloadingDocId, colors }) => {
   return (
@@ -38,18 +39,19 @@ const MeetingDocumentsCard = ({ meetingDocuments, onDocumentPress, downloadingDo
 
 const styles = {
   documentsCard: {
-    marginBottom: 12,
-    padding: 16,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
   },
   documentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
@@ -59,27 +61,27 @@ const styles = {
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   documentInfo: {
     flex: 1,
   },
   documentName: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 2,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing.xs / 2,
   },
   documentType: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: spacing.xl,
   },
   emptyStateText: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: spacing.sm,
   },
 };
 

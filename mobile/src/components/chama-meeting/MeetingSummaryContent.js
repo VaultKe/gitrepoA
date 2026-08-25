@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../common/Card';
+import { spacing, typography, borderRadius } from '../../utils/theme';
 import MeetingSummaryHeader from './MeetingSummaryHeader';
 import AttendanceTable from './AttendanceTable';
 import MeetingMinutesCard from './MeetingMinutesCard';
@@ -88,69 +89,73 @@ const MeetingSummaryContent = ({
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   detailsContainer: {
-    gap: 12,
+    gap: spacing.md,
   },
   overviewCard: {
-    marginBottom: 12,
-    padding: 16,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   attendanceTableCard: {
-    marginBottom: 12,
-    padding: 16,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   minutesCard: {
-    marginBottom: 12,
-    padding: 16,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   documentsCard: {
-    marginBottom: 12,
-    padding: 16,
+    marginHorizontal: spacing.sm,
+    marginVertical: spacing.xs,
+    padding: spacing.md,
   },
   detailsTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
   },
   attendanceStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
     backgroundColor: 'rgba(0, 212, 170, 0.05)',
   },
   statItem: {
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.xs / 2,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
   },
   noMeetingsContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 48,
-    paddingVertical: 64,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xxl,
   },
   noMeetingsTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 20,
-    marginBottom: 12,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.semibold,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   noMeetingsText: {
-    fontSize: 16,
+    fontSize: typography.fontSize.base,
     textAlign: 'center',
     lineHeight: 24,
   },
-};
+});
 
 export default MeetingSummaryContent;

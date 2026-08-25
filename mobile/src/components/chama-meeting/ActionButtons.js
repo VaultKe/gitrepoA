@@ -21,7 +21,7 @@ const ActionButtons = ({
   }
 
   return (
-    <View style={[styles.actionButtons, { backgroundColor: colors.surface }]}>
+    <View style={[styles.actionButtons, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {canMarkAttendance && (
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: colors.primary }]}
@@ -87,7 +87,6 @@ const styles = {
     padding: 12,
     gap: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
   },
   saveButton: {
     flex: 1,
