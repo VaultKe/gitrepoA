@@ -38,6 +38,7 @@ const useApplyForLoanScreen = () => {
   const [pageReady, setPageReady] = useState(false);
   const [expandedLoanTypes, setExpandedLoanTypes] = useState(false);
   const [expandedGuarantors, setExpandedGuarantors] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const loadLoanTypesForForm = useCallback(async () => {
     try {
@@ -167,30 +168,21 @@ const useApplyForLoanScreen = () => {
       };
       const response = await ApiService.applyForLoan(payload);
       if (response?.success || response?.data) {
-        Alert.alert('Success', 'Loan application submitted successfully', [
-          {
-            text: 'OK',
-            onPress: () => {
-              setNewLoan({
-                amount: '',
-                purpose: '',
-                repaymentPeriod: '12',
-                interestRate: '5',
-                guarantors: [],
-                businessPlan: '',
-                monthlyIncome: '',
-                otherLoans: '',
-                loanTypeId: '',
-                loanTypeName: '',
-                termMonths: '12',
-                requiresGuarantors: false,
-              });
-              setTimeout(() => {
-                navigation.navigate('ChamaLoansScreen', { chamaId, loanApplicationSuccess: true });
-              }, 100);
-            },
-          },
-        ]);
+        setNewLoan({
+          amount: '',
+          purpose: '',
+          repaymentPeriod: '12',
+          interestRate: '5',
+          guarantors: [],
+          businessPlan: '',
+          monthlyIncome: '',
+          otherLoans: '',
+          loanTypeId: '',
+          loanTypeName: '',
+          termMonths: '12',
+          requiresGuarantors: false,
+        });
+        setSubmitSuccess(true);
       } else {
         Alert.alert('Error', response?.error || response?.message || 'Failed to submit loan application');
       }
@@ -214,6 +206,8 @@ const useApplyForLoanScreen = () => {
     pageReady,
     expandedLoanTypes,
     expandedGuarantors,
+    submitSuccess,
+    setSubmitSuccess,
     colors,
     setNewLoan,
     setGuarantorSearch,

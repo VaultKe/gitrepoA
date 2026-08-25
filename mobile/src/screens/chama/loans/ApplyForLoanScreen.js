@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, FlatList, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
@@ -14,6 +14,16 @@ const ApplyForLoanScreen = () => {
 
   const [localGuarantorSearch, setLocalGuarantorSearch] = useState('');
   const [showGuarantorList, setShowGuarantorList] = useState(false);
+
+  useEffect(() => {
+    if (screen.submitSuccess) {
+      const timer = setTimeout(() => {
+        screen.setSubmitSuccess(false);
+        screen.navigation.navigate('ChamaLoansScreen', { chamaId: screen.chamaId, loanApplicationSuccess: true });
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [screen.submitSuccess, screen.chamaId, screen.navigation, screen.setSubmitSuccess]);
 
   if (!screen.pageReady) {
     return (
