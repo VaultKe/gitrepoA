@@ -140,7 +140,7 @@ const ProfileScreen = ({ navigation }) => {
             onNextPage={() => setChamasPage((p) => Math.min(Math.ceil(userChamas.length / CHAMAS_PER_PAGE), p + 1))}
           />
 
-          <View style={{ marginHorizontal: spacing.md, marginBottom: spacing.lg }}>
+          <View style={{ marginHorizontal: spacing.sm, marginBottom: spacing.lg }}>
             <RecentActivityTable
               colors={colors}
               recentActivities={screen.recentActivities}
