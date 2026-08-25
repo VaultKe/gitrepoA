@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chamaInfoCard: {
-    margin: spacing.md,
+    margin: spacing.sm,
   },
   chamaInfo: {
     flexDirection: 'row',
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
   },
   formCard: {
-    margin: spacing.md,
+    margin: spacing.sm,
   },
   formTitle: {
     fontSize: typography.fontSize.lg,

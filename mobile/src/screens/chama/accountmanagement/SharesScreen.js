@@ -42,6 +42,7 @@ const SharesScreen = ({ navigation, route }) => {
     renderRow,
     renderEmpty,
     isEmpty,
+    submitting,
     colors,
   } = useSharesScreen(route, styles);
 
