@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Modal, FlatList, TextInput, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, FlatList, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
@@ -11,6 +11,9 @@ const ApplyForLoanScreen = () => {
   const screen = useApplyForLoanScreen();
   const colors = screen.colors;
   const styles = createStyles(colors);
+
+  const [localGuarantorSearch, setLocalGuarantorSearch] = useState('');
+  const [showGuarantorList, setShowGuarantorList] = useState(false);
 
   if (!screen.pageReady) {
     return (
@@ -82,6 +85,124 @@ const ApplyForLoanScreen = () => {
           <Input label="Interest Rate (%)" value={screen.newLoan.interestRate} editable={!screen.newLoan.loanTypeId} onChangeText={(text) => screen.handleInputChange('interestRate', text.replace(/[^0-9.]/g, '').split('.').slice(0, 2).join('.'))} placeholder="5" keyboardType="numeric" helperText={screen.newLoan.loanTypeId ? 'Set by selected loan type' : ''} />
         </Card>
 
+        {screen.newLoan.requiresGuarantors && (
+          <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.info + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+                <Ionicons name="people" size={20} color={colors.info} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Guarantors</Text>
+                <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                  {screen.newLoan.guarantors.length < 2
+                    ? `At least 2 guarantors required (${screen.newLoan.guarantors.length}/2 selected)`
+                    : `${screen.newLoan.guarantors.length} guarantor${screen.newLoan.guarantors.length !== 1 ? 's' : ''} selected`}
+                </Text>
+              </View>
+            </View>
+
+            {screen.newLoan.guarantors.length > 0 && (
+              <View style={{ marginBottom: spacing.md }}>
+                {screen.newLoan.guarantors.map((guarantor, index) => (
+                  <View key={guarantor.id || index} style={[styles.selectedGuarantorItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.selectedGuarantorName, { color: colors.text }]}>
+                        {guarantor.firstName} {guarantor.lastName}
+                      </Text>
+                      <Text style={[styles.selectedGuarantorEmail, { color: colors.textSecondary }]}>
+                        {guarantor.email || `@${guarantor.firstName || 'user'}`}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.removeGuarantorBtn, { backgroundColor: colors.error + '15' }]}
+                      onPress={() => screen.removeGuarantor(guarantor.id)}
+                    >
+                      <Ionicons name="close" size={16} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.addGuarantorBtn, { borderColor: colors.border, backgroundColor: colors.background }]}
+              onPress={() => setShowGuarantorList((prev) => !prev)}
+            >
+              <Ionicons name={showGuarantorList ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} />
+              <Text style={[styles.addGuarantorText, { color: colors.primary }]}>
+                {showGuarantorList ? 'Hide Available Members' : 'Add Guarantor'}
+              </Text>
+            </TouchableOpacity>
+
+            {showGuarantorList && (
+              <View style={styles.guarantorListContainer}>
+                <View style={[styles.searchInputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name="search" size={18} color={colors.textSecondary} />
+                  <TextInput
+                    style={[styles.searchInput, { color: colors.text }]}
+                    placeholder="Search members..."
+                    placeholderTextColor={colors.textSecondary}
+                    value={localGuarantorSearch}
+                    onChangeText={setLocalGuarantorSearch}
+                  />
+                  {localGuarantorSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setLocalGuarantorSearch('')}>
+                      <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <FlatList
+                  data={screen.availableGuarantors.filter((g) => {
+                    const fullName = `${g.firstName || ''} ${g.lastName || ''}`.toLowerCase();
+                    const searchLower = localGuarantorSearch.toLowerCase();
+                    return fullName.includes(searchLower) || (g.email || '').toLowerCase().includes(searchLower);
+                  })}
+                  keyExtractor={(item, index) => (item.id ? String(item.id) : index.toString())}
+                  style={{ maxHeight: 300 }}
+                  nestedScrollEnabled
+                  renderItem={({ item }) => {
+                    const isSelected = screen.newLoan.guarantors.some((g) => g.id === item.id);
+                    return (
+                      <TouchableOpacity
+                        style={[styles.guarantorCard, { backgroundColor: isSelected ? colors.primary + '20' : colors.background, borderColor: isSelected ? colors.primary : colors.border }]}
+                        onPress={() => {
+                          if (!isSelected) {
+                            screen.addGuarantor(item);
+                          }
+                        }}
+                        disabled={isSelected}
+                      >
+                        <View style={styles.guarantorCardContent}>
+                          <View style={[styles.avatar, { backgroundColor: colors.white }]}>
+                            <Ionicons name="person" size={20} color={colors.primary} />
+                          </View>
+                          <View style={styles.guarantorDetails}>
+                            <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: typography.fontWeight.semibold }]}>
+                              {item.firstName} {item.lastName}
+                            </Text>
+                            <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary }]}>
+                              {item.email || 'No email'}
+                            </Text>
+                          </View>
+                          {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }}
+                  ListEmptyComponent={
+                    <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+                      <Text style={{ color: colors.textSecondary }}>
+                        {localGuarantorSearch ? 'No members match your search' : 'No available guarantors'}
+                      </Text>
+                    </View>
+                  }
+                />
+              </View>
+            )}
+          </Card>
+        )}
+
         <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.info + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
@@ -93,7 +214,7 @@ const ApplyForLoanScreen = () => {
           <Input label="Other Loans (Optional)" value={screen.newLoan.otherLoans} onChangeText={(text) => screen.handleInputChange('otherLoans', text)} placeholder="Do you have any other loans?" multiline numberOfLines={2} />
         </Card>
 
-        <Button title={screen.submitting ? 'Submitting...' : 'Submit Application'} onPress={screen.handleSubmit} disabled={screen.submitting} style={{ backgroundColor: colors.primary, marginTop: spacing.lg, marginBottom: spacing.xl }} icon={!screen.submitting && <Ionicons name="send" size={16} color={colors.white} />} />
+          <Button title={screen.submitting ? 'Submitting...' : 'Submit Application'} onPress={screen.handleSubmit} disabled={screen.submitting} style={{ backgroundColor: colors.primary, marginTop: spacing.lg, marginBottom: spacing.xl }} icon={!screen.submitting && <Ionicons name="send" size={16} color={colors.white} />} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -110,6 +231,9 @@ const createStyles = (colors) => StyleSheet.create({
   formGroup: { marginBottom: spacing.md },
   formLabel: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, marginBottom: spacing.xs },
   formInput: { height: 48, paddingHorizontal: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1 },
+  selectedGuarantorItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.sm, borderWidth: 1 },
+  selectedGuarantorName: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium },
+  selectedGuarantorEmail: { fontSize: typography.fontSize.xs },
   guarantorItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.sm, borderRadius: borderRadius.md, marginBottom: spacing.sm },
   guarantorInfo: { flex: 1 },
   guarantorName: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium },
@@ -117,12 +241,8 @@ const createStyles = (colors) => StyleSheet.create({
   removeGuarantorBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   addGuarantorBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, marginBottom: spacing.md, gap: spacing.sm },
   addGuarantorText: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium },
-  searchModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
-  searchModalContent: { borderRadius: borderRadius.xl, width: '100%', maxWidth: 420, maxHeight: '90%', borderWidth: 1 },
-  searchModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: spacing.lg },
-  searchModalTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold },
-  closeButton: { padding: spacing.xs },
-  searchInputContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, height: 44, borderRadius: borderRadius.md, gap: spacing.sm },
+  guarantorListContainer: { marginTop: spacing.md },
+  searchInputContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, height: 44, borderRadius: borderRadius.md, gap: spacing.sm, marginBottom: spacing.sm },
   searchInput: { flex: 1, fontSize: typography.fontSize.sm },
   guarantorCard: { borderRadius: borderRadius.md, borderWidth: 1, marginBottom: spacing.sm },
   guarantorCardContent: { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, gap: spacing.sm },
