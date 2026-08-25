@@ -153,6 +153,18 @@ const ChamaRules = ({ chama, colors, handleOpenRulesFile }) => {
           Members must maintain confidentiality of chama matters and member information
         </Text>
       </View>
+
+      {chama?.rules_file_path && handleOpenRulesFile && (
+        <TouchableOpacity
+          style={[styles.viewDocumentButton, { borderColor: colors.primary }]}
+          onPress={handleOpenRulesFile}
+        >
+          <Ionicons name="document-text" size={18} color={colors.primary} />
+          <Text style={[styles.viewDocumentText, { color: colors.primary }]}>
+            View Rules Document
+          </Text>
+        </TouchableOpacity>
+      )}
     </Card>
   );
 };
@@ -200,6 +212,20 @@ const styles = StyleSheet.create({
   horizontalSeparator: {
     height: 1,
     marginVertical: spacing.sm,
+  },
+  viewDocumentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  viewDocumentText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
 });
 
