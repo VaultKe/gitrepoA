@@ -84,6 +84,13 @@ const useApplyForLoanScreen = () => {
     }
   }, [chamaId, loadLoanTypesForForm, loadAvailableGuarantors]);
 
+  const handleInputChange = (field, value) => {
+    setNewLoan((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
   const addGuarantor = (guarantor) => {
     const userId = guarantor.id || guarantor.user_id || guarantor.user?.id || guarantor.userId;
     const firstName = guarantor.firstName || guarantor.first_name || guarantor.user?.first_name || '';
@@ -218,6 +225,7 @@ const useApplyForLoanScreen = () => {
     loadAvailableGuarantors,
     addGuarantor,
     removeGuarantor,
+    handleInputChange,
     handleSelectLoanType,
     handleSubmit,
     navigation,

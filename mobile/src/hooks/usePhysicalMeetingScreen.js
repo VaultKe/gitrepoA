@@ -186,11 +186,14 @@ const usePhysicalMeetingScreen = ({ route, navigation }) => {
 
       const response = await api.makeRequest(`/chamas/${currentChamaId}/members`);
       if (response.success && response.data) {
-        const members = response.data || [];
-        setChamaMembers(members);
+        const activeMembers = (response.data || []).filter((m) => {
+          const isActive = m?.is_active;
+          return !(isActive === false || isActive === 0 || isActive === '0' || isActive === 'false');
+        });
+        setChamaMembers(activeMembers);
 
         const initialAttendance = {};
-        members.forEach(member => {
+        activeMembers.forEach((member) => {
           const userId = member.user_id || member.id;
           initialAttendance[userId] = false;
         });
@@ -335,6 +338,7 @@ const usePhysicalMeetingScreen = ({ route, navigation }) => {
     setPreviousMinutes,
     meetingData,
     loadMeetingData,
+    isReadOnly,
   });
 
   const wrappedStartMeeting = async () => {

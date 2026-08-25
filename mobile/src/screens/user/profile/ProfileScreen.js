@@ -116,7 +116,7 @@ const ProfileScreen = ({ navigation }) => {
             onImagePress={handleImagePress}
             onLogout={handleLogout}
             onNavigateSettings={() => navigation.navigate('Settings')}
-            onToggleEditing={screen.setEditing}
+            onToggleEditing={() => screen.setEditing((prev) => !prev)}
           />
 
           {renderPersonalInfo()}

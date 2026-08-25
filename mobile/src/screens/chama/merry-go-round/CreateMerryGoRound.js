@@ -301,7 +301,7 @@ const CreateMerryGoRound = ({ route, navigation }) => {
                 Loading members...
               </Text>
             ) : (
-              <ScrollView style={styles.membersScrollContainer} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.membersScrollContainer} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                 <View style={styles.membersGrid}>
                   {chamaMembers.map((member) => {
                      const memberId = member.user_id || member.id;

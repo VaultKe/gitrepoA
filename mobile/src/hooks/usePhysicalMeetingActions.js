@@ -37,6 +37,7 @@ const usePhysicalMeetingActions = ({
   setPreviousMinutes,
   meetingData,
   loadMeetingData,
+  isReadOnly = false,
 }) => {
   const toggleMemberAttendance = async (userId) => {
     if (!canMarkAttendance) {
@@ -116,6 +117,16 @@ const usePhysicalMeetingActions = ({
 
   const saveMeetingData = async () => {
     console.log('saveMeetingData called, canMarkAttendance:', canMarkAttendance, 'chamaMembers count:', chamaMembers?.length);
+    if (isReadOnly) {
+      Toast.show({
+        type: 'error',
+        text1: 'Read-Only Mode',
+        text2: 'Cannot modify data for ended meetings',
+      });
+      setIsSaving(false);
+      return;
+    }
+
     try {
       setIsSaving(true);
       let savedItems = [];
@@ -223,6 +234,15 @@ const usePhysicalMeetingActions = ({
 
   const uploadDocument = async () => {
     try {
+      if (isReadOnly || !canUploadDocuments) {
+        Toast.show({
+          type: 'error',
+          text1: 'Read-Only Mode',
+          text2: 'Cannot upload documents for ended meetings',
+        });
+        return;
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         copyToCacheDirectory: true,
@@ -307,6 +327,15 @@ const usePhysicalMeetingActions = ({
   };
 
   const removeDocument = (docId) => {
+    if (isReadOnly || !canUploadDocuments) {
+      Toast.show({
+        type: 'error',
+        text1: 'Read-Only Mode',
+        text2: 'Cannot remove documents for ended meetings',
+      });
+      return;
+    }
+
     Alert.alert(
       'Remove Document',
       'Are you sure you want to remove this document?',
