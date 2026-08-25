@@ -25,8 +25,7 @@ const useMyChamas = ({ navigation, route }) => {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CHAMAS_CACHE_TTL) {
           const activeOnly = (data || []).filter(chama => {
-            const active = chama.membership_is_active;
-            return active !== false && active !== 0 && active !== '0' && active !== 'false';
+            return chama.membership_is_active !== false;
           });
           setChamas(activeOnly);
           return true;
@@ -77,8 +76,7 @@ const useMyChamas = ({ navigation, route }) => {
 
       if (response.success) {
         const data = (response.data || []).filter(chama => {
-          const active = chama.membership_is_active;
-          return active !== false && active !== 0 && active !== '0' && active !== 'false';
+          return chama.membership_is_active !== false;
         });
         setChamas(data);
         await cacheChamas(data);
@@ -109,8 +107,7 @@ const useMyChamas = ({ navigation, route }) => {
 
     // Filter out chamas where the user has left (membership is inactive)
     filtered = filtered.filter(chama => {
-      const active = chama.membership_is_active;
-      return active !== false && active !== 0 && active !== '0' && active !== 'false';
+      return chama.membership_is_active !== false;
     });
 
     // Apply category filter

@@ -27,6 +27,12 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
   });
   const [userRole, setUserRole] = useState('member');
 
+  // Ref to track current selectedChama to avoid stale closures in async functions
+  const selectedChamaRef = useRef(selectedChama);
+  useEffect(() => {
+    selectedChamaRef.current = selectedChama;
+  }, [selectedChama]);
+
   // Ref to track current chama ID to prevent race conditions
   const currentChamaIdRef = useRef(null);
 
@@ -57,16 +63,13 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
   const switchToChama = (chama) => {
     // Prevent switching to a chama where the user has left — check only
     // the per-chama membership flag.
-    if (chama) {
-      const active = chama.membership_is_active;
-      if (active === false || active === 0 || active === '0' || active === 'false') {
-        Alert.alert(
-          'Not a Member',
-          `You have left "${chama.name}". You can no longer access this chama.`,
-          [{ text: 'OK' }]
-        );
-        return;
-      }
+    if (chama?.membership_is_active === false) {
+      Alert.alert(
+        'Not a Member',
+        `You have left "${chama.name}". You can no longer access this chama.`,
+        [{ text: 'OK' }]
+      );
+      return;
     }
 
     // Immediately update the selected chama for instant UI response
@@ -212,14 +215,14 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
       const response = await ApiService.getUserChamas(20, 0);
       if (response.success) {
         const userChamasData = (response.data || []).filter(chama => {
-          const active = chama.membership_is_active;
-          return active !== false && active !== 0 && active !== '0' && active !== 'false';
+          return chama.membership_is_active !== false;
         });
         setUserChamas(userChamasData);
 
         // If the currently selected chama is no longer in the active list, clear it
-        if (selectedChama) {
-          const currentChamaId = selectedChama?.id || selectedChama?.chamaId || selectedChama;
+        const currentSelected = selectedChamaRef.current;
+        if (currentSelected) {
+          const currentChamaId = currentSelected?.id || currentSelected?.chamaId || currentSelected;
           const stillActive = userChamasData.find(c => c.id === currentChamaId);
           if (!stillActive) {
             setSelectedChama(null);
@@ -230,7 +233,7 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
         }
 
         // If no chama is currently selected and we have chamas, select the first one
-        if (userChamasData.length > 0 && !selectedChama) {
+        if (userChamasData.length > 0 && !currentSelected) {
           const first = userChamasData[0];
           setSelectedChama(first);
           await Promise.all([

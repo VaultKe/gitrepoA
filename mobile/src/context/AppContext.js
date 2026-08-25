@@ -123,8 +123,7 @@ function appReducer(state, action) {
     case ActionTypes.SET_CHAMAS:
       // Filter out chamas where the user has left (membership is inactive)
       return { ...state, chamas: (action.payload || []).filter(c => {
-        const active = c.membership_is_active;
-        return active !== false && active !== 0 && active !== '0' && active !== 'false';
+        return c.membership_is_active !== false;
       }) };
 
     case ActionTypes.SET_TRANSACTIONS:
@@ -150,11 +149,8 @@ function appReducer(state, action) {
 
     case ActionTypes.SET_SELECTED_CHAMA:
       // Prevent setting a chama where the user has left
-      if (action.payload) {
-        const active = action.payload.membership_is_active;
-        if (active === false || active === 0 || active === '0' || active === 'false') {
-          return { ...state, selectedChama: null };
-        }
+      if (action.payload?.membership_is_active === false) {
+        return { ...state, selectedChama: null };
       }
       return { ...state, selectedChama: action.payload };
 

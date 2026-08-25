@@ -17,7 +17,7 @@ const ChamaMemberRow = ({
 }) => {
   const colors = getThemeColors(theme);
 
-  const isLeft = item.is_active === false || item.is_active === 0 || item.is_active === '0';
+  const isLeft = item.is_active === false;
 
   const rowBackground = isLeft
     ? colors.error + '10'
