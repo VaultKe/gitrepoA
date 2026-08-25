@@ -81,7 +81,7 @@ const ChamaSelectorCard = ({ userChamas, selectedChama, getUserRole, switchToCha
 const styles = StyleSheet.create({
   selectorCard: {
     paddingTop: 32,
-    marginHorizontal: spacing.md,
+    marginHorizontal: spacing.sm,
     marginVertical: spacing.xs,
   },
   selectorTitle: {

@@ -273,7 +273,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
          colors={[colors.primary, colors.secondary || colors.primary]}
          start={{ x: 0, y: 0 }}
          end={{ x: 1, y: 1 }}
-         style={{ marginHorizontal: spacing.md, marginTop: spacing.lg, marginBottom: spacing.md, padding: spacing.lg, borderRadius: borderRadius.xl }}
+          style={{ marginHorizontal: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.md, padding: spacing.lg, borderRadius: borderRadius.xl }}
        >
          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
            <View style={{ flex: 1, paddingRight: spacing.sm }}>
@@ -335,7 +335,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
     };
 
     return (
-      <Card style={{ marginHorizontal: spacing.md, marginVertical: spacing.xs }} variant="outlined">
+      <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
         <View style={{ paddingHorizontal: spacing.sm, paddingVertical: spacing.md }}>
           <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'semibold', color: colors.text, marginBottom: spacing.md }}>
             Your Statistics
@@ -389,7 +389,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
     const growthPercent = getTrendPercent(series);
     const isPositive = growthPercent >= 0;
 
-    const cardMargin = spacing.md;
+    const cardMargin = spacing.sm;
     const cardPadding = spacing.md;
     const rightColWidth = 104;
     const yAxisWidth = 34;
@@ -400,7 +400,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
     const gridLabels = [maxValue, maxValue * 0.75, maxValue * 0.5, maxValue * 0.25, 0];
 
     return (
-      <Card style={{ marginHorizontal: spacing.md, marginVertical: spacing.xs }} variant="outlined">
+      <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
         <View style={{ paddingHorizontal: spacing.sm, paddingVertical: spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View>
@@ -481,7 +481,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
     const lastAction = quickActions[quickActions.length - 1];
 
     return (
-      <View style={{ marginHorizontal: spacing.md, marginVertical: spacing.xs, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
+      <View style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
         <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'semibold', color: colors.text, marginBottom: spacing.md }}>
           Quick Actions
         </Text>
@@ -536,7 +536,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
           {renderGreetingSection()}
 
           {selectedWallet && (
-            <View style={{ paddingHorizontal: spacing.md, marginVertical: spacing.xs }}>
+            <View style={{ paddingHorizontal: spacing.sm, marginVertical: spacing.xs }}>
               <WalletCard
                 wallet={selectedWallet}
                 onDeposit={() => navigation.navigate('Wallet')}

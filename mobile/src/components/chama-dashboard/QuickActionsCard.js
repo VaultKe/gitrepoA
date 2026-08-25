@@ -349,7 +349,7 @@ const QuickActionsCard = ({ selectedChama, chamaFeatures, onRouteChange, navigat
   const isDisabled = !selectedChama;
 
   return (
-    <Card style={[styles.actionsCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginVertical: spacing.xs }]}>
+    <Card style={[styles.actionsCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginVertical: spacing.xs }]} variant="outlined">
       <Text style={[styles.cardTitle, { color: colors.text }]}>
         Quick Actions
       </Text>
@@ -380,7 +380,7 @@ const QuickActionsCard = ({ selectedChama, chamaFeatures, onRouteChange, navigat
 
 const styles = StyleSheet.create({
   actionsCard: {
-    marginHorizontal: spacing.md,
+    marginHorizontal: spacing.sm,
     marginVertical: spacing.xs,
   },
   cardTitle: {
@@ -405,14 +405,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
   actionText: {
     fontSize: typography.fontSize.sm,
