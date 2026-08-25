@@ -78,3 +78,18 @@ export const getRoleIcon = (role) => {
       return 'person';
   }
 };
+
+export const getActivityColor = (type) => {
+  switch (type?.toLowerCase()) {
+    case 'contribution':
+    case 'deposit':
+      return 'success';
+    case 'withdrawal':
+    case 'loan':
+      return 'error';
+    case 'transfer':
+      return 'primary';
+    default:
+      return 'text';
+  }
+};

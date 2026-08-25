@@ -9,6 +9,7 @@ import ViewMemberDetailsSection from '../../../components/chama-members/ViewMemb
 import ViewMemberServiceFeeSection from '../../../components/chama-members/ViewMemberServiceFeeSection';
 import ViewMemberApprovalSection from '../../../components/chama-members/ViewMemberApprovalSection';
 import ViewMemberActionsSection from '../../../components/chama-members/ViewMemberActionsSection';
+import ViewMemberActivitySection from '../../../components/chama-members/ViewMemberActivitySection';
 
 const ViewMember = ({ route, navigation }) => {
   const screen = useViewMember({ route, navigation });
@@ -87,6 +88,19 @@ const ViewMember = ({ route, navigation }) => {
                   </View>
                 </View>
               </Card>
+            )}
+            {screen.isSelf && (
+              <ViewMemberActivitySection
+                recentActivity={screen.recentActivity}
+                activityPage={screen.activityPage}
+                setActivityPage={screen.setActivityPage}
+                activityItemsPerPage={10}
+                getActivityColor={screen.getActivityColor}
+                formatDate={screen.formatDate}
+                formatCurrency={screen.formatCurrency}
+                styles={styles}
+                colors={colors}
+              />
             )}
             <ViewMemberServiceFeeSection
               serviceFeePayments={screen.serviceFeePayments}

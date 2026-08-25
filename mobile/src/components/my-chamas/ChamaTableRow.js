@@ -29,21 +29,19 @@ const ChamaTableRow = ({ item, index, colors, themedStyles, navigation, onPressD
 
   return (
     <View style={[themedStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
-      <View style={[themedStyles.tableCell, themedStyles.nameCell]}>
+      <TouchableOpacity
+        style={[themedStyles.tableCell, themedStyles.nameCell]}
+        onPress={() => onPressDashboard(item)}
+        activeOpacity={0.7}
+      >
         <View style={themedStyles.nameContainer}>
-          {/* <View style={[themedStyles.typeIcon, { backgroundColor: typeConfig.color + '20' }]}>
-            <Ionicons name={typeConfig.icon} size={16} color={typeConfig.color} />
-          </View> */}
           <View>
             <Text style={[themedStyles.tableCellText, themedStyles.nameText]} numberOfLines={1}>
               {getDisplayName(item.name)}
             </Text>
-            <Text style={[themedStyles.tableCellText, themedStyles.subText]}>
-              {item.type || 'Unknown Type'}
-            </Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
 
       <View style={[themedStyles.tableCell, themedStyles.categoryCell]}>
         <View style={[themedStyles.typeBadge, { backgroundColor: typeConfig.color + '15' }]}>
@@ -59,13 +57,13 @@ const ChamaTableRow = ({ item, index, colors, themedStyles, navigation, onPressD
             style={[themedStyles.actionButton, { backgroundColor: colors.primary }]}
             onPress={() => onPressDetails(item)}
           >
-            <Ionicons name="eye" size={10} color={colors.white} />
+            <Ionicons name="eye" size={14} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[themedStyles.actionButton, { backgroundColor: colors.secondary }]}
             onPress={() => onPressDashboard(item)}
           >
-            <Ionicons name="grid" size={10} color={colors.white} />
+            <Ionicons name="grid" size={14} color={colors.white} />
           </TouchableOpacity>
         </View>
       </View>

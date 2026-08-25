@@ -19,6 +19,7 @@ import {
   getFeeStatusIcon,
   getRoleColor,
   getRoleIcon,
+  getActivityColor,
 } from '../utils/viewMemberHelpers';
 
 const PAY_COOLDOWN_MS = 30000;
@@ -53,6 +54,9 @@ const useViewMember = ({ route, navigation }) => {
   const [approvalActionType, setApprovalActionType] = useState(null);
   const [screenWidth, setScreenWidth] = useState(breakpoints.md + 1);
   const isDesktop = screenWidth >= breakpoints.md;
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [activityPage, setActivityPage] = useState(1);
+  const activityItemsPerPage = 10;
 
   const isSelf = memberId === user?.id;
   const isEligible = userRole === 'chairperson' || userRole === 'treasurer';
@@ -132,6 +136,9 @@ const useViewMember = ({ route, navigation }) => {
       const hadCache = await loadCachedMember();
       await loadMemberDetails(hadCache);
       loadServiceFeePayments();
+      if (isSelf) {
+        loadRecentActivity();
+      }
     };
     initialize();
   }, [memberId, chamaId]);
@@ -193,6 +200,25 @@ const useViewMember = ({ route, navigation }) => {
     } catch (error) {
     } finally {
       setApprovalHistoryLoading(false);
+    }
+  };
+
+  const loadRecentActivity = async () => {
+    try {
+      const response = await api.makeRequest(`/chamas/${chamaId}/transactions?limit=10&offset=0`);
+      if (response.success && response.data) {
+        const memberTransactions = (response.data || []).filter(t => t.initiated_by === memberId || t.user_id === memberId);
+        const formatted = memberTransactions.map(t => ({
+          id: t.id,
+          date: t.created_at || t.date,
+          type: t.type || 'transaction',
+          amount: t.amount,
+          description: t.description || t.metadata?.description || 'Transaction',
+        }));
+        setRecentActivity(formatted);
+      }
+    } catch (error) {
+      // Silently fail - activity is optional
     }
   };
 
@@ -460,14 +486,15 @@ const useViewMember = ({ route, navigation }) => {
     feePaymentsLoading, payingFee, cooldownActive, cooldownRemaining, serviceFeePaid,
     removeLoading, showRemoveConfirm, receiptLoading, approvalHistory, approvalHistoryLoading,
     showOTPModal, otpLoading, selectedApprovalItem, approvalActionType, isDesktop, isSelf,
-    isEligible, hasPaidServiceFee, colors,
+    isEligible, hasPaidServiceFee, recentActivity, activityPage, colors,
     setImageExpanded, setShowRemoveConfirm, setShowOTPModal, setSelectedApprovalItem, setApprovalActionType,
-    loadMemberDetails, loadServiceFeePayments, loadApprovalHistory,
+    setActivityPage,
+    loadMemberDetails, loadServiceFeePayments, loadApprovalHistory, loadRecentActivity,
     handleRemoveMember, confirmRemoveMember, handlePayServiceFee, handlePayMemberServiceFee,
     handleDownloadReceipt, handleInitiateApprove, handleVerifyOTP, handleResendOTP, handleImagePress,
     renderMemberAvatar,
     formatDate, formatCurrency, maskPhone, maskLocation, maskOccupation,
-    getFeeStatusColor, getFeeStatusIcon, getRoleColor, getRoleIcon, getMemberName,
+    getFeeStatusColor, getFeeStatusIcon, getRoleColor, getRoleIcon, getActivityColor, getMemberName,
   };
 };
 

@@ -8,10 +8,11 @@ import {
   SafeAreaView,
   RefreshControl,
   Dimensions,
-   ActivityIndicator,
-   TextInput,
- } from 'react-native';
+  ActivityIndicator,
+  TextInput,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { getThemeColors, spacing, typography, borderRadius, shadows, createThemedStyles } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
@@ -65,7 +66,8 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     textAlign: 'center',
   },
   tableCellText: {
-    fontSize: 12,
+    fontWeight: typography.fontWeight.bold,
+    fontSize: 13,
     color: colors.text,
     textAlign: 'center',
   },
@@ -82,7 +84,6 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
     marginRight: spacing.sm,
   },
   nameText: {
-    fontWeight: typography.fontWeight.medium,
     textAlign: 'left',
   },
   subText: {
@@ -114,12 +115,12 @@ const createTableStyles = createThemedStyles((colors, spacing, typography, shado
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   actionButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -293,7 +294,22 @@ const MyChamasScreen = ({ navigation, route }) => {
 
 const renderEmptyState = (hook) => (
   <View style={styles.emptyState}>
-    <Ionicons size={64} color={getThemeColors(hook.theme).textTertiary} />
+    <Svg width={64} height={64} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 7C3 5.89543 3.89543 5 5 5H9.58579C9.851 5 10.1054 5.10536 10.2929 5.29289L11.7071 6.70711C11.8946 6.89464 12.149 7 12.4142 7H19C20.1046 7 21 7.89543 21 9V17C21 18.1046 20.1046 19 19 19H5C3.89543 19 3 18.1046 3 17V7Z"
+        stroke={getThemeColors(hook.theme).textTertiary}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M3 10H21"
+        stroke={getThemeColors(hook.theme).textTertiary}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
     <Text style={[styles.emptyTitle, { color: getThemeColors(hook.theme).text }]}>
       No chamas found
     </Text>
