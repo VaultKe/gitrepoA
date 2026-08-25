@@ -43,7 +43,7 @@ const AccountManagementScreen = ({ route, navigation }) => {
           showsVerticalScrollIndicator={false}
         >
           {/* Stat Cards 2x2 Grid */}
-          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginHorizontal: spacing.md }}>
+          <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginHorizontal: spacing.sm }}>
             <View style={styles.statsContainer}>
               <View style={styles.statRow}>
                 <Card variant="outlined" style={styles.statCard}>
@@ -152,8 +152,8 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
   },
   statsContainer: {
     paddingHorizontal: spacing.sm,

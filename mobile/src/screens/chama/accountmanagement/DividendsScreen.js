@@ -51,10 +51,10 @@ const DividendsScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={{ flex: 1, position: 'relative' }}>
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+        <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
         {declarations.length > 0 && (
           <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm }}>
+            <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.text, marginBottom: spacing.sm }}>
               Dividend Declarations
             </Text>
             <View style={{ flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary }}>
@@ -77,7 +77,7 @@ const DividendsScreen = ({ navigation, route }) => {
 
         <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
           <View style={styles.headerRow}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
+            <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.text }}>
               Dividend Records
             </Text>
             <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
@@ -232,11 +232,11 @@ const styles = StyleSheet.create({
   declarationCell: { flex: 1.5, justifyContent: 'center' },
   amountCell: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
   actionsCell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { fontSize: typography.fontSize.sm, fontWeight: '600' },
+  rowTitle: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold },
   rowSub: { fontSize: typography.fontSize.xs, marginTop: 2 },
-  rowAmount: { fontSize: typography.fontSize.sm, fontWeight: '700' },
+  rowAmount: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.bold },
   statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm, marginTop: spacing.xs / 2, alignItems: 'center' },
-  statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  statusText: { fontSize: 10, fontWeight: typography.fontWeight.bold, textTransform: 'uppercase' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.xl },
   emptyTitle: { fontSize: typography.fontSize.lg, fontWeight: '600', marginTop: spacing.lg, marginBottom: spacing.xs },
   emptySubtitle: { fontSize: typography.fontSize.sm, textAlign: 'center' },

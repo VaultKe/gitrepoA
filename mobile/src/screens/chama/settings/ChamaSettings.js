@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   section: {
-    margin: spacing.md,
+    margin: spacing.sm,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     borderWidth: 1,

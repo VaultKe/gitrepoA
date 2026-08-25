@@ -418,13 +418,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: typography.fontSize.lg,
-    fontWeight: '600',
+    fontWeight: typography.fontWeight.semibold,
   },
   headerSubtitle: {
     fontSize: typography.fontSize.sm,
   },
   messageList: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     flexGrow: 1,
     paddingBottom: 70,

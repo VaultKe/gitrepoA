@@ -222,7 +222,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
         )}
 
         {/* Table Container */}
-        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
+        <View style={{ flex: 1, paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
           <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
             {/* Table Header */}
             <View style={tableStyles.tableHeader}>

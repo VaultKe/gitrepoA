@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   transactionsCard: {
     padding: spacing.lg,

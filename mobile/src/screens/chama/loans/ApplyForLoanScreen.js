@@ -24,12 +24,12 @@ const ApplyForLoanScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}>
+      <View style={{ paddingHorizontal: spacing.sm, paddingVertical: spacing.sm }}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Apply for Loan</Text>
         <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Complete the form below to apply for a loan.</Text>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xl }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.xl }} showsVerticalScrollIndicator={false}>
         <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
@@ -55,7 +55,7 @@ const ApplyForLoanScreen = () => {
                     <View style={styles.guarantorCardContent}>
                       <View style={[styles.avatar, { backgroundColor: colors.white }]}><Ionicons name="cash" size={20} color={colors.primary} /></View>
                       <View style={styles.guarantorDetails}>
-                        <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: '600' }]}>{item.name}</Text>
+                        <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: typography.fontWeight.semibold }]}>{item.name}</Text>
                         <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary, fontWeight: '500' }]}>KES {item.exactAmount ? item.exactAmount.toLocaleString() : '-'} • {item.interestRate}% • {item.termMonths} months</Text>
                       </View>
                       {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
@@ -104,7 +104,7 @@ const createStyles = (colors) => StyleSheet.create({
   containerBackground: { backgroundColor: colors.background },
   headerTitle: { fontSize: typography.fontSize['2xl'], fontWeight: typography.fontWeight.bold, marginBottom: spacing.xs },
   headerSubtitle: { fontSize: typography.fontSize.base },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.sm, paddingBottom: spacing.xs, borderBottomWidth: 1, borderBottomColor: 'rgba(0, 0, 0, 0.1)' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.sm, paddingBottom: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border },
   sectionTitle: { fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.sm },
   sectionSubtitle: { fontSize: typography.fontSize.sm, marginBottom: spacing.md },
   formGroup: { marginBottom: spacing.md },

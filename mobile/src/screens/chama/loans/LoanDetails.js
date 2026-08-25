@@ -336,7 +336,7 @@ const createStyles = (colors) => StyleSheet.create({
   loanInfo: { flex: 1 },
   loanTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.xs },
   loanMember: { fontSize: typography.fontSize.sm },
-  tableContainer: { marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' },
+  tableContainer: { marginHorizontal: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' },
   tableCard: { minHeight: 360, borderRadius: 8, width: '100%', alignSelf: 'stretch', padding: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   tableScrollContent: { flexGrow: 1, width: '100%' },
   tableContent: { minWidth: 680, width: '100%' },

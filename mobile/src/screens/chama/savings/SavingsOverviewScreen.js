@@ -48,8 +48,8 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
         <View style={{
           flexDirection: 'row',
           backgroundColor: colors.surface,
-          marginTop: spacing.md,
-          marginHorizontal: spacing.md,
+          marginTop: spacing.sm,
+          marginHorizontal: spacing.sm,
           borderRadius: borderRadius.md,
           overflow: 'hidden',
         }}>
@@ -71,11 +71,11 @@ const SavingsOverviewScreen = ({ navigation, route }) => {
           />
         </View>
 
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, flex: 1 }}>
+        <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.sm, flex: 1 }}>
           <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden', flex: 1 }}>
             <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
+                <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.text }}>
                   {activeTab === 'overview' ? 'Members Savings Overview' : 'Savings Transaction History'}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>

@@ -220,8 +220,8 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
   },
   section: {
     marginBottom: spacing.md,

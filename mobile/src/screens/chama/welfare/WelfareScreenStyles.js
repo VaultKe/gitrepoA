@@ -4,7 +4,7 @@ import { spacing, typography, borderRadius, shadows } from '../../../utils/theme
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollView: { flex: 1 },
-  content: { padding: spacing.md },
+  content: { padding: spacing.sm },
   requestCard: { marginBottom: spacing.md },
   requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
   requestInfo: { flex: 1, gap: spacing.sm },

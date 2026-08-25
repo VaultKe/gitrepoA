@@ -763,7 +763,7 @@ const getRowData = () => {
     );
   };
 
-  const cardStyle = { marginHorizontal: spacing.md, marginVertical: spacing.xs };
+  const    cardStyle = { marginHorizontal: spacing.sm, marginVertical: spacing.xs };
 
   const renderRoundSelector = () => (
     <Card style={styles.statsCard} variant="outlined">
@@ -1014,7 +1014,7 @@ const getRowData = () => {
 const styles = StyleSheet.create({
    container: { flex: 1 },
    scrollView: { flex: 1 },
-   section: { margin: spacing.md },
+    section: { margin: spacing.sm },
    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
    sectionTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.sm },
    statusHalfCard: { flex: 1, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1 },
@@ -1054,7 +1054,7 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.sm },
   statusBadgeText: { fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold, textTransform: 'uppercase' },
 
-  contributorsSection: { marginHorizontal: spacing.md, marginBottom: spacing.md },
+   contributorsSection: { marginHorizontal: spacing.sm, marginBottom: spacing.md },
   contributorFilters: { marginBottom: spacing.md },
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, marginBottom: spacing.sm },
   searchInput: { flex: 1, fontSize: typography.fontSize.sm },
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
   statusBadgeCell: { flex: 1, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
   tableFooter: { paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: 1 },
   tableFooterText: { fontSize: 12, fontWeight: '500' },
-  statsCard: { marginHorizontal: spacing.md, marginVertical: spacing.xs, },
+   statsCard: { marginHorizontal: spacing.sm, marginVertical: spacing.xs, },
 });
 
 export default MerryGoRoundScreen;

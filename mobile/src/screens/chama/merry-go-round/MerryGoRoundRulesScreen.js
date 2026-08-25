@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   introCard: {
     marginBottom: spacing.lg,

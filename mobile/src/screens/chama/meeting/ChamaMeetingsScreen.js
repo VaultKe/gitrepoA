@@ -140,7 +140,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
           onAttend={handleAttend}
           onDelete={handleDelete}
         />
-        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+        <View style={{ position: 'absolute', right: spacing.sm, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
           <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
           {!isUserMeetingsView && (
             <TouchableOpacity
@@ -158,7 +158,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, ...shadows.sm },
+  header: { paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, ...shadows.sm },
   tableControls: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.md },
   searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, height: 40 },
   searchIcon: { marginRight: spacing.sm },

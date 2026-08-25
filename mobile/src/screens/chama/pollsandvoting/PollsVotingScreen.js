@@ -189,7 +189,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
               />
             }
           >
-            <View style={{ padding: 16 }}>
+            <View style={{ padding: spacing.sm }}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 Completed Polls - {chamaDetails?.name || `Chama ${chamaId?.slice(-8) || 'Unknown'}`}
               </Text>
@@ -341,19 +341,19 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
   },
   list: {
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   listContentDesktop: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
 });
 

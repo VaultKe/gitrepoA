@@ -306,7 +306,7 @@ const WelfareScreen = ({ route, navigation }) => {
             )}
           </View>
         </ScrollView>
-        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+        <View style={{ position: 'absolute', right: spacing.sm, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
           <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
           <TouchableOpacity
             style={[styles.fab, { backgroundColor: colors.primary }]}

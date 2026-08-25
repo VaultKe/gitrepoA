@@ -214,7 +214,7 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
         )}
 
         {/* Table Container */}
-        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
+        <View style={{ flex: 1, paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
           {/* Table Header */}
           <View style={tableStyles.tableHeader}>
             <View style={[tableStyles.tableCell, tableStyles.nameCell]}>

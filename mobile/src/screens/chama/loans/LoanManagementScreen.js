@@ -141,7 +141,7 @@ const LoanManagementScreen = ({ route, navigation }) => {
         {renderHeader()}
         <ScrollView
           style={{ flex: 1, marginTop: spacing.sm }}
-          contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xxxl }}
+          contentContainerStyle={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.xxxl }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={screen.refreshing} onRefresh={screen.onRefresh} colors={[colors.primary]} tintColor={colors.primary} />

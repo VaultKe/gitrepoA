@@ -3,7 +3,7 @@ import { spacing, typography, borderRadius, shadows } from "../../../utils/theme
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollView: { flex: 1, padding: spacing.md },
+  scrollView: { flex: 1, padding: spacing.sm },
   header: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,

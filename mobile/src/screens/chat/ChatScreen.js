@@ -172,7 +172,7 @@ const ChatScreen = () => {
           />
         </View>
 
-        <View style={styles.tabs}>
+        <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
           {['all', 'private', 'groups'].map(tab => (
             <TouchableOpacity
               key={tab}
@@ -228,7 +228,7 @@ const ChatScreen = () => {
           }
         />
 
-        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+        <View style={{ position: 'absolute', right: spacing.sm, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
           <PageRefreshButton onRefresh={handleRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
           <TouchableOpacity
             style={[styles.fab, { backgroundColor: colors.primary }]}
@@ -246,25 +246,25 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: spacing.md, fontSize: typography.fontSize.md },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', margin: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', margin: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
   searchInput: { flex: 1, marginLeft: spacing.sm, fontSize: typography.fontSize.md },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' },
   tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabText: { fontSize: typography.fontSize.md, fontWeight: '500' },
-  errorContainer: { flexDirection: 'row', alignItems: 'center', margin: spacing.md, padding: spacing.md, borderRadius: borderRadius.md },
+  tabText: { fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.medium },
+  errorContainer: { flexDirection: 'row', alignItems: 'center', margin: spacing.sm, padding: spacing.md, borderRadius: borderRadius.md },
   errorText: { marginLeft: spacing.sm, flex: 1, fontSize: typography.fontSize.sm },
   roomItem: { flexDirection: 'row', padding: spacing.md, borderBottomWidth: 1 },
   avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   roomContent: { flex: 1, justifyContent: 'center' },
   roomHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
-  roomName: { fontSize: typography.fontSize.lg, fontWeight: '600', flex: 1 },
+  roomName: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, flex: 1 },
   timestamp: { fontSize: typography.fontSize.xs },
   messageRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   lastMessage: { flex: 1, fontSize: typography.fontSize.sm },
   badge: { minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xs, marginLeft: spacing.sm },
-  badgeText: { color: 'white', fontSize: typography.fontSize.xs, fontWeight: '600' },
+  badgeText: { color: 'white', fontSize: typography.fontSize.xs, fontWeight: typography.fontWeight.semibold },
   emptyContainer: { paddingTop: 100 },
-  emptyText: { fontSize: typography.fontSize.xl, fontWeight: '600', marginTop: spacing.md },
+  emptyText: { fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.semibold, marginTop: spacing.md },
   emptySubtext: { fontSize: typography.fontSize.md, marginTop: spacing.xs, textAlign: 'center', paddingHorizontal: spacing.xl },
   fab: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
 });

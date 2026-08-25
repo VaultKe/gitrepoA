@@ -2,7 +2,7 @@ import React from 'react';
 import { SafeAreaView, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors } from '../../../utils/theme';
+import { getThemeColors, spacing, typography } from '../../../utils/theme';
 import useOnlineMeetingScreen from '../../../hooks/useOnlineMeetingScreen';
 import OnlineMeetingLoading from '../../../components/chama-meeting/OnlineMeetingLoading';
 import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeetingErrorView';
@@ -84,16 +84,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: spacing.xl,
   },
   readOnlyTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.semibold,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   readOnlySubtitle: {
-    fontSize: 16,
+    fontSize: typography.fontSize.base,
     textAlign: 'center',
     lineHeight: 22,
   },

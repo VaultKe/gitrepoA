@@ -204,7 +204,7 @@ const SavingsWithdrawalScreen = ({ route, navigation }) => {
           />
         )}
 
-        <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
+        <View style={{ flex: 1, paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
           <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
             <View style={tableStyles.tableHeader}>
               <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
