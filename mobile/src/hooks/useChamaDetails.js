@@ -234,6 +234,10 @@ const useChamaDetails = ({ route, navigation }) => {
             const allPolls = response.data || [];
             const normalized = allPolls.map(poll => ({
               ...poll,
+              type: poll.poll_type || poll.type,
+              ends_at: poll.end_date || poll.ends_at,
+              created_by: poll.created_by_name || poll.created_by,
+              description: poll.description || '',
               userVoted: poll.user_voted === 1 || poll.user_voted === true,
               user_has_voted: poll.user_voted === 1 || poll.user_voted === true,
             }));

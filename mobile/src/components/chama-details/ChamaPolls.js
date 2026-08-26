@@ -6,7 +6,7 @@ import { getThemeColors, spacing, typography } from '../../utils/theme';
 const ChamaPolls = ({ polls, pollsLoading, colors, navigation, chamaId, getResponsiveTextSize }) => {
   const getPollStatus = (poll) => {
     const pollStatus = (poll.status || '').toLowerCase();
-    const endDate = poll.endDate || poll.end_date || poll.endsAt;
+    const endDate = poll.endDate || poll.end_date || poll.ends_at || poll.endsAt;
     const hasEnded = endDate && new Date(endDate) < new Date();
     const isActive = (pollStatus === 'active') && !hasEnded;
     return { isActive, hasEnded };
@@ -20,7 +20,7 @@ const ChamaPolls = ({ polls, pollsLoading, colors, navigation, chamaId, getRespo
   const latestPolls = sortedPolls.slice(0, 5);
 
   const formatPollDate = (poll) => {
-    const dateValue = poll.endDate || poll.end_date || poll.endsAt || poll.created_at || poll.createdAt;
+    const dateValue = poll.endDate || poll.end_date || poll.ends_at || poll.endsAt || poll.created_at || poll.createdAt;
     if (!dateValue) return 'Unknown Date';
     try {
       const date = new Date(dateValue);

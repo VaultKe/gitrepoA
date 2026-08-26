@@ -114,16 +114,11 @@ func (h *PollsHandlers) GetChamaPolls(c *gin.Context) {
 		return
 	}
 
-	// Convert to basic polls for list response
-	basicPolls := make([]models.Poll, len(polls))
-	for i, poll := range polls {
-		basicPolls[i] = poll.Poll
-	}
-
+	// Convert to polls with details for list response
 	c.JSON(http.StatusOK, models.PollsListResponse{
 		Success: true,
-		Data:    basicPolls,
-		Count:   len(basicPolls),
+		Data:    polls,
+		Count:   len(polls),
 	})
 	c.Abort()
 }
@@ -299,10 +294,10 @@ func (h *PollsHandlers) GetActivePolls(c *gin.Context) {
 	}
 
 	// Filter active polls
-	var activePolls []models.Poll
+	var activePolls []models.PollWithDetails
 	for _, poll := range polls {
 		if poll.Poll.Status == models.PollStatusActive {
-			activePolls = append(activePolls, poll.Poll)
+			activePolls = append(activePolls, poll)
 		}
 	}
 
@@ -346,10 +341,10 @@ func (h *PollsHandlers) GetPollResults(c *gin.Context) {
 	}
 
 	// Filter completed polls with results
-	var completedPolls []models.Poll
+	var completedPolls []models.PollWithDetails
 	for _, poll := range polls {
 		if poll.Status == models.PollStatusCompleted && poll.Result != nil {
-			completedPolls = append(completedPolls, poll.Poll)
+			completedPolls = append(completedPolls, poll)
 		}
 	}
 

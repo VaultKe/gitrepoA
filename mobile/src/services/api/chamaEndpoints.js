@@ -118,23 +118,23 @@ const getVoteResults = async (chamaId) => {
 };
 
 const getChamaVotes = async (chamaId, limit = 50, offset = 0) => {
-  return await makeRequest(`/chamas/${chamaId}/votes?limit=${limit}&offset=${offset}`);
+  return await makeRequest(`/chamas/${chamaId}/polls?limit=${limit}&offset=${offset}`);
 };
 
 const getChamaPolls = async (chamaId, limit = 50, offset = 0) => {
-  return await makeRequest(`/chamas/${chamaId}/votes?limit=${limit}&offset=${offset}`);
+  return await makeRequest(`/chamas/${chamaId}/polls?limit=${limit}&offset=${offset}`);
 };
 
 const getActivePolls = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}/votes/active`);
+  return await makeRequest(`/chamas/${chamaId}/polls/active`);
 };
 
 const getPollResults = async (chamaId) => {
-  return await makeRequest(`/chamas/${chamaId}/votes/results`);
+  return await makeRequest(`/chamas/${chamaId}/polls/results`);
 };
 
 const getPollDetails = async (chamaId, pollId) => {
-  return await makeRequest(`/chamas/${chamaId}/votes/${pollId}`);
+  return await makeRequest(`/chamas/${chamaId}/polls/${pollId}`);
 };
 
 const createPoll = async (chamaId, data) => {
@@ -144,10 +144,31 @@ const createPoll = async (chamaId, data) => {
   });
 };
 
-const castPollVote = async (chamaId, pollId, optionId) => {
-  return await makeRequest(`/chamas/${chamaId}/votes/${pollId}/vote`, {
+const createRegularPoll = async (chamaId, data) => {
+  const payload = {
+    title: data.title,
+    ...(data.description && { description: data.description }),
+    poll_type: data.type || data.poll_type || 'general',
+    end_date: data.ends_at || data.end_date,
+    is_anonymous: data.isAnonymous ?? true,
+    requires_majority: data.requiresMajority ?? true,
+    majority_percentage: data.majorityPercentage ?? 50,
+    options: (data.options || []).map((opt) => ({
+      option_text: opt.option_text || opt.optionText || String(opt),
+    })),
+    ...(data.metadata && { metadata: data.metadata }),
+  };
+
+  return await makeRequest(`/chamas/${chamaId}/polls`, {
     method: 'POST',
-    body: { optionId },
+    body: payload,
+  });
+};
+
+const castPollVote = async (chamaId, pollId, optionId) => {
+  return await makeRequest(`/chamas/${chamaId}/polls/${pollId}/vote`, {
+    method: 'POST',
+    body: { option_id: optionId },
   });
 };
 
@@ -262,6 +283,7 @@ export {
   getPollResults,
   getPollDetails,
   createPoll,
+  createRegularPoll,
   castPollVote,
   createRoleEscalationPoll,
   addMemberToChama,

@@ -79,15 +79,15 @@ type Vote struct {
 
 // RoleEscalationRequest represents a role escalation request
 type RoleEscalationRequest struct {
-	ID            string `json:"id" db:"id"`
-	ChamaID       string `json:"chama_id" db:"chama_id"`
-	CandidateID   string `json:"candidate_id" db:"candidate_id"`
-	CurrentRole   string `json:"current_role" db:"current_role"`
-	RequestedRole string `json:"requested_role" db:"requested_role"`
-	RequestedBy   string `json:"requested_by" db:"requested_by"`
-	PollID        *string `json:"poll_id,omitempty" db:"poll_id"`
-	Status        string `json:"status" db:"status"`
-	Justification *string `json:"justification,omitempty" db:"justification"`
+	ID            string    `json:"id" db:"id"`
+	ChamaID       string    `json:"chama_id" db:"chama_id"`
+	CandidateID   string    `json:"candidate_id" db:"candidate_id"`
+	CurrentRole   string    `json:"current_role" db:"current_role"`
+	RequestedRole string    `json:"requested_role" db:"requested_role"`
+	RequestedBy   string    `json:"requested_by" db:"requested_by"`
+	PollID        *string   `json:"poll_id,omitempty" db:"poll_id"`
+	Status        string    `json:"status" db:"status"`
+	Justification *string   `json:"justification,omitempty" db:"justification"`
 	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -151,10 +151,10 @@ type PollResponse struct {
 
 // PollsListResponse represents the response for listing polls
 type PollsListResponse struct {
-	Success bool   `json:"success"`
-	Data    []Poll `json:"data"`
-	Count   int    `json:"count"`
-	Error   string `json:"error,omitempty"`
+	Success bool              `json:"success"`
+	Data    []PollWithDetails `json:"data"`
+	Count   int               `json:"count"`
+	Error   string            `json:"error,omitempty"`
 }
 
 // VoteResponse represents the response for voting operations

@@ -62,27 +62,36 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
   const normalizePolls = (items) => {
     if (!Array.isArray(items)) return [];
     return items.map((poll) => {
-      const endsAt = poll.ends_at ? new Date(poll.ends_at).getTime() : null;
+      // Normalize field names from new polls API to match old votes API format
+      const normalized = {
+        ...poll,
+        type: poll.poll_type || poll.type || 'general',
+        ends_at: poll.end_date || poll.ends_at,
+        created_by: poll.created_by_name || poll.created_by,
+        description: poll.description || '',
+      };
+
+      const endsAt = normalized.ends_at ? new Date(normalized.ends_at).getTime() : null;
       const now = Date.now();
-      let status = poll.status || 'active';
+      let status = normalized.status || 'active';
       if (status === 'active' && endsAt && endsAt < now) {
         status = 'completed';
       }
-      const totalVotes = getTotalVotesCast(poll);
-      const isFullyVoted = isPollFullyVoted(poll, chamaMembers);
+      const totalVotes = getTotalVotesCast(normalized);
+      const isFullyVoted = isPollFullyVoted(normalized, chamaMembers);
       let timeRemaining = null;
       if (endsAt && status === 'active') {
         timeRemaining = Math.max(0, Math.floor((endsAt - now) / 1000));
       }
       return {
-        ...poll,
+        ...normalized,
         status,
         isFullyVoted,
         completionStatus: isFullyVoted ? 'All votes cast' : null,
         timeRemaining,
         totalVotes,
-        userVoted: poll.user_voted === 1 || poll.user_voted === true,
-        user_has_voted: poll.user_voted === 1 || poll.user_voted === true,
+        userVoted: normalized.user_voted === 1 || normalized.user_voted === true,
+        user_has_voted: normalized.user_voted === 1 || normalized.user_voted === true,
       };
     });
   };
@@ -370,7 +379,7 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
           options: pollForm.options.map((optionText) => ({ option_text: optionText.trim() })),
         };
 
-        const response = await ApiService.createPoll(chamaId, voteData);
+        const response = await ApiService.createRegularPoll(chamaId, voteData);
         if (response.success) {
           setSuccessMessage('Poll created successfully! Members can now vote.');
           setShowSuccessBanner(true);
@@ -395,15 +404,20 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
       Alert.alert('Error', 'You must be logged in to vote.');
       return;
     }
-    if (!pollId.includes('vote-')) {
-      Alert.alert('Error', 'Invalid vote format.');
-      return;
-    }
 
     try {
       setVotes((prevVotes) => prevVotes.map((vote) => (vote.id === pollId ? { ...vote, userVoted: true } : vote)));
 
-      const response = await ApiService.castPollVote(chamaId, pollId, optionId);
+      let response;
+      if (poll.type === 'Election / Voting') {
+        // Role escalation polls may still be in the old votes system
+        response = await ApiService.makeRequest(`/chamas/${chamaId}/votes/${pollId}/vote`, {
+          method: 'POST',
+          body: { optionId },
+        });
+      } else {
+        response = await ApiService.castPollVote(chamaId, pollId, optionId);
+      }
 
       if (response.success) {
         if (poll.type === 'Election / Voting' && response.data?.pollCompleted) {
@@ -426,23 +440,23 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
               if (vote.id === pollId) {
                 return {
                   ...vote,
-                  options: vote.options.map((opt) => (opt.id === optionId ? { ...opt, voteCount: opt.voteCount + 1 } : opt)),
-                  totalVotes: (vote.totalVotes || 0) + 1,
+                  options: vote.options.map((opt) => (opt.id === optionId ? { ...opt, vote_count: (opt.vote_count || 0) + 1 } : opt)),
+                  total_votes: ((vote.total_votes || vote.total_votes_cast || 0) + 1),
                 };
               }
               return vote;
             })
           );
           setPolls((prevPolls) =>
-            prevPolls.map((poll) => {
-              if (poll.id === pollId) {
+            prevPolls.map((pol) => {
+              if (pol.id === pollId) {
                 return {
-                  ...poll,
-                  options: poll.options.map((opt) => (opt.id === optionId ? { ...opt, voteCount: opt.voteCount + 1 } : opt)),
-                  totalVotes: (poll.totalVotes || 0) + 1,
+                  ...pol,
+                  options: pol.options.map((opt) => (opt.id === optionId ? { ...opt, vote_count: (opt.vote_count || 0) + 1 } : opt)),
+                  total_votes_cast: ((pol.total_votes_cast || pol.total_votes || 0) + 1),
                 };
               }
-              return poll;
+              return pol;
             })
           );
           Alert.alert('Vote Cast Successfully!', 'Your vote has been recorded and vote counts updated!', [{ text: 'OK' }]);
