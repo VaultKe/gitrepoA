@@ -1,26 +1,32 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
-// New Chama Tab Navigator (like user dashboard)
+// Chama Tab Navigator (Home tab = ChamaHomeStack, Chat tab)
 import ChamaTabNavigator from './ChamaTabNavigator';
 
 const Stack = createStackNavigator();
 
-// Main Chama Dashboard Stack
-export default function ChamaDashboardStack() {
+/**
+ * Chama Dashboard Stack
+ *
+ * Wraps ChamaTabNavigator in a Stack.
+ * The Tab navigator's Home tab uses ChamaHomeStack internally, so
+ * detail screens participate in Stack back history.
+ */
+export default function ChamaDashboardStack({ route }) {
+  const params = route?.params;
 
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false, // Let the tab navigator handle headers
+        headerShown: false,
       }}
     >
       <Stack.Screen
         name="ChamaTabs"
         component={ChamaTabNavigator}
-        options={{
-          title: 'Chama Dashboard',
-        }}
+        options={{ title: 'Chama Dashboard' }}
+        initialParams={params}
       />
     </Stack.Navigator>
   );

@@ -97,15 +97,14 @@ function UserTabNavigator() {
           const shouldShowBackButton = !isTabScreen || (canGoBack && hasNavigationHistory);
 
           // Enhanced header with profile pic, home icon, notification bell, and smart navigation
-          return (
-            <SmartHeader
-              title={options.title || route.name}
-              showBackButton={shouldShowBackButton}
-              showHomeButton={true}
-              showProfilePic={true}
-              showNotificationBell={true}
-            />
-          );
+           return (
+             <SmartHeader
+               title={options.title || route.name}
+               showBackButton={shouldShowBackButton}
+               showProfilePic={true}
+               showNotificationBell={true}
+             />
+           );
         },
       })}
     >

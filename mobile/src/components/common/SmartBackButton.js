@@ -1,36 +1,49 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors } from '../../utils/theme';
-import useSmartNavigation from '../../hooks/useSmartNavigation';
 
 /**
  * Smart Back Button Component
- * Automatically handles back navigation using navigation history
- * Works seamlessly across different dashboard contexts
+ *
+ * Uses navigation.goBack() (equivalent to navigate(-1)) to return to the
+ * immediate previous screen. When the current navigator (e.g. a Tab navigator)
+ * cannot go back, delegates to the parent navigator's goBack() — which is
+ * essential for nested navigators like Tab-inside-Stack.
  */
-const SmartBackButton = ({ 
-  style, 
-  iconSize = 24, 
-  iconColor, 
+const SmartBackButton = ({
+  style,
+  iconSize = 24,
+  iconColor,
   onPress,
-  disabled = false 
+  disabled = false,
 }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
-  const { goBack, getNavigationState } = useSmartNavigation();
+  const navigation = useNavigation();
 
   const handlePress = () => {
     if (disabled) return;
-    
+
     if (onPress) {
-      // Allow custom onPress to override default behavior
       onPress();
-    } else {
-      // Use smart back navigation with detailed logging
-      const navState = getNavigationState();
-      goBack();
+      return;
+    }
+
+    // navigate(-1): go back to the immediate previous route
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    // If the current navigator (e.g. Tab) can't go back, try the parent
+    // This handles the common Tab-inside-Stack pattern where the Tab
+    // navigator has no back stack but the parent Stack does.
+    const parent = navigation.getParent();
+    if (parent && typeof parent.canGoBack === 'function' && parent.canGoBack()) {
+      parent.goBack();
     }
   };
 

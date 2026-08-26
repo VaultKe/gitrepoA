@@ -1,25 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing, typography } from '../../utils/theme';
-import SmartBackButton from './SmartBackButton';
 import useSmartNavigation from '../../hooks/useSmartNavigation';
+import SmartBackButton from './SmartBackButton';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle';
 import apiService from '../../services/api';
 
 /**
  * Enhanced Smart Header Component
- * Universal header with profile pic, home icon, smart navigation, and centered title
- * Layout: [Home Icon] [Back Button] [Title (Center)] [Notification Bell] [Profile Pic]
+ * Universal header with profile pic, back arrow (navigate(-1)), and centered title
+ * Layout: [Back Arrow] [Title (Center)] [Notification Bell] [Profile Pic]
  */
 const SmartHeader = ({
   title,
   subtitle,
   showBackButton = true,
-  showHomeButton = true,
   showProfilePic = true,
   showNotificationBell = true,
   rightComponent,
@@ -28,13 +26,12 @@ const SmartHeader = ({
   titleStyle,
   backgroundColor,
   onBackPress,
-  onHomePress,
   onProfilePress,
 }) => {
   const { theme, user, getCachedAvatarData } = useApp();
   const insets = useSafeAreaInsets();
   const colors = getThemeColors(theme);
-  const { navigateTo, getCurrentContext } = useSmartNavigation();
+  const { navigateTo } = useSmartNavigation();
   const [avatarData, setAvatarData] = useState(null);
   const [avatarError, setAvatarError] = useState(false);
   const failedAvatarUrl = useRef(null);
@@ -57,18 +54,6 @@ const SmartHeader = ({
     }
     const base = apiService.uploadBaseUrl || apiService.baseURL || '';
     return `${base}/${url}`;
-  };
-
-  // Handle home navigation
-
-  // Handle home navigation
-  const handleHomePress = () => {
-    if (onHomePress) {
-      onHomePress();
-    } else {
-      // Navigate to user dashboard home
-      navigateTo('UserTabs', { screen: 'Home' });
-    }
   };
 
   // Handle profile navigation
@@ -111,11 +96,11 @@ const SmartHeader = ({
   return (
     <View style={[styles.safeArea, { backgroundColor: headerBackgroundColor, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: headerBackgroundColor }, style]}>
-        {/* Left Section: Home Icon + Back Button */}
+        {/* Left Section: Back Button */}
         <View style={styles.leftSection}>
           {leftComponent || (
             <View style={styles.leftButtons}>
-              {/* Smart Back Button */}
+              {/* Back Button — uses navigation.goBack() (navigate -1) */}
               {showBackButton && (
                 <SmartBackButton
                   iconColor={colors.text}

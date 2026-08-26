@@ -34,199 +34,31 @@ export const useSmartNavigation = () => {
   };
 
   /**
-   * Smart back navigation that intelligently handles navigation history
-   * Provides smooth navigation experience based on user's actual journey
+   * Go back to the previous screen using navigation.goBack() (navigate(-1)).
+   * Falls back to the parent navigator when the current navigator (e.g. Tab)
+   * has no back history. No smart fallbacks or Home redirects.
    */
   const goBack = () => {
-    try {
-      const state = navigation.getState();
-      const currentRoute = state?.routes?.[state?.index];
-      const routeHistory = state?.routes || [];
-
-       const currentRouteName = currentRoute?.name;
-
-       // PRIORITY 1: ALWAYS use React Navigation's natural back functionality
-      // This ensures: Home → Wallet → Deposit → Back → Wallet → Back → Home
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-        return;
-      }
-
-      // PRIORITY 2: If we can't go back, check if we have navigation history
-      const hasNavigationHistory = routeHistory.length > 1;
-      if (hasNavigationHistory) {
-        try {
-          navigation.goBack();
-          return;
-        } catch (error) {
-        }
-      }
-
-      // PRIORITY 3: Only use smart navigation as LAST RESORT when natural navigation fails
-      // Only handle main dashboard screens that have no navigation history
-       const mainDashboardScreens = ['Wallet', 'Chat', 'AIAssistant', 'MyChamas', 'Reminders', 'Meetings', 'BuyAirtime', 'PayBills'];
-      if (mainDashboardScreens.includes(currentRouteName) && routeHistory.length <= 1) {
-        navigation.navigate('Home');
-        return;
-      }
-      // PRIORITY 4: Handle specific screen contexts intelligently
-      if (currentRouteName) {
-        const intelligentFallback = getIntelligentFallback(currentRouteName, currentRoute?.params);
-        if (intelligentFallback && isLogicalFallback(currentRouteName, intelligentFallback)) {
-          navigation.navigate(intelligentFallback.screen, intelligentFallback.params);
-          return;
-        }
-      }
-
-      // PRIORITY 5: Dashboard-specific screens fallback
-      if (isScreenSpecificToDashboard(currentRouteName, currentDashboard)) {
-        switch (currentDashboard) {
-          case 'admin':
-            navigation.navigate('AdminDashboard', { screen: 'AdminTabs' });
-            break;
-          case 'chama':
-            navigation.navigate('ChamaDashboard', { screen: 'ChamaTabs' });
-            break;
-          case 'user':
-          default:
-            navigation.navigate('UserTabs', { screen: 'Home' });
-            break;
-        }
-      } else {
-      }
-    } catch (error) {
-      console.warn(' Navigation error in goBack:', error);
-      // Last resort: navigate to user home
-      try {
-        navigation.navigate('UserTabs', { screen: 'Home' });
-      } catch (fallbackError) {
-        console.error(' Failed to navigate back:', fallbackError);
-      }
-    }
-  };
-
-  /**
-   * Get intelligent fallback navigation based on current screen context
-   * Analyzes the current screen and provides the most logical back destination
-   */
-  const getIntelligentFallback = (currentRouteName, routeParams) => {
-    // Chama-specific screens should go back to the chama they came from
-    if (routeParams?.chamaId) {
-      return {
-        screen: 'ChamaDashboard',
-        params: {
-          chamaId: routeParams.chamaId,
-          chama: routeParams.chama
-        }
-      };
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
     }
 
-    // User dashboard screens should go back to appropriate user tab
-    const userDashboardScreens = {
-      'Wallet': { screen: 'UserTabs', params: { screen: 'Home' } },
-      'AIAssistant': { screen: 'UserTabs', params: { screen: 'Home' } },
-      'MyChamas': { screen: 'UserTabs', params: { screen: 'Home' } },
-      'ChamaList': { screen: 'UserTabs', params: { screen: 'Home' } },
-      'Chat': { screen: 'UserTabs', params: { screen: 'Home' } },
-      'ChatRoom': { screen: 'UserTabs', params: { screen: 'Home' } },
-       'Meetings': { screen: 'UserTabs', params: { screen: 'Home' } },
-	    };
-
-    if (userDashboardScreens[currentRouteName]) {
-      return userDashboardScreens[currentRouteName];
+    // Delegate to parent navigator (e.g. Tab inside Stack)
+    const parent = navigation.getParent();
+    if (parent && typeof parent.canGoBack === 'function' && parent.canGoBack()) {
+      parent.goBack();
     }
-
-    // Admin screens should go back to admin dashboard
-    const adminScreens = [
-      'UserManagementScreen', 'ChamaManagementScreen',
-      'SystemAnalyticsScreen', 'AdminSettingsScreen', 'SecurityCenterScreen',
-      'PaymentSystemScreen', 'BackupMaintenanceScreen',
-    ];
-
-    if (adminScreens.includes(currentRouteName)) {
-      return { screen: 'AdminDashboard', params: { screen: 'AdminTabs' } };
-    }
-
-    // If coming from user dashboard with fromUserDashboard flag
-    if (routeParams?.fromUserDashboard) {
-      return { screen: 'UserTabs', params: { screen: 'Home' } };
-    }
-
-    return null; // No intelligent fallback found
   };
 
   /**
    * Navigate to a screen with smart routing
-   * Prioritizes direct navigation within current navigator, then falls back to cross-navigator routing
+   * Uses navigation.navigate() directly — React Navigation will resolve the
+   * route within the current navigator or delegate to a parent navigator.
+   * No cross-navigator routing hacks that break stack history.
    */
   const navigateTo = (screenName, params = {}) => {
-    try {
-      // First, try direct navigation within current navigator
-      navigation.navigate(screenName, params);
-    } catch (error) {
-      console.warn(` Direct navigation to ${screenName} failed, trying alternative routes:`, error.message);
-
-      // First, try intelligent navigation for common screens within current navigator
-      const currentDashboard = getCurrentDashboard();
-      // Common screens that exist in all navigators - try current navigator first
-      const commonScreens = ['Profile', 'Settings', 'Notifications', 'SecuritySettings', 'HelpCenter', 'TransactionHistory', 'Invitations'];
-
-      if (commonScreens.includes(screenName)) {
-        // Since we've added these screens to all navigators, direct navigation should work
-        // If it failed, it means the screen might not be properly configured
-        return; // Don't try cross-navigator routing for common screens
-      }
-
-      // Try cross-dashboard navigation for specific screens
-      const alternativeRoutes = {
-        // User dashboard screens - all should go through UserDashboard stack
-        'Profile': 'UserDashboard',
-        'Settings': 'UserDashboard',
-        'Wallet': 'UserDashboard',
-        'Chat': 'UserDashboard',
-        'AIAssistant': 'UserDashboard',
-        'MyChamas': 'UserDashboard',
-        'ChamaList': 'UserDashboard',
-        'UserTabs': 'UserDashboard',
-        'Home': 'UserDashboard',
-
-        // Admin dashboard screens
-        'AdminMain': 'AdminDashboard',
-        'AdminTabs': 'AdminDashboard',
-        'AdminHomepage': 'AdminDashboard',
-        'UserManagementScreen': 'AdminDashboard',
-         'ChamaManagementScreen': 'AdminDashboard',
-	         'SystemAnalyticsScreen': 'AdminDashboard',
-
-        // Chama dashboard screens
-        'ChamaMain': 'ChamaDashboard',
-        'ChamaTabs': 'ChamaDashboard',
-        'ChamaMembersScreen': 'ChamaDashboard',
-        'ContributeScreen': 'ChamaDashboard',
-        'ChamaLoansScreen': 'ChamaDashboard',
-        'ChamaMeetingsScreen': 'ChamaDashboard',
-        'ChamaTransactionsScreen': 'ChamaDashboard',
-        'MerryGoRoundScreen': 'ChamaDashboard',
-        'WelfareScreen': 'ChamaDashboard',
-        'ChamaSettings': 'ChamaDashboard',
-        'LoanApplication': 'ChamaDashboard',
-        'CreateMeeting': 'ChamaDashboard',
-        'CreateMerryGoRound': 'ChamaDashboard',
-        'MeetingSummary': 'ChamaDashboard',
-        'InviteMembers': 'ChamaDashboard',
-        'ChatRoom': 'ChamaDashboard',
-      };
-
-      const dashboardRoute = alternativeRoutes[screenName];
-      if (dashboardRoute) {
-        navigation.navigate(dashboardRoute, { 
-          screen: screenName, 
-          params 
-        });
-      } else {
-        console.error(`❌ Could not navigate to ${screenName}`);
-      }
-    }
+    navigation.navigate(screenName, params);
   };
 
   /**
@@ -289,49 +121,6 @@ export const useSmartNavigation = () => {
       fromUserDashboard: params.fromUserDashboard,
       routeName: currentRoute?.name,
     };
-  };
-
-   /**
-    * Check if a fallback navigation is logical (has a clear parent-child relationship)
-    */
-   const isLogicalFallback = (currentScreen, fallback) => {
-     // Define screens that have clear logical parent screens
-     const logicalFallbacks = {
-       // Chama screens with clear parents
-       'LoanApplication': ['ChamaLoansScreen'],
-       'CreateMeeting': ['ChamaMeetingsScreen'],
-       'InviteMembers': ['ChamaMembersScreen'],
-       'ViewMember': ['ChamaMembersScreen'],
-     };
-
-    const validParents = logicalFallbacks[currentScreen];
-    if (!validParents) return false;
-
-    const fallbackScreen = fallback.screen;
-    return validParents.includes(fallbackScreen);
-  };
-
-  /**
-   * Check if a screen is specific to a particular dashboard context
-   */
-  const isScreenSpecificToDashboard = (screenName, dashboard) => {
-    const adminSpecificScreens = [
-      'UserManagementScreen', 'ChamaManagementScreen',
-      'SystemAnalyticsScreen', 'AdminSettingsScreen', 'SecurityCenterScreen',
-      'PaymentSystemScreen', 'BackupMaintenanceScreen',
-    ];
-
-    const chamaSpecificScreens = [
-      'ChamaMembersScreen', 'ContributeScreen', 'ChamaLoansScreen', 'ChamaMeetingsScreen',
-      'ChamaTransactionsScreen', 'MerryGoRoundScreen', 'WelfareScreen', 'ChamaSettings',
-      'LoanApplication', 'CreateMeeting', 'CreateMerryGoRound', 'InviteMembers',
-      'ViewMember', 'PhysicalMeeting', 'OnlineMeeting'
-    ];
-
-    if (dashboard === 'admin' && adminSpecificScreens.includes(screenName)) return true;
-    if (dashboard === 'chama' && chamaSpecificScreens.includes(screenName)) return true;
-
-    return false;
   };
 
   return {

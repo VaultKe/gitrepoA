@@ -154,15 +154,13 @@ function AdminTabNavigator({ route }) {
           // Don't show it just because it's not a main screen - that leads to confusing UX
           const shouldShowBackButton = canGoBack && hasNavigationHistory;
 
-          // Enhanced header with profile pic, admin home icon, notification bell, and smart navigation
+          // Enhanced header with profile pic, back arrow (visual only), notification bell
           return (
             <SmartHeader
               title={options.title || route.name}
               showBackButton={shouldShowBackButton}
-              showHomeButton={true}
               showProfilePic={true}
               showNotificationBell={true}
-              onHomePress={() => navigation.navigate('AdminHomepage')} // Admin-specific home
             />
           );
         },
