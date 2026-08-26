@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import useViewMember from '../../../hooks/useViewMember';
+import Button from '../../../components/common/Button';
+import Card from '../../../components/common/Card';
 import ViewMemberProfileSection from '../../../components/chama-members/ViewMemberProfileSection';
 import ViewMemberStatsSection from '../../../components/chama-members/ViewMemberStatsSection';
 import ViewMemberDetailsSection from '../../../components/chama-members/ViewMemberDetailsSection';
@@ -16,9 +18,6 @@ const ViewMember = ({ route, navigation }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
-
-  const canShowCombined = screen.userRole === 'chairperson' || screen.userRole === 'secretary' || screen.userRole === 'treasurer' ||
-    screen.approvalHistory.some(item => item.randomVerifierId === screen.user?.id || item.verifierId === screen.user?.id);
 
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
@@ -52,41 +51,35 @@ const ViewMember = ({ route, navigation }) => {
             <ViewMemberStatsSection
               memberStats={screen.memberStats}
               formatCurrency={screen.formatCurrency}
-              styles={styles}
               colors={colors}
             />
-            {canShowCombined && (
-              <Card variant="outlined" padding="none" style={styles.statsCard}>
-                <View style={screen.isDesktop ? styles.combinedCardRow : styles.combinedCardColumn}>
-                  <View style={screen.isDesktop ? styles.combinedCardLeft : styles.combinedCardFull}>
-                    <ViewMemberDetailsSection
-                      memberData={screen.memberData}
-                      isCombined
-                      isDesktop={screen.isDesktop}
-                      formatDate={screen.formatDate}
-                      maskPhone={screen.maskPhone}
-                      maskLocation={screen.maskLocation}
-                      maskOccupation={screen.maskOccupation}
-                      getRoleColor={screen.getRoleColor}
-                      getRoleIcon={screen.getRoleIcon}
-                      styles={styles}
-                      colors={colors}
-                    />
-                  </View>
-                  {screen.isDesktop && <View style={styles.combinedDivider} />}
-                  <View style={screen.isDesktop ? styles.combinedCardRight : styles.combinedCardFull}>
-                    <ViewMemberApprovalSection
-                      approvalHistory={screen.approvalHistory}
-                      userRole={screen.userRole}
-                      approvalHistoryLoading={screen.approvalHistoryLoading}
-                      isDesktop={screen.isDesktop}
-                      isCombined
-                      onInitiateApprove={screen.handleInitiateApprove}
-                      styles={styles}
-                      colors={colors}
-                    />
-                  </View>
-                </View>
+            <Card variant="outlined" padding="none" style={styles.detailsCard}>
+              <ViewMemberDetailsSection
+                memberData={screen.memberData}
+                isCombined={false}
+                isDesktop={screen.isDesktop}
+                formatDate={screen.formatDate}
+                maskPhone={screen.maskPhone}
+                maskLocation={screen.maskLocation}
+                maskOccupation={screen.maskOccupation}
+                getRoleColor={screen.getRoleColor}
+                getRoleIcon={screen.getRoleIcon}
+                styles={styles}
+                colors={colors}
+              />
+            </Card>
+            {(screen.userRole === 'chairperson' || screen.userRole === 'secretary' || screen.userRole === 'treasurer' || screen.approvalHistory.length > 0) && (
+              <Card variant="outlined" padding="none" style={styles.approvalCard}>
+                <ViewMemberApprovalSection
+                  approvalHistory={screen.approvalHistory}
+                  userRole={screen.userRole}
+                  approvalHistoryLoading={screen.approvalHistoryLoading}
+                  isDesktop={screen.isDesktop}
+                  isCombined={false}
+                  onInitiateApprove={screen.handleInitiateApprove}
+                  styles={styles}
+                  colors={colors}
+                />
               </Card>
             )}
             {screen.isSelf && (
@@ -176,6 +169,7 @@ const createStyles = (colors) => StyleSheet.create({
   memberEmail: { fontSize: typography.fontSize.sm, marginBottom: spacing.sm },
   memberEmailSecondary: { color: colors.textSecondary },
   statsCard: { borderRadius: borderRadius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  detailsCard: { borderRadius: borderRadius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
   statsContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   statsTitle: { color: colors.text, marginBottom: spacing.md, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },

@@ -1,63 +1,92 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../common/Card';
+import { spacing, typography, borderRadius } from '../../utils/theme';
 
-const ViewMemberStatsSection = ({ memberStats, formatCurrency, styles, colors }) => {
+const ViewMemberStatsSection = ({ memberStats, formatCurrency, colors }) => {
   if (!memberStats) return null;
   return (
-    <Card variant="outlined" padding="none" style={[styles.statsCard, { borderWidth: 1, borderColor: colors.border }]}>
-      <View style={styles.statsContent}>
-        <Text style={styles.statsTitle}>Member Statistics</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <View style={styles.statCard}>
-              <View style={styles.statIconRow}>
-                <View style={styles.statIconBoxPrimary}>
-                  <Ionicons name="wallet" size={20} color={colors.primary} />
-                </View>
-                <Text style={styles.statLabel}>Total Contributions</Text>
-              </View>
-              <Text style={styles.statValue}>{formatCurrency(memberStats.total_contributions)}</Text>
-            </View>
-          </View>
-          <View style={styles.statItem}>
-            <View style={styles.statCard}>
-              <View style={styles.statIconRow}>
-                <View style={styles.statIconBoxSuccess}>
-                  <Ionicons name="card" size={20} color={colors.success} />
-                </View>
-                <Text style={styles.statLabel}>Loans Taken</Text>
-              </View>
-              <Text style={styles.statValue}>{memberStats.loans_count || 0}</Text>
-            </View>
-          </View>
-          <View style={styles.statItem}>
-            <View style={styles.statCard}>
-              <View style={styles.statIconRow}>
-                <View style={styles.statIconBoxWarning}>
-                  <Ionicons name="calendar" size={20} color={colors.warning} />
-                </View>
-                <Text style={styles.statLabel}>Meetings Attended</Text>
-              </View>
-              <Text style={styles.statValue}>{memberStats.meetings_attended || 0}</Text>
-            </View>
-          </View>
-          <View style={styles.statItem}>
-            <View style={styles.statCard}>
-              <View style={styles.statIconRow}>
-                <View style={styles.statIconBoxInfo}>
-                  <Ionicons name="star" size={20} color={colors.info} />
-                </View>
-                <Text style={styles.statLabel}>Member Rating</Text>
-              </View>
-              <Text style={styles.statValue}>{memberStats.rating || 0}/5</Text>
-            </View>
-          </View>
+    <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        Member Statistics
+      </Text>
+
+      <View style={styles.statsGrid}>
+        <View style={[styles.statCard, { borderColor: colors.border }]}>
+          <Ionicons name="wallet" size={24} color={colors.primary} />
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {formatCurrency(memberStats.total_contributions)}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+            Total Contributions
+          </Text>
+        </View>
+
+        <View style={[styles.statCard, { borderColor: colors.border }]}>
+          <Ionicons name="card" size={24} color={colors.success} />
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {memberStats.loans_count || 0}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+            Loans Taken
+          </Text>
+        </View>
+
+        <View style={[styles.statCard, { borderColor: colors.border }]}>
+          <Ionicons name="calendar" size={24} color={colors.warning} />
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {memberStats.meetings_attended || 0}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+            Meetings Attended
+          </Text>
+        </View>
+
+        <View style={[styles.statCard, { borderColor: colors.border }]}>
+          <Ionicons name="star" size={24} color={colors.info} />
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {memberStats.rating || 0}/5
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+            Member Rating
+          </Text>
         </View>
       </View>
     </Card>
   );
 };
+
+const styles = StyleSheet.create({
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+  },
+  statValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    marginTop: spacing.xs,
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+});
 
 export default ViewMemberStatsSection;

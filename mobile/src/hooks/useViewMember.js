@@ -136,6 +136,7 @@ const useViewMember = ({ route, navigation }) => {
       const hadCache = await loadCachedMember();
       await loadMemberDetails(hadCache);
       loadServiceFeePayments();
+      loadApprovalHistory();
       if (isSelf) {
         loadRecentActivity();
       }
