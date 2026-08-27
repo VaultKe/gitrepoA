@@ -91,11 +91,19 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 
 		// Handle requests with missing or null origin (mobile apps, curl, etc.)
 		if origin == "" || origin == "null" {
-			// For API requests without Origin, allow with wildcard or use first available origin
-			// This enables mobile app access while still logging
+			// For native mobile clients without an Origin header, reuse the
+			// first configured allowed origin so CORS still succeeds without
 			log.Printf("ℹ️ CORS: Request without Origin header (likely mobile client)")
-			// Allow the request to proceed - don't abort
-			allowedOrigin = "*"
+
+			// falling back to a wildcard.
+			if len(allowedOrigins) > 0 {
+				for o := range allowedOrigins {
+					allowedOrigin = o
+					break
+				}
+			} else {
+				allowedOrigin = cfg.BaseURL
+			}
 		} else if cfg.AllowAllOrigins {
 			// When ALLOW_ALL_ORIGINS is true, echo back the requesting origin
 			allowedOrigin = origin

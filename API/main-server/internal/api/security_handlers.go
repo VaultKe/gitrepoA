@@ -20,6 +20,8 @@ type LoginSession struct {
 	UserID          string    `json:"userId" db:"user_id"`
 	DeviceType      string    `json:"deviceType" db:"device_type"`
 	DeviceName      string    `json:"deviceName" db:"device_name"`
+	Manufacturer    string    `json:"manufacturer" db:"manufacturer"`
+	Model           string    `json:"model" db:"model"`
 	OperatingSystem string    `json:"operatingSystem" db:"operating_system"`
 	Browser         string    `json:"browser" db:"browser"`
 	IPAddress       string    `json:"ipAddress" db:"ip_address"`
@@ -158,6 +160,8 @@ func GetLoginHistory(c *gin.Context) {
 			user_id TEXT NOT NULL,
 			device_type TEXT,
 			device_name TEXT,
+			manufacturer TEXT,
+			model TEXT,
 			operating_system TEXT,
 			browser TEXT,
 			ip_address TEXT,
@@ -176,13 +180,15 @@ func GetLoginHistory(c *gin.Context) {
 		fmt.Printf("Failed to create login_sessions table: %v\n", err)
 	}
 
-	// Ensure the device_uid column exists on older tables.
+	// Ensure the manufacturer, model, and device_uid columns exist on older tables.
+	_, _ = db.(*sql.DB).Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS manufacturer TEXT`)
+	_, _ = db.(*sql.DB).Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS model TEXT`)
 	_, _ = db.(*sql.DB).Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS device_uid TEXT`)
 
 	// Get login sessions
 	query := `
 		SELECT 
-			id, user_id, device_type, device_name, operating_system, 
+			id, user_id, device_type, device_name, manufacturer, model, operating_system, 
 			browser, ip_address, location, device_uid, login_time, last_activity, 
 			status, is_current
 		FROM login_sessions 
@@ -207,8 +213,8 @@ func GetLoginHistory(c *gin.Context) {
 		var session LoginSession
 		err := rows.Scan(
 			&session.ID, &session.UserID, &session.DeviceType, &session.DeviceName,
-			&session.OperatingSystem, &session.Browser, &session.IPAddress,
-			&session.Location, &session.DeviceUID, &session.LoginTime, &session.LastActivity,
+			&session.Manufacturer, &session.Model, &session.OperatingSystem, &session.Browser,
+			&session.IPAddress, &session.Location, &session.DeviceUID, &session.LoginTime, &session.LastActivity,
 			&session.Status, &session.IsCurrent,
 		)
 		if err != nil {
@@ -225,6 +231,8 @@ func GetLoginHistory(c *gin.Context) {
 		deviceName := c.GetHeader("X-Device-Name")
 		browserName := c.GetHeader("X-Browser-Name")
 		osName := c.GetHeader("X-OS-Name")
+		manufacturer := c.GetHeader("X-Manufacturer")
+		model := c.GetHeader("X-Model")
 		timezone := c.GetHeader("X-Timezone")
 
 		// Fallback values if headers are not present
@@ -260,6 +268,8 @@ func GetLoginHistory(c *gin.Context) {
 			UserID:          userID,
 			DeviceType:      deviceType,
 			DeviceName:      deviceName,
+			Manufacturer:    manufacturer,
+			Model:           model,
 			OperatingSystem: osName,
 			Browser:         browserName,
 			IPAddress:       ip,
@@ -274,22 +284,25 @@ func GetLoginHistory(c *gin.Context) {
 		// Try to insert this session into the database for future reference
 		insertQuery := `
 			INSERT INTO login_sessions
-			(id, user_id, device_type, device_name, operating_system, browser, ip_address, location, device_uid, is_current)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)
+			(id, user_id, device_type, device_name, manufacturer, model, operating_system, browser, ip_address, location, device_uid, is_current)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE)
 			ON CONFLICT (id) DO UPDATE SET
 				user_id = $2,
 				device_type = $3,
 				device_name = $4,
-				operating_system = $5,
-				browser = $6,
-				ip_address = $7,
-				location = $8,
-				device_uid = $9,
+				manufacturer = $5,
+				model = $6,
+				operating_system = $7,
+				browser = $8,
+				ip_address = $9,
+				location = $10,
+				device_uid = $11,
 				is_current = TRUE
 		`
 		_, err := db.(*sql.DB).Exec(insertQuery,
 			currentSession.ID, currentSession.UserID, currentSession.DeviceType,
-			currentSession.DeviceName, currentSession.OperatingSystem, currentSession.Browser,
+			currentSession.DeviceName, currentSession.Manufacturer, currentSession.Model,
+			currentSession.OperatingSystem, currentSession.Browser,
 			currentSession.IPAddress, currentSession.Location, currentSession.DeviceUID)
 		if err != nil {
 			fmt.Printf("Failed to insert current session: %v\n", err)
@@ -422,14 +435,16 @@ func LogoutSpecificDevice(c *gin.Context) {
 }
 
 // RecordLoginSession records a new login session
-func RecordLoginSession(db *sql.DB, userID, deviceUID, deviceType, deviceName, os, browser, ipAddress, location string) error {
-	// Ensure the table exists first (with the device_uid column)
+func RecordLoginSession(db *sql.DB, userID, deviceUID, deviceType, deviceName, manufacturer, model, os, browser, ipAddress, location string) error {
+	// Ensure the table exists first (with the device_uid, manufacturer, and model columns)
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS login_sessions (
 			id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id TEXT NOT NULL,
 			device_type TEXT,
 			device_name TEXT,
+			manufacturer TEXT,
+			model TEXT,
 			operating_system TEXT,
 			browser TEXT,
 			ip_address TEXT,
@@ -449,7 +464,9 @@ func RecordLoginSession(db *sql.DB, userID, deviceUID, deviceType, deviceName, o
 		return err
 	}
 
-	// Make sure the device_uid column exists on older tables.
+	// Make sure the manufacturer, model, and device_uid columns exist on older tables.
+	_, _ = db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS manufacturer TEXT`)
+	_, _ = db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS model TEXT`)
 	_, _ = db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS device_uid TEXT`)
 
 	// Mark all previous sessions as not current
@@ -461,14 +478,14 @@ func RecordLoginSession(db *sql.DB, userID, deviceUID, deviceType, deviceName, o
 	// Insert new session with debug logging
 	insertQuery := `
 		INSERT INTO login_sessions
-		(user_id, device_uid, device_type, device_name, operating_system, browser, ip_address, location, is_current)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
+		(user_id, device_uid, device_type, device_name, manufacturer, model, operating_system, browser, ip_address, location, is_current)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)
 	`
 
-	fmt.Printf("Recording login session for user %s: deviceUID=%s, device=%s, name=%s, os=%s, browser=%s, ip=%s, location=%s\n",
-		userID, deviceUID, deviceType, deviceName, os, browser, ipAddress, location)
+	fmt.Printf("Recording login session for user %s: deviceUID=%s, device=%s, name=%s, manufacturer=%s, model=%s, os=%s, browser=%s, ip=%s, location=%s\n",
+		userID, deviceUID, deviceType, deviceName, manufacturer, model, os, browser, ipAddress, location)
 
-	_, err = db.Exec(insertQuery, userID, deviceUID, deviceType, deviceName, os, browser, ipAddress, location)
+	_, err = db.Exec(insertQuery, userID, deviceUID, deviceType, deviceName, manufacturer, model, os, browser, ipAddress, location)
 	if err != nil {
 		fmt.Printf("Failed to record login session: %v\n", err)
 		return err

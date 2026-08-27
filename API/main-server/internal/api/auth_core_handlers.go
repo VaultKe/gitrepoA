@@ -471,6 +471,8 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 				deviceInfo.DeviceUID,
 				deviceInfo.DeviceType,
 				deviceInfo.DeviceName,
+				deviceInfo.Manufacturer,
+				deviceInfo.Model,
 				deviceInfo.OS,
 				deviceInfo.Browser,
 				clientIP,

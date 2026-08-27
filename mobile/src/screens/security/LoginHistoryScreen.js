@@ -240,11 +240,6 @@ const LoginHistoryScreen = ({ navigation }) => {
 
   const getDeviceDisplayName = (item) => {
     const parts = [];
-
-    if (item.deviceName && item.deviceName.trim() !== '') {
-      parts.push(item.deviceName);
-    }
-
     const modelParts = [
       item.manufacturer,
       item.model,
@@ -252,8 +247,14 @@ const LoginHistoryScreen = ({ navigation }) => {
       .filter(Boolean)
       .join(' ');
 
+    if (item.deviceName && item.deviceName.trim() !== '') {
+      parts.push(item.deviceName);
+    }
+
     if (modelParts) {
       parts.push(modelParts);
+    } else if (item.deviceType === 'web') {
+      parts.push('Web');
     }
 
     if (parts.length > 0) {
