@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
 import { getUserFirstName } from '../../../utils/userUtils';
@@ -19,125 +18,16 @@ import WalletCard from '../../../components/wallet/WalletCard';
 import Card from '../../../components/common/Card';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ApiService from '../../../services/api';
-
-// ─────────────────────────────────────────────────────────────
-// Chart helpers
-//
-// NOTE: `getUserStatistics` currently returns single current-value
-// snapshots, not a real time series. `buildTrendSeries` fabricates a
-// plausible-looking curve that always ENDS at the real current value
-// (so every number actually shown is accurate) purely to give the
-// mini charts and the growth percentage something to draw from.
-// Swap this out for a real historical series the moment the backend
-// exposes one - search for `buildTrendSeries(` to find every call site.
-// ─────────────────────────────────────────────────────────────
-const buildTrendSeries = (currentValue, points = 6) => {
-  const safeValue = Math.max(currentValue || 0, 0);
-  const base = safeValue * 0.55;
-  const series = [];
-  for (let i = 0; i < points - 1; i++) {
-    const progress = i / (points - 1);
-    const wobble = Math.sin(i * 1.3) * safeValue * 0.04;
-    series.push(Math.max(base + (safeValue - base) * progress + wobble, 0));
-  }
-  series.push(safeValue); // last point is always the real current value
-  return series;
-};
-
-const getTrendPercent = (series) => {
-  if (!series || series.length < 2) return 0;
-  const first = series[0];
-  const last = series[series.length - 1];
-  if (!first) return last > 0 ? 100 : 0;
-  return ((last - first) / first) * 100;
-};
-
-const getLastMonthsLabels = (count = 6) => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const now = new Date();
-  const labels = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    labels.push(months[d.getMonth()]);
-  }
-  return labels;
-};
-
-const formatCompact = (n) => {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K`;
-  return `${Math.round(n)}`;
-};
-
-// Builds a smooth path (quadratic midpoint technique) through a set of points
-const buildSmoothPath = (points) => {
-  let path = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const curr = points[i];
-    const next = points[i + 1];
-    const midX = (curr.x + next.x) / 2;
-    const midY = (curr.y + next.y) / 2;
-    path += ` Q ${curr.x} ${curr.y} ${midX} ${midY}`;
-  }
-  path += ` L ${points[points.length - 1].x} ${points[points.length - 1].y}`;
-  return path;
-};
-
-// Small filled area mini-chart used inside each stat tile
-const MiniAreaChart = ({ data = [], color, width = 84, height = 44, gradientId }) => {
-  if (!data || data.length < 2) return null;
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const points = data.map((v, i) => ({
-    x: (i * width) / (data.length - 1),
-    y: height - ((v - min) / range) * (height - 8) - 4,
-  }));
-  const linePath = buildSmoothPath(points);
-  const last = points[points.length - 1];
-  const areaPath = `${linePath} L ${last.x} ${height} L 0 ${height} Z`;
-
-  return (
-    <Svg width={width} height={height}>
-      <Defs>
-        <SvgLinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={color} stopOpacity={0.4} />
-          <Stop offset="1" stopColor={color} stopOpacity={0.02} />
-        </SvgLinearGradient>
-      </Defs>
-      <Path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
-      <Path d={linePath} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" />
-      <Circle cx={last.x} cy={last.y} r={2.5} fill={color} />
-    </Svg>
-  );
-};
-
-// Larger version used in the Wallet Overview card
-const WalletTrendChart = ({ data = [], color, width: chartWidth, height = 140, gradientId }) => {
-  if (!data || data.length < 2 || chartWidth <= 0) return null;
-  const max = Math.max(...data, 1);
-  const points = data.map((v, i) => ({
-    x: (i * chartWidth) / (data.length - 1),
-    y: height - (v / max) * (height - 10) - 4,
-  }));
-  const linePath = buildSmoothPath(points);
-  const last = points[points.length - 1];
-  const areaPath = `${linePath} L ${last.x} ${height} L 0 ${height} Z`;
-
-  return (
-    <Svg width={chartWidth} height={height}>
-      <Defs>
-        <SvgLinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={color} stopOpacity={0.35} />
-          <Stop offset="1" stopColor={color} stopOpacity={0.02} />
-        </SvgLinearGradient>
-      </Defs>
-      <Path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
-      <Path d={linePath} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" />
-      <Circle cx={last.x} cy={last.y} r={4} fill={color} />
-    </Svg>
-  );
-};
+import {
+  buildWalletTrendSeries,
+  buildTrendSeries,
+  buildContributionTrendSeries,
+  getTrendPercent,
+  getLastMonthsLabels,
+  formatCompact,
+  MiniAreaChart,
+  WalletTrendChart,
+} from './dashboardChartHelpers';
 
 const EnhancedUserDashboard = ({ navigation }) => {
   const { width } = useWindowDimensions();
@@ -158,6 +48,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
     totalContributions: 0,
     walletBalance: 0,
   });
+  const [walletTransactions, setWalletTransactions] = useState([]);
 
   useEffect(() => {
     const personalWallet = wallets.find(w => w.type === 'personal');
@@ -168,6 +59,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
 
   useEffect(() => {
     loadUserStatistics();
+    loadWalletTransactions();
   }, []);
 
   const loadUserStatistics = async () => {
@@ -187,11 +79,26 @@ const EnhancedUserDashboard = ({ navigation }) => {
     }
   };
 
+  const loadWalletTransactions = async () => {
+    try {
+      const response = await ApiService.getTransactions(100, 0);
+      if (response.success && Array.isArray(response.data)) {
+        setWalletTransactions(response.data);
+      } else {
+        setWalletTransactions([]);
+      }
+    } catch (error) {
+      console.warn('Failed to load wallet transactions for dashboard:', error);
+      setWalletTransactions([]);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
       await refreshData(true);
       await loadUserStatistics();
+      await loadWalletTransactions();
     } catch (error) {
       console.warn('Dashboard refresh failed:', error);
     } finally {
@@ -346,7 +253,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
               label="Wallet Balance"
               value={`Ksh ${userStats.walletBalance.toLocaleString()}`}
               color={colors.primary}
-              trendData={buildTrendSeries(userStats.walletBalance, 6)}
+              trendData={buildWalletTrendSeries(userStats.walletBalance, walletTransactions, selectedWallet?.id, 6)}
               gradientId="statWallet"
             />
             <StatTile
@@ -372,7 +279,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
               label="Contributions"
               value={userStats.totalContributions}
               color={colors.success}
-              trendData={buildTrendSeries(userStats.totalContributions, 6)}
+              trendData={buildContributionTrendSeries(walletTransactions, 6)}
               gradientId="statContributions"
             />
           </View>
@@ -384,7 +291,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
   const renderWalletTrend = () => {
     const currentBalance = userStats.walletBalance || 0;
     const points = 6;
-    const series = buildTrendSeries(currentBalance, points);
+    const series = buildWalletTrendSeries(currentBalance, walletTransactions, selectedWallet?.id, points);
     const labels = getLastMonthsLabels(points);
     const growthPercent = getTrendPercent(series);
     const isPositive = growthPercent >= 0;
