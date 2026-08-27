@@ -34,30 +34,45 @@ type ActiveDeviceResult struct {
 	NewDeviceRegistered     bool
 }
 
+// getDeviceCategory returns the broad category for a device type.
+// Mobile devices include: mobile, phone, android, ios, tablet
+// Web devices include: web, desktop
+// Everything else is treated as other.
+func getDeviceCategory(deviceType string) string {
+	switch strings.ToLower(strings.TrimSpace(deviceType)) {
+	case "mobile", "phone", "android", "ios", "tablet":
+		return "mobile"
+	case "web", "desktop":
+		return "web"
+	default:
+		return "other"
+	}
+}
+
 // EnforceSingleDevicePolicy enforces the single-device policy for a user.
-// When a user logs in on a new device, any previously active device is logged out
-// and an email notification is sent to the account owner.
-func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, newDeviceName, ipAddress, userAgent string) (*ActiveDeviceResult, error) {
+// A user may have at most one active mobile device and one active web device at the same time.
+// When a user logs in on a new device, only a previously active device in the same
+// category is logged out.
+func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, newDeviceName, ipAddress, userAgent, newDeviceType string) (*ActiveDeviceResult, error) {
 	if userID == "" || newDeviceUID == "" {
 		return nil, fmt.Errorf("userID and deviceUID are required")
 	}
 
 	result := &ActiveDeviceResult{}
+	newCategory := getDeviceCategory(newDeviceType)
 
-	// Get the currently active device for this user (excluding the new device)
-	activeDevice, err := s.GetActiveDeviceForUser(userID, newDeviceUID)
+	// Get the currently active device for this user in the same category (excluding the new device)
+	activeDevice, err := s.GetActiveDeviceForUser(userID, newDeviceUID, newCategory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check active device: %w", err)
 	}
 
 	if activeDevice != nil {
 		// Check if this is likely the SAME physical device re-authenticating
-		// (e.g., app reload, storage cleared, same browser/device name)
 		isSameDevice := s.isLikelySameDevice(activeDevice, newDeviceName, ipAddress, userAgent)
 
 		if isSameDevice {
 			// Same device re-authenticating - update the existing device record
-			// instead of kicking it out. This prevents false logout loops.
 			if _, err := s.db.Exec(
 				"UPDATE devices SET last_seen = $1, last_login_at = $1, updated_at = $1 WHERE id = $2",
 				time.Now(), activeDevice.ID,
@@ -68,7 +83,7 @@ func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, ne
 			return result, nil
 		}
 
-		// Different device - enforce single device policy
+		// Different device in the same category - enforce single-device policy for this category
 		result.PreviousDeviceLoggedOut = true
 		result.PreviousDeviceName = activeDevice.DeviceName
 		result.PreviousDeviceUID = activeDevice.ID
@@ -95,7 +110,7 @@ func (s *DevicePolicyService) EnforceSingleDevicePolicy(userID, newDeviceUID, ne
 			fmt.Printf("Failed to deactivate old device %s for user %s: %v\n", activeDevice.ID, userID, err)
 		}
 
-		// Also mark all login sessions as revoked except current
+		// Also mark all login sessions as revoked except current/new device
 		if _, err := s.db.Exec(
 			"UPDATE login_sessions SET status = 'revoked', last_activity = $1 WHERE user_id = $2 AND device_uid != $3",
 			time.Now(), userID, newDeviceUID,
@@ -143,8 +158,9 @@ func (s *DevicePolicyService) isLikelySameDevice(activeDevice *models.Device, ne
 }
 
 // GetActiveDeviceForUser returns the currently active device for a user,
-// excluding the specified device UID. Returns nil if no active device exists.
-func (s *DevicePolicyService) GetActiveDeviceForUser(userID, excludeDeviceUID string) (*models.Device, error) {
+// excluding the specified device UID and limiting to the given device category.
+// Returns nil if no active device exists.
+func (s *DevicePolicyService) GetActiveDeviceForUser(userID, excludeDeviceUID, deviceCategory string) (*models.Device, error) {
 	var device models.Device
 	query := `
 		SELECT id, user_id, device_name, device_type, ip_address, os_version,
@@ -152,11 +168,18 @@ func (s *DevicePolicyService) GetActiveDeviceForUser(userID, excludeDeviceUID st
 		       last_seen, last_login_at, is_active, created_at, updated_at
 		FROM devices
 		WHERE user_id = $1 AND is_active = TRUE AND id != $2
-		ORDER BY last_login_at DESC NULLS LAST, last_seen DESC
-		LIMIT 1
 	`
+	args := []interface{}{userID, excludeDeviceUID}
 
-	err := s.db.QueryRow(query, userID, excludeDeviceUID).Scan(
+	if deviceCategory == "mobile" {
+		query += " AND device_type IN ('mobile', 'phone', 'android', 'ios', 'tablet')"
+	} else if deviceCategory == "web" {
+		query += " AND device_type IN ('web', 'desktop')"
+	}
+
+	query += " ORDER BY last_login_at DESC NULLS LAST, last_seen DESC LIMIT 1"
+
+	err := s.db.QueryRow(query, args...).Scan(
 		&device.ID, &device.UserID, &device.DeviceName, &device.DeviceType,
 		&device.IPAddress, &device.OSVersion, &device.AppVersion,
 		&device.Manufacturer, &device.Model, &device.Locale, &device.Timezone,

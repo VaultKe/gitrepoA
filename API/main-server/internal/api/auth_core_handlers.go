@@ -409,17 +409,18 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 			}
 		}
 
-		// STRONG SINGLE-DEVICE ENFORCEMENT:
-		// Before issuing a new session, enforce the single-active-device policy.
-		// This revokes all tokens and deactivates any previously active device
-		// for this user, then returns whether a previous device was logged out.
-		devicePolicyResult, policyErr := h.devicePolicyService.EnforceSingleDevicePolicy(
-			user.ID,
-			deviceInfo.DeviceUID,
-			deviceInfo.DeviceName,
-			clientIP,
-			userAgent,
-		)
+	// STRONG SINGLE-DEVICE ENFORCEMENT:
+	// Before issuing a new session, enforce the single-active-device policy.
+	// This revokes all tokens and deactivates any previously active device
+	// in the same category (mobile/web) for this user, then returns whether a previous device was logged out.
+	devicePolicyResult, policyErr := h.devicePolicyService.EnforceSingleDevicePolicy(
+		user.ID,
+		deviceInfo.DeviceUID,
+		deviceInfo.DeviceName,
+		clientIP,
+		userAgent,
+		deviceInfo.DeviceType,
+	)
 		if policyErr != nil {
 			fmt.Printf("SECURITY: single-device policy enforcement failed for user %s: %v\n", user.ID, policyErr)
 		} else if devicePolicyResult != nil && devicePolicyResult.PreviousDeviceLoggedOut {
