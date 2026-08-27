@@ -15,7 +15,7 @@ import AmountInput from '../../../components/wallet/AmountInput';
 import useWithdrawScreen from '../../../hooks/useWithdrawScreen';
 
 const WithdrawScreen = ({ navigation }) => {
-  const { theme } = useApp();
+  const { theme, user } = useApp();
   const colors = getThemeColors(theme);
 
   const {
@@ -28,7 +28,7 @@ const WithdrawScreen = ({ navigation }) => {
     selectedMethod,
     setSelectedMethod,
     handleWithdraw,
-  } = useWithdrawScreen({ navigation });
+  } = useWithdrawScreen({ navigation, user });
 
   return (
     <View style={[{ flex: 1, backgroundColor: colors.background }]}>

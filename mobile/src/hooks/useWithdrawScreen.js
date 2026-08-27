@@ -4,11 +4,18 @@ import { useApp } from '../context/AppContext';
 import ApiService from '../services/api';
 import { formatCurrency } from '../utils/formatters';
 
-const useWithdrawScreen = ({ navigation }) => {
+const useWithdrawScreen = ({ navigation, user }) => {
   const { theme } = useApp();
 
+  const getInitialPhoneNumber = () => {
+    if (user?.phone) {
+      return user.phone;
+    }
+    return '';
+  };
+
   const [amount, setAmount] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(getInitialPhoneNumber);
   const [loading, setLoading] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('mpesa');
 
