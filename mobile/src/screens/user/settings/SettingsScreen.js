@@ -162,8 +162,102 @@ const SettingsScreen = ({ navigation }) => {
         onValueChange={(value) => updateSecuritySetting('auto_logout', value)}
         colors={colors}
       />
+
+      <SettingItem
+        title="Login Notifications"
+        description="Get notified when someone logs into your account"
+        value={settings.security.login_notifications}
+        onValueChange={(value) => updateSecuritySetting('login_notifications', value)}
+        colors={colors}
+      />
+
+      <SettingItem
+        title="Suspicious Activity Alerts"
+        description="Receive alerts for unusual account activity"
+        value={settings.security.suspicious_activity_alerts}
+        onValueChange={(value) => updateSecuritySetting('suspicious_activity_alerts', value)}
+        colors={colors}
+      />
+
+      <SettingItem
+        title="Device Management"
+        description="Monitor and manage devices that access your account"
+        value={settings.security.device_management}
+        onValueChange={(value) => updateSecuritySetting('device_management', value)}
+        colors={colors}
+      />
     </Card>
   );
+
+  const renderSecurityActions = () => {
+    return (
+      <Card variant="outlined" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Security Actions
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.actionRow, { borderBottomColor: colors.border }]}
+          onPress={() => navigation.navigate('ChangePassword')}
+        >
+          <View style={styles.actionRowContent}>
+            <View style={[styles.actionIcon, { backgroundColor: colors.warning + '15' }]}>
+              <Ionicons name="key" size={22} color={colors.warning} />
+            </View>
+            <View style={styles.actionText}>
+              <Text style={[styles.actionTitle, { color: colors.text }]}>
+                Change Password
+              </Text>
+              <Text style={[styles.actionDescription, { color: colors.textSecondary }]}>
+                Update your account password
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionRow, { borderBottomColor: colors.border }]}
+          onPress={() => navigation.navigate('LoginHistory')}
+        >
+          <View style={styles.actionRowContent}>
+            <View style={[styles.actionIcon, { backgroundColor: colors.info + '15' }]}>
+              <Ionicons name="time" size={22} color={colors.info} />
+            </View>
+            <View style={styles.actionText}>
+              <Text style={[styles.actionTitle, { color: colors.text }]}>
+                Login History
+              </Text>
+              <Text style={[styles.actionDescription, { color: colors.textSecondary }]}>
+                View recent login activity
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => navigation.navigate('WhatsAppLink')}
+        >
+          <View style={styles.actionRowContent}>
+            <View style={[styles.actionIcon, { backgroundColor: (colors.success || '#25D366') + '15' }]}>
+              <Ionicons name="logo-whatsapp" size={22} color={colors.success || '#25D366'} />
+            </View>
+            <View style={styles.actionText}>
+              <Text style={[styles.actionTitle, { color: colors.text }]}>
+                Link WhatsApp
+              </Text>
+              <Text style={[styles.actionDescription, { color: colors.textSecondary }]}>
+                Connect your WhatsApp account
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </Card>
+    );
+  };
 
   const accountMenuItems = [
     {
@@ -172,13 +266,6 @@ const SettingsScreen = ({ navigation }) => {
       icon: 'person',
       color: colors.primary,
       onPress: () => navigation.navigate('Profile'),
-    },
-    {
-      title: 'Security Settings',
-      subtitle: 'Password, PIN, and security options',
-      icon: 'shield-checkmark',
-      color: colors.info,
-      onPress: () => navigation.navigate('SecuritySettings'),
     },
     {
       title: 'Payment Methods',
@@ -245,6 +332,7 @@ const SettingsScreen = ({ navigation }) => {
         )}
         {renderNotificationSettings()}
         {renderSecuritySettings()}
+        {renderSecurityActions()}
         <MenuSection title="Account" items={accountMenuItems} colors={colors} />
         <MenuSection title="Support" items={supportMenuItems} colors={colors} />
 
@@ -321,6 +409,36 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+  },
+  actionRowContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  actionText: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing.xs,
+  },
+  actionDescription: {
+    fontSize: typography.fontSize.sm,
   },
   deleteButton: {
     marginBottom: spacing.md,

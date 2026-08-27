@@ -26,6 +26,9 @@ const useSettingsScreen = ({ navigation }) => {
       biometric_login: false,
       two_factor_auth: false,
       auto_logout: true,
+      login_notifications: true,
+      suspicious_activity_alerts: true,
+      device_management: true,
     },
     preferences: {
       language: 'en',
