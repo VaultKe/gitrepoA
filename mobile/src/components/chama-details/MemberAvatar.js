@@ -2,10 +2,13 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import ApiService from '../../services/api';
 
 const AVATAR_COLORS = ['#00D4AA', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#EC4899', '#6366F1'];
 
-const MemberAvatar = ({ member, colors, onAvatarPress, apiUploadBaseUrl }) => {
+const MemberAvatar = ({ member, colors, onAvatarPress }) => {
+  const uploadBaseUrl = ApiService.getUploadBaseUrl();
+
   const getAvatarColor = (seed) => {
     const str = String(seed || '');
     let hash = 0;
@@ -38,7 +41,7 @@ const MemberAvatar = ({ member, colors, onAvatarPress, apiUploadBaseUrl }) => {
     if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
       fullAvatarUrl = avatarUrl;
     } else {
-      fullAvatarUrl = `${apiUploadBaseUrl}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+           fullAvatarUrl = `${uploadBaseUrl}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
     }
 
     return (

@@ -13,6 +13,7 @@ import ChamaLoansScreen from '../screens/chama/loans/ChamaLoansScreen';
 import ChamaMeetingsScreen from '../screens/chama/meeting/ChamaMeetingsScreen';
 import ChamaTransactionsScreen from '../screens/chama/transactions/ChamaTransactionsScreen';
 import MerryGoRoundScreen from '../screens/chama/merry-go-round/MerryGoRoundScreen';
+import DocumentViewerScreen from '../screens/common/DocumentViewerScreen';
 import MerryGoRoundRulesScreen from '../screens/chama/merry-go-round/MerryGoRoundRulesScreen';
 import WelfareScreen from '../screens/chama/welfare/WelfareScreen';
 import ChamaSettings from '../screens/chama/settings/ChamaSettings';
@@ -146,6 +147,7 @@ const ChamaHomeStack = ({ route }) => {
     { name: 'PhysicalMeeting', component: PhysicalMeetingScreen, title: 'Physical Meeting' },
     { name: 'OnlineMeeting', component: OnlineMeetingScreen, title: 'Online Meeting' },
     { name: 'MeetingSummary', component: MeetingSummaryScreen, title: 'Meeting Summary' },
+    { name: 'DocumentViewer', component: DocumentViewerScreen, title: 'View Document' },
     { name: 'WelfareContributions', component: WelfareContributionsScreen, title: 'Welfare Contributions' },
     // Shared screens
     { name: 'Notifications', component: NotificationsScreen, title: 'Notifications' },

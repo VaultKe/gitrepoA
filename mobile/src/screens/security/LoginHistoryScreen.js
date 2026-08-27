@@ -239,20 +239,25 @@ const LoginHistoryScreen = ({ navigation }) => {
   };
 
   const getDeviceDisplayName = (item) => {
+    const parts = [];
+
     if (item.deviceName && item.deviceName.trim() !== '') {
-      return item.deviceName;
+      parts.push(item.deviceName);
     }
 
-    const parts = [
+    const modelParts = [
       item.manufacturer,
       item.model,
-      item.deviceType,
     ]
       .filter(Boolean)
       .join(' ');
 
-    if (parts.trim()) {
-      return parts.trim();
+    if (modelParts) {
+      parts.push(modelParts);
+    }
+
+    if (parts.length > 0) {
+      return parts.join(' • ');
     }
 
     return `${item.deviceType || 'Unknown'} Device`;

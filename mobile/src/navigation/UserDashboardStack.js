@@ -37,6 +37,7 @@ import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import MyChamasScreen from '../screens/user/chamaandgroups/MyChamasScreen';
 import CreateChamaScreen from '../screens/user/chamaandgroups/CreateChamaScreen';
 import ChamaDetailsScreen from '../screens/user/chamaandgroups/ChamaDetailsScreen';
+import DocumentViewerScreen from '../screens/common/DocumentViewerScreen';
 import ChamaTransactionsScreen from '../screens/chama/transactions/ChamaTransactionsScreen';
 import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
 import ViewMember from '../screens/chama/chamamember/ViewMember';
@@ -202,6 +203,14 @@ function UserTabNavigator() {
         component={ChamaDetailsScreen}
         options={{
           title: 'Chama Details',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+      />
+      <Tab.Screen
+        name="DocumentViewer"
+        component={DocumentViewerScreen}
+        options={{
+          title: 'View Document',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />
@@ -493,6 +502,12 @@ export default function UserDashboardStack({ navigation }) {
         name="MeetingSummary"
         component={withUserFooter(MeetingSummaryScreen)}
         options={{ title: 'Meeting Summary' }}
+      />
+      {/* Document Viewer Screen */}
+      <Stack.Screen
+        name="DocumentViewer"
+        component={withUserFooter(DocumentViewerScreen)}
+        options={{ title: 'View Document' }}
       />
 
      

@@ -16,6 +16,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 
 // Notification Service
 import notificationService from './src/services/notificationService';
+import useInactivityTracker from './src/hooks/useInactivityTracker';
 
 
 // Ignore specific warnings
@@ -27,9 +28,10 @@ LogBox.ignoreLogs([
 
 // Main App Component
 function AppContent() {
-  const { theme } = useApp();
+  const { theme, isAuthenticated } = useApp();
   const colors = getThemeColors(theme);
 
+  const { ActivityResponder } = useInactivityTracker();
 
   // Initialize notification service
   useEffect(() => {
@@ -53,11 +55,11 @@ function AppContent() {
   }, []);
 
   return (
-    <>
+    <ActivityResponder>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.background} />
       <RootNavigator />
       <Toast config={customToastConfig} />
-    </>
+    </ActivityResponder>
   );
 }
 

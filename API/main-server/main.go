@@ -18,6 +18,7 @@ import (
 	"vaultke-backend/config"
 	"vaultke-backend/database"
 	"vaultke-backend/internal/api"
+	"vaultke-backend/internal/middleware"
 	"vaultke-backend/internal/routes"
 	"vaultke-backend/internal/services"
 	"vaultke-backend/internal/storage"
@@ -221,6 +222,12 @@ func main() {
 
 	// Initialize meeting service for attendance endpoints
 	api.InitializeMeetingService(primaryDB, nil)
+
+	// Register CORS middleware early so it applies to ALL routes registered
+	// on this router, including the /uploads/* static-file handler below.
+	// (Gin's Use() only applies to routes registered after the call, so this
+	//  must precede the /uploads/* registration.)
+	router.Use(middleware.CORSMiddleware(cfg))
 
 	// Register custom uploads handler BEFORE routes.SetupRoutes to avoid Gin wildcard conflicts.
 	// This handles:

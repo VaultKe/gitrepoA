@@ -1,27 +1,13 @@
 import React from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
   ScrollView,
-  TouchableOpacity,
   SafeAreaView,
   RefreshControl,
-  Alert,
-  Linking,
-  Dimensions,
-  Platform,
-  ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
-import Toast from 'react-native-toast-message';
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, typography, borderRadius, shadows } from '../../../utils/theme';
-import Card from '../../../components/common/Card';
-import Button from '../../../components/common/Button';
+import { getThemeColors } from '../../../utils/theme';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
-import ApiService from '../../../services/api';
 import DestructiveConfirmModal from '../../../components/common/DestructiveConfirmModal';
 import getResponsiveStyles from '../../../styles/ChamaDetailsScreenStyles';
 import useChamaDetails from '../../../hooks/useChamaDetails';
@@ -39,7 +25,7 @@ import SmartResponsiveLayout from '../../../components/chama-details/SmartRespon
 import MemberAvatar from '../../../components/chama-details/MemberAvatar';
 
 const ChamaDetailsScreen = ({ route, navigation }) => {
-  const { theme, user, setSelectedChama, switchToChamaDashboard } = useApp();
+  const { theme, setSelectedChama, switchToChamaDashboard } = useApp();
   const colors = getThemeColors(theme);
   const details = useChamaDetails({ route, navigation });
   const styles = getResponsiveStyles(details.screenType, details.screenWidth, colors);
@@ -52,24 +38,18 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
     });
   };
 
-  const handleOpenRulesFile = async () => {
+  const handleOpenRulesFile = () => {
     const rawRulesFilePath = (details.chama?.rules_file_path && details.chama.rules_file_path.trim()) ||
       (details.chama?.permissions && details.chama.permissions.rules_file_path);
     const rulesFilePath = rawRulesFilePath ? rawRulesFilePath.trim() : null;
     if (!rulesFilePath) return;
-    const fullUrl = rulesFilePath.startsWith('http')
-      ? rulesFilePath
-      : `${ApiService.uploadBaseUrl}${rulesFilePath.startsWith('/') ? '' : '/'}${rulesFilePath}`;
-    try {
-      const supported = await Linking.canOpenURL(fullUrl);
-      if (supported) {
-        await Linking.openURL(fullUrl);
-      } else {
-        Alert.alert('Unable to open', 'No application is available to open the rules document.');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to open the rules document.');
-    }
+
+    navigation.navigate('DocumentViewer', {
+      documentUrl: rulesFilePath,
+      documentName: details.chama?.rules_file_name || 'Rules Document',
+      title: 'Chama Rules Document',
+      chamaId: details.chamaId,
+    });
   };
 
   const renderMemberAvatar = (member) => {
@@ -78,7 +58,6 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         member={member}
         colors={colors}
         onAvatarPress={handleAvatarPress}
-        apiUploadBaseUrl={ApiService.uploadBaseUrl}
       />
     );
   };
