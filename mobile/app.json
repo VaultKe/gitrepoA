@@ -4,7 +4,6 @@
     "slug": "vaultke",
     "version": "1.0.0",
     "main": "index.js",
-    "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
