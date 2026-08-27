@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { Alert, BackHandler, Toast } from 'react-native';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Alert, BackHandler, Toast, PermissionsAndroid, Platform } from 'react-native';
 import { useApp } from '../context/AppContext';
-import api from '../services/api';
+import { meetingApi, setMeetingAuthToken, clearMeetingAuthToken } from '../services/meetingApi';
+import { getWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES } from '../services/webrtcClient';
 
 const useOnlineMeetingScreen = ({ route, navigation }) => {
+  const { theme, user } = useApp();
   const {
     meetingId,
     meetingTitle,
@@ -12,28 +14,33 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     previewData = null,
     isReadOnly = false,
   } = route.params;
-  const { theme } = useApp();
-
-  const colors = {
-    backgroundColor: theme === 'dark' ? '#000000' : '#ffffff',
-    text: theme === 'dark' ? '#ffffff' : '#000000',
-    textSecondary: theme === 'dark' ? '#cccccc' : '#666666',
-    primary: '#007AFF',
-    error: '#FF3B30',
-  };
 
   const [isConnecting, setIsConnecting] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [meetingData, setMeetingData] = useState(null);
   const [connectionError, setConnectionError] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStreams, setRemoteStreams] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
+  const webrtcClientRef = useRef(null);
   const hasJoinedRef = useRef(false);
   const reconnectTimeoutRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRefs = useRef(new Map());
 
+  // Initialize meeting
   useEffect(() => {
+    if (isReadOnly) {
+      setIsConnecting(false);
+      return;
+    }
+
     initializeMeeting();
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -49,6 +56,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setIsConnecting(true);
       setConnectionError(null);
 
+      // Request permissions
+      await requestPermissions();
+
       let connectionData;
 
       if (isPreview && previewData) {
@@ -60,23 +70,36 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           isPreview: true,
         };
       } else {
-        const response = await api.makeRequest(`/meetings/${meetingId}/join`, {
-          method: 'POST',
-          body: { userRole },
+        const response = await meetingApi.joinRoom(meetingId, {
+          displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
+          role: userRole,
         });
 
-        if (!response.success) {
-          throw new Error(response.error || 'Failed to get meeting connection data');
+        if (!response) {
+          throw new Error('Failed to join meeting');
         }
 
-        connectionData = response.data;
+        connectionData = response;
       }
 
+      // Set auth token for subsequent requests
+      const token = await getAuthToken();
+      if (token) {
+        await setMeetingAuthToken(token);
+      }
+
+      setMeetingData(connectionData);
+
+      // Initialize WebRTC
+      await initializeWebRTC(connectionData);
+
+      // Mark attendance
       if (!isPreview) {
         await markAttendance();
       }
 
-      updateParticipantsList();
+      // Load participants
+      await updateParticipantsList();
 
       setIsConnected(true);
       setIsConnecting(false);
@@ -103,27 +126,131 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     }
   };
 
+  const requestPermissions = async () => {
+    if (Platform.OS === 'android') {
+      const permissions = [
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        PermissionsAndroid.PERMISSIONS.MODIFY_AUDIO_SETTINGS,
+      ];
+
+      const granted = await PermissionsAndroid.requestMultiple(permissions);
+      const denied = Object.values(granted).filter(p => p !== PermissionsAndroid.RESULTS.GRANTED);
+
+      if (denied.length > 0) {
+        throw new Error('Camera and microphone permissions are required for video calls');
+      }
+    }
+  };
+
+  const getAuthToken = async () => {
+    try {
+      const authModule = await import('../services/api/auth');
+      return await authModule.getAuthToken();
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const initializeWebRTC = async (connectionData) => {
+    const client = getWebRTCClient();
+    webrtcClientRef.current = client;
+
+    client.on('localStream', (stream) => {
+      setLocalStream(stream);
+    });
+
+    client.on('remoteStream', ({ connId, userId, stream }) => {
+      setRemoteStreams(prev => {
+        const exists = prev.find(s => s.connId === connId);
+        if (!exists) {
+          return [...prev, { connId, userId, stream }];
+        }
+        return prev;
+      });
+    });
+
+    client.on('participantJoined', (message) => {
+      setParticipants(prev => {
+        const exists = prev.find(p => p.userId === message.userId);
+        if (!exists) {
+          return [...prev, message];
+        }
+        return prev;
+      });
+    });
+
+    client.on('participantLeft', (message) => {
+      setParticipants(prev => prev.filter(p => p.userId !== message.userId));
+      setRemoteStreams(prev => prev.filter(s => s.connId !== message.connId));
+    });
+
+    client.on('chatMessage', (message) => {
+      setChatMessages(prev => [...prev, message.payload]);
+    });
+
+    client.on('roomEnded', () => {
+      Toast.show({
+        type: 'info',
+        text1: 'Meeting Ended',
+        text2: 'The meeting has been ended by the host',
+      });
+      navigation.goBack();
+    });
+
+    client.on('error', (error) => {
+      console.error('WebRTC error:', error);
+      if (error.type === 'websocket') {
+        setConnectionError('Connection lost. Reconnecting...');
+      }
+    });
+
+    client.on('connected', () => {
+      setConnectionError(null);
+    });
+
+    const stream = await client.initLocalMedia();
+    setLocalStream(stream);
+
+    await client.connectSignaling(
+      connectionData.roomId || meetingId,
+      user?.id || 'user',
+      connectionData.participantId
+    );
+  };
+
   const markAttendance = async () => {
     try {
-      await api.makeRequest(`/meetings/${meetingId}/attendance`, {
-        method: 'POST',
-        body: {
-          attendanceType: 'virtual',
-          isPresent: true,
-        },
-      });
+      await meetingApi.sendChatMessage(meetingId, 'Joined meeting', 'system');
     } catch (error) {
       console.error('Failed to mark attendance:', error);
     }
   };
 
-  const updateParticipantsList = () => {
-    setParticipants([]);
+  const updateParticipantsList = async () => {
+    try {
+      const response = await meetingApi.getParticipants(meetingId);
+      if (response && response.participants) {
+        setParticipants(response.participants);
+      }
+    } catch (error) {
+      console.error('Failed to update participants:', error);
+    }
   };
 
   const handleToggleCamera = async () => {
     const newState = !isCameraEnabled;
     setIsCameraEnabled(newState);
+
+    if (webrtcClientRef.current) {
+      webrtcClientRef.current.toggleVideo(newState);
+    }
+
+    try {
+      await meetingApi.updateParticipant(meetingId, { isVideoOn: newState });
+    } catch (error) {
+      console.error('Failed to update video state:', error);
+    }
 
     Toast.show({
       type: 'success',
@@ -136,6 +263,16 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     const newState = !isMicrophoneEnabled;
     setIsMicrophoneEnabled(newState);
 
+    if (webrtcClientRef.current) {
+      webrtcClientRef.current.toggleAudio(newState);
+    }
+
+    try {
+      await meetingApi.updateParticipant(meetingId, { isMuted: !newState });
+    } catch (error) {
+      console.error('Failed to update mic state:', error);
+    }
+
     Toast.show({
       type: 'success',
       text1: newState ? 'Microphone enabled' : 'Microphone disabled',
@@ -144,11 +281,64 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const handleSwitchCamera = async () => {
-    Toast.show({
-      type: 'success',
-      text1: 'Camera switched',
-      text2: 'Camera view has been switched',
-    });
+    try {
+      if (webrtcClientRef.current) {
+        await webrtcClientRef.current.switchCamera();
+      }
+      Toast.show({
+        type: 'success',
+        text1: 'Camera switched',
+        text2: 'Your camera view has been switched',
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to switch camera',
+      });
+    }
+  };
+
+  const handleToggleScreenShare = async () => {
+    try {
+      if (!isScreenSharing) {
+        const screenStream = await webrtcClientRef.current?.initScreenShare();
+        if (screenStream) {
+          setIsScreenSharing(true);
+          Toast.show({
+            type: 'success',
+            text1: 'Screen sharing started',
+            text2: 'You are now sharing your screen',
+          });
+        }
+      } else {
+        setIsScreenSharing(false);
+        Toast.show({
+          type: 'success',
+          text1: 'Screen sharing stopped',
+          text2: 'You are no longer sharing your screen',
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to toggle screen sharing',
+      });
+    }
+  };
+
+  const handleSendChatMessage = async (content) => {
+    try {
+      const response = await meetingApi.sendChatMessage(meetingId, content);
+      setChatMessages(prev => [...prev, response]);
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to send message',
+      });
+    }
   };
 
   const handleEndCall = () => {
@@ -157,7 +347,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       'Are you sure you want to leave the meeting?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Leave', style: 'destructive', onPress: leaveMeeting },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: leaveMeeting,
+        },
       ]
     );
   };
@@ -170,6 +364,18 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const leaveMeeting = async () => {
     try {
       hasJoinedRef.current = false;
+
+      if (webrtcClientRef.current) {
+        webrtcClientRef.current.sendSignalingMessage({
+          type: SIGNALING_MESSAGE_TYPES.LEAVE,
+          roomId: meetingId,
+          userId: user?.id,
+          connId: webrtcClientRef.current.connId,
+        });
+      }
+
+      await meetingApi.leaveRoom(meetingId);
+      cleanup();
       navigation.goBack();
     } catch (error) {
       console.error('Failed to leave meeting:', error);
@@ -178,9 +384,17 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const cleanup = () => {
+    if (webrtcClientRef.current) {
+      webrtcClientRef.current.disconnect();
+      webrtcClientRef.current = null;
+    }
+
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
+
+    clearMeetingAuthToken();
   };
 
   return {
@@ -189,22 +403,23 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     participants,
     isCameraEnabled,
     isMicrophoneEnabled,
+    isScreenSharing,
     meetingData,
     connectionError,
-    meetingId,
-    meetingTitle,
-    userRole,
-    isPreview,
-    previewData,
-    isReadOnly,
+    localStream,
+    remoteStreams,
+    chatMessages,
+    isChatOpen,
     handleToggleCamera,
     handleToggleMicrophone,
     handleSwitchCamera,
+    handleToggleScreenShare,
     handleEndCall,
+    handleSendChatMessage,
+    setIsChatOpen,
     leaveMeeting,
-    initializeMeeting,
-    colors,
-    theme,
+    localVideoRef,
+    remoteVideoRefs,
   };
 };
 

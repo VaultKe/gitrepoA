@@ -1,21 +1,39 @@
+# Build stage
 FROM golang:1.22-alpine AS builder
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git ca-certificates
 
 WORKDIR /app
+
+# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy source code
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o meeting-service ./cmd/server
 
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o meeting-service ./cmd/server
+
+# Runtime stage
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
+
+RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /root/
-COPY --from=builder /app/meeting-service .
-COPY --from=builder /app/configs/config.example.env .env
 
+# Copy the binary from builder
+COPY --from=builder /app/meeting-service .
+
+# Create recordings directory
+RUN mkdir -p /tmp/recordings && chmod 777 /tmp/recordings
+
+# Expose ports
 EXPOSE 8082
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1
+
+# Run the binary
 CMD ["./meeting-service"]

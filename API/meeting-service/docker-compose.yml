@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  meeting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      - SERVER_PORT=8082
+      - DATABASE_URL=postgresql://neondb_owner:npg_raLTI8VNq4Fn@ep-small-pond-adgvxr3v.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - JWT_SECRET=${JWT_SECRET:-vaultke-jwt-secret-key-for-development-2024}
+      - STUN_SERVER1=stun:stun.l.google.com:19302
+      - STUN_SERVER2=stun:stun1.l.google.com:19302
+      - TURN_SERVERS=
+      - MAX_ROOM_CAPACITY=150
+      - MAX_CONCURRENT_ROOMS=900
+      - ENABLE_RECORDING=false
+      - RECORDING_STORAGE_PATH=/tmp/recordings
+      - RATE_LIMIT_RPS=100
+      - RATE_LIMIT_BURST=200
+      - MAX_ICE_CONNECTIONS=500
+      - ALLOWED_ORIGINS=*
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 16G
+        reservations:
+          cpus: '4'
+          memory: 8G
+    networks:
+      - vaultke-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    networks:
+      - vaultke-network
+
+  coturn:
+    image: coturn/coturn:4.6.2
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/udp"
+      - "5349:5349/tcp"
+    volumes:
+      - ./turnserver.conf:/etc/turnserver.conf:ro
+    environment:
+      - TURN_SECRET=${TURN_SECRET:-vaultke-turn-secret}
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    networks:
+      - vaultke-network
+
+networks:
+  vaultke-network:
+    driver: bridge
+
+volumes:
+  redis_data:
