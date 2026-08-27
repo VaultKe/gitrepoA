@@ -100,7 +100,7 @@ type Chama struct {
 
 	// Member-specific fields (populated when querying user's chamas)
 	MemberID              string                 `json:"member_id" db:"member_id"`
-	MemberRole            ChamaRole              `json:"member_role" db:"role"`
+	MemberRole            ChamaRole              `json:"memberRole" db:"role"`
 	ServiceFeePaid        bool                   `json:"service_fee_paid" db:"service_fee_paid"`
 	ServiceFeeStatus      string                 `json:"service_fee_status" db:"service_fee_status"`
 	MembershipIsActive    bool                   `json:"membership_is_active" db:"is_active"`

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../components/common/Card';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
+import { formatRoleLabel, getRoleColor, getRoleIcon } from '../../utils/chamaMembersUtils';
 
 const UserChamasTable = memo(({
   colors,
@@ -55,7 +56,7 @@ const UserChamasTable = memo(({
           <View style={[styles.chamasTableHeader, { backgroundColor: colors.primary + '10', borderBottomColor: colors.primary }]}>
             <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 2 }]}>Name</Text>
             <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Category</Text>
-            <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Role</Text>
+            <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Role</Text>
             <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1.2 }]}>Reg. Fee</Text>
             <Text style={[styles.chamasTableHeaderText, { color: colors.primary, flex: 1 }]}>Action</Text>
           </View>
@@ -78,9 +79,35 @@ const UserChamasTable = memo(({
                 <Text style={[styles.chamasTableCell, { color: colors.text, flex: 1 }]} numberOfLines={1}>
                   {chama.category?.charAt(0).toUpperCase() + chama.category?.slice(1)}
                 </Text>
-                <Text style={[styles.chamasTableCell, { color: colors.text, flex: 1 }]} numberOfLines={1}>
-                  {chama.memberRole?.charAt(0).toUpperCase() + chama.memberRole?.slice(1)}
-                </Text>
+                <View style={[styles.chamasRoleCell, { flex: 1.2 }]}>
+                  <View style={[
+                    styles.chamasRoleBadge,
+                    {
+                      backgroundColor: {
+                        chairperson: colors.warning + '20',
+                        treasurer: colors.warning + '20',
+                        secretary: colors.warning + '20',
+                        assistant: colors.secondary + '20',
+                      }[chama.memberRole] || colors.textSecondary + '20',
+                    },
+                  ]}>
+                    <Ionicons
+                      name={getRoleIcon(chama.memberRole || 'member')}
+                      size={10}
+                      color={getRoleColor(chama.memberRole || 'member', colors)}
+                    />
+                    <Text
+                      style={[
+                        styles.chamasRoleText,
+                        {
+                          color: getRoleColor(chama.memberRole || 'member', colors),
+                        },
+                      ]}
+                    >
+                      {formatRoleLabel(chama.memberRole || 'member')}
+                    </Text>
+                  </View>
+                </View>
                 <View style={[styles.chamasStatusCell, { flex: 1.2 }]}>
                   <Ionicons
                     name={chama.service_fee_paid ? 'checkmark-circle' : 'time'}
@@ -192,6 +219,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  chamasRoleCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chamasRoleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'center',
+  },
+  chamasRoleText: {
+    fontSize: 12,
+    fontWeight: 'medium',
+    marginLeft: 4,
   },
   chamasStatusText: {
     fontSize: 12,
