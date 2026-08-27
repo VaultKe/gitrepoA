@@ -53,6 +53,22 @@ const login = async (credentials) => {
         console.warn('Refresh token verification failed:', e?.message || e);
       }
     }
+
+    // Store current device info for login history reference
+    try {
+      const deviceInfo = await (await import('./deviceInfo')).default();
+      await AsyncStorage.setItem('currentDeviceInfo', JSON.stringify({
+        deviceId: deviceInfo.deviceId,
+        deviceType: deviceInfo.deviceType,
+        deviceName: deviceInfo.deviceName,
+        platform: deviceInfo.platform,
+        osName: deviceInfo.osName,
+        browserName: deviceInfo.browserName,
+        loginTime: Date.now(),
+      }));
+    } catch (e) {
+      console.warn('Failed to store current device info:', e?.message || e);
+    }
   }
 
   return response;
@@ -106,6 +122,22 @@ const register = async (userData) => {
         console.warn('Refresh token verification failed:', e?.message || e);
       }
     }
+
+    // Store current device info for login history reference
+    try {
+      const deviceInfo = await (await import('./deviceInfo')).default();
+      await AsyncStorage.setItem('currentDeviceInfo', JSON.stringify({
+        deviceId: deviceInfo.deviceId,
+        deviceType: deviceInfo.deviceType,
+        deviceName: deviceInfo.deviceName,
+        platform: deviceInfo.platform,
+        osName: deviceInfo.osName,
+        browserName: deviceInfo.browserName,
+        loginTime: Date.now(),
+      }));
+    } catch (e) {
+      console.warn('Failed to store current device info:', e?.message || e);
+    }
   }
 
   return response;
@@ -124,6 +156,7 @@ const logout = async () => {
     await removeRefreshToken();
     await AsyncStorage.removeItem('userRole');
     await AsyncStorage.removeItem('userData');
+    await AsyncStorage.removeItem('currentDeviceInfo');
   }
   return { success: true };
 };

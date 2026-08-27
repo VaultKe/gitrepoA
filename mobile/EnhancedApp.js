@@ -31,7 +31,7 @@ function AppContent() {
   const { theme, isAuthenticated } = useApp();
   const colors = getThemeColors(theme);
 
-  const { ActivityResponder } = useInactivityTracker();
+  const { ActivityResponder } = useInactivityTracker(isAuthenticated);
 
   // Initialize notification service
   useEffect(() => {

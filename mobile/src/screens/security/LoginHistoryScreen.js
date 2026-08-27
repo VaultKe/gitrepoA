@@ -35,7 +35,16 @@ const LoginHistoryScreen = ({ navigation }) => {
       const response = await ApiService.getLoginHistory();
 
       if (response.success) {
-        setLoginHistory(response.data || []);
+        let data = response.data || [];
+        // Sort: current device first, then by most recent login time
+        data.sort((a, b) => {
+          if (a.isCurrent && !b.isCurrent) return -1;
+          if (!a.isCurrent && b.isCurrent) return 1;
+          const aTime = new Date(a.loginTime || 0).getTime();
+          const bTime = new Date(b.loginTime || 0).getTime();
+          return bTime - aTime;
+        });
+        setLoginHistory(data);
       } else {
         throw new Error(response.error || 'Failed to load login history');
       }
@@ -303,11 +312,12 @@ const LoginHistoryScreen = ({ navigation }) => {
     return ipAddress;
   };
 
-  const renderLoginItem = (item) => {
+  const renderLoginItem = (item, index) => {
     const isActive = item.status === 'active';
     const isCurrent = item.isCurrent;
     const isRevoked = item.status === 'revoked';
     const isLoggingOut = loggingOutId === item.id;
+    const isLatest = index === 0 && isActive;
 
     const deviceName = getDeviceDisplayName(item);
     const osDisplay = getOSDisplay(item);
@@ -354,8 +364,8 @@ const LoginHistoryScreen = ({ navigation }) => {
         style={[
           styles.loginItem,
           {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
+            backgroundColor: isCurrent ? colors.primary + '08' : colors.surface,
+            borderColor: isCurrent ? colors.primary + '40' : colors.border,
             opacity: isRevoked ? 0.7 : 1,
           },
         ]}
@@ -401,9 +411,17 @@ const LoginHistoryScreen = ({ navigation }) => {
                 {statusLabel}
               </Text>
             </View>
+            {isLatest && isActive && !isCurrent && (
+              <View style={[styles.latestBadge, { backgroundColor: colors.info + '15' }]}>
+                <Ionicons name="time-outline" size={10} color={colors.info} />
+                <Text style={[styles.latestBadgeText, { color: colors.info }]}>
+                  Latest
+                </Text>
+              </View>
+            )}
             {isCurrent && (
-              <View style={[styles.currentDeviceBadge, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name="phone-portrait" size={10} color={colors.primary} />
+              <View style={[styles.currentDeviceBadge, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.primary} />
                 <Text style={[styles.currentDevice, { color: colors.primary }]}>
                   This device
                 </Text>
@@ -536,7 +554,7 @@ const LoginHistoryScreen = ({ navigation }) => {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Recent Login Activity
             </Text>
-            {loginHistory.map(renderLoginItem)}
+            {loginHistory.map((item, index) => renderLoginItem(item, index))}
           </>
         )}
       </ScrollView>
@@ -634,6 +652,18 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     fontWeight: 'bold',
     letterSpacing: 0.3,
+  },
+  latestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 8,
+  },
+  latestBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '600',
   },
   currentDeviceBadge: {
     flexDirection: 'row',

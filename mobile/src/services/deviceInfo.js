@@ -115,6 +115,12 @@ export const getDeviceInfo = async () => {
     const model = isWeb ? '' : (Device.modelName || '');
     const deviceType = mapDeviceType(Device.deviceType);
 
+    // Safety: native apps must never report as 'web'
+    if (!isWeb && deviceType === 'web') {
+      // This should never happen, but if it does, force to mobile
+      deviceType = 'mobile';
+    }
+
     const deviceName = isWeb
       ? 'Web Browser'
       : (Device.deviceName || buildHumanReadableName(manufacturer, brand, model, osName));
