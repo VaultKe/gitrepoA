@@ -17,7 +17,6 @@ import SettingsScreen from '../screens/user/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/user/settings/SecuritySettingsScreen';
 import NotificationToneScreen from '../screens/user/settings/NotificationToneScreen';
 import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
-import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
 import ChangePasswordScreen from '../screens/security/ChangePasswordScreen';
 import LoginHistoryScreen from '../screens/security/LoginHistoryScreen';
 import withUserFooter from '../components/common/withUserFooter';
@@ -335,14 +334,6 @@ function UserTabNavigator() {
         component={ContactSupportScreen}
         options={{
           title: 'Contact Support',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-      />
-      <Tab.Screen
-        name="HelpCenter"
-        component={HelpCenterScreen}
-        options={{
-          title: 'Help Center',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />

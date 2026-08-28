@@ -357,7 +357,7 @@ func CreateMeeting(c *gin.Context) {
 		Duration    int    `json:"duration"`
 		Location    string `json:"location"`
 		MeetingURL  string `json:"meetingUrl"`
-		Type        string `json:"type"`
+		MeetingType string `json:"meetingType"`
 		Agenda      string `json:"agenda"`
 	}
 
@@ -433,9 +433,12 @@ func CreateMeeting(c *gin.Context) {
 	meetingID := fmt.Sprintf("meeting-%d", time.Now().UnixNano())
 
 	// Set default values
-	meetingType := req.Type
+	meetingType := req.MeetingType
 	if meetingType == "" {
-		meetingType = "regular"
+		meetingType = "physical"
+	}
+	if meetingType != "physical" && meetingType != "virtual" && meetingType != "hybrid" {
+		meetingType = "physical"
 	}
 
 	location := req.Location
@@ -447,9 +450,9 @@ func CreateMeeting(c *gin.Context) {
 	_, err = db.(*sql.DB).Exec(`
 		INSERT INTO meetings (
 			id, chama_id, title, description, scheduled_at, duration, location,
-			meeting_url, status, created_by, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9, CURRENT_TIMESTAMP)
-	`, meetingID, req.ChamaID, req.Title, req.Description, meetingTime, duration, location, req.MeetingURL, userID)
+			meeting_url, meeting_type, status, created_by, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'scheduled', $10, CURRENT_TIMESTAMP)
+	`, meetingID, req.ChamaID, req.Title, req.Description, meetingTime, duration, location, req.MeetingURL, meetingType, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -471,6 +474,8 @@ func CreateMeeting(c *gin.Context) {
 			"duration":    duration,
 			"location":    location,
 			"meetingUrl":  req.MeetingURL,
+			"meetingType": meetingType,
+			"type":        meetingType,
 			"status":      "scheduled",
 			"createdBy":   userID,
 			"createdAt":   time.Now().Format(time.RFC3339),

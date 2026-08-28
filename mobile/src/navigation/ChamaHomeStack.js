@@ -49,7 +49,6 @@ import NotificationsScreen from '../screens/user/notification/NotificationsScree
 import ProfileScreen from '../screens/user/profile/ProfileScreen';
 import SettingsScreen from '../screens/user/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/user/settings/SecuritySettingsScreen';
-import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
 import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryScreen';
 import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
@@ -154,7 +153,6 @@ const ChamaHomeStack = ({ route }) => {
     { name: 'Profile', component: ProfileScreen, title: 'My Profile' },
     { name: 'Settings', component: SettingsScreen, title: 'Settings' },
     { name: 'SecuritySettings', component: SecuritySettingsScreen, title: 'Security Settings' },
-    { name: 'HelpCenter', component: HelpCenterScreen, title: 'Help Center' },
     { name: 'TransactionHistory', component: TransactionHistoryScreen, title: 'Transaction History' },
     { name: 'Invitations', component: InvitationsScreen, title: 'Invitations' },
     { name: 'ContactSupport', component: ContactSupportScreen, title: 'Contact Support' },

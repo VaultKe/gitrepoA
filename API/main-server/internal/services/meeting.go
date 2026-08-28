@@ -21,7 +21,7 @@ func NewMeetingService(db *sql.DB, _ *CalendarService) *MeetingService {
 // GetMeeting retrieves a meeting by ID
 func (s *MeetingService) GetMeeting(meetingID string) (*models.Meeting, error) {
 	query := `
-		SELECT id, chama_id, title, description, type, location, meeting_link,
+		SELECT id, chama_id, title, description, meeting_type, location, meeting_link,
 			   scheduled_at, duration, status, created_by, created_at, updated_at
 		FROM meetings
 		WHERE id = $1

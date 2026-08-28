@@ -9,7 +9,7 @@ type Meeting struct {
 	ChamaID     string     `json:"chamaId" db:"chama_id"`
 	Title       string     `json:"title" db:"title"`
 	Description *string    `json:"description,omitempty" db:"description"`
-	Type        string     `json:"type" db:"type"`
+	Type        string     `json:"meetingType" db:"meeting_type"`
 	Location    *string    `json:"location,omitempty" db:"location"`
 	MeetingLink *string    `json:"meetingLink,omitempty" db:"meeting_link"`
 	ScheduledAt time.Time  `json:"scheduledAt" db:"scheduled_at"`
@@ -17,7 +17,7 @@ type Meeting struct {
 	Status      string     `json:"status" db:"status"`
 	CreatedBy   string     `json:"createdBy" db:"created_by"`
 	CreatedAt   time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt   time.Time  `json:"updatedAt" db:"updated_at"`
+	UpdatedAt   time.Time  `json:"updatedAt,omitempty" db:"updated_at"`
 }
 
 type MeetingAttendance struct {

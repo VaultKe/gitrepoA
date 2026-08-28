@@ -149,29 +149,31 @@ const useChamaMeetingsScreen = ({ route, navigation }) => {
 
   const handleAttend = (meeting) => {
     try {
-      console.log('Attend button pressed for meeting:', meeting.id, meeting.title);
-      const meetingType = meeting.meetingType || meeting.type || 'virtual';
-      const meetingDate = toEAT(meeting.startTime || meeting.scheduledAt || meeting.date);
-      const now = nowEAT();
-      const end = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
+      console.log('Attend button pressed for meeting:', meeting?.id, meeting?.title, meeting);
+      const meetingType = meeting?.meetingType || meeting?.type || 'virtual';
+      const meetingTypeLower = String(meetingType).toLowerCase();
+      const screenName = meetingTypeLower === 'virtual' || meetingTypeLower === 'hybrid' ? 'OnlineMeeting' : 'PhysicalMeeting';
 
-      const statusLower = (meeting.status || '').toLowerCase();
+      const meetingDate = toEAT(meeting?.startTime || meeting?.scheduledAt || meeting?.date);
+      const now = nowEAT();
+      const end = meetingDate ? new Date(meetingDate.getTime() + (meeting?.duration || 60) * 60000) : null;
+
+      const statusLower = String(meeting?.status || '').toLowerCase();
       const isEnded = statusLower === 'completed' || statusLower === 'ended';
 
-      const screenName = meetingType === 'virtual' || meetingType === 'hybrid' ? 'OnlineMeeting' : 'PhysicalMeeting';
       const params = {
-        meetingId: meeting.id,
-        meetingTitle: meeting.title,
+        meetingId: meeting?.id,
+        meetingTitle: meeting?.title,
         userRole: userRole,
         meetingData: meeting,
         isReadOnly: isEnded,
       };
 
-      if (meetingType === 'physical' || meetingType === 'hybrid') {
-        params.chamaId = chamaId || meeting.chamaId;
+      if (meetingTypeLower === 'physical' || meetingTypeLower === 'hybrid') {
+        params.chamaId = chamaId || meeting?.chamaId;
       }
 
-      console.log('Navigating to:', screenName, 'isEnded:', isEnded, 'status:', meeting.status, 'params:', params);
+      console.log('Navigating to:', screenName, 'isEnded:', isEnded, 'status:', meeting?.status, 'params:', params);
       navigation.navigate(screenName, params);
     } catch (error) {
       console.error('Failed to attend meeting:', error);

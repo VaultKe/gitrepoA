@@ -285,13 +285,6 @@ const SettingsScreen = ({ navigation }) => {
 
   const supportMenuItems = [
     {
-      title: 'Help Center',
-      subtitle: 'FAQs and support articles',
-      icon: 'help-circle',
-      color: colors.warning,
-      onPress: () => navigation.navigate('HelpCenter'),
-    },
-    {
       title: 'Contact Support',
       subtitle: 'Get help from our team',
       icon: 'chatbubble',

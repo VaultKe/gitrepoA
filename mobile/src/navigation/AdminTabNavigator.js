@@ -27,7 +27,6 @@ import ProfileScreen from '../screens/user/profile/ProfileScreen';
 // Import additional screens that users might navigate to
 import SettingsScreen from '../screens/user/settings/SettingsScreen';
 import SecuritySettingsScreen from '../screens/user/settings/SecuritySettingsScreen';
-import HelpCenterScreen from '../screens/user/settings/HelpCenterScreen';
 import TransactionHistoryScreen from '../screens/user/wallet/TransactionHistoryScreen';
 import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
 import ContactSupportScreen from '../screens/user/support/ContactSupportScreen';
@@ -334,15 +333,6 @@ function AdminTabNavigator({ route }) {
         component={SecuritySettingsScreen}
         options={{
           title: 'Security Settings',
-          tabBarButton: () => null, // Hide from tab bar
-        }}
-        initialParams={routeParams}
-      />
-      <Tab.Screen
-        name="HelpCenter"
-        component={HelpCenterScreen}
-        options={{
-          title: 'Help Center',
           tabBarButton: () => null, // Hide from tab bar
         }}
         initialParams={routeParams}
