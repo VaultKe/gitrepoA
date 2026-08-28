@@ -6,12 +6,6 @@ export const WEBRTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    // Add TURN servers here for production
-    // {
-    //   urls: 'turn:your-turn-server.com:3478',
-    //   username: 'turn-username',
-    //   credential: 'turn-credential',
-    // },
   ],
   iceTransportPolicy: 'all',
   iceCandidatePoolSize: 2,
@@ -48,25 +42,41 @@ export const SIGNALING_MESSAGE_TYPES = {
   CHAT_MESSAGE: 'chat-message',
 };
 
-// Platform-specific WebRTC imports
-let RTCPeerConnection, MediaStream, MediaStreamTrack, RTCSessionDescription, RTCIceCandidate;
+// Lazy native module loader to avoid bundling react-native-webrtc on web
+const loadNativeWebRTC = () => {
+  if (Platform.OS === 'web') return null;
+  try {
+    return require('react-native-webrtc');
+  } catch (e) {
+    console.warn('react-native-webrtc is not available:', e?.message || e);
+    return null;
+  }
+};
 
-if (Platform.OS === 'web') {
-  // Web platform - use native WebRTC
-  RTCPeerConnection = window.RTCPeerConnection;
-  MediaStream = window.MediaStream;
-  MediaStreamTrack = window.MediaStreamTrack;
-  RTCSessionDescription = window.RTCSessionDescription;
-  RTCIceCandidate = window.RTCIceCandidate;
-} else {
-  // Native platform - use react-native-webrtc
-  const ReactNativeWebRTC = require('react-native-webrtc');
-  RTCPeerConnection = ReactNativeWebRTC.RTCPeerConnection;
-  MediaStream = ReactNativeWebRTC.MediaStream;
-  MediaStreamTrack = ReactNativeWebRTC.MediaStreamTrack;
-  RTCSessionDescription = ReactNativeWebRTC.RTCSessionDescription;
-  RTCIceCandidate = ReactNativeWebRTC.RTCIceCandidate;
-}
+const getPlatformClasses = () => {
+  if (Platform.OS === 'web') {
+    return {
+      RTCPeerConnection: window.RTCPeerConnection,
+      MediaStream: window.MediaStream,
+      MediaStreamTrack: window.MediaStreamTrack,
+      RTCSessionDescription: window.RTCSessionDescription,
+      RTCIceCandidate: window.RTCIceCandidate,
+    };
+  }
+
+  const native = loadNativeWebRTC();
+  if (!native) {
+    throw new Error('react-native-webrtc is required on native platforms');
+  }
+
+  return {
+    RTCPeerConnection: native.RTCPeerConnection,
+    MediaStream: native.MediaStream,
+    MediaStreamTrack: native.MediaStreamTrack,
+    RTCSessionDescription: native.RTCSessionDescription,
+    RTCIceCandidate: native.RTCIceCandidate,
+  };
+};
 
 class WebRTCClient {
   constructor() {
@@ -83,6 +93,14 @@ class WebRTCClient {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
+    this.platformClasses = null;
+  }
+
+  ensurePlatformClasses() {
+    if (!this.platformClasses) {
+      this.platformClasses = getPlatformClasses();
+    }
+    return this.platformClasses;
   }
 
   on(event, handler) {
@@ -122,14 +140,17 @@ class WebRTCClient {
 
   async initLocalMedia(constraints = MEDIA_CONSTRAINTS) {
     try {
+      const { MediaStream } = this.ensurePlatformClasses();
+
       if (Platform.OS === 'web') {
         this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
       } else {
-        // React Native
-        const ReactNativeWebRTC = require('react-native-webrtc');
-        const stream = await ReactNativeWebRTC.mediaDevices.getUserMedia(constraints);
+        const native = loadNativeWebRTC();
+        if (!native) throw new Error('react-native-webrtc not available');
+        const stream = await native.mediaDevices.getUserMedia(constraints);
         this.localStream = new MediaStream(stream);
       }
+
       this.emit('localStream', this.localStream);
       return this.localStream;
     } catch (error) {
@@ -147,7 +168,6 @@ class WebRTCClient {
           audio: true,
         });
       } else {
-        // React Native - screen sharing requires expo-screen-capture or similar
         throw new Error('Screen sharing not implemented for mobile yet');
       }
       this.emit('screenStream', this.screenStream);
@@ -291,9 +311,9 @@ class WebRTCClient {
       return this.peerConnections.get(remoteConnId);
     }
 
+    const { RTCPeerConnection, MediaStream } = this.ensurePlatformClasses();
     const pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
-    // Add local tracks
     if (this.localStream) {
       if (Platform.OS === 'web') {
         this.localStream.getTracks().forEach(track => {
@@ -306,12 +326,10 @@ class WebRTCClient {
       }
     }
 
-    // Handle remote tracks
     pc.ontrack = (event) => {
       this.handleRemoteTrack(remoteConnId, remoteUserId, event);
     };
 
-    // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         this.sendSignalingMessage({
@@ -323,7 +341,6 @@ class WebRTCClient {
       }
     };
 
-    // Handle connection state changes
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       console.log(`Connection state with ${remoteUserId}: ${state}`);
@@ -353,6 +370,7 @@ class WebRTCClient {
 
   async handleOffer(message) {
     const pc = await this.createPeerConnection(message.connId, message.userId, false);
+    const { RTCSessionDescription } = this.ensurePlatformClasses();
     await pc.setRemoteDescription(new RTCSessionDescription(message.payload));
 
     const answer = await pc.createAnswer();
@@ -369,6 +387,7 @@ class WebRTCClient {
   async handleAnswer(message) {
     const pc = this.peerConnections.get(message.connId);
     if (pc) {
+      const { RTCSessionDescription } = this.ensurePlatformClasses();
       await pc.setRemoteDescription(new RTCSessionDescription(message.payload));
     }
   }
@@ -376,11 +395,14 @@ class WebRTCClient {
   async handleIceCandidate(message) {
     const pc = this.peerConnections.get(message.connId);
     if (pc && message.payload) {
+      const { RTCIceCandidate } = this.ensurePlatformClasses();
       await pc.addIceCandidate(new RTCIceCandidate(message.payload));
     }
   }
 
   handleRemoteTrack(connId, userId, event) {
+    const { MediaStream } = this.ensurePlatformClasses();
+
     if (!this.remoteStreams.has(connId)) {
       this.remoteStreams.set(connId, new MediaStream());
     }
@@ -410,10 +432,7 @@ class WebRTCClient {
 
   toggleAudio(enabled) {
     if (this.localStream) {
-      const tracks = Platform.OS === 'web'
-        ? this.localStream.getAudioTracks()
-        : this.localStream.getAudioTracks();
-      tracks.forEach(track => {
+      this.localStream.getAudioTracks().forEach(track => {
         track.enabled = enabled;
       });
     }
@@ -421,10 +440,7 @@ class WebRTCClient {
 
   toggleVideo(enabled) {
     if (this.localStream) {
-      const tracks = Platform.OS === 'web'
-        ? this.localStream.getVideoTracks()
-        : this.localStream.getVideoTracks();
-      tracks.forEach(track => {
+      this.localStream.getVideoTracks().forEach(track => {
         track.enabled = enabled;
       });
     }
@@ -471,20 +487,12 @@ class WebRTCClient {
     this.peerConnections.clear();
 
     if (this.localStream) {
-      if (Platform.OS === 'web') {
-        this.localStream.getTracks().forEach(track => track.stop());
-      } else {
-        this.localStream.getTracks().forEach(track => track.stop());
-      }
+      this.localStream.getTracks().forEach(track => track.stop());
       this.localStream = null;
     }
 
     if (this.screenStream) {
-      if (Platform.OS === 'web') {
-        this.screenStream.getTracks().forEach(track => track.stop());
-      } else {
-        this.screenStream.getTracks().forEach(track => track.stop());
-      }
+      this.screenStream.getTracks().forEach(track => track.stop());
       this.screenStream = null;
     }
 

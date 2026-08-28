@@ -14,8 +14,6 @@ import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ProfileHeader from '../../../components/profile/ProfileHeader';
 import PersonalInfoForm from '../../../components/profile/PersonalInfoForm';
 import WhatsAppLinkCard from '../../../components/profile/WhatsAppLinkCard';
-import UserChamasTable from '../../../components/profile/UserChamasTable';
-import RecentActivityTable from '../../../components/profile/RecentActivityTable';
 import useProfileScreen from '../../../hooks/useProfileScreen';
 
 const ProfileScreen = ({ navigation }) => {
@@ -35,14 +33,6 @@ const ProfileScreen = ({ navigation }) => {
     setCountySearch,
     selectCounty,
     setShowCountyPicker,
-    userChamas,
-    chamasLoading,
-    payingChamaFee,
-    cooldownActive,
-    cooldownRemaining,
-    chamasPage,
-    setChamasPage,
-    CHAMAS_PER_PAGE,
     imageExpanded,
     setImageExpanded,
     handleInputChange,
@@ -50,9 +40,6 @@ const ProfileScreen = ({ navigation }) => {
     handleSave,
     handleCancel,
     handleImagePress,
-    loadRecentActivities,
-    loadUserChamas,
-    handlePayChamaFee,
     handleLogout,
     user,
   } = screen;
@@ -94,11 +81,7 @@ const ProfileScreen = ({ navigation }) => {
             <RefreshControl
               refreshing={false}
               onRefresh={async () => {
-                try {
-                  await Promise.all([loadRecentActivities(), loadUserChamas()]);
-                } catch (error) {
-                  console.warn('Profile refresh failed:', error);
-                }
+                console.warn('Profile refresh has no data to reload in this view');
               }}
               colors={[colors.primary]}
               tintColor={colors.primary}
@@ -125,38 +108,11 @@ const ProfileScreen = ({ navigation }) => {
             colors={colors}
             onNavigateWhatsApp={handleNavigateWhatsApp}
           />
-
-          <UserChamasTable
-            colors={colors}
-            userChamas={userChamas}
-            chamasLoading={chamasLoading}
-            payingChamaFee={payingChamaFee}
-            cooldownActive={cooldownActive}
-            cooldownRemaining={cooldownRemaining}
-            chamasPage={chamasPage}
-            chamasPerPage={CHAMAS_PER_PAGE}
-            onPayChamaFee={handlePayChamaFee}
-            onPrevPage={() => setChamasPage((p) => Math.max(1, p - 1))}
-            onNextPage={() => setChamasPage((p) => Math.min(Math.ceil(userChamas.length / CHAMAS_PER_PAGE), p + 1))}
-          />
-
-          <View style={{ marginHorizontal: spacing.sm, marginBottom: spacing.lg }}>
-            <RecentActivityTable
-              colors={colors}
-              recentActivities={screen.recentActivities}
-              activitiesLoading={screen.activitiesLoading}
-              formatCurrency={screen.formatCurrency}
-            />
-          </View>
         </ScrollView>
 
         <PageRefreshButton
           onRefresh={async () => {
-            try {
-              await Promise.all([loadRecentActivities(), loadUserChamas()]);
-            } catch (error) {
-              console.warn('Profile refresh failed:', error);
-            }
+            console.warn('Profile refresh has no data to reload in this view');
           }}
           refreshing={false}
           color={colors.primary}

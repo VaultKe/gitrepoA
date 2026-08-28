@@ -9,11 +9,11 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../context/AppContext';
-import { getThemeColors, spacing, typography } from '../../utils/theme';
-import useOnlineMeetingScreen from '../../hooks/useOnlineMeetingScreen';
-import OnlineMeetingLoading from '../../components/chama-meeting/OnlineMeetingLoading';
-import OnlineMeetingErrorView from '../../components/chama-meeting/OnlineMeetingErrorView';
+import { useApp } from '../../../context/AppContext';
+import { getThemeColors, spacing, typography } from '../../../utils/theme';
+import useOnlineMeetingScreen from '../../../hooks/useOnlineMeetingScreen';
+import OnlineMeetingLoading from '../../../components/chama-meeting/OnlineMeetingLoading';
+import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeetingErrorView';
 
 const OnlineMeetingScreen = ({ route, navigation }) => {
   const { theme } = useApp();
@@ -182,7 +182,10 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.controlButton, isScreenSharing && styles.controlButtonActive]}
+          style={[
+            styles.controlButton,
+            isScreenSharing && { backgroundColor: 'rgba(59,130,246,0.4)' },
+          ]}
           onPress={handleToggleScreenShare}
         >
           <Ionicons
@@ -328,11 +331,8 @@ const styles = StyleSheet.create({
   controlButtonOff: {
     backgroundColor: 'rgba(255,0,0,0.2)',
   },
-  controlButtonActive: {
-    backgroundColor: colors.primary + '40',
-  },
   endCallButton: {
-    backgroundColor: colors.error,
+    backgroundColor: '#dc2626',
   },
   chatPanel: {
     position: 'absolute',
