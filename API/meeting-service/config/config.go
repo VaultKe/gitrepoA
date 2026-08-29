@@ -62,6 +62,8 @@ func Load() *Config {
 		RateLimitBurst:       getIntEnv("RATE_LIMIT_BURST", 200),
 		MaxICEConnections:    getIntEnv("MAX_ICE_CONNECTIONS", 500),
 		AllowedOrigins:       getStringSliceEnv("ALLOWED_ORIGINS", []string{
+			"https://livemeeting-service.onrender.com",
+			"wss://livemeeting-service.onrender.com",
 			"https://gitrepoa-1.onrender.com",
 			"http://localhost:8081",
 			"http://localhost:8082",
