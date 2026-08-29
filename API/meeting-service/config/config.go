@@ -64,6 +64,8 @@ func Load() *Config {
 		AllowedOrigins:       getStringSliceEnv("ALLOWED_ORIGINS", []string{
 			"https://gitrepoa-1.onrender.com",
 			"http://localhost:8081",
+			"http://localhost:8082",
+			"http://localhost:8085",
 			"http://localhost:3000",
 			"https://vault-better1.vercel.app",
 			"http://localhost:19006",

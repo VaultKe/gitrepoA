@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Alert, BackHandler, PermissionsAndroid, Platform } from 'react-native';
+import { Alert, BackHandler, Linking, PermissionsAndroid, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { meetingApi, setMeetingAuthToken, clearMeetingAuthToken } from '../services/meetingApi';
@@ -24,6 +24,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [screenStream, setScreenStream] = useState(null);
   const [meetingData, setMeetingData] = useState(null);
   const [connectionError, setConnectionError] = useState(null);
   const [localStream, setLocalStream] = useState(null);
@@ -36,6 +37,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const reconnectTimeoutRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
+  const participantIdRef = useRef(null);
 
   // Initialize meeting
   useEffect(() => {
@@ -89,6 +91,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           body: JSON.stringify({
             displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
             role: userRole,
+            userId: user?.id, // Pass userId so backend can create participant with correct user_id
           }),
         });
 
@@ -96,6 +99,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           const response = await meetingApi.joinRoom(meetingId, {
             displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
             role: userRole,
+            userId: user?.id, // Pass userId for unauthenticated joins
           });
           if (!response) {
             throw new Error('Failed to join meeting');
@@ -107,6 +111,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       }
 
       setMeetingData(connectionData);
+
+      // Store participantId for later API calls
+      if (connectionData.participantId) {
+        participantIdRef.current = connectionData.participantId;
+      }
 
       // Initialize WebRTC
       await initializeWebRTC(connectionData);
@@ -136,11 +145,28 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setConnectionError(error.message);
       setIsConnecting(false);
 
-      Toast.show({
-        type: 'error',
-        text1: 'Connection failed',
-        text2: error.message,
-      });
+      // Check if this is a permission error and offer to open settings
+      const isPermissionError = error.message?.includes('permissions are required');
+      
+      if (isPermissionError && Platform.OS === 'android') {
+        Alert.alert(
+          'Permissions Required',
+          error.message,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: () => Linking.openSettings() 
+            },
+          ]
+        );
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Connection failed',
+          text2: error.message,
+        });
+      }
     }
   };
 
@@ -156,9 +182,19 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       const denied = Object.values(granted).filter(p => p !== PermissionsAndroid.RESULTS.GRANTED);
 
       if (denied.length > 0) {
+        // Check if user selected "Don't ask again"
+        const neverAskAgain = Object.entries(granted).some(
+          ([key, value]) => value === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
+        );
+        
+        if (neverAskAgain) {
+          throw new Error('Camera and microphone permissions are required. Please enable them in Settings > Apps > VaultKe > Permissions.');
+        }
         throw new Error('Camera and microphone permissions are required for video calls');
       }
     }
+    // iOS permissions are requested automatically by the system when accessing camera/microphone
+    // The NSCameraUsageDescription and NSMicrophoneUsageDescription in Info.plist provide the prompt text
   };
 
   const getAuthToken = async () => {
@@ -270,6 +306,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       await meetingApi.updateParticipant(meetingId, { isVideoOn: newState });
     } catch (error) {
       console.error('Failed to update video state:', error);
+      // Don't show toast for "user not in room" - it's a non-critical sync error
+      if (!error.message?.includes('user not in room')) {
+        Toast.show({
+          type: 'warning',
+          text1: 'Sync warning',
+          text2: 'Camera state may not be synced to server',
+        });
+      }
     }
 
     Toast.show({
@@ -291,6 +335,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       await meetingApi.updateParticipant(meetingId, { isMuted: !newState });
     } catch (error) {
       console.error('Failed to update mic state:', error);
+      // Don't show toast for "user not in room" - it's a non-critical sync error
+      if (!error.message?.includes('user not in room')) {
+        Toast.show({
+          type: 'warning',
+          text1: 'Sync warning',
+          text2: 'Microphone state may not be synced to server',
+        });
+      }
     }
 
     Toast.show({
@@ -324,6 +376,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       if (!isScreenSharing) {
         const screenStream = await webrtcClientRef.current?.initScreenShare();
         if (screenStream) {
+          await webrtcClientRef.current?.replaceVideoTrack(screenStream);
+          setScreenStream(screenStream);
           setIsScreenSharing(true);
           Toast.show({
             type: 'success',
@@ -332,6 +386,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           });
         }
       } else {
+        await webrtcClientRef.current?.stopScreenShare();
+        setScreenStream(null);
         setIsScreenSharing(false);
         Toast.show({
           type: 'success',
@@ -431,6 +487,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     isCameraEnabled,
     isMicrophoneEnabled,
     isScreenSharing,
+    screenStream,
     meetingData,
     connectionError,
     localStream,

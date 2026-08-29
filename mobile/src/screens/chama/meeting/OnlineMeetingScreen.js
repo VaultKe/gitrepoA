@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -16,6 +16,7 @@ import OnlineMeetingLoading from '../../../components/chama-meeting/OnlineMeetin
 import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeetingErrorView';
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
+const MAX_GRID_PARTICIPANTS = 3;
 
 const OnlineMeetingScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
@@ -23,6 +24,8 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   const { isReadOnly = false } = route.params || {};
   const screen = useOnlineMeetingScreen({ route, navigation });
   const chatScrollRef = useRef(null);
+  const [isVideoExpanded, setIsVideoExpanded] = useState(false);
+  const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
 
   const {
     isConnecting,
@@ -30,6 +33,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     isCameraEnabled,
     isMicrophoneEnabled,
     isScreenSharing,
+    screenStream,
     meetingTitle,
     userRole,
     participants,
@@ -48,13 +52,14 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     remoteVideoRefs,
   } = screen;
 
-  // Set up local video element for web
+  // Set up local video element for web (camera or screen share)
+  const activeLocalStream = isScreenSharing && screenStream ? screenStream : localStream;
   useEffect(() => {
-    if (isWeb && localStream && localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream;
+    if (isWeb && activeLocalStream && localVideoRef.current) {
+      localVideoRef.current.srcObject = activeLocalStream;
       localVideoRef.current.play().catch(e => console.log('Local video play error:', e));
     }
-  }, [localStream]);
+  }, [localStream, screenStream, isScreenSharing, isCameraEnabled]);
 
   // Auto-scroll to bottom when new chat messages arrive
   useEffect(() => {
@@ -75,6 +80,60 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       });
     }
   }, [remoteStreams]);
+
+  // Determine the active participant for expanded view
+  // Priority: 1. Remote screen sharer, 2. Active speaker, 3. First remote participant
+  const getActiveParticipant = () => {
+    const remoteScreenSharer = remoteStreams.find(s => s.isScreenSharing);
+    if (remoteScreenSharer) return remoteScreenSharer;
+
+    const remoteActiveSpeaker = remoteStreams.find(s => s.isActive || s.isSpeaking);
+    if (remoteActiveSpeaker) return remoteActiveSpeaker;
+
+    return remoteStreams.length > 0 ? remoteStreams[0] : null;
+  };
+
+  const activeParticipant = getActiveParticipant();
+
+  // Auto-pin active participant when they change
+  useEffect(() => {
+    if (activeParticipant) {
+      setPinnedParticipantId(activeParticipant.connId);
+    }
+  }, [activeParticipant?.connId]);
+
+  // Determine if expanded view should be shown
+  // Show expanded when: user expanded, someone is screen sharing, or there's an active participant
+  const showExpandedView = isVideoExpanded || isScreenSharing || !!activeParticipant;
+
+  // Get the participant to show in expanded view
+  const getExpandedParticipant = () => {
+    // If user manually pinned someone, show them
+    if (pinnedParticipantId) {
+      const pinned = remoteStreams.find(s => s.connId === pinnedParticipantId);
+      if (pinned) return { participant: pinned, isLocal: false };
+    }
+    // If local user is screen sharing, show local
+    if (isScreenSharing) {
+      return { participant: { stream: screenStream }, isLocal: true };
+    }
+    // Show active participant
+    if (activeParticipant) {
+      return { participant: activeParticipant, isLocal: false };
+    }
+    return null;
+  };
+
+  const expandedData = getExpandedParticipant();
+
+  // Grid participants (excluding the expanded participant)
+  const gridRemoteParticipants = remoteStreams
+    .filter(s => !expandedData || expandedData.isLocal || s.connId !== expandedData.participant.connId)
+    .slice(0, MAX_GRID_PARTICIPANTS);
+
+  const hiddenParticipantsCount = Math.max(0,
+    remoteStreams.length - gridRemoteParticipants.length - (expandedData && !expandedData.isLocal ? 1 : 0)
+  );
 
   if (isReadOnly) {
     return (
@@ -107,9 +166,26 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   }
 
   const renderVideoElement = (stream, isLocal = false, connId = null) => {
+    // Show placeholder when local camera is disabled
+    if (isLocal && !isCameraEnabled) {
+      return (
+        <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
+          <Ionicons
+            name="videocam-off"
+            size={48}
+            color={colors.textSecondary}
+          />
+          <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
+            Camera off
+          </Text>
+        </View>
+      );
+    }
+
     if (isWeb) {
       return (
         <video
+          key={isLocal ? `local-${isCameraEnabled}` : `remote-${connId}`}
           ref={isLocal ? localVideoRef : (el => {
             if (!remoteVideoRefs.current) {
               remoteVideoRefs.current = new Map();
@@ -118,7 +194,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               remoteVideoRefs.current.set(connId, { current: el });
             }
           })}
-          srcObject={stream || undefined}
           style={styles.video}
           muted={isLocal}
           playsInline
@@ -147,25 +222,69 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]}>
-      {/* Video Grid */}
-      <View style={styles.videoContainer}>
-        {/* Local Video */}
-        <View style={styles.videoWrapper}>
-          {localStream ? renderVideoElement(localStream, true) : renderVideoElement(null, true)}
-          <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
-            <Text style={styles.videoLabelText}>You</Text>
-          </View>
-        </View>
-
-        {/* Remote Videos */}
-        {remoteStreams.map(({ connId, userId, stream }) => (
-          <View key={connId} style={styles.videoWrapper}>
-            {renderVideoElement(stream, false, connId)}
-            <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
-              <Text style={styles.videoLabelText}>Participant</Text>
+      {/* Video Area */}
+      <View style={styles.videoArea}>
+        {/* Expanded View - shows active speaker / screen sharer / pinned participant */}
+        {showExpandedView && expandedData && (
+          <View style={styles.expandedVideoContainer}>
+            {expandedData.isLocal ? (
+              isScreenSharing ? renderVideoElement(screenStream, true) : (localStream ? renderVideoElement(localStream, true) : renderVideoElement(null, true))
+            ) : (
+              renderVideoElement(expandedData.participant.stream, false, expandedData.participant.connId)
+            )}
+            <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+              <Text style={styles.videoLabelText}>
+                {expandedData.isLocal ? (isScreenSharing ? 'Your Screen' : 'You') : (expandedData.participant.name || 'Participant')}
+              </Text>
+              <TouchableOpacity
+                style={styles.expandButton}
+                onPress={() => setIsVideoExpanded(!isVideoExpanded)}
+              >
+                <Ionicons
+                  name={isVideoExpanded ? 'contract' : 'expand'}
+                  size={18}
+                  color="#fff"
+                />
+              </TouchableOpacity>
             </View>
           </View>
-        ))}
+        )}
+
+        {/* Grid View - shows local video + limited remote participants */}
+        <View style={[
+          styles.videoGrid,
+          showExpandedView && styles.videoGridWithExpanded
+        ]}>
+          {/* Local Video - always visible in grid */}
+          <View style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
+            {localStream ? renderVideoElement(activeLocalStream, true) : renderVideoElement(null, true)}
+            <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+              <Text style={styles.videoLabelText}>{isScreenSharing ? 'Screen' : 'You'}</Text>
+            </View>
+          </View>
+
+          {/* Remote Videos - limited to MAX_GRID_PARTICIPANTS */}
+          {gridRemoteParticipants.map(({ connId, userId, stream, name }) => (
+            <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
+              {renderVideoElement(stream, false, connId)}
+              <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
+                <Text style={styles.videoLabelText}>{name || 'Participant'}</Text>
+              </View>
+            </View>
+          ))}
+
+          {/* Hidden participants indicator */}
+          {hiddenParticipantsCount > 0 && (
+            <View style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded, styles.hiddenParticipantsBadge]}>
+              <View style={styles.hiddenParticipantsContent}>
+                <Ionicons name="people" size={32} color="#fff" />
+                <Text style={styles.hiddenParticipantsText}>
+                  +{hiddenParticipantsCount} others
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Controls */}
@@ -300,22 +419,54 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  videoContainer: {
+  videoArea: {
     flex: 1,
+    position: 'relative',
+  },
+  expandedVideoContainer: {
+    flex: 1,
+    margin: spacing.sm,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  videoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.sm,
   },
-   videoWrapper: {
-    width: '50%',
+  videoGridWithExpanded: {
+    flexWrap: 'nowrap',
+    justifyContent: 'flex-start',
+    overflowX: 'auto',
+    paddingVertical: spacing.md,
+  },
+  gridVideoWrapper: {
+    width: '48%',
     aspectRatio: 16 / 9,
-    minHeight: 120,
+    minHeight: 100,
     margin: spacing.xs,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  gridVideoWrapperExpanded: {
+    width: 120,
+    minWidth: 120,
+    height: 80,
+    margin: spacing.xs,
+  },
+  expandButton: {
+    marginLeft: spacing.xs,
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   video: {
     width: '100%',
@@ -339,11 +490,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   videoLabelText: {
     color: '#fff',
     fontSize: typography.fontSize.xs,
     fontWeight: '600',
+  },
+  hiddenParticipantsBadge: {
+    backgroundColor: '#374151',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hiddenParticipantsContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hiddenParticipantsText: {
+    color: '#fff',
+    fontSize: typography.fontSize.sm,
+    fontWeight: '600',
+    marginTop: spacing.xs,
   },
   controls: {
     flexDirection: 'row',

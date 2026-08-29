@@ -543,18 +543,53 @@ func (rm *RoomManager) GetParticipants(roomID string) ([]*models.Participant, er
 	return participants, nil
 }
 
+// getParticipantFromDB loads a single participant from the database.
+func (rm *RoomManager) getParticipantFromDB(roomID, userID string) (*models.Participant, bool) {
+	var p models.Participant
+	var metadataJSON []byte
+	var leftAt sql.NullTime
+
+	err := rm.db.QueryRow(`
+		SELECT id, room_id, user_id, display_name, role, is_muted, is_video_on, is_screen_sharing, joined_at, left_at, metadata
+		FROM participants
+		WHERE room_id = $1 AND user_id = $2
+		ORDER BY joined_at DESC LIMIT 1
+	`, roomID, userID).Scan(
+		&p.ID, &p.RoomID, &p.UserID, &p.DisplayName, &p.Role,
+		&p.IsMuted, &p.IsVideoOn, &p.IsScreenSharing, &p.JoinedAt,
+		&leftAt, &metadataJSON,
+	)
+	if err != nil {
+		return nil, false
+	}
+	if leftAt.Valid {
+		p.LeftAt = &leftAt.Time
+	}
+	if len(metadataJSON) > 0 {
+		_ = json.Unmarshal(metadataJSON, &p.Metadata)
+	}
+	return &p, true
+}
+
 // UpdateParticipant updates participant state (muted, video, screen share).
 func (rm *RoomManager) UpdateParticipant(roomID, userID string, updates map[string]interface{}) error {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	if rm.participants[roomID] == nil {
-		return ErrUserNotInRoom
-	}
-
+	// Try in-memory lookup first
 	participant, exists := rm.participants[roomID][userID]
-	if !exists {
-		return ErrUserNotInRoom
+
+	// Fallback: if not in memory, try loading from database
+	if !exists || participant == nil {
+		participant, exists = rm.getParticipantFromDB(roomID, userID)
+		if !exists || participant == nil {
+			return ErrUserNotInRoom
+		}
+		// Cache in memory for future lookups
+		if rm.participants[roomID] == nil {
+			rm.participants[roomID] = make(map[string]*models.Participant)
+		}
+		rm.participants[roomID][userID] = participant
 	}
 
 	setParts := []string{}

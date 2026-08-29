@@ -161,7 +161,7 @@ class WebRTCClient {
     }
   }
 
-  async initScreenShare() {
+   async initScreenShare() {
     try {
       if (Platform.OS === 'web') {
         this.screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -177,6 +177,19 @@ class WebRTCClient {
       console.error('Failed to get screen share:', error);
       this.emit('error', { type: 'screen', error });
       throw error;
+    }
+  }
+
+  async stopScreenShare() {
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(track => track.stop());
+      this.screenStream = null;
+    }
+    this.emit('screenShareStopped');
+
+    // Restore camera track in peer connections
+    if (this.localStream) {
+      await this.replaceVideoTrack(this.localStream);
     }
   }
 

@@ -194,7 +194,10 @@ export const meetingApi = {
   },
 
   async updateParticipant(roomId, updates) {
-    const response = await fetch(`${getMeetingApiUrl()}/rooms/${roomId}/participants`, {
+    // Backend uses JWT userID to identify the participant, no participantId in URL
+    const url = `${getMeetingApiUrl()}/rooms/${roomId}/participants`;
+
+    const response = await fetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

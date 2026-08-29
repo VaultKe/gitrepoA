@@ -149,11 +149,17 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 	var req struct {
 		DisplayName string `json:"displayName"`
 		Role        string `json:"role"`
+		UserID      string `json:"userId"` // Allow passing userId for debug/unauthenticated joins
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Use userID from request body if not available from JWT (debug endpoint)
+	if userID == "" && req.UserID != "" {
+		userID = req.UserID
 	}
 
 	if req.DisplayName == "" {
@@ -214,7 +220,13 @@ func (h *MeetingHandler) LeaveRoom(c *gin.Context) {
 	userID := getUserID(c)
 
 	if err := h.roomManager.LeaveRoom(roomID, userID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if errors.Is(err, room.ErrRoomNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		} else if errors.Is(err, room.ErrUserNotInRoom) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not in room"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -267,8 +279,12 @@ func (h *MeetingHandler) UpdateParticipant(c *gin.Context) {
 		updates["is_screen_sharing"] = *req.IsScreenSharing
 	}
 
-	if err := h.roomManager.UpdateParticipant(roomID, userID, updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+ 	if err := h.roomManager.UpdateParticipant(roomID, userID, updates); err != nil {
+		if errors.Is(err, room.ErrUserNotInRoom) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not in room"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
