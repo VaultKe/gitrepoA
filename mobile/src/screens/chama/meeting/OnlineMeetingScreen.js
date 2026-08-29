@@ -14,6 +14,7 @@ import { getThemeColors, spacing, typography } from '../../../utils/theme';
 import useOnlineMeetingScreen from '../../../hooks/useOnlineMeetingScreen';
 import OnlineMeetingLoading from '../../../components/chama-meeting/OnlineMeetingLoading';
 import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeetingErrorView';
+import WebVideo from '../../../components/chama-meeting/WebVideo';
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 const MAX_GRID_PARTICIPANTS = 3;
@@ -48,18 +49,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     handleEndCall,
     handleSendChatMessage,
     setIsChatOpen,
-    localVideoRef,
-    remoteVideoRefs,
   } = screen;
-
-  // Set up local video element for web (camera or screen share)
-  const activeLocalStream = isScreenSharing && screenStream ? screenStream : localStream;
-  useEffect(() => {
-    if (isWeb && activeLocalStream && localVideoRef.current) {
-      localVideoRef.current.srcObject = activeLocalStream;
-      localVideoRef.current.play().catch(e => console.log('Local video play error:', e));
-    }
-  }, [localStream, screenStream, isScreenSharing, isCameraEnabled]);
 
   // Auto-scroll to bottom when new chat messages arrive
   useEffect(() => {
@@ -67,19 +57,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       chatScrollRef.current.scrollToEnd({ animated: true });
     }
   }, [chatMessages, isChatOpen]);
-
-  // Set up remote video elements for web
-  useEffect(() => {
-    if (isWeb) {
-      remoteStreams.forEach(({ connId, stream }) => {
-        const ref = remoteVideoRefs.current?.get(connId);
-        if (ref && ref.current) {
-          ref.current.srcObject = stream;
-          ref.current.play().catch(e => console.log('Remote video play error:', e));
-        }
-      });
-    }
-  }, [remoteStreams]);
 
   // Determine the active participant for expanded view
   // Priority: 1. Remote screen sharer, 2. Active speaker, 3. First remote participant
@@ -183,22 +160,14 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     }
 
     if (isWeb) {
+      // Use a dedicated WebVideo component so srcObject is attached reliably
+      // (keyed to the stream itself, avoiding shared-ref / timing bugs).
       return (
-        <video
+        <WebVideo
           key={isLocal ? `local-${isCameraEnabled}` : `remote-${connId}`}
-          ref={isLocal ? localVideoRef : (el => {
-            if (!remoteVideoRefs.current) {
-              remoteVideoRefs.current = new Map();
-            }
-            if (connId) {
-              remoteVideoRefs.current.set(connId, { current: el });
-            }
-          })}
-          style={styles.video}
+          stream={stream}
           muted={isLocal}
-          playsInline
-          autoPlay
-          disablePictureInPicture
+          style={styles.video}
         />
       );
     } else {
@@ -250,19 +219,11 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           </View>
         )}
 
-        {/* Grid View - shows local video + limited remote participants */}
+        {/* Grid View - shows limited remote participants (local self-view is a PiP overlay) */}
         <View style={[
           styles.videoGrid,
           showExpandedView && styles.videoGridWithExpanded
         ]}>
-          {/* Local Video - always visible in grid */}
-          <View style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
-            {localStream ? renderVideoElement(activeLocalStream, true) : renderVideoElement(null, true)}
-            <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
-              <Text style={styles.videoLabelText}>{isScreenSharing ? 'Screen' : 'You'}</Text>
-            </View>
-          </View>
-
           {/* Remote Videos - limited to MAX_GRID_PARTICIPANTS */}
           {gridRemoteParticipants.map(({ connId, userId, stream, name }) => (
             <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
@@ -284,6 +245,15 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               </View>
             </View>
           )}
+        </View>
+
+        {/* Self-view (always visible picture-in-picture) so the user can
+            always see themselves regardless of the expanded view state. */}
+        <View style={styles.selfViewPiP}>
+          {renderVideoElement(localStream, true)}
+          <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+            <Text style={styles.videoLabelText}>{isScreenSharing ? 'You · Camera' : 'You'}</Text>
+          </View>
         </View>
       </View>
 
@@ -461,6 +431,19 @@ const styles = StyleSheet.create({
     minWidth: 120,
     height: 80,
     margin: spacing.xs,
+  },
+  selfViewPiP: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 110,
+    height: 150,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#374151',
+    zIndex: 10,
   },
   expandButton: {
     marginLeft: spacing.xs,

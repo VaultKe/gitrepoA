@@ -35,8 +35,6 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const webrtcClientRef = useRef(null);
   const hasJoinedRef = useRef(false);
   const reconnectTimeoutRef = useRef(null);
-  const localVideoRef = useRef(null);
-  const remoteVideoRefs = useRef(new Map());
   const participantIdRef = useRef(null);
 
   // Initialize meeting
@@ -502,8 +500,6 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     handleSendChatMessage,
     setIsChatOpen,
     leaveMeeting,
-    localVideoRef,
-    remoteVideoRefs,
   };
 };
 
