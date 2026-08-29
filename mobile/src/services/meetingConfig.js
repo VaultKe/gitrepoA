@@ -2,15 +2,15 @@ import { Platform } from 'react-native';
 
 export const MEETING_API_BASE_URL = __DEV__
   ? Platform.select({
-      web: 'http://localhost:8086/api/v1',
-      default: 'http://10.0.2.2:8086/api/v1',
+      web: 'https://livemeeting-service.onrender.com/api/v1',
+      default: 'https://livemeeting-service.onrender.com/api/v1',
     })
   : 'https://livemeeting-service.onrender.com/api/v1';
 
 export const WS_BASE_URL = __DEV__
   ? Platform.select({
-      web: 'ws://localhost:8086',
-      default: 'ws://10.0.2.2:8086',
+      web: 'wss://livemeeting-service.onrender.com',
+      default: 'wss://livemeeting-service.onrender.com',
     })
   : 'wss://livemeeting-service.onrender.com';
 
