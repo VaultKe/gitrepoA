@@ -40,7 +40,7 @@ func Load() *Config {
 	godotenv.Load("../../.env")
 
 	cfg := &Config{
-		ServerPort:           getIntEnv("SERVER_PORT", 8082),
+		ServerPort:           getIntEnv("SERVER_PORT", 8086),
 		DatabaseURL:          getEnv("DATABASE_URL", ""),
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:        getEnv("REDIS_PASSWORD", ""),

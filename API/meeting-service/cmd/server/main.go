@@ -75,7 +75,7 @@ func main() {
 	go cleanupLoop(roomManager, 5*time.Minute)
 
 	// Gin setup
-	if cfg.ServerPort != 8082 {
+	if cfg.ServerPort != 8086 {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
