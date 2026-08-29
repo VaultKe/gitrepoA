@@ -301,7 +301,7 @@ class WebRTCClient {
         break;
 
       case SIGNALING_MESSAGE_TYPES.CHAT_MESSAGE:
-        this.emit('chatMessage', message);
+        this.emit('chatMessage', { ...message.payload, senderId: message.userId });
         break;
 
       default:

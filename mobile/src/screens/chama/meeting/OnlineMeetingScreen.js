@@ -18,10 +18,11 @@ import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeet
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 
 const OnlineMeetingScreen = ({ route, navigation }) => {
-  const { theme } = useApp();
+  const { theme, user } = useApp();
   const colors = getThemeColors(theme);
   const { isReadOnly = false } = route.params || {};
   const screen = useOnlineMeetingScreen({ route, navigation });
+  const chatScrollRef = useRef(null);
 
   const {
     isConnecting,
@@ -54,6 +55,13 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       localVideoRef.current.play().catch(e => console.log('Local video play error:', e));
     }
   }, [localStream]);
+
+  // Auto-scroll to bottom when new chat messages arrive
+  useEffect(() => {
+    if (isChatOpen && chatScrollRef.current) {
+      chatScrollRef.current.scrollToEnd({ animated: true });
+    }
+  }, [chatMessages, isChatOpen]);
 
   // Set up remote video elements for web
   useEffect(() => {
@@ -110,6 +118,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               remoteVideoRefs.current.set(connId, { current: el });
             }
           })}
+          srcObject={stream || undefined}
           style={styles.video}
           muted={isLocal}
           playsInline
@@ -214,14 +223,35 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.chatMessages}>
-            {chatMessages.map((msg, index) => (
-              <View key={index} style={styles.chatMessage}>
-                <Text style={[styles.chatMessageText, { color: colors.text }]}>
-                  {msg.content}
-                </Text>
-              </View>
-            ))}
+          <ScrollView style={styles.chatMessages} ref={chatScrollRef}>
+            {chatMessages.map((msg, index) => {
+              const isOwn = msg.isOwn || msg.senderId === user?.id;
+              return (
+                <View
+                  key={msg.id || index}
+                  style={[
+                    styles.chatMessage,
+                    isOwn ? styles.chatMessageOwn : styles.chatMessageOther,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.chatBubble,
+                      isOwn ? styles.chatBubbleOwn : styles.chatBubbleOther,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chatMessageText,
+                        { color: isOwn ? 'white' : colors.text },
+                      ]}
+                    >
+                      {msg.content}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
           </ScrollView>
           <View style={[styles.chatInput, { borderTopColor: colors.border }]}>
             <TextInput
@@ -278,9 +308,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.sm,
   },
-  videoWrapper: {
+   videoWrapper: {
     width: '50%',
     aspectRatio: 16 / 9,
+    minHeight: 120,
     margin: spacing.xs,
     borderRadius: 8,
     overflow: 'hidden',
@@ -289,7 +320,7 @@ const styles = StyleSheet.create({
   video: {
     width: '100%',
     height: '100%',
-    objectFit: 'cover',
+    backgroundColor: '#000',
   },
   videoPlaceholder: {
     width: '100%',
@@ -355,15 +386,35 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: '600',
   },
-  chatMessages: {
+   chatMessages: {
     flex: 1,
     padding: spacing.sm,
   },
   chatMessage: {
     marginBottom: spacing.sm,
+    width: '100%',
+  },
+  chatMessageOwn: {
+    alignItems: 'flex-end',
+  },
+  chatMessageOther: {
+    alignItems: 'flex-start',
+  },
+  chatBubble: {
+    maxWidth: '78%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 16,
+  },
+  chatBubbleOwn: {
+    backgroundColor: '#2563eb',
+  },
+  chatBubbleOther: {
+    backgroundColor: '#e5e7eb',
   },
   chatMessageText: {
     fontSize: typography.fontSize.sm,
+    lineHeight: typography.fontSize.sm * 1.3,
   },
   chatInput: {
     flexDirection: 'row',

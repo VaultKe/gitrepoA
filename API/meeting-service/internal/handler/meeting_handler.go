@@ -459,6 +459,7 @@ func (h *MeetingHandler) SendRoomChatMessage(c *gin.Context) {
 		UserID: userID,
 		Payload: map[string]interface{}{
 			"id":          msg.ID,
+			"userId":      userID,
 			"content":     msg.Content,
 			"messageType": msg.MessageType,
 			"createdAt":   msg.CreatedAt,

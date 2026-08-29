@@ -63,7 +63,8 @@ func NewRoomManager(db *sql.DB, redisClient *redis.Client) *RoomManager {
 	return rm
 }
 
-// ensureSchema creates tables if they don't exist.
+// ensureSchema creates tables if they don't exist and adds missing columns
+// to pre-existing tables that may have been created with a different schema.
 func (rm *RoomManager) ensureSchema() {
 	_, err := rm.db.Exec(`
 		CREATE TABLE IF NOT EXISTS rooms (
@@ -85,6 +86,10 @@ func (rm *RoomManager) ensureSchema() {
 		fmt.Printf("Failed to create rooms table: %v\n", err)
 	}
 
+	// Add missing columns to pre-existing rooms table (created by main-server without these columns)
+	_, _ = rm.db.Exec(`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS recording_path TEXT`)
+	_, _ = rm.db.Exec(`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb`)
+
 	_, err = rm.db.Exec(`
 		CREATE TABLE IF NOT EXISTS participants (
 			id TEXT PRIMARY KEY,
@@ -105,9 +110,29 @@ func (rm *RoomManager) ensureSchema() {
 		fmt.Printf("Failed to create participants table: %v\n", err)
 	}
 
+	// Add missing columns to pre-existing participants table
+	_, _ = rm.db.Exec(`ALTER TABLE participants ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb`)
+	_, _ = rm.db.Exec(`ALTER TABLE participants ADD COLUMN IF NOT EXISTS is_screen_sharing BOOLEAN DEFAULT FALSE`)
+	_, _ = rm.db.Exec(`ALTER TABLE participants ADD COLUMN IF NOT EXISTS is_video_on BOOLEAN DEFAULT FALSE`)
+	_, _ = rm.db.Exec(`ALTER TABLE participants ADD COLUMN IF NOT EXISTS is_muted BOOLEAN DEFAULT FALSE`)
+	_, _ = rm.db.Exec(`ALTER TABLE participants ADD COLUMN IF NOT EXISTS left_at TIMESTAMP`)
+
 	// Create indexes
 	_, _ = rm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_participants_room_id ON participants(room_id)`)
 	_, _ = rm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status)`)
+
+	// Create room_chat_messages table (also created by migration scripts, but ensured here for safety)
+	_, _ = rm.db.Exec(`
+		CREATE TABLE IF NOT EXISTS room_chat_messages (
+			id TEXT PRIMARY KEY,
+			room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL,
+			content TEXT NOT NULL,
+			message_type TEXT DEFAULT 'text',
+			created_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)
+	`)
+	_, _ = rm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_room_chat_messages_room_id ON room_chat_messages(room_id)`)
 }
 
 // loadActiveRooms loads active rooms from DB into memory.

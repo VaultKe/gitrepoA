@@ -203,7 +203,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     });
 
     client.on('chatMessage', (message) => {
-      setChatMessages(prev => [...prev, message.payload]);
+      setChatMessages(prev => [...prev, {
+        ...message,
+        isOwn: message.senderId === user?.id,
+      }]);
     });
 
     client.on('roomEnded', () => {
@@ -348,7 +351,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const handleSendChatMessage = async (content) => {
     try {
       const response = await meetingApi.sendChatMessage(meetingId, content);
-      setChatMessages(prev => [...prev, response]);
+      // Mark as own message; avoid duplicates since WebSocket broadcast will also deliver it
+      setChatMessages(prev => {
+        // Check if the WebSocket already delivered this message (same id)
+        if (prev.some(m => m.id === response.id)) {
+          return prev;
+        }
+        return [...prev, { ...response, isOwn: true }];
+      });
     } catch (error) {
       Toast.show({
         type: 'error',
