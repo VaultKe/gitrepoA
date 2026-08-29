@@ -436,8 +436,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    width: 110,
-    height: 150,
+    width: 132,
+    height: 184,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#1a1a1a',
@@ -455,6 +455,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#000',
+    objectFit: 'cover',
   },
   videoPlaceholder: {
     width: '100%',
