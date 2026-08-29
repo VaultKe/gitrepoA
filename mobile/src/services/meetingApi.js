@@ -1,6 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMeetingApiUrl } from '../services/meetingConfig';
 
+const parseJsonSafe = async (response) => {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+};
+
 let authToken = null;
 
 export const setMeetingAuthToken = async (token) => {
@@ -30,9 +38,59 @@ export const clearMeetingAuthToken = async () => {
   await AsyncStorage.removeItem('meetingAuthToken');
 };
 
+// Helper to get the main app auth token directly
+const getMainAppAuthToken = async () => {
+  try {
+    // Try the main app's auth token storage
+    const mainToken = await AsyncStorage.getItem('authToken');
+    if (mainToken) {
+      console.log('[MeetingAPI] Found main app auth token');
+      return mainToken;
+    }
+    
+    // Also check userData as fallback
+    const userDataStr = await AsyncStorage.getItem('userData');
+    if (userDataStr) {
+      try {
+        const userData = JSON.parse(userDataStr);
+        if (userData.token) {
+          console.log('[MeetingAPI] Found token in userData');
+          return userData.token;
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+    }
+    
+    console.warn('[MeetingAPI] No auth token found in any storage');
+    return null;
+  } catch (e) {
+    console.warn('[MeetingAPI] Error getting auth token:', e);
+    return null;
+  }
+};
+
 const getAuthHeader = async () => {
-  const token = await getMeetingAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  // First try the meeting-specific token
+  let token = await getMeetingAuthToken();
+  
+  // If not found, try the main app's token
+  if (!token) {
+    token = await getMainAppAuthToken();
+    if (token) {
+      // Cache it for future requests
+      await setMeetingAuthToken(token);
+    }
+  }
+  
+  if (token) {
+    const authHeader = { Authorization: `Bearer ${token}` };
+    console.log('[MeetingAPI] Request headers:', JSON.stringify(authHeader));
+    return authHeader;
+  }
+  
+  console.warn('[MeetingAPI] No auth token available - request will fail with 401');
+  return {};
 };
 
 export const meetingApi = {
@@ -47,7 +105,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to create room');
     }
 
@@ -60,7 +118,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to get room');
     }
 
@@ -68,17 +126,26 @@ export const meetingApi = {
   },
 
   async joinRoom(roomId, data) {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...await getAuthHeader(),
+    };
+    
+    console.log('[MeetingAPI] joinRoom request:', {
+      url: `${getMeetingApiUrl()}/rooms/${roomId}/join`,
+      headers: { ...headers, Authorization: headers.Authorization ? 'Bearer ***' : 'none' },
+      body: data,
+    });
+    
     const response = await fetch(`${getMeetingApiUrl()}/rooms/${roomId}/join`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...await getAuthHeader(),
-      },
+      headers,
       body: JSON.stringify(data),
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
+      console.error('[MeetingAPI] joinRoom failed:', response.status, error);
       throw new Error(error.error || 'Failed to join room');
     }
 
@@ -92,7 +159,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to leave room');
     }
 
@@ -106,7 +173,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to end room');
     }
 
@@ -119,7 +186,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to get participants');
     }
 
@@ -137,7 +204,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to update participant');
     }
 
@@ -150,7 +217,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to get stats');
     }
 
@@ -168,7 +235,7 @@ export const meetingApi = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to send message');
     }
 
@@ -184,7 +251,7 @@ export const meetingApi = {
     );
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await parseJsonSafe(response);
       throw new Error(error.error || 'Failed to get messages');
     }
 

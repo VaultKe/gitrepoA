@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"vaultke-meeting-service/config"
@@ -47,11 +49,7 @@ func NewMeetingHandler(cfg *config.Config, rm *room.RoomManager, sfu *webrtc.SFU
 
 // CreateRoom creates a new meeting room.
 func (h *MeetingHandler) CreateRoom(c *gin.Context) {
-	userID, _ := c.Get("userID")
-	userRole, _ := c.Get("role")
-	if userRole == "" {
-		userRole = "participant"
-	}
+	userID := getUserID(c)
 
 	var req struct {
 		ChamaID          string                 `json:"chamaId"`
@@ -77,7 +75,7 @@ func (h *MeetingHandler) CreateRoom(c *gin.Context) {
 		Name:             req.Name,
 		Type:             roomType,
 		MaxParticipants:   req.MaxParticipants,
-		CreatedBy:        userID.(string),
+		CreatedBy:        userID,
 		RecordingEnabled: req.RecordingEnabled,
 		Metadata:         req.Metadata,
 	}
@@ -145,11 +143,8 @@ func (h *MeetingHandler) EndRoom(c *gin.Context) {
 // JoinRoom adds a participant to a room.
 func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 	roomID := c.Param("roomID")
-	userID, _ := c.Get("userID")
-	userRole, _ := c.Get("role")
-	if userRole == "" {
-		userRole = "participant"
-	}
+	userID := getUserID(c)
+	userRole := getUserRole(c)
 
 	var req struct {
 		DisplayName string `json:"displayName"`
@@ -162,8 +157,17 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 	}
 
 	if req.DisplayName == "" {
-		req.DisplayName = fmt.Sprintf("User %s", userID.(string)[:8])
+		if userID != "" {
+			req.DisplayName = fmt.Sprintf("User %s", userID[:8])
+		} else {
+			req.DisplayName = "User"
+		}
 	}
+
+	// Sanitize strings to prevent PostgreSQL UTF-8 encoding errors
+	req.DisplayName = strings.ToValidUTF8(req.DisplayName, "")
+	userRole = strings.ToValidUTF8(userRole, "")
+	fmt.Printf("[JoinRoom] Sanitized displayName=%q role=%q\n", req.DisplayName, userRole)
 
 	// Check room capacity
 	if h.roomManager.IsRoomFull(roomID) {
@@ -171,9 +175,13 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	participant, err := h.roomManager.JoinRoom(roomID, userID.(string), req.DisplayName, userRole.(string))
+	participant, err := h.roomManager.JoinRoom(roomID, userID, req.DisplayName, userRole)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if errors.Is(err, room.ErrRoomFull) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "room is full"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to join room: " + err.Error()})
+		}
 		return
 	}
 
@@ -181,7 +189,7 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 	h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 		Type:   "participant-joined",
 		RoomID: roomID,
-		UserID: userID.(string),
+		UserID: userID,
 		Payload: map[string]interface{}{
 			"participantId": participant.ID,
 			"displayName":   participant.DisplayName,
@@ -203,9 +211,9 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 // LeaveRoom removes a participant from a room.
 func (h *MeetingHandler) LeaveRoom(c *gin.Context) {
 	roomID := c.Param("roomID")
-	userID, _ := c.Get("userID")
+	userID := getUserID(c)
 
-	if err := h.roomManager.LeaveRoom(roomID, userID.(string)); err != nil {
+	if err := h.roomManager.LeaveRoom(roomID, userID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -213,7 +221,7 @@ func (h *MeetingHandler) LeaveRoom(c *gin.Context) {
 	h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 		Type:   "participant-left",
 		RoomID: roomID,
-		UserID: userID.(string),
+		UserID: userID,
 	})
 
 	c.JSON(http.StatusOK, gin.H{"status": "left room"})
@@ -235,7 +243,7 @@ func (h *MeetingHandler) GetParticipants(c *gin.Context) {
 // UpdateParticipant updates participant state (muted, video, screen share).
 func (h *MeetingHandler) UpdateParticipant(c *gin.Context) {
 	roomID := c.Param("roomID")
-	userID, _ := c.Get("userID")
+	userID := getUserID(c)
 
 	var req struct {
 		IsMuted         *bool `json:"isMuted,omitempty"`
@@ -259,7 +267,7 @@ func (h *MeetingHandler) UpdateParticipant(c *gin.Context) {
 		updates["is_screen_sharing"] = *req.IsScreenSharing
 	}
 
-	if err := h.roomManager.UpdateParticipant(roomID, userID.(string), updates); err != nil {
+	if err := h.roomManager.UpdateParticipant(roomID, userID, updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -268,7 +276,7 @@ func (h *MeetingHandler) UpdateParticipant(c *gin.Context) {
 	h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 		Type:   "participant-updated",
 		RoomID: roomID,
-		UserID: userID.(string),
+		UserID: userID,
 		Payload: map[string]interface{}{
 			"isMuted":         req.IsMuted,
 			"isVideoOn":       req.IsVideoOn,
@@ -282,11 +290,8 @@ func (h *MeetingHandler) UpdateParticipant(c *gin.Context) {
 // WebRTCSignal handles WebSocket signaling for WebRTC.
 func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 	roomID := c.Param("roomID")
-	userID, _ := c.Get("userID")
-	userRole, _ := c.Get("role")
-	if userRole == "" {
-		userRole = "participant"
-	}
+	userID := getUserID(c)
+	userRole := getUserRole(c)
 
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -295,13 +300,13 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 	}
 
 	// Generate a unique connection ID
-	connID := fmt.Sprintf("%s-%d", userID.(string), time.Now().UnixNano())
+	connID := fmt.Sprintf("%s-%d", userID, time.Now().UnixNano())
 
 	// Create signaling client
 	client := &signaling.SignalingClient{
 		Conn:   conn,
 		RoomID: roomID,
-		UserID: userID.(string),
+		UserID: userID,
 		ConnID: connID,
 		Send:   make(chan []byte, 256),
 		Hub:    h.signalingHub,
@@ -412,7 +417,7 @@ type RoomChatMessage struct {
 // SendRoomChatMessage sends a chat message to a room.
 func (h *MeetingHandler) SendRoomChatMessage(c *gin.Context) {
 	roomID := c.Param("roomID")
-	userID, _ := c.Get("userID")
+	userID := getUserID(c)
 
 	var req struct {
 		Content     string `json:"content"`
@@ -432,7 +437,7 @@ func (h *MeetingHandler) SendRoomChatMessage(c *gin.Context) {
 	msg := &models.RoomChatMessage{
 		ID:          room.GenerateID(),
 		RoomID:      roomID,
-		UserID:      userID.(string),
+		UserID:      userID,
 		Content:     req.Content,
 		MessageType: req.MessageType,
 		CreatedAt:   time.Now(),
@@ -451,7 +456,7 @@ func (h *MeetingHandler) SendRoomChatMessage(c *gin.Context) {
 	h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 		Type:   "chat-message",
 		RoomID: roomID,
-		UserID: userID.(string),
+		UserID: userID,
 		Payload: map[string]interface{}{
 			"id":          msg.ID,
 			"content":     msg.Content,
@@ -500,4 +505,26 @@ func (h *MeetingHandler) GetRoomChatMessages(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"messages": messages})
+}
+
+// getUserID safely extracts a string userID from the Gin context.
+func getUserID(c *gin.Context) string {
+	userID, _ := c.Get("userID")
+	if userID != nil {
+		if s, ok := userID.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// getUserRole safely extracts a string role from the Gin context.
+func getUserRole(c *gin.Context) string {
+	role, _ := c.Get("role")
+	if role != nil {
+		if s, ok := role.(string); ok && s != "" {
+			return s
+		}
+	}
+	return "participant"
 }

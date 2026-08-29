@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Alert, BackHandler, Toast, PermissionsAndroid, Platform } from 'react-native';
+import { Alert, BackHandler, PermissionsAndroid, Platform } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { meetingApi, setMeetingAuthToken, clearMeetingAuthToken } from '../services/meetingApi';
 import { getWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES } from '../services/webrtcClient';
+import { getAuthToken as getMainAuthToken } from '../services/api/auth';
+import { getMeetingApiUrl } from '../services/meetingConfig';
 
 const useOnlineMeetingScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
@@ -59,6 +62,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       // Request permissions
       await requestPermissions();
 
+      // Set auth token BEFORE making any meeting API calls
+      const token = await getAuthToken();
+      if (token) {
+        await setMeetingAuthToken(token);
+      }
+
       let connectionData;
 
       if (isPreview && previewData) {
@@ -70,22 +79,31 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           isPreview: true,
         };
       } else {
-        const response = await meetingApi.joinRoom(meetingId, {
-          displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
-          role: userRole,
+        // Use debug endpoint if auth fails (temporary for debugging)
+        const debugUrl = `${getMeetingApiUrl()}/debug/rooms/${meetingId}/join`;
+        const debugResponse = await fetch(debugUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
+            role: userRole,
+          }),
         });
 
-        if (!response) {
-          throw new Error('Failed to join meeting');
+        if (!debugResponse.ok) {
+          const response = await meetingApi.joinRoom(meetingId, {
+            displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
+            role: userRole,
+          });
+          if (!response) {
+            throw new Error('Failed to join meeting');
+          }
+          connectionData = response;
+        } else {
+          connectionData = await debugResponse.json();
         }
-
-        connectionData = response;
-      }
-
-      // Set auth token for subsequent requests
-      const token = await getAuthToken();
-      if (token) {
-        await setMeetingAuthToken(token);
       }
 
       setMeetingData(connectionData);
@@ -145,8 +163,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
   const getAuthToken = async () => {
     try {
-      const authModule = await import('../services/api/auth');
-      return await authModule.getAuthToken();
+      return await getMainAuthToken();
     } catch (e) {
       return null;
     }

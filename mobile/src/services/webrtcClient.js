@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { getMeetingWsUrl } from '../services/meetingConfig';
+import { getMeetingAuthToken } from '../services/meetingApi';
 
 // WebRTC configuration for the meeting client
 export const WEBRTC_CONFIG = {
@@ -185,7 +186,15 @@ class WebRTCClient {
     this.participantId = participantId;
     this.connId = `${userId}-${Date.now()}`;
 
-    const wsUrl = getMeetingWsUrl(roomId);
+    // Retrieve the JWT token for WebSocket authentication
+    let token = null;
+    try {
+      token = await getMeetingAuthToken();
+    } catch (e) {
+      console.warn('Failed to retrieve meeting auth token:', e?.message || e);
+    }
+
+    const wsUrl = getMeetingWsUrl(roomId, token);
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {

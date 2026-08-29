@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, Platform } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -14,6 +14,8 @@ import { getThemeColors, spacing, typography } from '../../../utils/theme';
 import useOnlineMeetingScreen from '../../../hooks/useOnlineMeetingScreen';
 import OnlineMeetingLoading from '../../../components/chama-meeting/OnlineMeetingLoading';
 import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeetingErrorView';
+
+const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 
 const OnlineMeetingScreen = ({ route, navigation }) => {
   const { theme } = useApp();
@@ -47,7 +49,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
   // Set up local video element for web
   useEffect(() => {
-    if (Platform.OS === 'web' && localStream && localVideoRef.current) {
+    if (isWeb && localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
       localVideoRef.current.play().catch(e => console.log('Local video play error:', e));
     }
@@ -55,7 +57,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
   // Set up remote video elements for web
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (isWeb) {
       remoteStreams.forEach(({ connId, stream }) => {
         const ref = remoteVideoRefs.current?.get(connId);
         if (ref && ref.current) {
@@ -97,7 +99,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   }
 
   const renderVideoElement = (stream, isLocal = false, connId = null) => {
-    if (Platform.OS === 'web') {
+    if (isWeb) {
       return (
         <video
           ref={isLocal ? localVideoRef : (el => {

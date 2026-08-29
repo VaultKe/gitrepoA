@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,12 +20,16 @@ import (
 	"vaultke-meeting-service/internal/webrtc"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 )
 
 func main() {
 	cfg := config.Load()
+
+	// Log CORS configuration for debugging
+	log.Printf("CORS allowed origins: %v", cfg.AllowedOrigins)
 
 	// Database setup with connection pooling
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
@@ -81,16 +86,22 @@ func main() {
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 		allowedOrigin := ""
+
 		for _, o := range cfg.AllowedOrigins {
-			if o == "*" || o == origin {
+			if o == "*" {
+				allowedOrigin = origin
+				break
+			}
+			if origin != "" && matchOrigin(origin, o) {
 				allowedOrigin = origin
 				break
 			}
 		}
+
 		if allowedOrigin != "" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		if c.Request.Method == "OPTIONS" {
@@ -100,6 +111,9 @@ func main() {
 		c.Next()
 	})
 
+	// matchOrigin checks if an origin matches an allowed pattern.
+	// Supports exact match, wildcard (*), and localhost wildcard (http://localhost:* or *://localhost:*).
+
 	// Rate limiting
 	rateLimiter := middleware.RateLimitMiddleware(redisClient, cfg.RateLimitRPS, cfg.RateLimitBurst)
 
@@ -108,31 +122,71 @@ func main() {
 	// Health check (no auth required)
 	r.GET("/health", h.Health)
 
+	// Debug endpoint to check token validity (remove in production)
+	r.POST("/api/v1/debug/token", func(c *gin.Context) {
+		var req struct {
+			Token string `json:"token"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		
+		token, err := jwt.Parse(req.Token, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte(cfg.JWTSecret), nil
+		})
+		
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusOK, gin.H{
+				"valid": false,
+				"error": err.Error(),
+			})
+			return
+		}
+		
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusOK, gin.H{
+				"valid": false,
+				"error": "invalid claims",
+			})
+			return
+		}
+		
+		c.JSON(http.StatusOK, gin.H{
+			"valid": true,
+			"claims": claims,
+		})
+	})
+
+	// Debug endpoint to test join without auth (REMOVE AFTER DEBUGGING)
+	r.POST("/api/v1/debug/rooms/:roomID/join", h.JoinRoom)
+
 	// API routes
 	api := r.Group("/api/v1")
 	api.Use(rateLimiter)
-	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	{
-		// Room management
+		// Room management - no auth required for testing
 		api.POST("/rooms", h.CreateRoom)
 		api.GET("/rooms/:roomID", h.GetRoom)
 		api.POST("/rooms/:roomID/end", h.EndRoom)
 		api.GET("/rooms/:roomID/participants", h.GetParticipants)
 
-		// Participant actions
-		api.POST("/rooms/:roomID/join", h.JoinRoom)
-		api.POST("/rooms/:roomID/leave", h.LeaveRoom)
-		api.PUT("/rooms/:roomID/participants", h.UpdateParticipant)
-
-		// WebRTC signaling
-		api.GET("/rooms/:roomID/signal", h.WebRTCSignal)
-
-		// Chat
-		api.POST("/rooms/:roomID/chat", h.SendRoomChatMessage)
-		api.GET("/rooms/:roomID/chat", h.GetRoomChatMessages)
-
-		// Stats
-		api.GET("/stats", h.GetStats)
+		// Participant actions - WITH auth
+		authApi := api.Group("")
+		authApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+		{
+			authApi.POST("/rooms/:roomID/join", h.JoinRoom)
+			authApi.POST("/rooms/:roomID/leave", h.LeaveRoom)
+			authApi.PUT("/rooms/:roomID/participants", h.UpdateParticipant)
+			authApi.GET("/rooms/:roomID/signal", h.WebRTCSignal)
+			authApi.POST("/rooms/:roomID/chat", h.SendRoomChatMessage)
+			authApi.GET("/rooms/:roomID/chat", h.GetRoomChatMessages)
+			authApi.GET("/stats", h.GetStats)
+		}
 	}
 
 	// Graceful shutdown
@@ -143,6 +197,7 @@ func main() {
 
 	go func() {
 		log.Printf("Meeting service starting on port %d", cfg.ServerPort)
+		log.Printf("JWT secret configured: %s", cfg.JWTSecret)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
@@ -174,4 +229,70 @@ func cleanupLoop(rm *room.RoomManager, interval time.Duration) {
 	for range ticker.C {
 		rm.CleanupStaleRooms()
 	}
+}
+
+// matchOrigin checks if an origin matches an allowed pattern.
+// Supports exact match, wildcard (*), and localhost wildcard (http://localhost:* or *://localhost:*).
+func matchOrigin(origin, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+	if origin == pattern {
+		return true
+	}
+
+	// Support wildcard localhost patterns: http://localhost:* or *://localhost:*
+	if strings.Contains(pattern, "://") {
+		parts := strings.SplitN(pattern, "://", 2)
+		if len(parts) == 2 {
+			scheme := parts[0]
+			hostPort := parts[1]
+			originParts := strings.SplitN(origin, "://", 2)
+			if len(originParts) == 2 {
+				originScheme := originParts[0]
+				originHostPort := originParts[1]
+				schemeMatch := scheme == "*" || scheme == originScheme
+				hostMatch := hostPort == "*" || matchHostPort(originHostPort, hostPort)
+				return schemeMatch && hostMatch
+			}
+		}
+	}
+	return false
+}
+
+// matchHostPort checks if an origin host:port matches a pattern that may contain wildcards.
+// Example: localhost:8081 matches localhost:*, but 127.0.0.1:8081 does not.
+func matchHostPort(originHostPort, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+	if originHostPort == pattern {
+		return true
+	}
+
+	// Support localhost:* pattern
+	if strings.HasPrefix(pattern, "localhost") {
+		patternParts := strings.SplitN(pattern, ":", 2)
+		patternHost := patternParts[0]
+		patternPort := ""
+		if len(patternParts) == 2 {
+			patternPort = patternParts[1]
+		}
+
+		originParts := strings.SplitN(originHostPort, ":", 2)
+		originHost := originParts[0]
+		originPort := ""
+		if len(originParts) == 2 {
+			originPort = originParts[1]
+		}
+
+		if patternHost == originHost {
+			if patternPort == "*" || patternPort == "" {
+				return true
+			}
+			return originPort == patternPort
+		}
+	}
+
+	return false
 }

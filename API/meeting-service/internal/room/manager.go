@@ -2,16 +2,25 @@ package room
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"vaultke-meeting-service/internal/models"
 
 	"github.com/redis/go-redis/v9"
+)
+
+// Sentinel errors returned by RoomManager methods.
+var (
+	ErrRoomFull   = errors.New("room is full")
+	ErrRoomNotFound = errors.New("room not found")
+	ErrUserNotInRoom = errors.New("user not in room")
 )
 
 // RoomManager manages meeting rooms and participants with PostgreSQL persistence
@@ -253,7 +262,7 @@ func (rm *RoomManager) GetRoom(roomID string) (*models.Room, error) {
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.New("room not found")
+			return nil, ErrRoomNotFound
 		}
 		return nil, fmt.Errorf("failed to query room: %w", err)
 	}
@@ -283,7 +292,7 @@ func (rm *RoomManager) EndRoom(roomID string) error {
 
 	room, exists := rm.rooms[roomID]
 	if !exists {
-		return errors.New("room not found")
+		return ErrRoomNotFound
 	}
 
 	now := time.Now()
@@ -328,15 +337,40 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role string) (*mode
 			SELECT id, max_participants FROM rooms WHERE id = $1
 		`, roomID).Scan(&dbRoom.ID, &dbRoom.MaxParticipants)
 		if err != nil {
-			return nil, errors.New("room not found")
+			// Auto-create room if it doesn't exist
+			room = &models.Room{
+				ID:             roomID,
+				ChamaID:        "default",
+				Name:           "Auto-created Room",
+				Type:           models.RoomTypeVirtual,
+				Status:         models.RoomStatusWaiting,
+				MaxParticipants: 150,
+				CreatedBy:      userID,
+				CreatedAt:      time.Now(),
+			}
+			metadataJSON, _ := json.Marshal(room.Metadata)
+			_, insertErr := rm.db.Exec(`
+				INSERT INTO rooms (id, chama_id, name, type, status, max_participants, created_by, created_at, recording_enabled, metadata)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			`, room.ID, room.ChamaID, room.Name, room.Type, room.Status,
+				room.MaxParticipants, room.CreatedBy, room.CreatedAt,
+				room.RecordingEnabled, metadataJSON)
+			if insertErr != nil {
+				return nil, fmt.Errorf("failed to create room: %w", insertErr)
+			}
+			rm.rooms[roomID] = room
+			rm.stats.mu.Lock()
+			rm.stats.ActiveRooms++
+			rm.stats.mu.Unlock()
+		} else {
+			room = &dbRoom
+			rm.rooms[roomID] = room
 		}
-		room = &dbRoom
-		rm.rooms[roomID] = room
 	}
 
 	// Check capacity
 	if rm.isRoomFullUnsafe(roomID) {
-		return nil, errors.New("room is full")
+		return nil, ErrRoomFull
 	}
 
 	// Check if user is already in room
@@ -345,6 +379,9 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role string) (*mode
 			return existing, nil
 		}
 	}
+
+	// Ensure no stale DB record blocks re-join (left_at set or orphaned)
+	_, _ = rm.db.Exec(`DELETE FROM participants WHERE room_id = $1 AND user_id = $2`, roomID, userID)
 
 	// Activate room if waiting
 	if room.Status == models.RoomStatusWaiting {
@@ -357,8 +394,8 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role string) (*mode
 		ID:          generateID(),
 		RoomID:      roomID,
 		UserID:      userID,
-		DisplayName: displayName,
-		Role:        models.ParticipantRole(role),
+		DisplayName: strings.ToValidUTF8(displayName, ""),
+		Role:        models.ParticipantRole(strings.ToValidUTF8(role, "")),
 		JoinedAt:    now,
 	}
 
@@ -397,12 +434,12 @@ func (rm *RoomManager) LeaveRoom(roomID, userID string) error {
 	defer rm.mu.Unlock()
 
 	if rm.participants[roomID] == nil {
-		return errors.New("user not in room")
+		return ErrUserNotInRoom
 	}
 
 	participant, exists := rm.participants[roomID][userID]
 	if !exists {
-		return errors.New("user not in room")
+		return ErrUserNotInRoom
 	}
 
 	now := time.Now()
@@ -487,12 +524,12 @@ func (rm *RoomManager) UpdateParticipant(roomID, userID string, updates map[stri
 	defer rm.mu.Unlock()
 
 	if rm.participants[roomID] == nil {
-		return errors.New("user not in room")
+		return ErrUserNotInRoom
 	}
 
 	participant, exists := rm.participants[roomID][userID]
 	if !exists {
-		return errors.New("user not in room")
+		return ErrUserNotInRoom
 	}
 
 	setParts := []string{}
@@ -619,16 +656,14 @@ func (rm *RoomManager) DB() *sql.DB {
 	return rm.db
 }
 
-// GenerateID generates a random hex ID.
+// GenerateID generates a random 32-character hex ID using crypto/rand.
 func GenerateID() string {
 	bytes := make([]byte, 16)
-	for i := range bytes {
-		bytes[i] = byte(((i * 123 + 456) % 16) + '0')
-		if bytes[i] > '9' {
-			bytes[i] = bytes[i] - 10 + 'a'
-		}
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback: use timestamp-based pseudo-random ID (should not happen in practice)
+		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
-	return string(bytes)
+	return fmt.Sprintf("%x", bytes)
 }
 
 // generateID generates a random hex ID (internal alias).

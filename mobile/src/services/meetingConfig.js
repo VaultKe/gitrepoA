@@ -15,4 +15,10 @@ export const WS_BASE_URL = __DEV__
   : 'wss://gitrepoa-1.onrender.com';
 
 export const getMeetingApiUrl = () => MEETING_API_BASE_URL;
-export const getMeetingWsUrl = (roomId) => `${WS_BASE_URL}/api/v1/rooms/${roomId}/signal`;
+export const getMeetingWsUrl = (roomId, token = null) => {
+  const base = `${WS_BASE_URL}/api/v1/rooms/${roomId}/signal`;
+  if (token) {
+    return `${base}?token=${encodeURIComponent(token)}`;
+  }
+  return base;
+};
