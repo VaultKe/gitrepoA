@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"vaultke-meeting-service/config"
@@ -24,15 +25,20 @@ type MeetingHandler struct {
 	sfuManager    *webrtc.SFUManager
 	signalingHub  *signaling.SignalingHub
 	upgrader      websocket.Upgrader
+	// activeScreenSharers tracks which connection id is currently sharing its
+	// screen per room. This prevents two participants from sharing at once.
+	activeScreenSharers map[string]string // roomID -> connID
+	ssMu                sync.Mutex
 }
 
 // NewMeetingHandler creates a new meeting handler.
 func NewMeetingHandler(cfg *config.Config, rm *room.RoomManager, sfu *webrtc.SFUManager, hub *signaling.SignalingHub) *MeetingHandler {
 	return &MeetingHandler{
-		config:       cfg,
-		roomManager:  rm,
-		sfuManager:   sfu,
-		signalingHub: hub,
+		config:              cfg,
+		roomManager:         rm,
+		sfuManager:          sfu,
+		signalingHub:        hub,
+		activeScreenSharers: make(map[string]string),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
@@ -334,20 +340,47 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 	// Handle signaling messages
 	client.ReadPump(func(msg *signaling.SignalingMessage) error {
 		switch msg.Type {
-		case "offer":
-			// Forward offer to all other participants in the room
-			// so every peer pair can negotiate, not just one target.
-			h.signalingHub.BroadcastToRoom(roomID, msg)
+		case "offer", "answer", "ice-candidate":
+			// Route WebRTC negotiation messages to the intended target only.
+			// The client sets `target` to the remote connection id. Broadcasting
+			// these to the whole room caused every participant to receive offers
+			// they never initiated, which broke peer-connection negotiation and
+			// let senders receive their own offers back (self-loops).
+			if msg.Target != "" {
+				h.signalingHub.SendToConnection(msg.Target, msg)
+			} else {
+				h.signalingHub.BroadcastToRoom(roomID, msg)
+			}
 
-		case "answer":
-			// Forward answer to all other participants so multi-peer
-			// mesh connections can complete negotiation.
-			h.signalingHub.BroadcastToRoom(roomID, msg)
+		case "screen-share-started":
+			// Only one participant may share its screen at a time per room.
+			h.ssMu.Lock()
+			existing, sharing := h.activeScreenSharers[roomID]
+			if sharing && existing != connID {
+				h.ssMu.Unlock()
+				// Reject: another peer is already sharing. Tell the requester to stop.
+				h.signalingHub.SendToConnection(connID, &signaling.SignalingMessage{
+					Type:   "screen-share-rejected",
+					RoomID: roomID,
+					ConnID: connID,
+					Payload: map[string]interface{}{
+						"reason": "another-participant-already-sharing",
+					},
+				})
+				return nil
+			}
+			h.activeScreenSharers[roomID] = connID
+			h.ssMu.Unlock()
 
-		case "ice-candidate":
-			// Forward ICE candidate to all other participants so every
-			// peer pair can exchange connectivity candidates.
-			h.signalingHub.BroadcastToRoom(roomID, msg)
+			msg.ConnID = connID
+			h.signalingHub.BroadcastToRoomExcept(roomID, connID, msg)
+
+		case "screen-share-stopped":
+			h.ssMu.Lock()
+			delete(h.activeScreenSharers, roomID)
+			h.ssMu.Unlock()
+			msg.ConnID = connID
+			h.signalingHub.BroadcastToRoomExcept(roomID, connID, msg)
 
 		case "join":
 			// Participant is joining the signaling channel
@@ -364,6 +397,7 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 
 		case "leave":
 			// Participant is leaving the signaling channel
+			h.clearScreenSharer(roomID, connID)
 			h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 				Type:   "participant-left",
 				RoomID: roomID,
@@ -385,8 +419,21 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 	// Wait for connection to close
 	<-client.Send
 
+	// Cleanup: ensure any active screen share from this connection is cleared.
+	h.clearScreenSharer(roomID, connID)
+
 	// Cleanup
 	h.signalingHub.UnregisterClient(client)
+}
+
+// clearScreenSharer removes a connection from the active screen-sharer registry
+// (if it was the one sharing) and is safe to call when there is none.
+func (h *MeetingHandler) clearScreenSharer(roomID, connID string) {
+	h.ssMu.Lock()
+	defer h.ssMu.Unlock()
+	if existing, ok := h.activeScreenSharers[roomID]; ok && existing == connID {
+		delete(h.activeScreenSharers, roomID)
+	}
 }
 
 // GetStats returns meeting service statistics.

@@ -59,8 +59,13 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setIsConnecting(true);
       setConnectionError(null);
 
-      // Request permissions
-      await requestPermissions();
+      // Request permissions, but do not block joining if the user denies them
+      try {
+        await requestPermissions();
+      } catch (permError) {
+        console.warn('Media permissions not granted, joining without camera/mic:', permError);
+        // Continue without local media; the user can enable later if permissions change
+      }
 
       // Set auth token BEFORE making any meeting API calls
       const token = await getAuthToken();
@@ -144,17 +149,17 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setIsConnecting(false);
 
       // Check if this is a permission error and offer to open settings
-      const isPermissionError = error.message?.includes('permissions are required');
-      
+      const isPermissionError = /permissions? are required|Camera and microphone access is required|NotAllowedError|Permission denied|not allowed by the user agent/i.test(error.message || '');
+
       if (isPermissionError && Platform.OS === 'android') {
         Alert.alert(
           'Permissions Required',
-          error.message,
+          'Camera and microphone access is required to join the meeting. Please enable them in Settings > Apps > VaultKe > Permissions.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              onPress: () => Linking.openSettings() 
+            {
+              text: 'Open Settings',
+              onPress: () => Linking.openSettings()
             },
           ]
         );
@@ -263,7 +268,15 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setConnectionError(null);
     });
 
-    const stream = await client.initLocalMedia();
+    let stream = null;
+    try {
+      stream = await client.initLocalMedia();
+    } catch (mediaError) {
+      console.warn('Could not initialize local media, continuing without it:', mediaError);
+      // Keep camera/mic disabled; user can try enabling later
+      setIsCameraEnabled(false);
+      setIsMicrophoneEnabled(false);
+    }
     setLocalStream(stream);
 
     await client.connectSignaling(
@@ -294,6 +307,22 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
   const handleToggleCamera = async () => {
     const newState = !isCameraEnabled;
+
+    // If turning on but we have no local stream yet, try to re-acquire media
+    if (newState && !localStream && webrtcClientRef.current) {
+      try {
+        await webrtcClientRef.current.initLocalMedia();
+      } catch (e) {
+        Toast.show({
+          type: 'error',
+          text1: 'Camera unavailable',
+          text2: e.message || 'Could not enable camera. Please check permissions.',
+        });
+        setIsCameraEnabled(false);
+        return;
+      }
+    }
+
     setIsCameraEnabled(newState);
 
     if (webrtcClientRef.current) {
@@ -323,6 +352,22 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
   const handleToggleMicrophone = async () => {
     const newState = !isMicrophoneEnabled;
+
+    // If turning on but we have no local stream yet, try to re-acquire media
+    if (newState && !localStream && webrtcClientRef.current) {
+      try {
+        await webrtcClientRef.current.initLocalMedia();
+      } catch (e) {
+        Toast.show({
+          type: 'error',
+          text1: 'Microphone unavailable',
+          text2: e.message || 'Could not enable microphone. Please check permissions.',
+        });
+        setIsMicrophoneEnabled(false);
+        return;
+      }
+    }
+
     setIsMicrophoneEnabled(newState);
 
     if (webrtcClientRef.current) {

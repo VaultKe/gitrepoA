@@ -189,6 +189,36 @@ func (h *SignalingHub) BroadcastToRoom(roomID string, msg *SignalingMessage) {
 	h.mu.RUnlock()
 }
 
+// BroadcastToRoomExcept broadcasts a message to all clients in a room except
+// the one identified by excludeConnID. This is used for events (e.g. screen share
+// start/stop) where the sender should not receive its own notification.
+func (h *SignalingHub) BroadcastToRoomExcept(roomID, excludeConnID string, msg *SignalingMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+
+	// Publish to Redis for other instances
+	h.publishRedis(data)
+
+	// Local broadcast, skipping the excluding connection
+	h.mu.RLock()
+	if roomClients, exists := h.rooms[roomID]; exists {
+		for client := range roomClients {
+			if client.ConnID == excludeConnID {
+				continue
+			}
+			select {
+			case client.Send <- data:
+			default:
+				close(client.Send)
+				delete(h.clients, client)
+			}
+		}
+	}
+	h.mu.RUnlock()
+}
+
 // SendToUser sends a message to a specific user in a room.
 func (h *SignalingHub) SendToUser(roomID, userID string, msg *SignalingMessage) {
 	data, err := json.Marshal(msg)

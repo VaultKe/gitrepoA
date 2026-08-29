@@ -157,7 +157,10 @@ class WebRTCClient {
     } catch (error) {
       console.error('Failed to get local media:', error);
       this.emit('error', { type: 'media', error });
-      throw error;
+      const friendly = new Error(
+        'Camera and microphone access is required to join the meeting. Please allow permissions and try again.'
+      );
+      throw friendly;
     }
   }
 
@@ -197,7 +200,9 @@ class WebRTCClient {
     this.roomId = roomId;
     this.userId = userId;
     this.participantId = participantId;
-    this.connId = `${userId}-${Date.now()}`;
+    // connId will be set by the server after the first participant-joined event
+    // (or our own join confirmation). Until then, keep it null so we can match it.
+    this.connId = null;
 
     // Retrieve the JWT token for WebSocket authentication
     let token = null;
@@ -215,11 +220,13 @@ class WebRTCClient {
       this.reconnectAttempts = 0;
       this.emit('connected');
 
+      // Send join without connId; the server will broadcast participant-joined
+      // with the authoritative connId for this connection.
       this.sendSignalingMessage({
         type: SIGNALING_MESSAGE_TYPES.JOIN,
         roomId: this.roomId,
         userId: this.userId,
-        connId: this.connId,
+        participantId: this.participantId,
       });
     };
 
@@ -283,7 +290,17 @@ class WebRTCClient {
       case SIGNALING_MESSAGE_TYPES.PARTICIPANT_JOINED:
         this.emit('participantJoined', message);
         if (message.userId !== this.userId) {
-          this.createPeerConnection(message.connId, message.userId, true);
+          // Use server-issued connId so all peers agree on one identifier.
+          const remoteConnId = message.connId;
+          if (remoteConnId) {
+            this.createPeerConnection(remoteConnId, message.userId, true);
+          }
+        } else {
+          // This is our own join confirmation: adopt the server-issued connId.
+          if (message.connId && (!this.connId || this.connId !== message.connId)) {
+            this.connId = message.connId;
+            console.log('Adopted server connId:', this.connId);
+          }
         }
         break;
 
@@ -324,7 +341,12 @@ class WebRTCClient {
 
   sendSignalingMessage(message) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      // Always include connId if we have one, so the server can route correctly.
+      const payload = { ...message };
+      if (this.connId) {
+        payload.connId = this.connId;
+      }
+      this.ws.send(JSON.stringify(payload));
     }
   }
 
