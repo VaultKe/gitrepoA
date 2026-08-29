@@ -128,10 +128,13 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         await markAttendance();
       }
 
-      // Load participants
-      await updateParticipantsList();
+       // Load participants
+       await updateParticipantsList();
 
-      setIsConnected(true);
+       // Load existing chat history so newcomers see the backlog
+       await loadChatHistory();
+
+       setIsConnected(true);
       setIsConnecting(false);
       hasJoinedRef.current = true;
 
@@ -216,13 +219,43 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setLocalStream(stream);
     });
 
-    client.on('remoteStream', ({ connId, userId, stream }) => {
+    client.on('remoteStream', ({ connId, userId, stream, isScreenSharing = false }) => {
       setRemoteStreams(prev => {
         const exists = prev.find(s => s.connId === connId);
         if (!exists) {
-          return [...prev, { connId, userId, stream }];
+          return [...prev, { connId, userId, stream, isScreenSharing }];
         }
-        return prev;
+        // Update existing entry (track may have been replaced for screen share)
+        return prev.map(s =>
+          s.connId === connId ? { ...s, stream, isScreenSharing } : s
+        );
+      });
+    });
+
+    client.on('screenShareStarted', ({ connId, userId }) => {
+      setRemoteStreams(prev =>
+        prev.map(s => (s.connId === connId ? { ...s, isScreenSharing: true } : s))
+      );
+    });
+
+    client.on('screenShareStopped', ({ connId, userId }) => {
+      setRemoteStreams(prev =>
+        prev.map(s => (s.connId === connId ? { ...s, isScreenSharing: false } : s))
+      );
+    });
+
+    client.on('screenShareRejected', (payload) => {
+      // Server rejected our screen share (someone else is already sharing).
+      if (isScreenSharing) {
+        setIsScreenSharing(false);
+        setScreenStream(null);
+      }
+      Toast.show({
+        type: 'warning',
+        text1: 'Screen share declined',
+        text2: payload?.reason === 'another-participant-already-sharing'
+          ? 'Another participant is already sharing their screen'
+          : 'Unable to start screen sharing',
       });
     });
 
@@ -239,6 +272,16 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     client.on('participantLeft', (message) => {
       setParticipants(prev => prev.filter(p => p.userId !== message.userId));
       setRemoteStreams(prev => prev.filter(s => s.connId !== message.connId));
+    });
+
+    client.on('participantUpdated', (message) => {
+      setParticipants(prev =>
+        prev.map(p =>
+          p.userId === message.userId
+            ? { ...p, ...message.payload, userId: message.userId }
+            : p
+        )
+      );
     });
 
     client.on('chatMessage', (message) => {
@@ -300,12 +343,26 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       if (response && response.participants) {
         setParticipants(response.participants);
       }
-    } catch (error) {
-      console.error('Failed to update participants:', error);
-    }
-  };
+     } catch (error) {
+       console.error('Failed to update participants:', error);
+     }
+   };
 
-  const handleToggleCamera = async () => {
+   const loadChatHistory = async () => {
+     try {
+       const response = await meetingApi.getChatMessages(meetingId);
+       if (response && response.messages) {
+         setChatMessages(response.messages.map(msg => ({
+           ...msg,
+           isOwn: msg.userId === user?.id,
+         })));
+       }
+     } catch (error) {
+       console.error('Failed to load chat history:', error);
+     }
+   };
+
+   const handleToggleCamera = async () => {
     const newState = !isCameraEnabled;
 
     // If turning on but we have no local stream yet, try to re-acquire media
@@ -417,11 +474,23 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const handleToggleScreenShare = async () => {
     try {
       if (!isScreenSharing) {
+        // Ask the server to coordinate: only one sharer per room. The server
+        // either broadcasts `screenShareStarted` to peers or, if someone else
+        // is already sharing, emits `screenShareRejected` (handled above).
+        webrtcClientRef.current?.sendScreenShareStarted();
+
+        // Optimistically start. If the server rejects, the screenShareRejected
+        // handler rolls us back.
         const screenStream = await webrtcClientRef.current?.initScreenShare();
         if (screenStream) {
           await webrtcClientRef.current?.replaceVideoTrack(screenStream);
           setScreenStream(screenStream);
           setIsScreenSharing(true);
+          try {
+            await meetingApi.updateParticipant(meetingId, { isScreenSharing: true });
+          } catch (e) {
+            console.warn('Failed to sync screen-share state to server:', e?.message);
+          }
           Toast.show({
             type: 'success',
             text1: 'Screen sharing started',
@@ -432,6 +501,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         await webrtcClientRef.current?.stopScreenShare();
         setScreenStream(null);
         setIsScreenSharing(false);
+        webrtcClientRef.current?.sendScreenShareStopped();
+        try {
+          await meetingApi.updateParticipant(meetingId, { isScreenSharing: false });
+        } catch (e) {
+          console.warn('Failed to sync screen-share state to server:', e?.message);
+        }
         Toast.show({
           type: 'success',
           text1: 'Screen sharing stopped',
@@ -439,10 +514,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         });
       }
     } catch (error) {
+      setIsScreenSharing(false);
+      setScreenStream(null);
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to toggle screen sharing',
+        text2: error.message || 'Failed to toggle screen sharing',
       });
     }
   };
@@ -520,10 +597,32 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       reconnectTimeoutRef.current = null;
     }
 
-    clearMeetingAuthToken();
-  };
+     clearMeetingAuthToken();
+   };
 
-  return {
+   // Build a userId -> displayName lookup from the participants list (API + signaling).
+   const getParticipantName = (userId) => {
+     if (!userId) return 'Participant';
+     const p = participants.find(part => part.userId === userId);
+     if (p && (p.displayName || p.name)) return p.displayName || p.name;
+     // The signaling participant-joined payload nests details in .payload
+     const joined = participants.find(part => part.payload?.userId === userId);
+     if (joined && joined.payload?.displayName) return joined.payload.displayName;
+     return 'Participant';
+   };
+
+   // Keep display names synced onto remote stream entries so the UI can label
+   // each tile even when the name arrives after the first media track.
+   useEffect(() => {
+     setRemoteStreams(prev => {
+       const needsUpdate = prev.some(s => s.name !== getParticipantName(s.userId));
+       if (!needsUpdate) return prev;
+       return prev.map(s => ({ ...s, name: getParticipantName(s.userId) }));
+     });
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [participants.length]);
+
+   return {
     isConnecting,
     isConnected,
     participants,

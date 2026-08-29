@@ -41,6 +41,9 @@ export const SIGNALING_MESSAGE_TYPES = {
   PARTICIPANT_UPDATED: 'participant-updated',
   ROOM_ENDED: 'room-ended',
   CHAT_MESSAGE: 'chat-message',
+  SCREEN_SHARE_STARTED: 'screen-share-started',
+  SCREEN_SHARE_STOPPED: 'screen-share-stopped',
+  SCREEN_SHARE_REJECTED: 'screen-share-rejected',
 };
 
 // Lazy native module loader to avoid bundling react-native-webrtc on web
@@ -334,9 +337,43 @@ class WebRTCClient {
         this.emit('chatMessage', { ...message.payload, senderId: message.userId });
         break;
 
+      case SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STARTED:
+        this.setRemoteScreenShare(message.connId, message.userId, true);
+        this.emit('screenShareStarted', {
+          connId: message.connId,
+          userId: message.userId,
+        });
+        break;
+
+      case SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STOPPED:
+        this.setRemoteScreenShare(message.connId, message.userId, false);
+        this.emit('screenShareStopped', {
+          connId: message.connId,
+          userId: message.userId,
+        });
+        break;
+
+      case SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_REJECTED:
+        this.emit('screenShareRejected', message.payload || {});
+        break;
+
       default:
         console.log('Unknown signaling message:', message.type);
     }
+  }
+
+  sendScreenShareStarted() {
+    this.sendSignalingMessage({
+      type: SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STARTED,
+      roomId: this.roomId,
+    });
+  }
+
+  sendScreenShareStopped() {
+    this.sendSignalingMessage({
+      type: SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STOPPED,
+      roomId: this.roomId,
+    });
   }
 
   sendSignalingMessage(message) {
@@ -357,6 +394,13 @@ class WebRTCClient {
 
     const { RTCPeerConnection, MediaStream } = this.ensurePlatformClasses();
     const pc = new RTCPeerConnection(WEBRTC_CONFIG);
+
+    // Buffer ICE candidates that arrive before a remote description is set so
+    // we don't drop them (and thus fail to connect) due to ordering.
+    if (!this.pendingIceCandidates) {
+      this.pendingIceCandidates = new Map();
+    }
+    this.pendingIceCandidates.set(remoteConnId, []);
 
     if (this.localStream) {
       if (Platform.OS === 'web') {
@@ -415,7 +459,21 @@ class WebRTCClient {
   async handleOffer(message) {
     const pc = await this.createPeerConnection(message.connId, message.userId, false);
     const { RTCSessionDescription } = this.ensurePlatformClasses();
+
+    // Offer collision guard: if we already have a pending local offer on this
+    // peer connection (because we also initiated), roll it back so we can
+    // cleanly accept the incoming offer. This makes joining near-simultaneously
+    // (both sides sending offers) safe.
+    if (pc.signalingState === 'have-local-offer' || pc.signalingState === 'have-remote-offer') {
+      try {
+        await pc.setLocalDescription({ type: 'rollback' });
+      } catch (e) {
+        console.warn('PeerConnection rollback failed:', e?.message || e);
+      }
+    }
+
     await pc.setRemoteDescription(new RTCSessionDescription(message.payload));
+    this.flushPendingIceCandidates(message.connId);
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -433,35 +491,86 @@ class WebRTCClient {
     if (pc) {
       const { RTCSessionDescription } = this.ensurePlatformClasses();
       await pc.setRemoteDescription(new RTCSessionDescription(message.payload));
+      this.flushPendingIceCandidates(message.connId);
     }
   }
 
   async handleIceCandidate(message) {
     const pc = this.peerConnections.get(message.connId);
-    if (pc && message.payload) {
-      const { RTCIceCandidate } = this.ensurePlatformClasses();
-      await pc.addIceCandidate(new RTCIceCandidate(message.payload));
+    if (!pc || !message.payload) return;
+
+    const hasRemoteDesc = pc.remoteDescription && pc.remoteDescription.type;
+    if (!hasRemoteDesc) {
+      // Remote description not set yet: buffer until setRemoteDescription runs.
+      if (!this.pendingIceCandidates) {
+        this.pendingIceCandidates = new Map();
+      }
+      const buffer = this.pendingIceCandidates.get(message.connId) || [];
+      buffer.push(message.payload);
+      this.pendingIceCandidates.set(message.connId, buffer);
+      return;
     }
+
+    const { RTCIceCandidate } = this.ensurePlatformClasses();
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(message.payload));
+    } catch (e) {
+      console.warn('Failed to add ICE candidate:', e?.message || e);
+    }
+  }
+
+  // Adds any buffered ICE candidates for a connection once its remote
+  // description has been set.
+  flushPendingIceCandidates(connId) {
+    if (!this.pendingIceCandidates) return;
+    const buffer = this.pendingIceCandidates.get(connId);
+    if (!buffer || buffer.length === 0) {
+      this.pendingIceCandidates.delete(connId);
+      return;
+    }
+    const pc = this.peerConnections.get(connId);
+    if (!pc) {
+      this.pendingIceCandidates.delete(connId);
+      return;
+    }
+    const { RTCIceCandidate } = this.ensurePlatformClasses();
+    buffer.forEach(cand => {
+      pc.addIceCandidate(new RTCIceCandidate(cand)).catch(e =>
+        console.warn('Buffered ICE add failed:', e?.message || e)
+      );
+    });
+    this.pendingIceCandidates.delete(connId);
   }
 
   handleRemoteTrack(connId, userId, event) {
     const { MediaStream } = this.ensurePlatformClasses();
 
     if (!this.remoteStreams.has(connId)) {
-      this.remoteStreams.set(connId, new MediaStream());
+      this.remoteStreams.set(connId, { stream: new MediaStream(), userId, isScreenSharing: false });
     }
 
-    const stream = this.remoteStreams.get(connId);
+    const entry = this.remoteStreams.get(connId);
+    if (userId) {
+      entry.userId = userId;
+    }
+    const stream = entry.stream;
 
-    if (Platform.OS === 'web' && event.streams[0]) {
-      event.streams[0].getTracks().forEach(track => {
-        stream.addTrack(track);
+    // When a track is replaced (e.g. camera -> screen share via replaceTrack),
+    // the receiver fires a new ontrack for the same kind. Remove any existing
+    // track of that kind first so we don't accumulate duplicate tracks in the
+    // same MediaStream (which would otherwise show stale camera frames when
+    // someone is screen sharing).
+    const incomingTrack = event.track;
+    if (incomingTrack) {
+      stream.getTracks().forEach(t => {
+        if (t.kind === incomingTrack.kind) {
+          stream.removeTrack(t);
+        }
       });
-    } else if (event.track) {
-      stream.addTrack(event.track);
+      stream.addTrack(incomingTrack);
     }
 
-    this.emit('remoteStream', { connId, userId, stream });
+    this.emit('remoteStream', { connId, userId, stream, isScreenSharing: entry.isScreenSharing });
   }
 
   removePeerConnection(connId) {
@@ -471,7 +580,28 @@ class WebRTCClient {
       this.peerConnections.delete(connId);
     }
     this.remoteStreams.delete(connId);
+    if (this.pendingIceCandidates) {
+      this.pendingIceCandidates.delete(connId);
+    }
     this.emit('peerConnectionRemoved', { connId });
+  }
+
+  // Toggles the remote screen-share flag for a connection and re-emits the
+  // remoteStream event so the UI can update its display (e.g. show "Screen"
+  // label / switch the tile to the screen track).
+  setRemoteScreenShare(connId, userId, isScreenSharing) {
+    if (!this.remoteStreams.has(connId)) {
+      // Track screen-share state even before a remoteStream has arrived so the
+      // flag is correct when the first track does arrive.
+      this.remoteStreams.set(connId, { stream: null, userId, isScreenSharing });
+      return;
+    }
+    const entry = this.remoteStreams.get(connId);
+    entry.isScreenSharing = isScreenSharing;
+    if (userId) {
+      entry.userId = userId;
+    }
+    this.emit('remoteStream', { connId, userId: entry.userId, stream: entry.stream, isScreenSharing });
   }
 
   toggleAudio(enabled) {
@@ -558,10 +688,12 @@ class WebRTCClient {
     return this.localStream;
   }
 
-  getRemoteStreams() {
-    return Array.from(this.remoteStreams.entries()).map(([connId, stream]) => ({
+   getRemoteStreams() {
+    return Array.from(this.remoteStreams.entries()).map(([connId, entry]) => ({
       connId,
-      stream,
+      stream: entry.stream,
+      userId: entry.userId,
+      isScreenSharing: entry.isScreenSharing,
     }));
   }
 }

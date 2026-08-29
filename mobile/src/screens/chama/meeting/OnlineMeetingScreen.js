@@ -201,21 +201,25 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             ) : (
               renderVideoElement(expandedData.participant.stream, false, expandedData.participant.connId)
             )}
-            <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
-              <Text style={styles.videoLabelText}>
-                {expandedData.isLocal ? (isScreenSharing ? 'Your Screen' : 'You') : (expandedData.participant.name || 'Participant')}
-              </Text>
-              <TouchableOpacity
-                style={styles.expandButton}
-                onPress={() => setIsVideoExpanded(!isVideoExpanded)}
-              >
-                <Ionicons
-                  name={isVideoExpanded ? 'contract' : 'expand'}
-                  size={18}
-                  color="#fff"
-                />
-              </TouchableOpacity>
-            </View>
+             <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+               <Text style={styles.videoLabelText}>
+                 {expandedData.isLocal
+                   ? (isScreenSharing ? 'Your Screen' : 'You')
+                   : (expandedData.participant.isScreenSharing
+                       ? `${expandedData.participant.name || 'Participant'} (Screen)`
+                       : (expandedData.participant.name || 'Participant'))}
+               </Text>
+               <TouchableOpacity
+                 style={styles.expandButton}
+                 onPress={() => setIsVideoExpanded(!isVideoExpanded)}
+               >
+                 <Ionicons
+                   name={isVideoExpanded ? 'contract' : 'expand'}
+                   size={18}
+                   color="#fff"
+                 />
+               </TouchableOpacity>
+             </View>
           </View>
         )}
 
@@ -224,15 +228,20 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           styles.videoGrid,
           showExpandedView && styles.videoGridWithExpanded
         ]}>
-          {/* Remote Videos - limited to MAX_GRID_PARTICIPANTS */}
-          {gridRemoteParticipants.map(({ connId, userId, stream, name }) => (
-            <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
-              {renderVideoElement(stream, false, connId)}
-              <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
-                <Text style={styles.videoLabelText}>{name || 'Participant'}</Text>
-              </View>
-            </View>
-          ))}
+           {/* Remote Videos - limited to MAX_GRID_PARTICIPANTS */}
+           {gridRemoteParticipants.map(({ connId, userId, stream, name, isScreenSharing: sharing }) => (
+             <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
+               {renderVideoElement(stream, false, connId)}
+               <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
+                 {sharing && (
+                   <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
+                 )}
+                 <Text style={styles.videoLabelText}>
+                   {sharing ? `${name || 'Participant'} (Screen)` : (name || 'Participant')}
+                 </Text>
+               </View>
+             </View>
+           ))}
 
           {/* Hidden participants indicator */}
           {hiddenParticipantsCount > 0 && (
