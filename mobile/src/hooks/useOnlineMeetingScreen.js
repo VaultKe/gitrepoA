@@ -35,6 +35,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const webrtcClientRef = useRef(null);
   const hasJoinedRef = useRef(false);
   const reconnectTimeoutRef = useRef(null);
+  const screenShareRejectedRef = useRef(false);
   const participantIdRef = useRef(null);
 
   // Initialize meeting
@@ -246,10 +247,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
     client.on('screenShareRejected', (payload) => {
       // Server rejected our screen share (someone else is already sharing).
-      if (isScreenSharing) {
-        setIsScreenSharing(false);
-        setScreenStream(null);
+      screenShareRejectedRef.current = true;
+      if (webrtcClientRef.current?.screenStream) {
+        webrtcClientRef.current?.stopScreenShare();
       }
+      setScreenStream(null);
+      setIsScreenSharing(false);
       Toast.show({
         type: 'warning',
         text1: 'Screen share declined',
@@ -474,16 +477,26 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const handleToggleScreenShare = async () => {
     try {
       if (!isScreenSharing) {
+        screenShareRejectedRef.current = false;
         // Ask the server to coordinate: only one sharer per room. The server
         // either broadcasts `screenShareStarted` to peers or, if someone else
         // is already sharing, emits `screenShareRejected` (handled above).
         webrtcClientRef.current?.sendScreenShareStarted();
 
-        // Optimistically start. If the server rejects, the screenShareRejected
-        // handler rolls us back.
+        // Optimistically start. If the server rejects (screenShareRejected fires
+        // during the await below), we abort before replacing the outgoing track.
         const screenStream = await webrtcClientRef.current?.initScreenShare();
+        if (screenShareRejectedRef.current) {
+          return;
+        }
         if (screenStream) {
           await webrtcClientRef.current?.replaceVideoTrack(screenStream);
+          if (screenShareRejectedRef.current) {
+            // Rejected while capturing; roll back.
+            await webrtcClientRef.current?.stopScreenShare();
+            setScreenStream(null);
+            return;
+          }
           setScreenStream(screenStream);
           setIsScreenSharing(true);
           try {
@@ -597,32 +610,32 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       reconnectTimeoutRef.current = null;
     }
 
-     clearMeetingAuthToken();
-   };
+    clearMeetingAuthToken();
+  };
 
-   // Build a userId -> displayName lookup from the participants list (API + signaling).
-   const getParticipantName = (userId) => {
-     if (!userId) return 'Participant';
-     const p = participants.find(part => part.userId === userId);
-     if (p && (p.displayName || p.name)) return p.displayName || p.name;
-     // The signaling participant-joined payload nests details in .payload
-     const joined = participants.find(part => part.payload?.userId === userId);
-     if (joined && joined.payload?.displayName) return joined.payload.displayName;
-     return 'Participant';
-   };
+  // Build a userId -> displayName lookup from the participants list (API + signaling).
+  const getParticipantName = (userId) => {
+    if (!userId) return 'Participant';
+    const p = participants.find(part => part.userId === userId);
+    if (p && (p.displayName || p.name)) return p.displayName || p.name;
+    // The signaling participant-joined payload nests details in .payload
+    const joined = participants.find(part => part.payload?.userId === userId);
+    if (joined && joined.payload?.displayName) return joined.payload.displayName;
+    return 'Participant';
+  };
 
-   // Keep display names synced onto remote stream entries so the UI can label
-   // each tile even when the name arrives after the first media track.
-   useEffect(() => {
-     setRemoteStreams(prev => {
-       const needsUpdate = prev.some(s => s.name !== getParticipantName(s.userId));
-       if (!needsUpdate) return prev;
-       return prev.map(s => ({ ...s, name: getParticipantName(s.userId) }));
-     });
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [participants.length]);
+  // Keep display names synced onto remote stream entries so the UI can label
+  // each tile even when the name arrives after the first media track.
+  useEffect(() => {
+    setRemoteStreams(prev => {
+      const needsUpdate = prev.some(s => s.name !== getParticipantName(s.userId));
+      if (!needsUpdate) return prev;
+      return prev.map(s => ({ ...s, name: getParticipantName(s.userId) }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participants.length]);
 
-   return {
+  return {
     isConnecting,
     isConnected,
     participants,
@@ -630,6 +643,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     isMicrophoneEnabled,
     isScreenSharing,
     screenStream,
+    meetingTitle,
+    userRole,
     meetingData,
     connectionError,
     localStream,

@@ -98,6 +98,7 @@ class WebRTCClient {
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
     this.platformClasses = null;
+    this.pendingIceCandidates = new Map();
   }
 
   ensurePlatformClasses() {
@@ -397,21 +398,33 @@ class WebRTCClient {
 
     // Buffer ICE candidates that arrive before a remote description is set so
     // we don't drop them (and thus fail to connect) due to ordering.
-    if (!this.pendingIceCandidates) {
-      this.pendingIceCandidates = new Map();
-    }
     this.pendingIceCandidates.set(remoteConnId, []);
 
+    // Choose the tracks that should go OUT to this remote peer.
+    // While screen sharing, the outgoing video must be the screen (not the
+    // camera), so participants who join mid-share still receive the shared
+    // screen. Audio always follows the local microphone when available.
+    let outgoingVideo = null;
+    let outgoingAudio = null;
+
+    if (this.screenStream) {
+      outgoingVideo = this.screenStream.getVideoTracks()[0] || null;
+    }
+    if (!outgoingVideo && this.localStream) {
+      outgoingVideo = this.localStream.getVideoTracks()[0] || null;
+    }
     if (this.localStream) {
-      if (Platform.OS === 'web') {
-        this.localStream.getTracks().forEach(track => {
-          pc.addTrack(track, this.localStream);
-        });
-      } else {
-        this.localStream.getTracks().forEach(track => {
-          pc.addTrack(track, this.localStream);
-        });
-      }
+      outgoingAudio = this.localStream.getAudioTracks()[0] || null;
+    }
+    if (!outgoingAudio && this.screenStream) {
+      outgoingAudio = this.screenStream.getAudioTracks()[0] || null;
+    }
+
+    if (outgoingVideo) {
+      pc.addTrack(outgoingVideo, this.screenStream || this.localStream);
+    }
+    if (outgoingAudio && outgoingAudio !== outgoingVideo) {
+      pc.addTrack(outgoingAudio, this.localStream || this.screenStream);
     }
 
     pc.ontrack = (event) => {
@@ -502,9 +515,6 @@ class WebRTCClient {
     const hasRemoteDesc = pc.remoteDescription && pc.remoteDescription.type;
     if (!hasRemoteDesc) {
       // Remote description not set yet: buffer until setRemoteDescription runs.
-      if (!this.pendingIceCandidates) {
-        this.pendingIceCandidates = new Map();
-      }
       const buffer = this.pendingIceCandidates.get(message.connId) || [];
       buffer.push(message.payload);
       this.pendingIceCandidates.set(message.connId, buffer);
@@ -590,18 +600,21 @@ class WebRTCClient {
   // remoteStream event so the UI can update its display (e.g. show "Screen"
   // label / switch the tile to the screen track).
   setRemoteScreenShare(connId, userId, isScreenSharing) {
-    if (!this.remoteStreams.has(connId)) {
+    let entry = this.remoteStreams.get(connId);
+    let stream = null;
+    if (!entry) {
       // Track screen-share state even before a remoteStream has arrived so the
       // flag is correct when the first track does arrive.
-      this.remoteStreams.set(connId, { stream: null, userId, isScreenSharing });
-      return;
+      entry = { stream: null, userId, isScreenSharing };
+      this.remoteStreams.set(connId, entry);
+    } else {
+      entry.isScreenSharing = isScreenSharing;
+      if (userId) {
+        entry.userId = userId;
+      }
+      stream = entry.stream;
     }
-    const entry = this.remoteStreams.get(connId);
-    entry.isScreenSharing = isScreenSharing;
-    if (userId) {
-      entry.userId = userId;
-    }
-    this.emit('remoteStream', { connId, userId: entry.userId, stream: entry.stream, isScreenSharing });
+    this.emit('remoteStream', { connId, userId: entry.userId, stream, isScreenSharing });
   }
 
   toggleAudio(enabled) {
@@ -676,6 +689,7 @@ class WebRTCClient {
     }
 
     this.remoteStreams.clear();
+    this.pendingIceCandidates?.clear();
     this.reconnectAttempts = 0;
     this.emit('disconnected');
   }
