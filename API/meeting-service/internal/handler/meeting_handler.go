@@ -336,23 +336,18 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 		switch msg.Type {
 		case "offer":
 			// Forward offer to all other participants in the room
+			// so every peer pair can negotiate, not just one target.
 			h.signalingHub.BroadcastToRoom(roomID, msg)
 
 		case "answer":
-			// Forward answer to the target connection
-			if msg.Target != "" {
-				h.signalingHub.SendToConnection(msg.Target, msg)
-			} else {
-				h.signalingHub.BroadcastToRoom(roomID, msg)
-			}
+			// Forward answer to all other participants so multi-peer
+			// mesh connections can complete negotiation.
+			h.signalingHub.BroadcastToRoom(roomID, msg)
 
 		case "ice-candidate":
-			// Forward ICE candidate to the target or room
-			if msg.Target != "" {
-				h.signalingHub.SendToConnection(msg.Target, msg)
-			} else {
-				h.signalingHub.BroadcastToRoom(roomID, msg)
-			}
+			// Forward ICE candidate to all other participants so every
+			// peer pair can exchange connectivity candidates.
+			h.signalingHub.BroadcastToRoom(roomID, msg)
 
 		case "join":
 			// Participant is joining the signaling channel
