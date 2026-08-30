@@ -4,9 +4,9 @@ const PROD_API_URL = 'https://livemeeting-service.onrender.com/api/v1';
 
 export const MEETING_API_BASE_URL = __DEV__
   ? Platform.select({
-      web: 'http://localhost:8086/api/v1',
-      default: 'http://localhost:8086/api/v1',
-    }) ?? 'http://localhost:8086/api/v1'
+      web: 'https://livemeeting-service.onrender.com/api/v1',
+      default: 'https://livemeeting-service.onrender.com/api/v1',
+    }) ?? 'https://livemeeting-service.onrender.com/api/v1'
   : PROD_API_URL;
 
 // The WebSocket scheme MUST match the HTTP scheme of the API base URL so that

@@ -44,6 +44,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // Mirror of the participants list so event handlers (which close over stale
   // state) can read the latest roster without re-subscribing.
   const participantsRef = useRef([]);
+  // Polling interval for reliable participant sync
+  const pollIntervalRef = useRef(null);
+  // Track known participant IDs for detecting joins/leaves via polling
+  const knownParticipantIdsRef = useRef(new Set());
 
 
   // Initialize meeting
@@ -308,6 +312,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         });
       }
 
+      // Track this participant so polling doesn't duplicate the event
+      if (message.userId) {
+        knownParticipantIdsRef.current.add(message.userId);
+      }
+
       // Log participant join for debugging
       console.log('[Meeting] Participant joined:', {
         userId: message.userId,
@@ -334,6 +343,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     client.on('participantLeft', (message) => {
       setParticipants(prev => prev.filter(p => p.userId !== message.userId));
       setRemoteStreams(prev => prev.filter(s => s.connId !== message.connId));
+
+      // Remove from known IDs so polling doesn't re-add them
+      if (message.userId) {
+        knownParticipantIdsRef.current.delete(message.userId);
+      }
 
       // Log participant leave for debugging
       console.log('[Meeting] Participant left:', {
@@ -431,13 +445,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       const response = await meetingApi.getParticipants(meetingId);
       if (response && response.participants) {
         setParticipants(response.participants);
-        console.log('[Meeting] Initial participants loaded:', {
-          count: response.participants.length,
-          participants: response.participants.map(p => ({
-            userId: p.userId,
-            displayName: p.displayName,
-          })),
-        });
+        knownParticipantIdsRef.current = new Set(response.participants.map(p => p.userId));
+        console.log('[Meeting] Participants synced:', response.participants.length);
       }
      } catch (error) {
        console.error('Failed to update participants:', error);
@@ -568,6 +577,16 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const handleToggleScreenShare = async () => {
+    // Screen sharing is only supported on web
+    if (Platform.OS !== 'web') {
+      Toast.show({
+        type: 'warning',
+        text1: 'Screen sharing unavailable',
+        text2: 'Screen sharing is only supported on web browsers',
+      });
+      return;
+    }
+
     try {
       if (!isScreenSharing) {
         screenShareRejectedRef.current = false;
@@ -703,8 +722,84 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       reconnectTimeoutRef.current = null;
     }
 
+    // Stop the polling interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
     clearMeetingAuthToken();
   };
+
+  // Reliable participant sync: poll the API periodically to catch any
+  // joins/leaves that were missed due to WebSocket disconnections.
+  const startParticipantPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await meetingApi.getParticipants(meetingId);
+        if (!response || !response.participants) return;
+
+        const apiParticipants = response.participants;
+        const currentIds = new Set(apiParticipants.map(p => p.userId));
+        const previousIds = new Set(knownParticipantIdsRef.current);
+
+        // Detect new joins
+        const newJoins = apiParticipants.filter(p => !previousIds.has(p.userId));
+        const leftIds = [...previousIds].filter(id => !currentIds.has(id));
+
+        knownParticipantIdsRef.current = currentIds;
+
+        for (const joined of newJoins) {
+          if (joined.userId === user?.id) continue;
+          console.log('[Meeting] Poll: participant joined:', joined.userId);
+          setParticipants(prev => prev.find(p => p.userId === joined.userId) ? prev : [...prev, joined]);
+          setRemoteStreams(prev => prev.find(s => s.userId === joined.userId) ? prev : [...prev, {
+            connId: joined.userId,
+            userId: joined.userId,
+            stream: null,
+            name: joined.displayName || 'Participant',
+            isScreenSharing: false,
+          }]);
+          if (initialLoadDoneRef.current) {
+            Toast.show({ type: 'info', text1: `${joined.displayName || 'Someone'} joined`, position: 'top' });
+          }
+        }
+
+        for (const leftId of leftIds) {
+          console.log('[Meeting] Poll: participant left:', leftId);
+          setParticipants(prev => prev.filter(p => p.userId !== leftId));
+          setRemoteStreams(prev => prev.filter(s => s.userId !== leftId));
+          if (initialLoadDoneRef.current) {
+            const left = participantsRef.current.find(p => p.userId === leftId);
+            Toast.show({ type: 'info', text1: `${left?.displayName || 'Someone'} left`, position: 'top' });
+          }
+        }
+      } catch (error) {
+        console.warn('[Meeting] Poll failed:', error.message);
+      }
+    }, 5000);
+  };
+
+  useEffect(() => {
+    if (isConnected && !isReadOnly) {
+      startParticipantPolling();
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [isConnected, isReadOnly]);
 
   // Build a userId -> displayName lookup from the participants list (API + signaling).
   const getParticipantName = (userId) => {

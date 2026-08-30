@@ -68,18 +68,36 @@ const getPlatformClasses = () => {
     };
   }
 
-  const native = loadNativeWebRTC();
-  if (!native) {
-    throw new Error('react-native-webrtc is required on native platforms');
-  }
+  try {
+    const native = loadNativeWebRTC();
+    if (!native) {
+      console.warn('react-native-webrtc not available, some features may not work');
+      return {
+        RTCPeerConnection: null,
+        MediaStream: null,
+        MediaStreamTrack: null,
+        RTCSessionDescription: null,
+        RTCIceCandidate: null,
+      };
+    }
 
-  return {
-    RTCPeerConnection: native.RTCPeerConnection,
-    MediaStream: native.MediaStream,
-    MediaStreamTrack: native.MediaStreamTrack,
-    RTCSessionDescription: native.RTCSessionDescription,
-    RTCIceCandidate: native.RTCIceCandidate,
-  };
+    return {
+      RTCPeerConnection: native.RTCPeerConnection,
+      MediaStream: native.MediaStream,
+      MediaStreamTrack: native.MediaStreamTrack,
+      RTCSessionDescription: native.RTCSessionDescription,
+      RTCIceCandidate: native.RTCIceCandidate,
+    };
+  } catch (e) {
+    console.warn('Failed to load react-native-webrtc:', e?.message);
+    return {
+      RTCPeerConnection: null,
+      MediaStream: null,
+      MediaStreamTrack: null,
+      RTCSessionDescription: null,
+      RTCIceCandidate: null,
+    };
+  }
 };
 
 class WebRTCClient {
@@ -439,6 +457,13 @@ class WebRTCClient {
     }
 
     const { RTCPeerConnection, MediaStream } = this.ensurePlatformClasses();
+
+    // Guard against missing WebRTC support (e.g., react-native-webrtc not linked)
+    if (!RTCPeerConnection) {
+      console.warn('[WebRTC] RTCPeerConnection not available, skipping peer connection creation');
+      return null;
+    }
+
     const pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
     // Buffer ICE candidates that arrive before a remote description is set so
@@ -619,6 +644,12 @@ class WebRTCClient {
 
   handleRemoteTrack(connId, userId, event) {
     const { MediaStream } = this.ensurePlatformClasses();
+
+    // Guard against missing WebRTC support
+    if (!MediaStream) {
+      console.warn('[WebRTC] MediaStream not available, cannot handle remote track');
+      return;
+    }
 
     console.log('[ScreenShare] Remote track received:', {
       connId,
