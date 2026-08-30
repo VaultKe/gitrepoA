@@ -175,6 +175,14 @@ func main() {
 		api.POST("/rooms/:roomID/end", h.EndRoom)
 		api.GET("/rooms/:roomID/participants", h.GetParticipants)
 
+		// WebSocket signaling - intentionally NOT behind the JWT auth group.
+		// The meeting client connects here with the userId carried in the JOIN
+		// message body (debug/unauthenticated flow), and the hub preserves it.
+		// Requiring the main-app JWT here silently broke signaling for the
+		// unauthenticated debug join, so participants never learned about each
+		// other (looked like they weren't in the same room).
+		api.GET("/rooms/:roomID/signal", h.WebRTCSignal)
+
 		// Participant actions - WITH auth
 		authApi := api.Group("")
 		authApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
@@ -182,7 +190,6 @@ func main() {
 			authApi.POST("/rooms/:roomID/join", h.JoinRoom)
 			authApi.POST("/rooms/:roomID/leave", h.LeaveRoom)
 			authApi.PUT("/rooms/:roomID/participants", h.UpdateParticipant)
-			authApi.GET("/rooms/:roomID/signal", h.WebRTCSignal)
 			authApi.POST("/rooms/:roomID/chat", h.SendRoomChatMessage)
 			authApi.GET("/rooms/:roomID/chat", h.GetRoomChatMessages)
 			authApi.GET("/stats", h.GetStats)

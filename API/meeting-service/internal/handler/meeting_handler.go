@@ -33,7 +33,7 @@ type MeetingHandler struct {
 
 // NewMeetingHandler creates a new meeting handler.
 func NewMeetingHandler(cfg *config.Config, rm *room.RoomManager, sfu *webrtc.SFUManager, hub *signaling.SignalingHub) *MeetingHandler {
-	return &MeetingHandler{
+	h := &MeetingHandler{
 		config:              cfg,
 		roomManager:         rm,
 		sfuManager:          sfu,
@@ -51,6 +51,35 @@ func NewMeetingHandler(cfg *config.Config, rm *room.RoomManager, sfu *webrtc.SFU
 			},
 		},
 	}
+
+	// Set up callback for when clients are removed from the hub.
+	// This ensures participant-left events are broadcast even when clients
+	// disconnect unexpectedly (browser close, network loss, etc.)
+	hub.SetOnClientRemoved(func(info signaling.ClientRemovedInfo) {
+		// Only broadcast participant-left for clients that were properly joined
+		// (have a userID and connID). Clients that disconnected before sending
+		// a join message don't need a leave notification.
+		if info.ConnID == "" || info.UserID == "" {
+			return
+		}
+
+		// Broadcast participant-left to the room
+		h.signalingHub.BroadcastToRoom(info.RoomID, &signaling.SignalingMessage{
+			Type:        "participant-left",
+			RoomID:      info.RoomID,
+			UserID:      info.UserID,
+			ConnID:      info.ConnID,
+			DisplayName: info.DisplayName,
+		})
+
+		// Clean up screen sharing if this client was sharing
+		h.clearScreenSharer(info.RoomID, info.ConnID)
+
+		fmt.Printf("[Signal] Client removed | roomID=%s userID=%s connID=%s reason=%d\n",
+			info.RoomID, info.UserID, info.ConnID, info.Reason)
+	})
+
+	return h
 }
 
 // CreateRoom creates a new meeting room.
@@ -321,18 +350,13 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 		return
 	}
 
+	fmt.Printf("[Signal] WebSocket connected | roomID=%s userID=%s origin=%s\n", roomID, userID, c.Request.Header.Get("Origin"))
+
 	// Generate a unique connection ID
 	connID := fmt.Sprintf("%s-%d", userID, time.Now().UnixNano())
 
 	// Create signaling client
-	client := &signaling.SignalingClient{
-		Conn:   conn,
-		RoomID: roomID,
-		UserID: userID,
-		ConnID: connID,
-		Send:   make(chan []byte, 256),
-		Hub:    h.signalingHub,
-	}
+	client := signaling.NewSignalingClient(conn, roomID, userID, connID, h.signalingHub)
 
 	// Register client
 	h.signalingHub.RegisterClient(client)
@@ -358,6 +382,7 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			existing, sharing := h.activeScreenSharers[roomID]
 			if sharing && existing != connID {
 				h.ssMu.Unlock()
+				fmt.Printf("[Signal] screen-share-started | roomID=%s connID=%s | REJECTED (already sharing: %s)\n", roomID, connID, existing)
 				// Reject: another peer is already sharing. Tell the requester to stop.
 				h.signalingHub.SendToConnection(connID, &signaling.SignalingMessage{
 					Type:   "screen-share-rejected",
@@ -373,6 +398,7 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			h.ssMu.Unlock()
 
 			msg.ConnID = connID
+			fmt.Printf("[Signal] screen-share-started | roomID=%s connID=%s | broadcasting to room\n", roomID, connID)
 			h.signalingHub.BroadcastToRoomExcept(roomID, connID, msg)
 
 		case "screen-share-stopped":
@@ -380,24 +406,75 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			delete(h.activeScreenSharers, roomID)
 			h.ssMu.Unlock()
 			msg.ConnID = connID
+			fmt.Printf("[Signal] screen-share-stopped | roomID=%s connID=%s | broadcasting to room\n", roomID, connID)
 			h.signalingHub.BroadcastToRoomExcept(roomID, connID, msg)
 
 		case "join":
-			// Participant is joining the signaling channel
+			// Participant is joining the signaling channel.
+			// 1) Tell everyone else in the room that this participant joined
+			//    (with a proper userId + displayName so they are correctly
+			//    identified and can establish a peer connection).
+			client.DisplayName = msg.DisplayName
+			client.Role = userRole
+
+			// Sync with RoomManager to ensure consistent participant tracking
+			// between HTTP joins and WebSocket joins. This ensures the participant
+			// appears in GetParticipants() and Redis presence is set.
+			participantID := ""
+			participant, err := h.roomManager.JoinRoom(roomID, msg.UserID, msg.DisplayName, userRole)
+			if err != nil {
+				fmt.Printf("[Signal] join | roomID=%s userID=%s | RoomManager join failed: %v\n", roomID, msg.UserID, err)
+				// Continue anyway - the signaling broadcast should still work
+			} else {
+				participantID = participant.ID
+				fmt.Printf("[Signal] join | roomID=%s userID=%s | RoomManager participantId=%s\n", roomID, msg.UserID, participantID)
+			}
+
 			h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
-				Type:   "participant-joined",
-				RoomID: roomID,
-				UserID: msg.UserID,
-				ConnID: connID,
+				Type:        "participant-joined",
+				RoomID:      roomID,
+				UserID:      msg.UserID,
+				ConnID:      connID,
+				DisplayName: msg.DisplayName,
 				Payload: map[string]interface{}{
-					"connId": connID,
-					"role":   userRole,
+					"connId":        connID,
+					"role":          userRole,
+					"participantId": participantID,
 				},
 			})
+
+			// 2) Tell the new joiner about the participants who are ALREADY in
+			//    the room, so the UI can show them immediately and the client
+			//    can open peer connections to each (a proper live meeting).
+			existing := h.signalingHub.GetRoomClients(roomID)
+			fmt.Printf("[Signal] join | roomID=%s userID=%s connID=%s | clientsInRoom=%d\n", roomID, msg.UserID, connID, h.signalingHub.GetRoomClientCount(roomID))
+			for other := range existing {
+				if other.ConnID == connID {
+					continue
+				}
+				h.signalingHub.SendToConnection(connID, &signaling.SignalingMessage{
+					Type:        "participant-joined",
+					RoomID:      roomID,
+					UserID:      other.UserID,
+					ConnID:      other.ConnID,
+					DisplayName: other.DisplayName,
+					Payload: map[string]interface{}{
+						"connId":   other.ConnID,
+						"role":     other.Role,
+						"initiator": true,
+					},
+				})
+			}
 
 		case "leave":
 			// Participant is leaving the signaling channel
 			h.clearScreenSharer(roomID, connID)
+
+			// Sync with RoomManager to ensure consistent participant tracking
+			if err := h.roomManager.LeaveRoom(roomID, msg.UserID); err != nil {
+				fmt.Printf("[Signal] leave | roomID=%s userID=%s | RoomManager leave failed: %v\n", roomID, msg.UserID, err)
+			}
+
 			h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 				Type:   "participant-left",
 				RoomID: roomID,
@@ -416,13 +493,31 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 	// Start write pump
 	go client.WritePump()
 
-	// Wait for connection to close
-	<-client.Send
+	// Wait for connection to close. ReadPump returns when the WebSocket
+	// connection is closed (either gracefully or unexpectedly).
+	// We use a done channel to avoid blocking forever if the client was
+	// already removed from the hub (e.g., due to ping timeout).
+	done := make(chan struct{})
+	go func() {
+		// Block on the Send channel - it will be closed when the client
+		// is removed from the hub via removeClient
+		<-client.Send
+		close(done)
+	}()
 
-	// Cleanup: ensure any active screen share from this connection is cleared.
+	// Also monitor for context cancellation (client disconnected)
+	select {
+	case <-done:
+		// Client Send channel was closed (client removed from hub)
+	case <-c.Request.Context().Done():
+		// HTTP request context cancelled (client disconnected)
+		fmt.Printf("[Signal] Context cancelled | roomID=%s connID=%s\n", roomID, connID)
+	}
+
+	// Cleanup: ensure the client is removed from the hub and participant-left
+	// is broadcast. The OnClientRemoved callback in NewMeetingHandler handles
+	// broadcasting participant-left, but only if the client was properly joined.
 	h.clearScreenSharer(roomID, connID)
-
-	// Cleanup
 	h.signalingHub.UnregisterClient(client)
 }
 

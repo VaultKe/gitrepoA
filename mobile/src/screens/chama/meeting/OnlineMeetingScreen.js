@@ -80,11 +80,20 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   }, [activeParticipant?.connId]);
 
   // Determine if expanded view should be shown
-  // Show expanded when: user expanded, someone is screen sharing, or there's an active participant
-  const showExpandedView = isVideoExpanded || isScreenSharing || !!activeParticipant;
+  // Show expanded when: user expanded, someone is screen sharing (local or remote),
+  // or there's an active participant
+  const hasRemoteScreenSharer = remoteStreams.some(s => s.isScreenSharing);
+  const showExpandedView = isVideoExpanded || isScreenSharing || hasRemoteScreenSharer || !!activeParticipant;
 
   // Get the participant to show in expanded view
+  // Priority: 1. Remote screen sharer (always show when someone is sharing)
+  //           2. User pinned participant, 3. Local screen sharing, 4. Active participant
   const getExpandedParticipant = () => {
+    // Always show remote screen sharer in expanded view (highest priority)
+    const remoteScreenSharer = remoteStreams.find(s => s.isScreenSharing);
+    if (remoteScreenSharer) {
+      return { participant: remoteScreenSharer, isLocal: false };
+    }
     // If user manually pinned someone, show them
     if (pinnedParticipantId) {
       const pinned = remoteStreams.find(s => s.connId === pinnedParticipantId);
@@ -154,6 +163,21 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           />
           <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
             Camera off
+          </Text>
+        </View>
+      );
+    }
+
+    // Show placeholder for remote participants without media streams
+    // (e.g., they joined but haven't enabled camera/microphone yet)
+    if (!isLocal && !stream) {
+      return (
+        <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+            <Ionicons name="person" size={36} color="#fff" />
+          </View>
+          <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
+            {isLocal ? 'You' : 'Participant'}
           </Text>
         </View>
       );
@@ -471,6 +495,14 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   placeholderText: {
     marginTop: spacing.sm,

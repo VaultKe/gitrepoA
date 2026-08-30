@@ -13,27 +13,66 @@ import (
 
 // SignalingMessage represents a WebSocket signaling message.
 type SignalingMessage struct {
-	Type      string                 `json:"type"`
-	RoomID    string                 `json:"roomId,omitempty"`
-	UserID    string                 `json:"userId,omitempty"`
-	ConnID    string                 `json:"connId,omitempty"`
-	Target    string                 `json:"target,omitempty"`
-	Payload   interface{}            `json:"payload,omitempty"`
-	Timestamp time.Time              `json:"timestamp,omitempty"`
+	Type        string      `json:"type"`
+	RoomID      string      `json:"roomId,omitempty"`
+	UserID      string      `json:"userId,omitempty"`
+	ConnID      string      `json:"connId,omitempty"`
+	Target      string      `json:"target,omitempty"`
+	DisplayName string      `json:"displayName,omitempty"`
+	Payload     interface{} `json:"payload,omitempty"`
+	Timestamp   time.Time   `json:"timestamp,omitempty"`
 }
 
 // SignalingClient represents a connected WebSocket client.
 type SignalingClient struct {
-	Conn      *websocket.Conn
-	RoomID    string
-	UserID    string
-	ConnID    string
-	Send      chan []byte
-	Hub       *SignalingHub
-	mu        sync.Mutex
-	closed    bool
-	lastPing  time.Time
+	Conn       *websocket.Conn
+	RoomID     string
+	UserID     string
+	ConnID     string
+	DisplayName string
+	Role       string
+	Send       chan []byte
+	Hub        *SignalingHub
+	mu         sync.Mutex
+	closed     bool
+	lastPing   time.Time
 }
+
+// ClientRemovedReason indicates why a client was removed from the hub.
+type ClientRemovedReason int
+
+const (
+	ClientLeft ClientRemovedReason = iota
+	ClientDisconnected
+	ClientDropped
+)
+
+// ClientRemovedInfo contains information about a removed client.
+type ClientRemovedInfo struct {
+	RoomID      string
+	UserID      string
+	ConnID      string
+	DisplayName string
+	Role        string
+	Reason      ClientRemovedReason
+}
+
+// NewSignalingClient creates a new signaling client with initialized fields.
+func NewSignalingClient(conn *websocket.Conn, roomID, userID, connID string, hub *SignalingHub) *SignalingClient {
+	return &SignalingClient{
+		Conn:     conn,
+		RoomID:   roomID,
+		UserID:   userID,
+		ConnID:   connID,
+		Send:     make(chan []byte, 256),
+		Hub:      hub,
+		lastPing: time.Now(), // Initialize to current time to avoid immediate timeout
+	}
+}
+
+// OnClientRemoved is called when a client is removed from the hub.
+// This allows the handler to broadcast participant-left events.
+type OnClientRemoved func(info ClientRemovedInfo)
 
 // SignalingHub manages WebSocket signaling connections and Redis pub/sub.
 type SignalingHub struct {
@@ -45,9 +84,12 @@ type SignalingHub struct {
 	unregister chan *SignalingClient
 
 	// Redis pub/sub for horizontal scaling
-	redisClient *redis.Client
-	redisPub    *redis.PubSub
+	redisClient  *redis.Client
+	redisPub     *redis.PubSub
 	redisChannel string
+
+	// Callback when a client is removed
+	onClientRemoved OnClientRemoved
 
 	mu sync.RWMutex
 }
@@ -55,12 +97,12 @@ type SignalingHub struct {
 // NewSignalingHub creates a new signaling hub.
 func NewSignalingHub(redisClient *redis.Client, redisChannel string) *SignalingHub {
 	hub := &SignalingHub{
-		clients:     make(map[*SignalingClient]bool),
-		rooms:       make(map[string]map[*SignalingClient]bool),
-		broadcast:   make(chan []byte, 65536),
-		register:    make(chan *SignalingClient, 1024),
-		unregister:  make(chan *SignalingClient, 1024),
-		redisClient: redisClient,
+		clients:      make(map[*SignalingClient]bool),
+		rooms:        make(map[string]map[*SignalingClient]bool),
+		broadcast:    make(chan []byte, 65536),
+		register:     make(chan *SignalingClient, 1024),
+		unregister:   make(chan *SignalingClient, 1024),
+		redisClient:  redisClient,
 		redisChannel: redisChannel,
 	}
 
@@ -81,6 +123,13 @@ func NewSignalingHub(redisClient *redis.Client, redisChannel string) *SignalingH
 	return hub
 }
 
+// SetOnClientRemoved sets the callback for when a client is removed from the hub.
+func (h *SignalingHub) SetOnClientRemoved(callback OnClientRemoved) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onClientRemoved = callback
+}
+
 // Run is the main event loop for the signaling hub.
 func (h *SignalingHub) Run() {
 	pingTicker := time.NewTicker(30 * time.Second)
@@ -98,7 +147,7 @@ func (h *SignalingHub) Run() {
 			h.mu.Unlock()
 
 		case client := <-h.unregister:
-			h.removeClient(client)
+			h.removeClient(client, ClientLeft)
 
 		case message := <-h.broadcast:
 			h.mu.RLock()
@@ -106,8 +155,12 @@ func (h *SignalingHub) Run() {
 				select {
 				case client.Send <- message:
 				default:
+					// Client's send buffer is full - close and clean up
 					close(client.Send)
-					delete(h.clients, client)
+					// Need to unlock before calling removeClient to avoid deadlock
+					h.mu.RUnlock()
+					h.removeClient(client, ClientDropped)
+					h.mu.RLock()
 				}
 			}
 			h.mu.RUnlock()
@@ -118,7 +171,11 @@ func (h *SignalingHub) Run() {
 				client.mu.Lock()
 				if time.Since(client.lastPing) > 2*time.Minute {
 					client.mu.Unlock()
+					// Need to unlock before calling removeClient to avoid deadlock
+					h.mu.RUnlock()
 					client.Close()
+					h.removeClient(client, ClientDisconnected)
+					h.mu.RLock()
 					continue
 				}
 				client.mu.Unlock()
@@ -129,6 +186,8 @@ func (h *SignalingHub) Run() {
 }
 
 // listenRedis listens for messages from Redis pub/sub.
+// Messages are expected to contain a RoomID field so we can filter delivery
+// to only clients in the relevant room, preventing cross-room event leaks.
 func (h *SignalingHub) listenRedis() {
 	if h.redisPub == nil {
 		return
@@ -138,7 +197,34 @@ func (h *SignalingHub) listenRedis() {
 		if msg == nil || msg.Payload == "" {
 			continue
 		}
-		h.broadcast <- []byte(msg.Payload)
+
+		// Parse the message to extract RoomID for room-aware delivery
+		var parsedMsg struct {
+			RoomID string `json:"roomId"`
+		}
+		if err := json.Unmarshal([]byte(msg.Payload), &parsedMsg); err != nil {
+			// If we can't parse, broadcast to all (backward compatibility)
+			h.broadcast <- []byte(msg.Payload)
+			continue
+		}
+
+		// Deliver only to clients in the specified room
+		if parsedMsg.RoomID != "" {
+			h.mu.RLock()
+			if roomClients, exists := h.rooms[parsedMsg.RoomID]; exists {
+				for client := range roomClients {
+					select {
+					case client.Send <- []byte(msg.Payload):
+					default:
+						// Client buffer full - will be cleaned up by ping check
+					}
+				}
+			}
+			h.mu.RUnlock()
+		} else {
+			// No room ID - broadcast to all (for global events like room-ended)
+			h.broadcast <- []byte(msg.Payload)
+		}
 	}
 }
 
@@ -181,8 +267,12 @@ func (h *SignalingHub) BroadcastToRoom(roomID string, msg *SignalingMessage) {
 			select {
 			case client.Send <- data:
 			default:
+				// Client's send buffer is full - clean up
 				close(client.Send)
-				delete(h.clients, client)
+				// Need to unlock before calling removeClient to avoid deadlock
+				h.mu.RUnlock()
+				h.removeClient(client, ClientDropped)
+				h.mu.RLock()
 			}
 		}
 	}
@@ -211,8 +301,12 @@ func (h *SignalingHub) BroadcastToRoomExcept(roomID, excludeConnID string, msg *
 			select {
 			case client.Send <- data:
 			default:
+				// Client's send buffer is full - clean up
 				close(client.Send)
-				delete(h.clients, client)
+				// Need to unlock before calling removeClient to avoid deadlock
+				h.mu.RUnlock()
+				h.removeClient(client, ClientDropped)
+				h.mu.RLock()
 			}
 		}
 	}
@@ -235,8 +329,7 @@ func (h *SignalingHub) SendToUser(roomID, userID string, msg *SignalingMessage) 
 				select {
 				case client.Send <- data:
 				default:
-					close(client.Send)
-					delete(h.clients, client)
+					// Client's send buffer is full - will be cleaned up by ping check
 				}
 				break
 			}
@@ -259,8 +352,7 @@ func (h *SignalingHub) SendToConnection(connID string, msg *SignalingMessage) {
 			select {
 			case client.Send <- data:
 			default:
-				close(client.Send)
-				delete(h.clients, client)
+				// Client's send buffer is full - will be cleaned up by ping check
 			}
 			break
 		}
@@ -297,7 +389,9 @@ func (h *SignalingHub) GetRoomClientCount(roomID string) int {
 }
 
 // removeClient removes a client from all tracking structures.
-func (h *SignalingHub) removeClient(client *SignalingClient) {
+// reason indicates why the client was removed so the callback can decide
+// whether to broadcast a participant-left event.
+func (h *SignalingHub) removeClient(client *SignalingClient, reason ClientRemovedReason) {
 	if client == nil {
 		return
 	}
@@ -328,6 +422,22 @@ func (h *SignalingHub) removeClient(client *SignalingClient) {
 
 	client.Conn.Close()
 	close(client.Send)
+
+	// Notify the handler so it can broadcast participant-left if needed
+	if h.onClientRemoved != nil {
+		info := ClientRemovedInfo{
+			RoomID:      client.RoomID,
+			UserID:      client.UserID,
+			ConnID:      client.ConnID,
+			DisplayName: client.DisplayName,
+			Role:        client.Role,
+			Reason:      reason,
+		}
+		// Call callback outside lock to avoid deadlock
+		h.mu.Unlock()
+		h.onClientRemoved(info)
+		h.mu.Lock()
+	}
 }
 
 // WritePump pumps messages from the Send channel to the WebSocket connection.
@@ -382,8 +492,17 @@ func (c *SignalingClient) ReadPump(handler func(*SignalingMessage) error) {
 			continue
 		}
 
-		msg.UserID = c.UserID
-		msg.ConnID = c.ConnID
+		// For authenticated connections the context user/conn id are
+		// authoritative. For unauthenticated/debug joins the client supplies
+		// its own userId in the message body, so only overwrite it when the
+		// context actually has a value — otherwise we'd broadcast an empty
+		// userId and break identity/room matching on the client.
+		if c.UserID != "" {
+			msg.UserID = c.UserID
+		}
+		if c.ConnID != "" {
+			msg.ConnID = c.ConnID
+		}
 		msg.Timestamp = time.Now()
 
 		if err := handler(&msg); err != nil {

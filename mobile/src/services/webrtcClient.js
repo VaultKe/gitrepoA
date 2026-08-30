@@ -200,10 +200,11 @@ class WebRTCClient {
     }
   }
 
-  async connectSignaling(roomId, userId, participantId) {
+  async connectSignaling(roomId, userId, participantId, displayName = null) {
     this.roomId = roomId;
     this.userId = userId;
     this.participantId = participantId;
+    this.displayName = displayName;
     // connId will be set by the server after the first participant-joined event
     // (or our own join confirmation). Until then, keep it null so we can match it.
     this.connId = null;
@@ -220,7 +221,7 @@ class WebRTCClient {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('Signaling connected');
+      console.log('[Meeting] Signaling connected | roomId=' + roomId + ' userId=' + this.userId);
       this.reconnectAttempts = 0;
       this.emit('connected');
 
@@ -231,6 +232,12 @@ class WebRTCClient {
         roomId: this.roomId,
         userId: this.userId,
         participantId: this.participantId,
+        displayName: this.displayName,
+      });
+      console.log('[Meeting] Sent join message:', {
+        roomId: this.roomId,
+        userId: this.userId,
+        displayName: this.displayName,
       });
     };
 
@@ -248,8 +255,14 @@ class WebRTCClient {
       this.emit('error', { type: 'websocket', error });
     };
 
-    this.ws.onclose = () => {
-      console.log('WebSocket closed');
+    this.ws.onclose = (event) => {
+      console.log('[Meeting] WebSocket closed:', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+        roomId: this.roomId,
+        userId: this.userId,
+      });
       this.emit('disconnected');
       this.handleReconnect();
     };
@@ -282,28 +295,56 @@ class WebRTCClient {
 
     setTimeout(async () => {
       try {
-        await this.connectSignaling(this.roomId, this.userId, this.participantId);
+        // Preserve displayName on reconnect so the server can identify us
+        await this.connectSignaling(this.roomId, this.userId, this.participantId, this.displayName);
+        console.log('[Meeting] Reconnected successfully | roomId=' + this.roomId + ' userId=' + this.userId);
       } catch (error) {
-        console.error('Reconnect failed:', error);
+        console.error('[Meeting] Reconnect failed:', error);
       }
     }, delay);
   }
 
   handleSignalingMessage(message) {
+    // Log received signaling messages for debugging presence
+    if (message.type === SIGNALING_MESSAGE_TYPES.PARTICIPANT_JOINED) {
+      console.log('[Meeting] Received participant-joined:', {
+        userId: message.userId,
+        displayName: message.displayName || message.payload?.displayName,
+        connId: message.connId,
+        isSelf: message.userId === this.userId,
+        isInitiator: message.payload?.initiator,
+      });
+    } else if (message.type === SIGNALING_MESSAGE_TYPES.PARTICIPANT_LEFT) {
+      console.log('[Meeting] Received participant-left:', {
+        userId: message.userId,
+        connId: message.connId,
+      });
+    }
+
     switch (message.type) {
       case SIGNALING_MESSAGE_TYPES.PARTICIPANT_JOINED:
         this.emit('participantJoined', message);
-        if (message.userId !== this.userId) {
-          // Use server-issued connId so all peers agree on one identifier.
-          const remoteConnId = message.connId;
-          if (remoteConnId) {
-            this.createPeerConnection(remoteConnId, message.userId, true);
-          }
-        } else {
+        if (message.userId === this.userId) {
           // This is our own join confirmation: adopt the server-issued connId.
           if (message.connId && (!this.connId || this.connId !== message.connId)) {
             this.connId = message.connId;
-            console.log('Adopted server connId:', this.connId);
+            console.log('[Meeting] Adopted server connId:', this.connId);
+          }
+          break;
+        }
+
+        // Use server-issued connId so all peers agree on one identifier.
+        const remoteConnId = message.connId;
+        if (!remoteConnId) break;
+
+        // Only the *newly joined* participant opens the connection (the server
+        // flags those roster-sync messages with `initiator`). Existing members
+        // just wait for the incoming offer. This prevents both sides from
+        // sending simultaneous offers (glare) which previously broke negotiation
+        // and made it look like participants weren't in the same room.
+        if (message.payload && message.payload.initiator) {
+          if (!this.peerConnections.has(remoteConnId)) {
+            this.createPeerConnection(remoteConnId, message.userId, true);
           }
         }
         break;
@@ -339,6 +380,7 @@ class WebRTCClient {
         break;
 
       case SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STARTED:
+        console.log('[Meeting] Received screen-share-started:', { connId: message.connId, userId: message.userId });
         this.setRemoteScreenShare(message.connId, message.userId, true);
         this.emit('screenShareStarted', {
           connId: message.connId,
@@ -347,6 +389,7 @@ class WebRTCClient {
         break;
 
       case SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STOPPED:
+        console.log('[Meeting] Received screen-share-stopped:', { connId: message.connId, userId: message.userId });
         this.setRemoteScreenShare(message.connId, message.userId, false);
         this.emit('screenShareStopped', {
           connId: message.connId,
@@ -364,6 +407,7 @@ class WebRTCClient {
   }
 
   sendScreenShareStarted() {
+    console.log('[Meeting] Sending screen-share-started to server');
     this.sendSignalingMessage({
       type: SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STARTED,
       roomId: this.roomId,
@@ -371,6 +415,7 @@ class WebRTCClient {
   }
 
   sendScreenShareStopped() {
+    console.log('[Meeting] Sending screen-share-stopped to server');
     this.sendSignalingMessage({
       type: SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STOPPED,
       roomId: this.roomId,
@@ -409,6 +454,7 @@ class WebRTCClient {
 
     if (this.screenStream) {
       outgoingVideo = this.screenStream.getVideoTracks()[0] || null;
+      console.log('[ScreenShare] Using screen stream for outgoing video, connId:', remoteConnId);
     }
     if (!outgoingVideo && this.localStream) {
       outgoingVideo = this.localStream.getVideoTracks()[0] || null;
@@ -429,6 +475,25 @@ class WebRTCClient {
 
     pc.ontrack = (event) => {
       this.handleRemoteTrack(remoteConnId, remoteUserId, event);
+    };
+
+    // Handle renegotiation needed (e.g., when adding screen share track after initial connection)
+    pc.onnegotiationneeded = async () => {
+      try {
+        console.log('[ScreenShare] Negotiation needed for connection:', remoteConnId);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        this.sendSignalingMessage({
+          type: SIGNALING_MESSAGE_TYPES.OFFER,
+          roomId: this.roomId,
+          target: remoteConnId,
+          payload: offer,
+        });
+        console.log('[ScreenShare] Renegotiation offer sent to:', remoteConnId);
+      } catch (err) {
+        console.error('[ScreenShare] Renegotiation failed:', err);
+      }
     };
 
     pc.onicecandidate = (event) => {
@@ -555,6 +620,13 @@ class WebRTCClient {
   handleRemoteTrack(connId, userId, event) {
     const { MediaStream } = this.ensurePlatformClasses();
 
+    console.log('[ScreenShare] Remote track received:', {
+      connId,
+      trackKind: event.track?.kind,
+      trackId: event.track?.id,
+      hasEntry: this.remoteStreams.has(connId),
+    });
+
     if (!this.remoteStreams.has(connId)) {
       this.remoteStreams.set(connId, { stream: new MediaStream(), userId, isScreenSharing: false });
     }
@@ -579,6 +651,12 @@ class WebRTCClient {
       });
       stream.addTrack(incomingTrack);
     }
+
+    console.log('[ScreenShare] Emitting remoteStream:', {
+      connId,
+      trackCount: stream.getTracks().length,
+      isScreenSharing: entry.isScreenSharing,
+    });
 
     this.emit('remoteStream', { connId, userId, stream, isScreenSharing: entry.isScreenSharing });
   }
@@ -644,12 +722,21 @@ class WebRTCClient {
 
   async replaceVideoTrack(newStream) {
     const videoTrack = newStream.getVideoTracks()[0];
-    if (!videoTrack) return;
+    if (!videoTrack) {
+      console.log('[ScreenShare] No video track in new stream');
+      return;
+    }
 
-    for (const [, pc] of this.peerConnections) {
+    console.log('[ScreenShare] Replacing video track in peer connections, count:', this.peerConnections.size);
+    for (const [connId, pc] of this.peerConnections) {
       const sender = pc.getSenders().find(s => s.track?.kind === 'video');
       if (sender) {
+        console.log('[ScreenShare] Replacing track for connection:', connId);
         await sender.replaceTrack(videoTrack);
+      } else {
+        // No video sender exists (e.g., user had no camera), add the screen track as a new sender
+        console.log('[ScreenShare] No video sender found, adding new track for connection:', connId);
+        pc.addTrack(videoTrack, newStream);
       }
     }
   }

@@ -37,6 +37,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const reconnectTimeoutRef = useRef(null);
   const screenShareRejectedRef = useRef(false);
   const participantIdRef = useRef(null);
+  // Becomes true once the initial participant roster has loaded, so we only
+  // toast for genuinely *new* arrivals and not the burst of existing members
+  // the server sends right after we join.
+  const initialLoadDoneRef = useRef(false);
+  // Mirror of the participants list so event handlers (which close over stale
+  // state) can read the latest roster without re-subscribing.
+  const participantsRef = useRef([]);
+
 
   // Initialize meeting
   useEffect(() => {
@@ -131,7 +139,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
        // Load participants
        await updateParticipantsList();
-
+       // Roster is now synced — further joins are real arrivals worth a toast.
+       initialLoadDoneRef.current = true;
        // Load existing chat history so newcomers see the backlog
        await loadChatHistory();
 
@@ -233,16 +242,24 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       });
     });
 
-    client.on('screenShareStarted', ({ connId, userId }) => {
-      setRemoteStreams(prev =>
-        prev.map(s => (s.connId === connId ? { ...s, isScreenSharing: true } : s))
-      );
+    client.on('screenShareStarted', (data) => {
+      console.log('[Meeting] screenShareStarted event received:', data);
+      if (data && data.connId) {
+        setRemoteStreams(prev =>
+          prev.map(s => (s.connId === data.connId ? { ...s, isScreenSharing: true } : s))
+        );
+      }
     });
 
-    client.on('screenShareStopped', ({ connId, userId }) => {
-      setRemoteStreams(prev =>
-        prev.map(s => (s.connId === connId ? { ...s, isScreenSharing: false } : s))
-      );
+    client.on('screenShareStopped', (data) => {
+      console.log('[Meeting] screenShareStopped event received:', data);
+      // When local user stops sharing, no data is passed
+      // When remote user stops sharing, data contains { connId, userId }
+      if (data && data.connId) {
+        setRemoteStreams(prev =>
+          prev.map(s => (s.connId === data.connId ? { ...s, isScreenSharing: false } : s))
+        );
+      }
     });
 
     client.on('screenShareRejected', (payload) => {
@@ -263,6 +280,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     });
 
     client.on('participantJoined', (message) => {
+      const isNew = !participantsRef.current.some(p => p.userId === message.userId);
       setParticipants(prev => {
         const exists = prev.find(p => p.userId === message.userId);
         if (!exists) {
@@ -270,11 +288,73 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         }
         return prev;
       });
+
+      // Add participant to remoteStreams as a placeholder so they appear in
+      // the video grid even before they enable their camera/microphone.
+      // The stream will be updated to the actual media when tracks arrive.
+      if (message.connId && message.userId !== user?.id) {
+        setRemoteStreams(prev => {
+          const exists = prev.find(s => s.connId === message.connId);
+          if (!exists) {
+            return [...prev, {
+              connId: message.connId,
+              userId: message.userId,
+              stream: null,
+              name: message.displayName || message.payload?.displayName || 'Participant',
+              isScreenSharing: false,
+            }];
+          }
+          return prev;
+        });
+      }
+
+      // Log participant join for debugging
+      console.log('[Meeting] Participant joined:', {
+        userId: message.userId,
+        displayName: message.displayName || message.payload?.displayName || 'Unknown',
+        connId: message.connId,
+        isSelf: message.userId === user?.id,
+        totalParticipants: participantsRef.current.length + (isNew ? 1 : 0),
+      });
+
+      if (isNew && initialLoadDoneRef.current && message.userId !== user?.id) {
+        const name =
+          message.displayName ||
+          message.payload?.displayName ||
+          message.name ||
+          'Someone';
+        Toast.show({
+          type: 'info',
+          text1: `${name} joined the meeting`,
+          position: 'top',
+        });
+      }
     });
 
     client.on('participantLeft', (message) => {
       setParticipants(prev => prev.filter(p => p.userId !== message.userId));
       setRemoteStreams(prev => prev.filter(s => s.connId !== message.connId));
+
+      // Log participant leave for debugging
+      console.log('[Meeting] Participant left:', {
+        userId: message.userId,
+        connId: message.connId,
+        totalParticipants: participantsRef.current.length - 1,
+      });
+
+      if (initialLoadDoneRef.current && message.userId !== user?.id) {
+        const left = participantsRef.current.find(p => p.userId === message.userId);
+        const name =
+          left?.displayName ||
+          left?.payload?.displayName ||
+          left?.name ||
+          'Someone';
+        Toast.show({
+          type: 'info',
+          text1: `${name} left the meeting`,
+          position: 'top',
+        });
+      }
     });
 
     client.on('participantUpdated', (message) => {
@@ -312,6 +392,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
     client.on('connected', () => {
       setConnectionError(null);
+      // Refresh participants list on (re)connect to catch any joins/leaves
+      // that may have occurred while the client was disconnected.
+      // This ensures the UI is always up-to-date.
+      console.log('[Meeting] Connection established, refreshing participants...');
+      updateParticipantsList();
     });
 
     let stream = null;
@@ -328,7 +413,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     await client.connectSignaling(
       connectionData.roomId || meetingId,
       user?.id || 'user',
-      connectionData.participantId
+      connectionData.participantId,
+      connectionData.displayName || `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim()
     );
   };
 
@@ -345,6 +431,13 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       const response = await meetingApi.getParticipants(meetingId);
       if (response && response.participants) {
         setParticipants(response.participants);
+        console.log('[Meeting] Initial participants loaded:', {
+          count: response.participants.length,
+          participants: response.participants.map(p => ({
+            userId: p.userId,
+            displayName: p.displayName,
+          })),
+        });
       }
      } catch (error) {
        console.error('Failed to update participants:', error);
@@ -623,6 +716,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     if (joined && joined.payload?.displayName) return joined.payload.displayName;
     return 'Participant';
   };
+
+  // Keep a live mirror of the participants list for event handlers that close
+  // over stale state (so join/leave toasts can read the latest roster).
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   // Keep display names synced onto remote stream entries so the UI can label
   // each tile even when the name arrives after the first media track.
