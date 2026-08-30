@@ -14,6 +14,14 @@ class NotificationService {
     if (this.isInitialized) return true;
     this.setupNotificationHandler();
     this.setupAppStateListener();
+
+    // Setup Android notification channels
+    await this.setupNotificationChannels();
+
+    // Request permissions on app start so notifications can appear
+    // in the phone's notification shade
+    await this.requestPermissionsFromUser();
+
     this.isInitialized = true;
     return true;
   }
@@ -83,7 +91,11 @@ class NotificationService {
 
   async requestPermissionsFromUser() {
     try {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status } = await Notifications.requestPermissionsAsync({
+        sound: true,
+        badge: true,
+        vibrate: true,
+      });
       return status === 'granted';
     } catch (error) {
       console.error('Failed to request permissions:', error);
@@ -175,6 +187,36 @@ class NotificationService {
     } catch (error) {
       console.warn('Could not fetch sound info:', error);
       return null;
+    }
+  }
+
+  async checkNotificationChannels() {
+    if (Platform.OS === 'android') {
+      try {
+        const channels = await Notifications.getNotificationChannelsAsync();
+        return channels && channels.some(channel => channel.id === 'default');
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async verifyNotificationSystem() {
+    try {
+      const permissionStatus = await this.getPermissionStatus();
+      const channelsOk = await this.checkNotificationChannels();
+
+      return {
+        overall: permissionStatus.enabled && channelsOk,
+        permissions: permissionStatus,
+        channels: channelsOk,
+      };
+    } catch (error) {
+      return {
+        overall: false,
+        error: error.message,
+      };
     }
   }
 

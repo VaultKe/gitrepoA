@@ -18,8 +18,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/badge.png",
-        "backgroundColor": "#0D1117"
+        "foregroundImage": "./assets/app-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.somulos.vaultke"
@@ -36,7 +36,16 @@
     "experiments": {
       "typedRoutes": false
     },
-    "plugins": [],
+    "useNextNotificationsApi": true,
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/app-icon.png",
+          "color": "#ffffff"
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "b78f8d8c-3775-40fc-a8cf-e8cc04359f42"

@@ -35,20 +35,23 @@ function AppContent() {
 
   // Initialize notification service
   useEffect(() => {
-    // Initialize the enhanced notification service
-    notificationService.initialize().then(async (success) => {
-      if (success) {
-        // Verify the notification system is working properly
-        const verification = await notificationService.verifyNotificationSystem();
-        if (verification.overall) {
+    notificationService.initialize()
+      .then(async (success) => {
+        if (success) {
+          const verification = await notificationService.verifyNotificationSystem();
+          if (verification.overall) {
+            console.log('Notification system verified and ready');
+          } else {
+            console.warn('Notification system issues detected:', verification);
+          }
         } else {
+          console.warn('Notification service initialization failed');
         }
-      } else {
-      }
-    }).catch((error) => {
-    });
+      })
+      .catch((error) => {
+        console.error('Notification service error:', error);
+      });
 
-    // Cleanup on unmount
     return () => {
       notificationService.cleanup();
     };
