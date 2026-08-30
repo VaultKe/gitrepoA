@@ -16,9 +16,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     isPreview = false,
     previewData = null,
     isReadOnly = false,
-  } = route.params;
+  } = route.params || {};
 
-  const [isConnecting, setIsConnecting] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(!meetingId);
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
@@ -26,7 +26,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
   const [meetingData, setMeetingData] = useState(null);
-  const [connectionError, setConnectionError] = useState(null);
+  const [connectionError, setConnectionError] = useState(
+    meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.'
+  );
   const [localStream, setLocalStream] = useState(null);
   const [remoteStreams, setRemoteStreams] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
@@ -53,6 +55,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // Initialize meeting
   useEffect(() => {
     if (isReadOnly) {
+      setIsConnecting(false);
+      return;
+    }
+
+    if (!meetingId) {
       setIsConnecting(false);
       return;
     }
