@@ -60,21 +60,21 @@ const ChamaMeetingsTable = ({
             onPress={() => onViewSummary(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="eye" size={12} color={colors.white} />
+            <Ionicons name="eye" size={16} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButtonSmall, styles.actionButtonSuccess]}
             onPress={() => onAttend(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="play" size={12} color={colors.white} />
+            <Ionicons name="play" size={16} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButtonSmall, styles.actionButtonError]}
             onPress={() => onDelete(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="trash" size={12} color={colors.white} />
+            <Ionicons name="trash" size={16} color={colors.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -198,7 +198,6 @@ const getStatusTextStyle = (status, styles) => {
 
 const createStyles = (colors) => StyleSheet.create({
   tableContainer: {
-    marginHorizontal: spacing.sm,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
     alignSelf: 'stretch',
@@ -222,7 +221,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.primary + '10',
     borderBottomWidth: 2,
@@ -232,7 +231,7 @@ const createStyles = (colors) => StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
   titleCell: {
     flex: 1.5,
@@ -255,7 +254,7 @@ const createStyles = (colors) => StyleSheet.create({
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
     color: colors.primary,
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
   },
   tableHeaderTextTitle: {
@@ -269,8 +268,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableRowEven: {
     flexDirection: 'row',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
     alignItems: 'center',
@@ -278,15 +277,15 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableRowOdd: {
     flexDirection: 'row',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
   tableCellText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: typography.fontWeight.medium,
   },
   tableCellTextDefault: {
@@ -294,7 +293,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   statusBadge: {
     paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
   statusBadgePrimary: {
@@ -313,7 +312,7 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.textSecondary + '20',
   },
   statusText: {
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: typography.fontWeight.bold,
     textTransform: 'uppercase',
   },
@@ -335,10 +334,11 @@ const createStyles = (colors) => StyleSheet.create({
   actionButtonSmall: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    gap: 2,
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    gap: 4,
   },
   actionButtonPrimary: {
     backgroundColor: colors.primary,

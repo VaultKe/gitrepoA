@@ -43,7 +43,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="calendar-outline" size={64} color={colors.textTertiary} />
+      <Ionicons name="calendar-outline" size={68} color={colors.textTertiary} />
       <Text style={[styles.emptyTitle, { color: colors.text }]}>No Meetings Found</Text>
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         {isUserMeetingsView
@@ -74,7 +74,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
             <Text style={[styles.filterButtonText, { color: colors.text }]}>
               {filterOptions.find(opt => opt.id === filterStatus)?.name || 'All'}
             </Text>
-            <Ionicons name={showFilterDropdown ? "chevron-up" : "chevron-down"} size={16} color={colors.textSecondary} />
+            <Ionicons name={showFilterDropdown ? "chevron-up" : "chevron-down"} size={18} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -106,15 +106,15 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
               <Text style={[styles.dropdownItemText, { color: filterStatus === filter.id ? colors.white : colors.text }]}>
                 {filter.name}
               </Text>
-              {filterStatus === filter.id && (
-                <Ionicons name="checkmark" size={14} color={colors.white} />
-              )}
+               {filterStatus === filter.id && (
+                 <Ionicons name="checkmark" size={16} color={colors.white} />
+               )}
             </TouchableOpacity>
           ))}
         </View>
       )}
 
-      <View style={{ flex: 1, position: 'relative' }}>
+      <View style={{ flex: 1, paddingHorizontal: spacing.sm, position: 'relative' }}>
         <ChamaMeetingsTable
           meetings={getFilteredMeetings().meetings}
           totalCount={getFilteredMeetings().totalCount}
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, ...shadows.sm },
   tableControls: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.md },
-  searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, height: 40 },
+  searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, height: 44 },
   searchIcon: { marginRight: spacing.sm },
   searchInput: { flex: 1, fontSize: typography.fontSize.base, paddingVertical: spacing.xs },
   filterButton: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minWidth: 100, justifyContent: 'space-between' },

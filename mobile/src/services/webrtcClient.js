@@ -100,6 +100,12 @@ const getPlatformClasses = () => {
   }
 };
 
+const isWebRTCAvailable = () => {
+  if (Platform.OS === 'web') return true;
+  const native = loadNativeWebRTC();
+  return !!native;
+};
+
 class WebRTCClient {
   constructor() {
     this.peerConnections = new Map();
