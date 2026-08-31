@@ -453,6 +453,12 @@ const AppContext = createContext();
         // Compress user data before storing to prevent storage quota errors
         const rawUserData = response.data.user;
 
+        if (!rawUserData) {
+          console.warn('⚠️ Login response missing user data');
+          dispatch({ type: ActionTypes.LOGIN_SUCCESS, payload: response.data });
+          return { success: true };
+        }
+
         // Ultra-minimal user data - only essential fields
         const compressedUserData = {
           id: rawUserData.id,

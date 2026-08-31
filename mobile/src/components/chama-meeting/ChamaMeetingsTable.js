@@ -27,14 +27,16 @@ const ChamaMeetingsTable = ({
   const styles = createStyles(colors);
 
   const renderMeetingRow = ({ item, index }) => {
+    if (!item) return null;
     const status = getDynamicStatus(item, 'all');
     const statusColor = getStatusColor(status);
+    const titleText = item.title || 'Untitled Meeting';
 
     return (
       <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
         <View style={[styles.tableCell, styles.titleCell]}>
           <Text style={[styles.tableCellText, styles.tableCellTextDefault]} numberOfLines={2}>
-            {item.title.length > 30 ? `${item.title.substring(0, 30)}..` : item.title}
+            {titleText.length > 30 ? `${titleText.substring(0, 30)}..` : titleText}
           </Text>
         </View>
         <View style={[styles.tableCell, styles.dateCell]}>
@@ -44,7 +46,7 @@ const ChamaMeetingsTable = ({
         </View>
         <View style={[styles.tableCell, styles.locationCell]}>
           <Text style={[styles.tableCellText, styles.tableCellTextDefault]}>
-            {item.location}
+            {item.location || 'N/A'}
           </Text>
         </View>
         <View style={[styles.tableCell, styles.statusCell]}>

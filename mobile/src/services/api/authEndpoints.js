@@ -15,7 +15,9 @@ const login = async (credentials) => {
   });
 
   if (response.success && response.data?.token) {
-    await storeUserData(response.data.user);
+    if (response.data.user) {
+      await storeUserData(response.data.user);
+    }
     const { setAuthToken, getAuthToken } = await import('./auth');
     await setAuthToken(response.data.token);
 

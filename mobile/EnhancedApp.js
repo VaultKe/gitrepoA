@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { LogBox } from 'react-native';
+import { LogBox, ErrorUtils } from 'react-native';
 import Toast from 'react-native-toast-message';
 import customToastConfig from './src/components/common/CustomToast';
 
@@ -24,6 +24,24 @@ LogBox.ignoreLogs([
   'Non-serializable values were found in the navigation state',
   'AsyncStorage has been extracted from react-native',
 ]);
+
+// Global JS error handler to prevent hard crashes and log errors instead
+ErrorUtils.setGlobalHandler((error, isFatal) => {
+  console.error('[GlobalErrorHandler]', isFatal ? 'FATAL' : 'Non-fatal', error);
+  if (isFatal) {
+    // For fatal errors, show a toast if possible and reload
+    try {
+      Toast.show({
+        type: 'error',
+        text1: 'App Error',
+        text2: 'Something went wrong. Please restart the app.',
+        visibilityTime: 5000,
+      });
+    } catch (e) {
+      // Ignore toast errors during fatal crash
+    }
+  }
+});
 
 
 // Main App Component

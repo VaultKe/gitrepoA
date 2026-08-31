@@ -852,3 +852,9 @@ export const createWebRTCClient = () => {
   webrtcClient = new WebRTCClient();
   return webrtcClient;
 };
+
+export const isWebRTCAvailable = () => {
+  if (Platform.OS === 'web') return true;
+  const native = loadNativeWebRTC();
+  return !!native;
+};

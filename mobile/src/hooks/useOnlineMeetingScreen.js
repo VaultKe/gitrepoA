@@ -3,7 +3,7 @@ import { Alert, BackHandler, Linking, PermissionsAndroid, Platform } from 'react
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { meetingApi, setMeetingAuthToken, clearMeetingAuthToken } from '../services/meetingApi';
-import { getWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES } from '../services/webrtcClient';
+import { getWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES, isWebRTCAvailable } from '../services/webrtcClient';
 import { getAuthToken as getMainAuthToken } from '../services/api/auth';
 import { getMeetingApiUrl } from '../services/meetingConfig';
 
@@ -29,6 +29,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const [connectionError, setConnectionError] = useState(
     meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.'
   );
+
+  // Check WebRTC availability on mount
+  useEffect(() => {
+    if (!isWebRTCAvailable()) {
+      setConnectionError('Video calling is not available on this device. Please update the app or contact support.');
+      setIsConnecting(false);
+    }
+  }, []);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStreams, setRemoteStreams] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
@@ -64,7 +72,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       return;
     }
 
-    initializeMeeting();
+    initializeMeeting().catch((error) => {
+      console.error('Failed to initialize meeting:', error);
+      setConnectionError('Failed to connect to meeting. Please try again.');
+      setIsConnecting(false);
+    });
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
 

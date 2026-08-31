@@ -139,12 +139,18 @@ const useChamaMeetingsScreen = ({ route, navigation }) => {
   };
 
   const handleViewSummary = (meeting) => {
-    navigation.navigate('MeetingSummary', {
-      meetingId: meeting.id,
-      meetingData: meeting,
-      chamaId: chamaId || meeting.chamaId,
-      chamaName: chamaName || meeting.chamaName || 'Chama',
-    });
+    if (!meeting) return;
+    try {
+      navigation.navigate('MeetingSummary', {
+        meetingId: meeting.id,
+        meetingData: meeting,
+        chamaId: chamaId || meeting.chamaId,
+        chamaName: chamaName || meeting.chamaName || 'Chama',
+      });
+    } catch (error) {
+      console.error('Failed to view meeting summary:', error);
+      Alert.alert('Navigation Error', `Failed to open meeting summary: ${error.message}`);
+    }
   };
 
   const handleAttend = (meeting) => {
@@ -182,6 +188,7 @@ const useChamaMeetingsScreen = ({ route, navigation }) => {
   };
 
   const handleDelete = (meeting) => {
+    if (!meeting) return;
     Alert.alert(
       'Delete Meeting',
       `Are you sure you want to delete "${meeting.title}"?`,
