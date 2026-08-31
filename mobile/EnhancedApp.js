@@ -26,22 +26,24 @@ LogBox.ignoreLogs([
 ]);
 
 // Global JS error handler to prevent hard crashes and log errors instead
-ErrorUtils.setGlobalHandler((error, isFatal) => {
-  console.error('[GlobalErrorHandler]', isFatal ? 'FATAL' : 'Non-fatal', error);
-  if (isFatal) {
-    // For fatal errors, show a toast if possible and reload
-    try {
-      Toast.show({
-        type: 'error',
-        text1: 'App Error',
-        text2: 'Something went wrong. Please restart the app.',
-        visibilityTime: 5000,
-      });
-    } catch (e) {
-      // Ignore toast errors during fatal crash
+if (ErrorUtils && typeof ErrorUtils.setGlobalHandler === 'function') {
+  ErrorUtils.setGlobalHandler((error, isFatal) => {
+    console.error('[GlobalErrorHandler]', isFatal ? 'FATAL' : 'Non-fatal', error);
+    if (isFatal) {
+      // For fatal errors, show a toast if possible and reload
+      try {
+        Toast.show({
+          type: 'error',
+          text1: 'App Error',
+          text2: 'Something went wrong. Please restart the app.',
+          visibilityTime: 5000,
+        });
+      } catch (e) {
+        // Ignore toast errors during fatal crash
+      }
     }
-  }
-});
+  });
+}
 
 
 // Main App Component
