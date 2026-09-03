@@ -7,6 +7,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  FlatList,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
@@ -17,7 +19,7 @@ import Input from '../../../components/common/Input';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ContributionTypeSelector from '../../../components/contributions/ContributionTypeSelector';
 import PaymentMethodSelector from '../../../components/contributions/PaymentMethodSelector';
-import MemberListingSection from '../../../components/contributions/MemberListingSection';
+// Member listing rendered inline using guarantor card design
 import CurrentRecipientInfo from '../../../components/contributions/CurrentRecipientInfo';
 import PaymentConfirmationModal from '../../../components/contributions/PaymentConfirmationModal';
 import MerryGoRoundRules from '../../../components/contributions/MerryGoRoundRules';
@@ -190,20 +192,104 @@ const ContributeScreen = ({ route, navigation }) => {
                 availablePaymentMethods={availablePaymentMethods}
               />
 
-              <MemberListingSection
-                chamaMembers={chamaMembers}
-                selectedContributor={selectedContributor}
-                memberSearchQuery={memberSearchQuery}
-                setMemberSearchQuery={setMemberSearchQuery}
-                contributionType={contributionType}
-                roundName={roundName}
-                setSelectedContributor={setSelectedContributor}
-                getMemberName={getMemberName}
-                renderMemberAvatar={renderMemberAvatar}
-                validateMemberSelection={validateMemberSelection}
-                required={paymentMethod === 'pay_for'}
-                onLoadMembers={() => loadChamaMembers()}
-              />
+              <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.info + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+                    <Ionicons name="people" size={20} color={colors.info} />
+                  </View>
+                  <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Select Member</Text>
+                </View>
+
+                <View style={{ marginBottom: spacing.md }}>
+                  <View style={[styles.searchInputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Ionicons name="search" size={18} color={colors.textSecondary} />
+                    <TextInput
+                      style={[styles.searchInput, { color: colors.text }]}
+                      placeholder="Search members..."
+                      placeholderTextColor={colors.textSecondary}
+                      value={memberSearchQuery}
+                      onChangeText={setMemberSearchQuery}
+                    />
+                    {memberSearchQuery.length > 0 && (
+                      <TouchableOpacity onPress={() => setMemberSearchQuery('')}>
+                        <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <FlatList
+                    data={(() => {
+                      try {
+                        const { isMemberVisible } = require('../../../utils/chamaMembersUtils');
+                        return (chamaMembers || []).filter((m) => isMemberVisible(m)).filter((m) => {
+                          const fullName = (m.first_name || m.user?.first_name || '') + ' ' + (m.last_name || m.user?.last_name || '');
+                          const search = memberSearchQuery ? memberSearchQuery.toLowerCase() : '';
+                          const matchesSearch = !search || fullName.toLowerCase().includes(search) || (m.email || m.user?.email || '').toLowerCase().includes(search);
+                          return matchesSearch;
+                        });
+                      } catch (e) {
+                        return (chamaMembers || []).filter((m) => {
+                          const isActive = m.is_active !== false;
+                          const status = (m.status || m.user?.status || '').toLowerCase();
+                          const notLeft = status !== 'left';
+                          const fullName = (m.first_name || m.user?.first_name || '') + ' ' + (m.last_name || m.user?.last_name || '');
+                          const search = memberSearchQuery ? memberSearchQuery.toLowerCase() : '';
+                          const matchesSearch = !search || fullName.toLowerCase().includes(search) || (m.email || '').toLowerCase().includes(search);
+                          return isActive && notLeft && matchesSearch;
+                        });
+                      }
+                    })()}
+                    keyExtractor={(item, index) => (item.id ? String(item.id) : index.toString())}
+                    style={{ maxHeight: 300 }}
+                    nestedScrollEnabled
+                    renderItem={({ item }) => {
+                      const isSelected = selectedContributor?.id === item.id || selectedContributor?.user_id === item.user_id;
+                      return (
+                        <TouchableOpacity
+                          style={[styles.guarantorCard, { backgroundColor: isSelected ? colors.primary + '20' : colors.background, borderColor: isSelected ? colors.primary : colors.border }]}
+                          onPress={() => {
+                            if (validateMemberSelection(item)) {
+                              setSelectedContributor(item);
+                            }
+                          }}
+                          disabled={isSelected}
+                        >
+                          <View style={styles.guarantorCardContent}>
+                            <View style={[styles.avatar, { backgroundColor: colors.white }]}>
+                              {renderMemberAvatar(item)}
+                            </View>
+                            <View style={styles.guarantorDetails}>
+                              <Text style={[styles.guarantorName, { color: isSelected ? colors.primary : colors.text, fontWeight: typography.fontWeight.semibold }]}>
+                                {getMemberName(item)}
+                              </Text>
+                              <Text style={[styles.guarantorEmail, { color: isSelected ? colors.primary : colors.textSecondary }]}>
+                                {item.email || item.user?.email || 'No email'}
+                              </Text>
+                            </View>
+                            {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    }}
+                    ListEmptyComponent={
+                      <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+                        <Text style={{ color: colors.textSecondary }}>
+                          {memberSearchQuery ? 'No members match your search' : 'No available members'}
+                        </Text>
+                        {paymentMethod === 'pay_for' && (
+                          <TouchableOpacity
+                            style={[styles.loadMembersButton, { borderColor: colors.primary, marginTop: spacing.md }]}
+                            onPress={() => loadChamaMembers()}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.loadMembersButtonText, { color: colors.primary }]}>Load members</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    }
+                  />
+                </View>
+              </Card>
 
               {paymentMethod === 'mpesa' && (
                 <PhoneNumberDisplay user={screen.user} />
@@ -453,6 +539,17 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
+  sectionTitle: { fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.sm },
+  searchInputContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm, height: 44, borderRadius: borderRadius.md, gap: spacing.sm, marginBottom: spacing.sm },
+  searchInput: { flex: 1, fontSize: typography.fontSize.sm },
+  guarantorCard: { borderRadius: borderRadius.md, borderWidth: 1, marginBottom: spacing.sm },
+  guarantorCardContent: { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, gap: spacing.sm },
+  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  guarantorDetails: { flex: 1 },
+  guarantorName: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold },
+  guarantorEmail: { fontSize: typography.fontSize.xs },
+  loadMembersButton: { marginTop: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: borderRadius.md, borderWidth: 1 },
+  loadMembersButtonText: { fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold },
 });
 
 export default ContributeScreen;

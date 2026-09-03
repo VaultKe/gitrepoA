@@ -76,8 +76,23 @@ const MemberListingSection = ({
         </Text>
       </View>
 
-      {chamaMembers.length > 0 ? (
-        <View style={[styles.memberPickerContainer, { backgroundColor: colors.surface }]}>
+      {/* Filter out members who have left or are inactive */}
+      {(() => {
+        const filteredMembers = (chamaMembers || []).filter((member) => {
+          try {
+            // use shared helper to determine visibility
+            const { isMemberVisible } = require('../../utils/chamaMembersUtils');
+            return isMemberVisible(member);
+          } catch (e) {
+            const isActive = member.is_active !== false;
+            const status = (member.status || member.user?.status || '').toLowerCase();
+            const notLeft = status !== 'left';
+            return isActive && notLeft;
+          }
+        });
+
+        return filteredMembers.length > 0 ? (
+          <View style={[styles.memberPickerContainer, { backgroundColor: colors.surface }]}>
           <View style={styles.memberSearchContainer}>
             <Ionicons name="search" size={16} color={colors.textSecondary} />
             <TextInput
@@ -99,7 +114,7 @@ const MemberListingSection = ({
             style={styles.memberGridScroll}
             contentContainerStyle={styles.memberGridContent}
           >
-            {chamaMembers
+            {filteredMembers
               .filter(member => {
                 const name = getMemberName(member).toLowerCase();
                 return !memberSearchQuery || name.includes(memberSearchQuery.toLowerCase());
@@ -111,7 +126,7 @@ const MemberListingSection = ({
               ))}
           </ScrollView>
         </View>
-      ) : (
+        ) : (
         <View style={[styles.noMembersContainer, { backgroundColor: colors.surface }]}>
           <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
           <Text style={[styles.noMembersText, { color: colors.textSecondary }]}>

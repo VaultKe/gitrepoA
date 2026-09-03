@@ -64,13 +64,25 @@ export const getInvitationStatus = (invitation, colors) => {
 };
 
 export const getFilteredMembers = (members, searchQuery) => {
-  if (!searchQuery) return members;
+  // First filter out members who have left or are inactive using centralized helper
+  const visibleMembers = (members || []).filter(isMemberVisible);
+
+  if (!searchQuery) return visibleMembers;
 
   const query = searchQuery.toLowerCase();
-  return members.filter(member =>
-    `${member.user?.first_name} ${member.user?.last_name}`.toLowerCase().includes(query) ||
-    member.role.toLowerCase().includes(query)
-  );
+  return visibleMembers.filter((member) => {
+    const first = (member.user?.first_name || member.first_name || '').toString();
+    const last = (member.user?.last_name || member.last_name || '').toString();
+    const full = `${first} ${last}`.trim().toLowerCase();
+    const role = (member.role || '').toString().toLowerCase();
+    const email = (member.user?.email || member.email || '').toString().toLowerCase();
+
+    return (
+      (full && full.includes(query)) ||
+      (role && role.includes(query)) ||
+      (email && email.includes(query))
+    );
+  });
 };
 
 export const getFilteredInvitations = (invitations, searchQuery) => {
@@ -81,4 +93,29 @@ export const getFilteredInvitations = (invitations, searchQuery) => {
     inv.email.toLowerCase().includes(query) ||
     inv.status.toLowerCase().includes(query)
   );
+};
+
+export const isMemberVisible = (member) => {
+  if (!member) return false;
+
+  // Active flags can appear at different levels
+  const activeFlags = [
+    member.is_active,
+    member.membership_is_active,
+    member.user?.is_active,
+    member.user?.membership_is_active,
+  ];
+
+  // If any explicit false found -> not visible
+  for (const f of activeFlags) {
+    if (f === false) return false;
+  }
+
+  // Check status fields for 'left'
+  const statuses = [member.status, member.user?.status, member.membership_status, member.user?.membership_status];
+  for (const s of statuses) {
+    if (typeof s === 'string' && s.toLowerCase() === 'left') return false;
+  }
+
+  return true;
 };
