@@ -269,10 +269,19 @@ export default function EmailVerificationScreen({ route, navigation }) {
             {/* Email Verification Card */}
             <Card
               variant="outlined"
-              padding={isDesktop ? "xl" : "lg"}
+              padding="md"
               style={[
                 styles.verificationCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: 8,
+                  shadowColor: 'transparent',
+                  shadowOpacity: 0,
+                  shadowRadius: 0,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 0,
+                },
                 !isDesktop && !isTablet && styles.mobileVerificationCard
               ]}
             >
@@ -299,7 +308,16 @@ export default function EmailVerificationScreen({ route, navigation }) {
               <Card
                 variant="outlined"
                 padding="lg"
-                style={[styles.countdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[styles.countdownCard, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: 8,
+                  shadowColor: 'transparent',
+                  shadowOpacity: 0,
+                  shadowRadius: 0,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 0,
+                }]}
               >
                 {isTokenValid ? (
                   <>
@@ -348,7 +366,16 @@ export default function EmailVerificationScreen({ route, navigation }) {
                     <Card
                       variant="outlined"
                       padding="md"
-                      style={[styles.errorCard, { backgroundColor: colors.error + '15', borderColor: colors.error }]}
+                      style={[styles.errorCard, {
+                        backgroundColor: colors.error + '15',
+                        borderColor: colors.error,
+                        borderRadius: 8,
+                        shadowColor: 'transparent',
+                        shadowOpacity: 0,
+                        shadowRadius: 0,
+                        shadowOffset: { width: 0, height: 0 },
+                        elevation: 0,
+                      }]}
                     >
                       <View style={styles.errorContent}>
                         <Ionicons name="alert-circle" size={20} color={colors.error} />
@@ -583,12 +610,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: '100%',
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.sm,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.lg,
   },
   responsiveContainer: {
     width: '100%',
@@ -597,13 +625,13 @@ const styles = StyleSheet.create({
   },
   verificationCard: {
     width: '100%',
-    borderRadius: borderRadius.xl,
-    marginTop: spacing.lg,
+    borderRadius: 8,
+    marginTop: spacing.md,
   },
   mobileVerificationCard: {
-    borderRadius: borderRadius.lg,
+    borderRadius: 8,
     marginTop: spacing.md,
-    marginHorizontal: 0,
+    marginHorizontal: spacing.sm,
   },
   desktopLogoText: {
     fontSize: typography.fontSize.xxxl,

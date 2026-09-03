@@ -310,7 +310,15 @@ export default function RegisterScreen({ navigation }) {
         padding="md"
         style={[
           styles.genderCard,
-          { borderColor: errors.gender ? colors.error : colors.border }
+          {
+            borderColor: errors.gender ? colors.error : colors.border,
+            borderRadius: 8,
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 0,
+          }
         ]}
       >
         <Text style={[styles.fieldLabel, { color: colors.text }]}>

@@ -175,11 +175,20 @@ export default function ForgotPasswordScreen({ navigation }) {
 
         {/* General Error */}
         {errors.general && (
-          <Card
-            variant="outlined"
-            padding="md"
-            style={[styles.errorCard, { backgroundColor: colors.error + '15', borderColor: colors.error }]}
-          >
+           <Card
+             variant="outlined"
+             padding="md"
+             style={[styles.errorCard, {
+               backgroundColor: colors.error + '15',
+               borderColor: colors.error,
+               borderRadius: 8,
+               shadowColor: 'transparent',
+               shadowOpacity: 0,
+               shadowRadius: 0,
+               shadowOffset: { width: 0, height: 0 },
+               elevation: 0,
+             }]}
+           >
             <View style={styles.errorContent}>
               <Ionicons name="alert-circle" size={20} color={colors.error} />
               <Text style={[styles.errorText, { color: colors.error }]}>{errors.general}</Text>
@@ -298,7 +307,16 @@ export default function ForgotPasswordScreen({ navigation }) {
         <Card
           variant="outlined"
           padding="md"
-          style={[styles.instructionsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[styles.instructionsCard, {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 8,
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 0,
+          }]}
         >
           <Text style={[styles.instructionsText, { color: colors.text }]}>
             • Check your email inbox and spam folder{'\n'}
@@ -323,7 +341,15 @@ export default function ForgotPasswordScreen({ navigation }) {
         <Card
           variant="outlined"
           padding="md"
-          style={[styles.secondaryCard, { borderColor: colors.primary }]}
+          style={[styles.secondaryCard, {
+            borderColor: colors.primary,
+            borderRadius: 8,
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 0,
+          }]}
           onPress={() => setStep('request')}
         >
           <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>
@@ -525,23 +551,23 @@ const styles = StyleSheet.create({
   },
   forgotPasswordCard: {
     width: '100%',
-    borderRadius: borderRadius.xl,
-    marginTop: spacing.lg,
+    borderRadius: 8,
+    marginTop: spacing.md,
   },
   mobileForgotPasswordCard: {
-    borderRadius: borderRadius.lg,
+    borderRadius: 8,
     marginTop: spacing.md,
-    marginHorizontal: 0,
+    marginHorizontal: spacing.sm,
   },
   successCard: {
     width: '100%',
-    borderRadius: borderRadius.xl,
-    marginTop: spacing.lg,
+    borderRadius: 8,
+    marginTop: spacing.md,
   },
   mobileSuccessCard: {
-    borderRadius: borderRadius.lg,
+    borderRadius: 8,
     marginTop: spacing.md,
-    marginHorizontal: 0,
+    marginHorizontal: spacing.sm,
   },
   desktopLogoText: {
     fontSize: typography.fontSize.xxxl,
