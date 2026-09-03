@@ -1,44 +1,46 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import ApiService from '../services/api';
 import { useApp } from '../context/AppContext';
 import { useChamaContext } from '../context/ChamaContext';
+import ApiService from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  formatCurrency,
   isMemberLeft,
   getMemberName,
   getMemberShortName,
+  formatCurrency,
 } from '../utils/merryGoRoundHelpers';
 
-const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
-  const { chamaId: routeChamaId, newMerryGoRound, refresh } = route.params || {};
+const useMerryGoRoundScreen = ({ route }) => {
   const { theme, user } = useApp();
-  const { currentChamaId, selectedChama } = useChamaContext();
+  const { currentChamaId } = useChamaContext();
+  const { chamaId: routeChamaId, newMerryGoRound, refresh } = route.params || {};
 
   const chamaId = routeChamaId || currentChamaId;
 
-  // Cache-first loader (mirrors MyChamasScreen): show cached merry-go-rounds instantly, then refresh.
+  // Cache config
   const MGR_CACHE_KEY = `cached_merry_gorounds_${chamaId}`;
-  const MGR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  const MGR_CACHE_TTL = 5 * 60 * 1000;
 
+  // State
   const [merryGoRounds, setMerryGoRounds] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRound, setSelectedRound] = useState(null);
-  const selectedRoundRef = useRef(selectedRound);
-  useEffect(() => { selectedRoundRef.current = selectedRound; }, [selectedRound]);
-
   const [contributorFilter, setContributorFilter] = useState('all');
   const [contributorSearch, setContributorSearch] = useState('');
   const [roundContributions, setRoundContributions] = useState([]);
-
-  // When set (1-based position), the Contributors table is reused to show who has paid that recipient
   const [selectedRecipientPosition, setSelectedRecipientPosition] = useState(null);
-  const selectedRecipientRef = useRef(selectedRecipientPosition);
-  useEffect(() => { selectedRecipientRef.current = selectedRecipientPosition; }, [selectedRecipientPosition]);
 
-  const loadCachedMerryGoRounds = async () => {
+  // Refs
+  const selectedRoundRef = useRef(selectedRound);
+  const selectedRecipientPositionRef = useRef(selectedRecipientPosition);
+
+  useEffect(() => { selectedRoundRef.current = selectedRound; }, [selectedRound]);
+  useEffect(() => { selectedRecipientPositionRef.current = selectedRecipientPosition; }, [selectedRecipientPosition]);
+
+  // --- Cache helpers ---
+  const loadCachedMerryGoRounds = useCallback(async () => {
     try {
       const cached = await AsyncStorage.getItem(MGR_CACHE_KEY);
       if (cached) {
@@ -52,9 +54,9 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
       // Silent fail for cache read
     }
     return false;
-  };
+  }, [chamaId]);
 
-  const cacheMerryGoRounds = async (rounds) => {
+  const cacheMerryGoRounds = useCallback(async (rounds) => {
     try {
       await AsyncStorage.setItem(MGR_CACHE_KEY, JSON.stringify({
         rounds,
@@ -63,11 +65,12 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     } catch (error) {
       // Silent fail for cache write
     }
-  };
+  }, [chamaId]);
 
-  const loadMerryGoRounds = async (silent = false) => {
+  // --- Data loading ---
+  const loadMerryGoRounds = useCallback(async () => {
     try {
-      if (!silent) setLoading(true);
+      setLoading(true);
       const response = await ApiService.getMerryGoRounds(chamaId);
       if (response.success) {
         let rounds = response.data || [];
@@ -79,7 +82,6 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
           });
         }
         setMerryGoRounds(rounds);
-        // Persist for instant display on next visit (cache-first loader)
         cacheMerryGoRounds(rounds);
         if (rounds.length > 0) {
           const current = selectedRoundRef.current;
@@ -90,32 +92,11 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     } catch (error) {
       console.error('Failed to load merry-go-rounds:', error);
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
-  };
+  }, [chamaId, user?.id, cacheMerryGoRounds]);
 
-  useEffect(() => {
-    const initialize = async () => {
-      const hadCache = await loadCachedMerryGoRounds();
-      await loadMerryGoRounds(hadCache);
-    };
-    initialize();
-  }, [chamaId]);
-
-  // Reload once when screen regains focus so stat card picks up backend advances without continuous polling
-  useFocusEffect(
-    useCallback(() => {
-      loadMerryGoRounds();
-    }, [chamaId])
-  );
-
-  useEffect(() => {
-    if (selectedRound) {
-      loadRoundContributions();
-    }
-  }, [selectedRound]);
-
-  const loadRoundContributions = async () => {
+  const loadRoundContributions = useCallback(async () => {
     const currentRound = selectedRoundRef.current;
     if (!currentRound) return;
     try {
@@ -127,7 +108,6 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
       }
 
       // Optional payments endpoint: silently ignore 404s and other non-critical failures.
-      // The screen already derives the contributors table from getContributions + getChamaTransactions.
       try {
         const paymentsResponse = await ApiService.makeRequest(`/merry-go-rounds/${currentRound.id}/payments`);
         if (paymentsResponse.success && paymentsResponse.data) {
@@ -157,25 +137,55 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     } catch (error) {
       console.error('Failed to load round contributions:', error);
     }
-  };
+  }, [chamaId]);
 
-  const onRefresh = async () => {
+  // --- Effects ---
+  useEffect(() => {
+    const initialize = async () => {
+      await loadCachedMerryGoRounds();
+      await loadMerryGoRounds();
+    };
+    initialize();
+  }, [chamaId, loadCachedMerryGoRounds, loadMerryGoRounds]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMerryGoRounds();
+    }, [chamaId, loadMerryGoRounds])
+  );
+
+  useEffect(() => {
+    if (selectedRound) {
+      loadRoundContributions();
+    }
+  }, [selectedRound, loadRoundContributions]);
+
+  // --- Handlers ---
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadMerryGoRounds();
     if (selectedRoundRef.current) {
       await loadRoundContributions();
     }
     setRefreshing(false);
-  };
+  }, [loadMerryGoRounds, loadRoundContributions]);
 
-  const getTargetRecipient = () => {
+  const handleSelectRound = useCallback((round) => {
+    setSelectedRound(round);
+    setContributorSearch('');
+    setContributorFilter('all');
+    setSelectedRecipientPosition(null);
+  }, []);
+
+  // --- Helpers ---
+  const getTargetRecipient = useCallback(() => {
     if (!selectedRound) return null;
     const participants = selectedRound.members || selectedRound.participants || [];
+    const currentPosition = selectedRound.current_position || selectedRound.currentRound || 1;
     const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
-    const currentPosition = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
+    const currentPositionFromStatus = currentParticipant ? participants.indexOf(currentParticipant) + 1 : currentPosition;
 
-    // When a recipient position is tapped, use it; otherwise fall back to the current recipient
-    const position = selectedRecipientRef.current || currentPosition;
+    const position = selectedRecipientPositionRef.current || currentPositionFromStatus;
     const targetParticipant = participants[position - 1];
     const recipientMember = targetParticipant ? (targetParticipant.user || targetParticipant) : null;
     const recipientId = recipientMember ? (targetParticipant.user_id || (targetParticipant.user && targetParticipant.user.id)) : null;
@@ -184,36 +194,19 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
       position,
       recipientId,
       recipientName: recipientMember ? getMemberName(recipientMember) : '',
-      isRecipientView: selectedRecipientRef.current !== null,
+      isRecipientView: selectedRecipientPositionRef.current !== null,
     };
-  };
+  }, [selectedRound]);
 
-  const getPayoutDate = (row) => {
-    if (!selectedRound) return '—';
-    const participants = selectedRound.members || selectedRound.participants || [];
-    const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
-    const currentPos = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
-    const frequency = selectedRound.frequency || 'monthly';
-    const cyclesAway = row.position >= currentPos ? (row.position - currentPos) : 0;
-    const date = new Date();
-    if (frequency === 'weekly') date.setDate(date.getDate() + cyclesAway * 7);
-    else if (frequency === 'biweekly') date.setDate(date.getDate() + cyclesAway * 14);
-    else date.setMonth(date.getMonth() + cyclesAway);
-    return date.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const getRowData = () => {
+  const getRowData = useCallback(() => {
     if (!selectedRound) return [];
     const participants = selectedRound.members || selectedRound.participants || [];
     const amountPerRound = selectedRound.amount_per_round || selectedRound.amountPerRound || 0;
 
-    // Find the actual current recipient from participant statuses, matching Member Order logic
     const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
     const currentPosition = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
     const roundComplete = selectedRound.roundComplete || false;
 
-    // When a Member Order position is tapped, the table shows payments TO that recipient.
-    // Otherwise it falls back to the current recipient (default behaviour).
     const target = getTargetRecipient() || {
       position: currentPosition,
       recipientId: participants[currentPosition - 1]
@@ -225,7 +218,6 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     const currentRecipientId = target.recipientId;
     const currentRecipientName = target.recipientName;
 
-    // Filter contributions to only this specific merry-go-round round
     const thisRoundContributions = roundContributions.filter(c => {
       const roundIdMatch = c.roundId === selectedRound.id ||
                           c.merry_go_round_id === selectedRound.id ||
@@ -235,7 +227,6 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
       return roundIdMatch;
     });
 
-    // Build a map of user IDs whose contribution obligation is fulfilled for THIS ROUND
     const fulfilledUserIds = new Set(
       thisRoundContributions
         .flatMap(c => {
@@ -259,7 +250,6 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
         .filter(id => id)
     );
 
-    // Build a set of user IDs who contributed specifically to the target recipient in this round
     const paidToRecipientUserIds = new Set(
       thisRoundContributions
         .filter(c => {
@@ -326,18 +316,37 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
         memberLeft,
       };
     });
-  };
+  }, [selectedRound, roundContributions, getTargetRecipient]);
+
+  const getPayoutDate = useCallback((row) => {
+    if (!selectedRound) return '—';
+    const participants = selectedRound.members || selectedRound.participants || [];
+    const currentParticipant = participants.find(p => (p.status || 'pending') === 'current');
+    const currentPos = currentParticipant ? participants.indexOf(currentParticipant) + 1 : (selectedRound.current_position || selectedRound.currentRound || 1);
+    const frequency = selectedRound.frequency || 'monthly';
+    const cyclesAway = row.position >= currentPos ? (row.position - currentPos) : 0;
+
+    const date = new Date();
+    if (frequency === 'weekly') date.setDate(date.getDate() + cyclesAway * 7);
+    else if (frequency === 'biweekly') date.setDate(date.getDate() + cyclesAway * 14);
+    else date.setMonth(date.getMonth() + cyclesAway);
+
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }, [selectedRound]);
 
   return {
-    chamaId,
     theme,
     user,
-    selectedChama,
+    chamaId,
     merryGoRounds,
     loading,
     refreshing,
     selectedRound,
-    setSelectedRound,
+    selectedRoundRef,
     contributorFilter,
     setContributorFilter,
     contributorSearch,
@@ -345,15 +354,18 @@ const useMerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
     roundContributions,
     selectedRecipientPosition,
     setSelectedRecipientPosition,
+    selectedRecipientPositionRef,
     onRefresh,
+    handleSelectRound,
+    loadMerryGoRounds,
     loadRoundContributions,
-    getTargetRecipient,
-    getRowData,
-    getPayoutDate,
-    isMemberLeft,
     formatCurrency,
     getMemberName,
     getMemberShortName,
+    isMemberLeft,
+    getTargetRecipient,
+    getRowData,
+    getPayoutDate,
   };
 };
 

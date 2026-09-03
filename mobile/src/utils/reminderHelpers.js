@@ -27,7 +27,7 @@ export const scheduleNotification = async (reminder) => {
       content: {
         title: reminder.title,
         body: reminder.description || 'Reminder notification',
-        sound: true,
+        sound: reminder.sound || true,
         priority: Notifications.AndroidNotificationPriority.HIGH,
       },
       trigger: {
@@ -69,7 +69,7 @@ export const scheduleRecurringNotifications = async (reminder) => {
           content: {
             title: reminder.title,
             body: reminder.description || 'Recurring reminder',
-            sound: true,
+            sound: reminder.sound || true,
             priority: Notifications.AndroidNotificationPriority.HIGH,
           },
           trigger: {

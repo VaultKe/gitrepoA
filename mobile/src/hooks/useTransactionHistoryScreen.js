@@ -48,7 +48,22 @@ const useTransactionHistoryScreen = ({ navigation }) => {
           chamaName: tx.chamaName,
           contributionType: tx.contributionType,
         }));
-        setTransactions(formattedTransactions);
+        // Filter to only include transactions relevant to the current user
+        const extractUserId = (val) => {
+          if (!val) return null;
+          if (typeof val === 'string' || typeof val === 'number') return String(val);
+          if (typeof val === 'object') return String(val.id || val.userId || val._id || (val.user && val.user.id) || '');
+          return null;
+        };
+
+        const currentUserId = user?.id ? String(user.id) : null;
+        const userTransactions = formattedTransactions.filter((tx) => {
+          const initiator = extractUserId(tx.initiatedBy);
+          const recipient = extractUserId(tx.recipientId) || extractUserId(tx.metadata?.userId) || extractUserId(tx.metadata?.recipientId);
+          return (!currentUserId) || initiator === currentUserId || recipient === currentUserId;
+        });
+
+        setTransactions(userTransactions);
         return;
       }
 

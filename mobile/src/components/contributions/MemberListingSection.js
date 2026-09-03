@@ -16,6 +16,7 @@ const MemberListingSection = ({
   renderMemberAvatar,
   validateMemberSelection,
   required = false,
+  onLoadMembers,
 }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
@@ -125,6 +126,16 @@ const MemberListingSection = ({
               : 'Members will appear here once loaded'
             }
           </Text>
+
+          {required && typeof onLoadMembers === 'function' && (
+            <TouchableOpacity
+              style={[styles.loadMembersButton, { borderColor: colors.primary }]}
+              onPress={onLoadMembers}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.loadMembersButtonText, { color: colors.primary }]}>Load members</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -238,6 +249,17 @@ const styles = StyleSheet.create({
   noMembersSubtext: {
     fontSize: typography.fontSize.sm,
     textAlign: 'center',
+  },
+  loadMembersButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  loadMembersButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
   requiredIndicator: {
     fontSize: typography.fontSize.base,

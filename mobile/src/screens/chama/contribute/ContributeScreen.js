@@ -78,6 +78,7 @@ const ContributeScreen = ({ route, navigation }) => {
     handleWelfareSelect,
     closeAllDropdowns,
     loadCurrentRecipient,
+    loadChamaMembers,
     onRefresh,
     handleContribute,
     confirmContribution,
@@ -201,6 +202,7 @@ const ContributeScreen = ({ route, navigation }) => {
                 renderMemberAvatar={renderMemberAvatar}
                 validateMemberSelection={validateMemberSelection}
                 required={paymentMethod === 'pay_for'}
+                onLoadMembers={() => loadChamaMembers()}
               />
 
               {paymentMethod === 'mpesa' && (

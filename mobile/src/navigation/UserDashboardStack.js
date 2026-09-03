@@ -30,6 +30,7 @@ import NotificationsScreen from '../screens/user/notification/NotificationsScree
 
 // Reminder Screen
 import ReminderScreen from '../screens/user/reminders/ReminderScreen';
+import ReminderCreateScreen from '../screens/user/reminders/ReminderCreateScreen';
 
 // Chama Screens
 import InvitationsScreen from '../screens/chama/meeting/InvitationsScreen';
@@ -428,6 +429,14 @@ function UserTabNavigator() {
         }}
       />
       <Tab.Screen
+        name="ReminderCreate"
+        component={ReminderCreateScreen}
+        options={{
+          title: 'Create Reminder',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+      />
+      <Tab.Screen
         name="PhysicalMeeting"
         component={PhysicalMeetingScreen}
         options={{
@@ -514,6 +523,8 @@ export default function UserDashboardStack({ navigation }) {
         component={withUserFooter(DocumentViewerScreen)}
         options={{ title: 'View Document' }}
       />
+
+      {/* ReminderCreate moved into Tab Navigator so it uses same header as Reminders */}
 
      
     </Stack.Navigator>

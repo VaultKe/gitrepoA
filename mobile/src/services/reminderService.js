@@ -11,6 +11,7 @@ class ReminderService {
       reminderType: reminderData.type,
       scheduledAt: reminderData.dateTime,
       isEnabled: reminderData.isEnabled,
+      sound: reminderData.sound || null,
     };
 
     const response = await ApiService.makeRequest('/reminders', {
@@ -63,6 +64,9 @@ class ReminderService {
     if (updateData.isCompleted !== undefined) {
       payload.isCompleted = updateData.isCompleted;
     }
+    if (updateData.sound !== undefined) {
+      payload.sound = updateData.sound || null;
+    }
 
     const response = await ApiService.makeRequest(`/reminders/${reminderId}`, {
       method: 'PUT',
@@ -106,6 +110,7 @@ class ReminderService {
       dateTime: backendReminder.scheduledAt,
       isEnabled: backendReminder.isEnabled,
       isCompleted: backendReminder.isCompleted,
+      sound: backendReminder.sound || 'default',
       createdAt: backendReminder.createdAt,
       updatedAt: backendReminder.updatedAt,
       notificationSent: backendReminder.notificationSent,

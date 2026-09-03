@@ -7,7 +7,9 @@ import {
   SafeAreaView,
   RefreshControl,
   useWindowDimensions,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing } from '../../../utils/theme';
 import Card from '../../../components/common/Card';
@@ -15,11 +17,11 @@ import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import ReminderTableHeader from '../../../components/reminders/ReminderTableHeader';
 import ReminderItem from '../../../components/reminders/ReminderItem';
 import EmptyRemindersState from '../../../components/reminders/EmptyRemindersState';
-import AddEditReminderModal from '../../../components/reminders/AddEditReminderModal';
+// AddEditReminderModal removed: using navigated ReminderCreate screen instead
 import useReminderScreen from '../../../hooks/useReminderScreen';
 import styles from '../../../styles/ReminderScreenStyles';
 
-const ReminderScreen = () => {
+const ReminderScreen = ({ navigation }) => {
   const { theme } = useApp();
   const colors = getThemeColors(theme);
   const { width } = useWindowDimensions();
@@ -70,7 +72,7 @@ const ReminderScreen = () => {
               />
             }
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 160 }}
           >
             <Card
               variant="outlined"
@@ -88,89 +90,70 @@ const ReminderScreen = () => {
               }}
             >
               <ReminderTableHeader
-                isDesktop={isDesktop}
+                isDesktop={true} // force show filters on the reminders page (mobile + desktop)
                 searchValue={searchValue}
                 onSearchChange={setSearchValue}
                 filterValue={filterValue}
                 onFilterChange={setFilterValue}
-                onCreate={openAddModal}
+                onCreate={() => navigation.navigate('ReminderCreate')}
                 showTableHeader={false}
               />
             </Card>
 
-            <Card
-              variant="outlined"
-              style={{
-                borderRadius: 8,
-                overflow: 'hidden',
-                borderWidth: 1,
-                borderColor: colors.border,
-                shadowColor: 'transparent',
-                shadowOpacity: 0,
-                shadowRadius: 0,
-                shadowOffset: { width: 0, height: 0 },
-                elevation: 0,
-                minHeight: 400,
-              }}
-            >
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ flexGrow: 1, minWidth: Math.max(width - 32, 760) }}
-              >
-                <View style={{ width: '100%' }}>
-                  <ReminderTableHeader
-                    isDesktop={isDesktop}
-                    searchValue={searchValue}
-                    onSearchChange={setSearchValue}
-                    filterValue={filterValue}
-                    onFilterChange={setFilterValue}
-                    onCreate={openAddModal}
-                    showSearchFilter={false}
+            {filteredReminders.length > 0 ? (
+              filteredReminders.map((item, index) => (
+                <Card
+                  key={item.id}
+                  variant="outlined"
+                  style={{
+                    borderRadius: 12,
+                    marginBottom: spacing.sm,
+                    paddingVertical: 8,
+                    paddingHorizontal: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                  }}
+                >
+                  <ReminderItem
+                    reminder={item}
+                    onToggle={handleToggleReminder}
+                    onEdit={(r) => navigation.navigate('ReminderCreate', { reminder: r })}
+                    onDelete={handleDeleteReminder}
+                    index={index}
                   />
-
-                  <View style={{ width: '100%', flex: 1, minHeight: 380 }}>
-                    {filteredReminders.length > 0 ? (
-                      filteredReminders.map((item, index) => (
-                        <ReminderItem
-                          key={item.id}
-                          reminder={item}
-                          onToggle={handleToggleReminder}
-                          onEdit={openEditModal}
-                          onDelete={handleDeleteReminder}
-                          index={index}
-                        />
-                      ))
-                    ) : (
-                      <EmptyRemindersState onAddReminder={openAddModal} />
-                    )}
-                  </View>
-                </View>
-              </ScrollView>
-            </Card>
+                </Card>
+              ))
+            ) : (
+              <Card variant="outlined" style={{ borderRadius: 8, padding: spacing.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                <EmptyRemindersState onAddReminder={() => navigation.navigate('ReminderCreate')} />
+              </Card>
+            )}
           </ScrollView>
           <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} />
+
+          {/* Floating create button placed just above the refresh button, same size */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('ReminderCreate')}
+            style={{
+              position: 'absolute',
+              right: 16,
+              bottom: 64 + 56 + 12, // above the refresh button
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: colors.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              elevation: 6,
+            }}
+          >
+            <Ionicons name="add" size={28} color="#fff" />
+          </TouchableOpacity>
         </View>
       )}
 
-      <AddEditReminderModal
-        visible={showAddModal}
-        editingReminder={editingReminder}
-        formData={formData}
-        onFormDataChange={setFormData}
-        onCancel={() => {
-          setShowAddModal(false);
-          setEditingReminder(null);
-          resetForm();
-        }}
-        onSave={() => {
-          if (editingReminder) {
-            handleEditReminder();
-          } else {
-            handleAddReminder();
-          }
-        }}
-      />
     </SafeAreaView>
   );
 };

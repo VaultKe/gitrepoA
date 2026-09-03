@@ -42,6 +42,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
   const colors = getThemeColors(theme);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState(null);
+  const [maskStats, setMaskStats] = useState(false);
   const [userStats, setUserStats] = useState({
     totalChamas: 0,
     totalMeetings: 0,
@@ -175,12 +176,12 @@ const EnhancedUserDashboard = ({ navigation }) => {
 
    const renderGreetingSection = () => {
      const greeting = getGreeting();
-     return (
+    return (
        <LinearGradient
          colors={[colors.primary, colors.secondary || colors.primary]}
          start={{ x: 0, y: 0 }}
          end={{ x: 1, y: 1 }}
-          style={{ marginHorizontal: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.md, padding: spacing.lg, borderRadius: borderRadius.xl }}
+         style={{ marginHorizontal: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.md, padding: spacing.lg, borderRadius: borderRadius.xl, position: 'relative' }}
        >
          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
            <View style={{ flex: 1, paddingRight: spacing.sm }}>
@@ -195,7 +196,14 @@ const EnhancedUserDashboard = ({ navigation }) => {
              </Text>
            </View>
           <Image source={require('../../../../assets/wallet.png')} style={{ width: 128, height: 128, resizeMode: 'contain' }} />
-          </View>
+         </View>
+
+         <TouchableOpacity
+           onPress={() => setMaskStats(!maskStats)}
+           style={{ position: 'absolute', right: spacing.sm, top: spacing.sm, padding: 8, borderRadius: 20, backgroundColor: colors.surface + '40', zIndex: 20 }}
+         >
+           <Ionicons name={maskStats ? 'eye-off' : 'eye'} size={18} color={colors.white} />
+         </TouchableOpacity>
         </LinearGradient>
      );
    };
@@ -217,7 +225,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
             </View>
 
             <Text style={{ fontSize: typography.fontSize.lg, fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs }}>
-              {value}
+              {maskStats ? (typeof value === 'number' ? '•••' : '•••') : value}
             </Text>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -352,7 +360,7 @@ const EnhancedUserDashboard = ({ navigation }) => {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {formatCurrency(currentBalance)}
+                {maskStats ? '•••' : formatCurrency(currentBalance)}
               </Text>
               <View
                 style={{
