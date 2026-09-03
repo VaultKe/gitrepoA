@@ -20,11 +20,11 @@ import (
 
 // MeetingHandler handles HTTP and WebSocket requests for meetings.
 type MeetingHandler struct {
-	config        *config.Config
-	roomManager   *room.RoomManager
-	sfuManager    *webrtc.SFUManager
-	signalingHub  *signaling.SignalingHub
-	upgrader      websocket.Upgrader
+	config       *config.Config
+	roomManager  *room.RoomManager
+	sfuManager   *webrtc.SFUManager
+	signalingHub *signaling.SignalingHub
+	upgrader     websocket.Upgrader
 	// activeScreenSharers tracks which connection id is currently sharing its
 	// screen per room. This prevents two participants from sharing at once.
 	activeScreenSharers map[string]string // roomID -> connID
@@ -109,7 +109,7 @@ func (h *MeetingHandler) CreateRoom(c *gin.Context) {
 		ChamaID:          req.ChamaID,
 		Name:             req.Name,
 		Type:             roomType,
-		MaxParticipants:   req.MaxParticipants,
+		MaxParticipants:  req.MaxParticipants,
 		CreatedBy:        userID,
 		RecordingEnabled: req.RecordingEnabled,
 		Metadata:         req.Metadata,
@@ -239,12 +239,12 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 	})
 
 	c.JSON(http.StatusOK, gin.H{
-		"participantId": participant.ID,
-		"roomId":        participant.RoomID,
-		"displayName":   participant.DisplayName,
-		"role":          participant.Role,
-		"stun":          []string{h.config.STUNServer1, h.config.STUNServer2},
-		"turn":          h.config.TURNServers,
+		"participantId":   participant.ID,
+		"roomId":          participant.RoomID,
+		"displayName":     participant.DisplayName,
+		"role":            participant.Role,
+		"stun":            []string{h.config.STUNServer1, h.config.STUNServer2},
+		"turn":            h.config.TURNServers,
 		"turnCredentials": h.config.TURNCredentials,
 	})
 }
@@ -314,7 +314,7 @@ func (h *MeetingHandler) UpdateParticipant(c *gin.Context) {
 		updates["is_screen_sharing"] = *req.IsScreenSharing
 	}
 
- 	if err := h.roomManager.UpdateParticipant(roomID, userID, updates); err != nil {
+	if err := h.roomManager.UpdateParticipant(roomID, userID, updates); err != nil {
 		if errors.Is(err, room.ErrUserNotInRoom) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not in room"})
 		} else {
@@ -411,11 +411,10 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 
 		case "join":
 			// Participant is joining the signaling channel.
-			// 1) Tell everyone else in the room that this participant joined
-			//    (with a proper userId + displayName so they are correctly
-			//    identified and can establish a peer connection).
 			client.DisplayName = msg.DisplayName
 			client.Role = userRole
+			client.UserID = msg.UserID
+			client.ConnID = connID
 
 			// Sync with RoomManager to ensure consistent participant tracking
 			// between HTTP joins and WebSocket joins. This ensures the participant
@@ -424,12 +423,14 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			participant, err := h.roomManager.JoinRoom(roomID, msg.UserID, msg.DisplayName, userRole)
 			if err != nil {
 				fmt.Printf("[Signal] join | roomID=%s userID=%s | RoomManager join failed: %v\n", roomID, msg.UserID, err)
-				// Continue anyway - the signaling broadcast should still work
 			} else {
 				participantID = participant.ID
 				fmt.Printf("[Signal] join | roomID=%s userID=%s | RoomManager participantId=%s\n", roomID, msg.UserID, participantID)
 			}
 
+			// Broadcast the join to everybody in the room, including a stable
+			// userId + connId payload so the client can start a peer connection
+			// to the new participant without ambiguity.
 			h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 				Type:        "participant-joined",
 				RoomID:      roomID,
@@ -438,14 +439,14 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 				DisplayName: msg.DisplayName,
 				Payload: map[string]interface{}{
 					"connId":        connID,
+					"userId":        msg.UserID,
 					"role":          userRole,
 					"participantId": participantID,
 				},
 			})
 
-			// 2) Tell the new joiner about the participants who are ALREADY in
-			//    the room, so the UI can show them immediately and the client
-			//    can open peer connections to each (a proper live meeting).
+			// Send the existing room members to the new joiner so they can open
+			// peer connections immediately instead of waiting for a delayed sync.
 			existing := h.signalingHub.GetRoomClients(roomID)
 			fmt.Printf("[Signal] join | roomID=%s userID=%s connID=%s | clientsInRoom=%d\n", roomID, msg.UserID, connID, h.signalingHub.GetRoomClientCount(roomID))
 			for other := range existing {
@@ -459,9 +460,9 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 					ConnID:      other.ConnID,
 					DisplayName: other.DisplayName,
 					Payload: map[string]interface{}{
-						"connId":   other.ConnID,
-						"role":     other.Role,
-						"initiator": true,
+						"connId": other.ConnID,
+						"userId": other.UserID,
+						"role":   other.Role,
 					},
 				})
 			}
@@ -537,8 +538,8 @@ func (h *MeetingHandler) GetStats(c *gin.Context) {
 	sfuStats := h.sfuManager.GetGlobalStats()
 
 	stats := map[string]interface{}{
-		"rooms":     roomStats,
-		"sfu":       sfuStats,
+		"rooms": roomStats,
+		"sfu":   sfuStats,
 		"signaling": map[string]interface{}{
 			"connectedClients": h.signalingHub.GetClientCount(),
 		},
@@ -550,9 +551,9 @@ func (h *MeetingHandler) GetStats(c *gin.Context) {
 // Health returns service health status.
 func (h *MeetingHandler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status":           "healthy",
-		"timestamp":        time.Now().Unix(),
-		"activeRooms":      h.roomManager.GetActiveRoomsCount(),
+		"status":             "healthy",
+		"timestamp":          time.Now().Unix(),
+		"activeRooms":        h.roomManager.GetActiveRoomsCount(),
 		"maxConcurrentRooms": h.config.MaxConcurrentRooms,
 	})
 }
@@ -656,6 +657,10 @@ func (h *MeetingHandler) GetRoomChatMessages(c *gin.Context) {
 			continue
 		}
 		messages = append(messages, &msg)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"messages": messages})

@@ -3,7 +3,7 @@ import { Alert, BackHandler, Linking, PermissionsAndroid, Platform } from 'react
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { meetingApi, setMeetingAuthToken, clearMeetingAuthToken } from '../services/meetingApi';
-import { getWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES, isWebRTCAvailable } from '../services/webrtcClient';
+import { getWebRTCClient, createWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES, isWebRTCAvailable } from '../services/webrtcClient';
 import { getAuthToken as getMainAuthToken } from '../services/api/auth';
 import { getMeetingApiUrl } from '../services/meetingConfig';
 
@@ -244,8 +244,99 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     }
   };
 
+  const getHumanName = (value, fallback = 'Guest') => {
+    if (!value) return fallback;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return fallback;
+      return trimmed;
+    }
+    if (typeof value === 'object') {
+      const parts = [
+        value.displayName,
+        value.name,
+        value.fullName,
+        value.firstName && value.lastName ? `${value.firstName} ${value.lastName}` : value.firstName || value.lastName,
+      ].filter(Boolean);
+      const resolved = parts[0];
+      return resolved || fallback;
+    }
+    return fallback;
+  };
+
+  const truncateName = (value, maxLength = 18) => {
+    const name = getHumanName(value, 'Guest');
+    if (name.length <= maxLength) return name;
+    return `${name.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
+  };
+
+  const upsertRemoteStreamPlaceholder = (userId, connId, displayName) => {
+    if (!userId || userId === user?.id) return;
+
+    setRemoteStreams(prev => {
+      const candidateConnId = connId || userId;
+      const existingIndex = prev.findIndex(s =>
+        (s.userId && s.userId === userId) || (s.connId && s.connId === candidateConnId)
+      );
+
+      const resolvedName = truncateName(displayName || 'Guest');
+
+      if (existingIndex >= 0) {
+        return prev.map((s, index) =>
+          index === existingIndex
+            ? {
+                ...s,
+                connId: candidateConnId,
+                userId,
+                name: resolvedName,
+              }
+            : s
+        );
+      }
+
+      return [...prev, {
+        connId: candidateConnId,
+        userId,
+        stream: null,
+        name: resolvedName,
+        isScreenSharing: false,
+      }];
+    });
+  };
+
+  const mergeParticipantEntry = (prev, incoming) => {
+    if (!incoming) return prev;
+
+    const incomingUserId = incoming.userId || incoming.payload?.userId || null;
+    const incomingConnId = incoming.connId || incoming.payload?.connId || null;
+    if (!incomingUserId && !incomingConnId) return prev;
+
+    const identityMatches = (entry) => {
+      const entryUserId = entry.userId || entry.payload?.userId || null;
+      const entryConnId = entry.connId || entry.payload?.connId || null;
+      return (
+        (incomingUserId && entryUserId && incomingUserId === entryUserId) ||
+        (incomingConnId && entryConnId && incomingConnId === entryConnId)
+      );
+    };
+
+    const existingIndex = prev.findIndex(identityMatches);
+    if (existingIndex >= 0) {
+      const updatedEntry = {
+        ...prev[existingIndex],
+        ...incoming,
+        ...(incoming.payload || {}),
+        userId: incomingUserId || prev[existingIndex].userId || incoming.payload?.userId,
+        connId: incomingConnId || prev[existingIndex].connId || incoming.payload?.connId,
+      };
+      return prev.map((entry, index) => index === existingIndex ? updatedEntry : entry);
+    }
+
+    return [...prev, incoming];
+  };
+
   const initializeWebRTC = async (connectionData) => {
-    const client = getWebRTCClient();
+    const client = createWebRTCClient();
     webrtcClientRef.current = client;
 
     client.on('localStream', (stream) => {
@@ -254,22 +345,37 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
     client.on('remoteStream', ({ connId, userId, stream, isScreenSharing = false }) => {
       setRemoteStreams(prev => {
-        const exists = prev.find(s => s.connId === connId);
-        if (!exists) {
-          return [...prev, { connId, userId, stream, isScreenSharing }];
+        const existingIndex = prev.findIndex(s =>
+          (s.connId && connId && s.connId === connId) || (s.userId && userId && s.userId === userId)
+        );
+
+        if (existingIndex < 0) {
+          return [...prev, {
+            connId: connId || userId,
+            userId,
+            stream,
+            isScreenSharing,
+            name: truncateName(getHumanName({ displayName: userId ? undefined : undefined }, 'Guest')),
+          }];
         }
-        // Update existing entry (track may have been replaced for screen share)
-        return prev.map(s =>
-          s.connId === connId ? { ...s, stream, isScreenSharing } : s
+
+        return prev.map((s, index) =>
+          index === existingIndex
+            ? { ...s, connId: connId || s.connId, userId: userId || s.userId, stream, isScreenSharing }
+            : s
         );
       });
     });
 
     client.on('screenShareStarted', (data) => {
       console.log('[Meeting] screenShareStarted event received:', data);
-      if (data && data.connId) {
+      if (data && (data.connId || data.userId)) {
         setRemoteStreams(prev =>
-          prev.map(s => (s.connId === data.connId ? { ...s, isScreenSharing: true } : s))
+          prev.map(s =>
+            (s.connId === data.connId || s.userId === data.userId)
+              ? { ...s, connId: data.connId || s.connId, userId: data.userId || s.userId, isScreenSharing: true }
+              : s
+          )
         );
       }
     });
@@ -278,9 +384,13 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       console.log('[Meeting] screenShareStopped event received:', data);
       // When local user stops sharing, no data is passed
       // When remote user stops sharing, data contains { connId, userId }
-      if (data && data.connId) {
+      if (data && (data.connId || data.userId)) {
         setRemoteStreams(prev =>
-          prev.map(s => (s.connId === data.connId ? { ...s, isScreenSharing: false } : s))
+          prev.map(s =>
+            (s.connId === data.connId || s.userId === data.userId)
+              ? { ...s, connId: data.connId || s.connId, userId: data.userId || s.userId, isScreenSharing: false }
+              : s
+          )
         );
       }
     });
@@ -303,32 +413,22 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     });
 
     client.on('participantJoined', (message) => {
-      const isNew = !participantsRef.current.some(p => p.userId === message.userId);
-      setParticipants(prev => {
-        const exists = prev.find(p => p.userId === message.userId);
-        if (!exists) {
-          return [...prev, message];
-        }
-        return prev;
+      const isNew = !participantsRef.current.some(p => {
+        const currentUserId = p.userId || p.payload?.userId;
+        const messageUserId = message.userId || message.payload?.userId;
+        return currentUserId && messageUserId && currentUserId === messageUserId;
       });
+      setParticipants(prev => mergeParticipantEntry(prev, message));
 
       // Add participant to remoteStreams as a placeholder so they appear in
       // the video grid even before they enable their camera/microphone.
       // The stream will be updated to the actual media when tracks arrive.
-      if (message.connId && message.userId !== user?.id) {
-        setRemoteStreams(prev => {
-          const exists = prev.find(s => s.connId === message.connId);
-          if (!exists) {
-            return [...prev, {
-              connId: message.connId,
-              userId: message.userId,
-              stream: null,
-              name: message.displayName || message.payload?.displayName || 'Participant',
-              isScreenSharing: false,
-            }];
-          }
-          return prev;
-        });
+      if (message.userId !== user?.id) {
+        upsertRemoteStreamPlaceholder(
+          message.userId,
+          message.connId || message.payload?.connId,
+          message.displayName || message.payload?.displayName || message.name || 'Guest'
+        );
       }
 
       // Track this participant so polling doesn't duplicate the event
@@ -351,17 +451,28 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           message.payload?.displayName ||
           message.name ||
           'Someone';
-        Toast.show({
-          type: 'info',
-          text1: `${name} joined the meeting`,
-          position: 'top',
-        });
+        setTimeout(() => {
+          Toast.show({
+            type: 'info',
+            text1: `${name} joined the meeting`,
+            position: 'top',
+          });
+        }, 120);
       }
     });
 
     client.on('participantLeft', (message) => {
-      setParticipants(prev => prev.filter(p => p.userId !== message.userId));
-      setRemoteStreams(prev => prev.filter(s => s.connId !== message.connId));
+      setParticipants(prev => prev.filter(p => {
+        const currentUserId = p.userId || p.payload?.userId;
+        const currentConnId = p.connId || p.payload?.connId;
+        return !(
+          (message.userId && currentUserId === message.userId) ||
+          (message.connId && currentConnId === message.connId)
+        );
+      }));
+      setRemoteStreams(prev => prev.filter(s =>
+        !((message.userId && s.userId === message.userId) || (message.connId && s.connId === message.connId))
+      ));
 
       // Remove from known IDs so polling doesn't re-add them
       if (message.userId) {
@@ -391,13 +502,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     });
 
     client.on('participantUpdated', (message) => {
-      setParticipants(prev =>
-        prev.map(p =>
-          p.userId === message.userId
-            ? { ...p, ...message.payload, userId: message.userId }
+      setParticipants(prev => {
+        const updated = prev.map(p =>
+          (p.userId || p.payload?.userId) === (message.userId || message.payload?.userId)
+            ? { ...p, ...message.payload, userId: message.userId || p.userId || message.payload?.userId }
             : p
-        )
-      );
+        );
+        return updated.some(p => (p.userId || p.payload?.userId) === (message.userId || message.payload?.userId)) ? updated : [...updated, message];
+      });
     });
 
     client.on('chatMessage', (message) => {
@@ -463,14 +575,30 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     try {
       const response = await meetingApi.getParticipants(meetingId);
       if (response && response.participants) {
-        setParticipants(response.participants);
-        knownParticipantIdsRef.current = new Set(response.participants.map(p => p.userId));
-        console.log('[Meeting] Participants synced:', response.participants.length);
+        const nextParticipants = response.participants;
+        setParticipants(prev => {
+          const merged = nextParticipants.reduce((acc, participant) => mergeParticipantEntry(acc, participant), prev);
+          return merged;
+        });
+        knownParticipantIdsRef.current = new Set(nextParticipants.map(p => p.userId || p.payload?.userId || p.memberId).filter(Boolean));
+
+        nextParticipants.forEach((participant) => {
+          const participantUserId = participant.userId || participant.payload?.userId || participant.memberId;
+          if (participantUserId && participantUserId !== user?.id) {
+            upsertRemoteStreamPlaceholder(
+              participantUserId,
+              participant.connId || participant.payload?.connId || participant.userId,
+              participant.displayName || participant.name || participant.payload?.displayName || participant.payload?.name || 'Guest'
+            );
+          }
+        });
+
+        console.log('[Meeting] Participants synced:', nextParticipants.length);
       }
-     } catch (error) {
-       console.error('Failed to update participants:', error);
-     }
-   };
+    } catch (error) {
+      console.error('Failed to update participants:', error);
+    }
+  };
 
    const loadChatHistory = async () => {
      try {
@@ -596,16 +724,6 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const handleToggleScreenShare = async () => {
-    // Screen sharing is only supported on web
-    if (Platform.OS !== 'web') {
-      Toast.show({
-        type: 'warning',
-        text1: 'Screen sharing unavailable',
-        text2: 'Screen sharing is only supported on web browsers',
-      });
-      return;
-    }
-
     try {
       if (!isScreenSharing) {
         screenShareRejectedRef.current = false;
@@ -757,17 +875,22 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       clearInterval(pollIntervalRef.current);
     }
 
+    updateParticipantsList();
+
     pollIntervalRef.current = setInterval(async () => {
       try {
         const response = await meetingApi.getParticipants(meetingId);
         if (!response || !response.participants) return;
 
         const apiParticipants = response.participants;
-        const currentIds = new Set(apiParticipants.map(p => p.userId));
-        const previousIds = new Set(knownParticipantIdsRef.current);
+const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userId || p.memberId).filter(Boolean));
+      const previousIds = new Set(knownParticipantIdsRef.current);
 
-        // Detect new joins
-        const newJoins = apiParticipants.filter(p => !previousIds.has(p.userId));
+      // Detect new joins
+      const newJoins = apiParticipants.filter(p => {
+        const id = p.userId || p.payload?.userId || p.memberId;
+        return id && !previousIds.has(id);
+      });
         const leftIds = [...previousIds].filter(id => !currentIds.has(id));
 
         knownParticipantIdsRef.current = currentIds;
@@ -775,32 +898,36 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         for (const joined of newJoins) {
           if (joined.userId === user?.id) continue;
           console.log('[Meeting] Poll: participant joined:', joined.userId);
-          setParticipants(prev => prev.find(p => p.userId === joined.userId) ? prev : [...prev, joined]);
-          setRemoteStreams(prev => prev.find(s => s.userId === joined.userId) ? prev : [...prev, {
-            connId: joined.userId,
-            userId: joined.userId,
-            stream: null,
-            name: joined.displayName || 'Participant',
-            isScreenSharing: false,
-          }]);
+          setParticipants(prev => mergeParticipantEntry(prev, joined));
+          upsertRemoteStreamPlaceholder(
+            joined.userId,
+            joined.connId || joined.userId,
+            joined.displayName || joined.name || 'Participant'
+          );
           if (initialLoadDoneRef.current) {
-            Toast.show({ type: 'info', text1: `${joined.displayName || 'Someone'} joined`, position: 'top' });
+            setTimeout(() => {
+              Toast.show({ type: 'info', text1: `${joined.displayName || 'Someone'} joined`, position: 'top' });
+            }, 120);
           }
         }
 
         for (const leftId of leftIds) {
           console.log('[Meeting] Poll: participant left:', leftId);
-          setParticipants(prev => prev.filter(p => p.userId !== leftId));
-          setRemoteStreams(prev => prev.filter(s => s.userId !== leftId));
+          setParticipants(prev => prev.filter(p => {
+            const candidateId = p.userId || p.payload?.userId || p.memberId;
+            return candidateId !== leftId;
+          }));
+          setRemoteStreams(prev => prev.filter(s => (s.userId || s.payload?.userId) !== leftId));
           if (initialLoadDoneRef.current) {
-            const left = participantsRef.current.find(p => p.userId === leftId);
-            Toast.show({ type: 'info', text1: `${left?.displayName || 'Someone'} left`, position: 'top' });
+            const left = participantsRef.current.find(p => (p.userId || p.payload?.userId || p.memberId) === leftId);
+            const leftName = left?.displayName || left?.payload?.displayName || left?.name || 'Someone';
+            Toast.show({ type: 'info', text1: `${leftName} left`, position: 'top' });
           }
         }
       } catch (error) {
         console.warn('[Meeting] Poll failed:', error.message);
       }
-    }, 5000);
+    }, 1500);
   };
 
   useEffect(() => {
@@ -822,13 +949,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
   // Build a userId -> displayName lookup from the participants list (API + signaling).
   const getParticipantName = (userId) => {
-    if (!userId) return 'Participant';
+    if (!userId) return 'Guest';
     const p = participants.find(part => part.userId === userId);
     if (p && (p.displayName || p.name)) return p.displayName || p.name;
-    // The signaling participant-joined payload nests details in .payload
     const joined = participants.find(part => part.payload?.userId === userId);
     if (joined && joined.payload?.displayName) return joined.payload.displayName;
-    return 'Participant';
+    return 'Guest';
   };
 
   // Keep a live mirror of the participants list for event handlers that close

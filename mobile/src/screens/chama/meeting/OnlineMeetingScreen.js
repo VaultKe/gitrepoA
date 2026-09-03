@@ -7,8 +7,19 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+let RTCView = null;
+if (Platform.OS !== 'web') {
+  try {
+    RTCView = require('react-native-webrtc').RTCView;
+  } catch (error) {
+    console.warn('Unable to load RTCView native component:', error?.message || error);
+    RTCView = null;
+  }
+}
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography } from '../../../utils/theme';
 import useOnlineMeetingScreen from '../../../hooks/useOnlineMeetingScreen';
@@ -18,6 +29,30 @@ import WebVideo from '../../../components/chama-meeting/WebVideo';
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 const MAX_GRID_PARTICIPANTS = 3;
+
+const getDisplayName = (value, fallback = 'Guest') => {
+  if (!value) return fallback;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || fallback;
+  }
+  if (typeof value === 'object') {
+    const parts = [
+      value.displayName,
+      value.name,
+      value.fullName,
+      value.firstName && value.lastName ? `${value.firstName} ${value.lastName}` : value.firstName || value.lastName,
+    ].filter(Boolean);
+    return parts[0] || fallback;
+  }
+  return fallback;
+};
+
+const truncateDisplayName = (value, maxLength = 18) => {
+  const name = getDisplayName(value, 'Guest');
+  if (name.length <= maxLength) return name;
+  return `${name.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
+};
 
 const OnlineMeetingScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
@@ -121,6 +156,23 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     remoteStreams.length - gridRemoteParticipants.length - (expandedData && !expandedData.isLocal ? 1 : 0)
   );
 
+  const rosterParticipants = participants
+    .filter((entry) => {
+      const entryUserId = entry.userId || entry.payload?.userId || entry.memberId;
+      return Boolean(entryUserId) && entryUserId !== user?.id;
+    })
+    .map((entry) => {
+      const entryUserId = entry.userId || entry.payload?.userId || entry.memberId;
+      const fallbackName = getDisplayName(entry.displayName || entry.payload?.displayName || entry.name || entry.payload?.name || 'Guest');
+      return {
+        id: entryUserId || entry.connId || `${entry.displayName || 'guest'}-${Math.random()}`,
+        name: truncateDisplayName(fallbackName, 18),
+      };
+    });
+
+  const visibleRosterParticipants = rosterParticipants.slice(0, 6);
+  const hiddenRosterCount = Math.max(0, rosterParticipants.length - visibleRosterParticipants.length);
+
   if (isReadOnly) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -171,13 +223,14 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     // Show placeholder for remote participants without media streams
     // (e.g., they joined but haven't enabled camera/microphone yet)
     if (!isLocal && !stream) {
+      const placeholderName = 'Guest';
       return (
-        <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+        <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}> 
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}> 
             <Ionicons name="person" size={36} color="#fff" />
           </View>
-          <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
-            {isLocal ? 'You' : 'Participant'}
+          <Text style={[styles.placeholderText, { color: colors.textSecondary }]}> 
+            {truncateDisplayName(placeholderName, 18)}
           </Text>
         </View>
       );
@@ -194,30 +247,39 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           style={styles.video}
         />
       );
-    } else {
-      // For React Native, we'd use react-native-webrtc's RTCView
-      // This is a placeholder - actual implementation requires expo-dev-client
-      // or bare React Native with proper linking
+    }
+
+    if (RTCView && stream && typeof stream.toURL === 'function') {
+      const streamUrl = stream.toURL();
       return (
-        <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
-          <Ionicons
-            name={isLocal ? 'person' : 'people'}
-            size={48}
-            color={colors.textSecondary}
-          />
-          <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
-            {isLocal ? 'You' : 'Participant'}
-          </Text>
-        </View>
+        <RTCView
+          key={isLocal ? `local-${isCameraEnabled}` : `remote-${connId}`}
+          streamURL={streamUrl}
+          style={styles.video}
+          objectFit="cover"
+          mirror={isLocal}
+          zOrder={0}
+        />
       );
     }
+
+    return (
+      <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}> 
+        <Ionicons
+          name={isLocal ? 'person' : 'people'}
+          size={48}
+          color={colors.textSecondary}
+        />
+        <Text style={[styles.placeholderText, { color: colors.textSecondary }]}> 
+          {isLocal ? 'You' : 'Guest'}
+        </Text>
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]}>
-      {/* Video Area */}
       <View style={styles.videoArea}>
-        {/* Expanded View - shows active speaker / screen sharer / pinned participant */}
         {showExpandedView && expandedData && (
           <View style={styles.expandedVideoContainer}>
             {expandedData.isLocal ? (
@@ -225,49 +287,46 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             ) : (
               renderVideoElement(expandedData.participant.stream, false, expandedData.participant.connId)
             )}
-             <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
-               <Text style={styles.videoLabelText}>
-                 {expandedData.isLocal
-                   ? (isScreenSharing ? 'Your Screen' : 'You')
-                   : (expandedData.participant.isScreenSharing
-                       ? `${expandedData.participant.name || 'Participant'} (Screen)`
-                       : (expandedData.participant.name || 'Participant'))}
-               </Text>
-               <TouchableOpacity
-                 style={styles.expandButton}
-                 onPress={() => setIsVideoExpanded(!isVideoExpanded)}
-               >
-                 <Ionicons
-                   name={isVideoExpanded ? 'contract' : 'expand'}
-                   size={18}
-                   color="#fff"
-                 />
-               </TouchableOpacity>
-             </View>
+            <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+              <Text style={styles.videoLabelText}>
+                {expandedData.isLocal
+                  ? (isScreenSharing ? 'Your Screen' : 'You')
+                  : (expandedData.participant.isScreenSharing
+                      ? `${truncateDisplayName(expandedData.participant.name || 'Guest')} (Screen)`
+                      : truncateDisplayName(expandedData.participant.name || 'Guest'))}
+              </Text>
+              <TouchableOpacity
+                style={styles.expandButton}
+                onPress={() => setIsVideoExpanded(!isVideoExpanded)}
+              >
+                <Ionicons
+                  name={isVideoExpanded ? 'contract' : 'expand'}
+                  size={18}
+                  color="#fff"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
-        {/* Grid View - shows limited remote participants (local self-view is a PiP overlay) */}
         <View style={[
           styles.videoGrid,
           showExpandedView && styles.videoGridWithExpanded
         ]}>
-           {/* Remote Videos - limited to MAX_GRID_PARTICIPANTS */}
-           {gridRemoteParticipants.map(({ connId, userId, stream, name, isScreenSharing: sharing }) => (
-             <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
-               {renderVideoElement(stream, false, connId)}
-               <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
-                 {sharing && (
-                   <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
-                 )}
-                 <Text style={styles.videoLabelText}>
-                   {sharing ? `${name || 'Participant'} (Screen)` : (name || 'Participant')}
-                 </Text>
-               </View>
-             </View>
-           ))}
+          {gridRemoteParticipants.map(({ connId, userId, stream, name, isScreenSharing: sharing }) => (
+            <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
+              {renderVideoElement(stream, false, connId)}
+              <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
+                {sharing && (
+                  <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
+                )}
+                <Text style={styles.videoLabelText}>
+                  {sharing ? `${truncateDisplayName(name || 'Guest')} (Screen)` : truncateDisplayName(name || 'Guest')}
+                </Text>
+              </View>
+            </View>
+          ))}
 
-          {/* Hidden participants indicator */}
           {hiddenParticipantsCount > 0 && (
             <View style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded, styles.hiddenParticipantsBadge]}>
               <View style={styles.hiddenParticipantsContent}>
@@ -280,8 +339,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Self-view (always visible picture-in-picture) so the user can
-            always see themselves regardless of the expanded view state. */}
         <View style={styles.selfViewPiP}>
           {renderVideoElement(localStream, true)}
           <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
@@ -290,7 +347,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         </View>
       </View>
 
-      {/* Controls */}
       <View style={[styles.controls, { backgroundColor: colors.surface + 'E6' }]}>
         <TouchableOpacity
           style={[styles.controlButton, !isMicrophoneEnabled && styles.controlButtonOff]}
@@ -336,10 +392,9 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Chat Panel */}
       {isChatOpen && (
-        <View style={[styles.chatPanel, { backgroundColor: colors.surface }]}>
-          <View style={[styles.chatHeader, { borderBottomColor: colors.border }]}>
+        <View style={[styles.chatPanel, { backgroundColor: colors.surface }]}> 
+          <View style={[styles.chatHeader, { borderBottomColor: colors.border }]}> 
             <Text style={[styles.chatTitle, { color: colors.text }]}>Meeting Chat</Text>
             <TouchableOpacity onPress={() => setIsChatOpen(false)}>
               <Ionicons name="close" size={24} color={colors.text} />
@@ -375,7 +430,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               );
             })}
           </ScrollView>
-          <View style={[styles.chatInput, { borderTopColor: colors.border }]}>
+          <View style={[styles.chatInput, { borderTopColor: colors.border }]}> 
             <TextInput
               style={[styles.chatInputField, { color: colors.text, backgroundColor: colors.background }]}
               placeholder="Type a message..."
@@ -390,7 +445,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      {/* Chat Toggle Button */}
       <TouchableOpacity
         style={[styles.chatToggle, { backgroundColor: colors.primary }]}
         onPress={() => setIsChatOpen(!isChatOpen)}

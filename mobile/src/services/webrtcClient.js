@@ -120,7 +120,7 @@ class WebRTCClient {
     this.eventHandlers = new Map();
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 1000;
+    this.reconnectDelay = 600;
     this.platformClasses = null;
     this.pendingIceCandidates = new Map();
   }
@@ -194,14 +194,22 @@ class WebRTCClient {
 
    async initScreenShare() {
     try {
+      const native = loadNativeWebRTC();
+
       if (Platform.OS === 'web') {
         this.screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: { cursor: 'always' },
           audio: true,
         });
+      } else if (native && native.mediaDevices && typeof native.mediaDevices.getDisplayMedia === 'function') {
+        this.screenStream = await native.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
       } else {
-        throw new Error('Screen sharing not implemented for mobile yet');
+        throw new Error('Screen sharing is not available on this build');
       }
+
       this.emit('screenStream', this.screenStream);
       return this.screenStream;
     } catch (error) {
@@ -247,10 +255,10 @@ class WebRTCClient {
     this.ws.onopen = () => {
       console.log('[Meeting] Signaling connected | roomId=' + roomId + ' userId=' + this.userId);
       this.reconnectAttempts = 0;
-      this.emit('connected');
 
-      // Send join without connId; the server will broadcast participant-joined
-      // with the authoritative connId for this connection.
+      // Send join before emitting the connected signal so the room state is
+      // updated immediately and the app refreshes the roster without waiting for
+      // an additional polling cycle.
       this.sendSignalingMessage({
         type: SIGNALING_MESSAGE_TYPES.JOIN,
         roomId: this.roomId,
@@ -263,6 +271,8 @@ class WebRTCClient {
         userId: this.userId,
         displayName: this.displayName,
       });
+
+      this.emit('connected');
     };
 
     this.ws.onmessage = (event) => {
@@ -358,18 +368,19 @@ class WebRTCClient {
         }
 
         // Use server-issued connId so all peers agree on one identifier.
-        const remoteConnId = message.connId;
+        const remoteConnId = message.connId || message.payload?.connId;
         if (!remoteConnId) break;
 
-        // Only the *newly joined* participant opens the connection (the server
-        // flags those roster-sync messages with `initiator`). Existing members
-        // just wait for the incoming offer. This prevents both sides from
-        // sending simultaneous offers (glare) which previously broke negotiation
-        // and made it look like participants weren't in the same room.
-        if (message.payload && message.payload.initiator) {
-          if (!this.peerConnections.has(remoteConnId)) {
-            this.createPeerConnection(remoteConnId, message.userId, true);
-          }
+        // Determine a stable initiator without relying on the server's stale
+        // metadata. When two peers join nearly simultaneously, exactly one side
+        // should create the offer; otherwise both sides race and negotiation
+        // fails, leaving remote tiles blank.
+        const currentUserId = String(this.userId || '');
+        const remoteUserId = String(message.userId || '');
+        const shouldInitiate = currentUserId.localeCompare(remoteUserId) < 0;
+
+        if (!this.peerConnections.has(remoteConnId)) {
+          this.createPeerConnection(remoteConnId, remoteUserId, shouldInitiate);
         }
         break;
 
