@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 	"strings"
 
@@ -55,32 +54,10 @@ func (w *corsResponseWriter) Write(data []byte) (int, error) {
 
 // CORSMiddleware applies strict CORS handling
 func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
+	// Build allowed origins map strictly from config (env via config.Load)
 	allowedOrigins := make(map[string]struct{})
 	for _, origin := range cfg.AllowedOrigins {
 		allowedOrigins[origin] = struct{}{}
-	}
-
-	// Default fallback origins for development when none configured
-	defaultOrigins := []string{
-		"https://gitrepoa-1.onrender.com",
-		"http://localhost:8081",
-		"https://localhost",
-		"https://127.0.0.1:8081",
-		"http://localhost:8085",
-		"http://localhost:2885",
-		"http://localhost:2886",
-		"http://localhost:3000",
-		"http://127.0.0.1:3000",
-		"https://vault-better1.vercel.app",
-		"http://localhost:19006",
-		"http://127.0.0.1:19006",
-		"https://chat-services-l1a6.onrender.com",
-		"https://livemeeting-service.onrender.com",
-	}
-	if len(allowedOrigins) == 0 {
-		for _, origin := range defaultOrigins {
-			allowedOrigins[origin] = struct{}{}
-		}
 	}
 
 	return func(c *gin.Context) {
@@ -91,23 +68,37 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 
 		// Handle requests with missing or null origin (mobile apps, curl, etc.)
 		if origin == "" || origin == "null" {
-			// For native mobile clients without an Origin header, reuse the
-			// first configured allowed origin so CORS still succeeds without
-			log.Printf("ℹ️ CORS: Request without Origin header (likely mobile client)")
-
-			// falling back to a wildcard.
-			if len(allowedOrigins) > 0 {
-				for o := range allowedOrigins {
-					allowedOrigin = o
-					break
-				}
+			// For requests without Origin header we only allow them if the
+			// server is explicitly configured to allow all origins or if
+			// a specific allowed origin exists in the env. We strictly read
+			// allowed origins from the environment (`API/main-server/.env`).
+			if cfg.AllowAllOrigins {
+				allowedOrigin = "*"
+			} else if len(cfg.AllowedOrigins) > 0 {
+				// Use the first allowed origin from config
+				allowedOrigin = cfg.AllowedOrigins[0]
 			} else {
-				allowedOrigin = cfg.BaseURL
+				// No explicit allowed origins configured — deny
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Origin not allowed (no allowed origins configured)"})
+				return
 			}
 		} else if cfg.AllowAllOrigins {
 			// When ALLOW_ALL_ORIGINS is true, echo back the requesting origin
 			allowedOrigin = origin
 		} else if _, allowed := allowedOrigins[origin]; !allowed {
+			// If origin is not allowed, for development environments we still
+			// include CORS headers so browser clients get a JSON response instead
+			// of a silent CORS block. In production we keep the strict behavior.
+			if cfg.Environment != "production" || cfg.AllowAllOrigins {
+				// Echo back the requesting origin so browsers accept the response
+				allowedOrigin = origin
+				setCORSHeaders(c.Writer.Header(), allowedOrigin)
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"error": "Origin not allowed (dev override)",
+				})
+				return
+			}
+
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Origin not allowed",
 			})

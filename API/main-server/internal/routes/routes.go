@@ -46,7 +46,8 @@ func SetupRoutes(
 	router.LoadHTMLGlob("templates/*")
 
 	// Global middleware
-	router.Use(middleware.CORSMiddleware(cfg))
+	// NOTE: CORS middleware is registered centrally in main.go to avoid
+	// multiple registrations across the codebase. Do not register it here.
 
 	// Disable rate limiting for development
 	if os.Getenv("DISABLE_RATE_LIMITING") != "true" {
@@ -272,12 +273,12 @@ func SetupRoutes(
 				users.PUT("/preferences", api.UpdateUserPreferences)
 
 				users.POST("/avatar", func(c *gin.Context) {
-				authHandlers.UploadAvatar(c)
-			})
-			users.GET("/search-by-credentials", api.SearchUserByCredentials)
-			users.GET("/search-by-national-id", api.SearchUserByIdNumber)
-			users.GET("/search-by-phone", api.SearchUserByPhone)
-			users.PUT("/:id/role", api.AdminUpdateUserRole)
+					authHandlers.UploadAvatar(c)
+				})
+				users.GET("/search-by-credentials", api.SearchUserByCredentials)
+				users.GET("/search-by-national-id", api.SearchUserByIdNumber)
+				users.GET("/search-by-phone", api.SearchUserByPhone)
+				users.PUT("/:id/role", api.AdminUpdateUserRole)
 				users.PUT("/:id/status", api.UpdateUserStatus)
 				users.DELETE("/:id", api.DeleteUser)
 				users.POST("/onboard", api.OnboardUser)
@@ -299,12 +300,12 @@ func SetupRoutes(
 				})
 				chamas.DELETE("/:id", api.DeleteChama)
 				chamas.POST("/:id/leave", api.LeaveChama)
-			chamas.GET("/:id/members", api.GetChamaMembers)
-			chamas.GET("/:id/members/:memberId", api.GetChamaMember)
-			chamas.DELETE("/:id/members/:memberId", api.RemoveMember)
-			chamas.GET("/:id/members/:memberId/role", api.GetMemberRole)
-			chamas.GET("/:id/members/:memberId/stats", api.GetChamaMemberStatistics)
-			chamas.GET("/:id/members/export", api.ExportChamaMembers)
+				chamas.GET("/:id/members", api.GetChamaMembers)
+				chamas.GET("/:id/members/:memberId", api.GetChamaMember)
+				chamas.DELETE("/:id/members/:memberId", api.RemoveMember)
+				chamas.GET("/:id/members/:memberId/role", api.GetMemberRole)
+				chamas.GET("/:id/members/:memberId/stats", api.GetChamaMemberStatistics)
+				chamas.GET("/:id/members/export", api.ExportChamaMembers)
 				chamas.GET("/:id/transactions", api.GetChamaTransactions)
 				chamas.GET("/:id/statistics", api.GetChamaStatistics)
 				chamas.GET("/:id/merry-go-rounds", api.GetMerryGoRounds)
@@ -518,8 +519,8 @@ func SetupRoutes(
 
 			onlineMeetings := protected.Group("/online-meetings")
 			{
-			onlineMeetings.Use(meetingAuthPassthrough)
-			onlineMeetings.Any("/*path", proxyTo(cfg.MeetingServiceURL, "/online-meetings"))
+				onlineMeetings.Use(meetingAuthPassthrough)
+				onlineMeetings.Any("/*path", proxyTo(cfg.MeetingServiceURL, "/online-meetings"))
 			}
 
 			merryGoRounds := protected.Group("/merry-go-rounds")

@@ -131,9 +131,8 @@ const useContributionScreen = ({ route, navigation }) => {
   useEffect(() => {
     loadChamaDetails();
     loadWalletBalance();
-    checkUserRole();
-
     if (chamaId) {
+      checkUserRole();
       loadContributionOptions();
     }
 
@@ -336,6 +335,8 @@ const useContributionScreen = ({ route, navigation }) => {
 
   // Check user role in the chama
   const checkUserRole = async () => {
+    if (!chamaId || !user?.id) return;
+
     try {
       const response = await ApiService.getMemberRole(chamaId, user.id);
       if (response.success) {
@@ -349,7 +350,11 @@ const useContributionScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error('Failed to check user role:', error);
-      loadChamaMembers();
+      // Only attempt the members fallback if we actually have a valid chamaId.
+      // Without it, this would hit /contributions/chamas/undefined/members → 403.
+      if (chamaId) {
+        loadChamaMembers();
+      }
     }
   };
 
@@ -516,12 +521,15 @@ const useContributionScreen = ({ route, navigation }) => {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
+      const promises = [
         loadChamaDetails(),
         loadWalletBalance(),
-        loadContributionOptions(),
-        checkUserRole(),
-      ]);
+      ];
+      if (chamaId) {
+        promises.push(loadContributionOptions());
+        promises.push(checkUserRole());
+      }
+      await Promise.all(promises);
     } catch (error) {
       console.warn('ContributeScreen refresh failed:', error);
     } finally {

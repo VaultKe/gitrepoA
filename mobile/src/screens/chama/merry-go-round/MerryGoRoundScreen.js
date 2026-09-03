@@ -842,7 +842,7 @@ const getRowData = () => {
                 title="Contribute"
                 onPress={() => {
                   const navParams = {
-                    chamaId: selectedRound.chamaId,
+                    chamaId,
                     roundId: selectedRound.id,
                     roundName: selectedRound.name,
                     contributionType: 'merry-go-round',
