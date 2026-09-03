@@ -64,6 +64,7 @@ import { getThemeColors } from '../utils/theme';
 
 // Import the extracted UserTabBar and HOC
 import UserTabBar from '../components/common/UserTabBar';
+import UserHomeStack from './UserHomeStack';
 
 
 const Tab = createBottomTabNavigator();
@@ -84,7 +85,19 @@ function UserTabNavigator() {
           const SmartHeader = require('../components/common/SmartHeader').default;
 
           // Determine if back button should be shown based on navigation state
-          const canGoBack = navigation.canGoBack();
+          const canGoBack = (() => {
+            try {
+              if (navigation.canGoBack && navigation.canGoBack()) return true;
+              let parent = navigation.getParent && navigation.getParent();
+              while (parent) {
+                if (typeof parent.canGoBack === 'function' && parent.canGoBack()) return true;
+                parent = parent.getParent && parent.getParent();
+              }
+              return false;
+            } catch (e) {
+              return false;
+            }
+          })();
           const isTabScreen = ['Home', 'Meetings', 'History', 'Chat'].includes(route.name);
 
           // Get navigation state for more intelligent back button logic
@@ -110,10 +123,11 @@ function UserTabNavigator() {
     >
       <Tab.Screen
         name="Home"
-        component={EnhancedUserDashboard}
+        component={UserHomeStack}
         options={{
           title: 'Home',
           tabBarLabel: 'Home',
+          headerShown: false,
         }}
       />
 
