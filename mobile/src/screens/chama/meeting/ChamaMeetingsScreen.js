@@ -43,7 +43,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="calendar-outline" size={68} color={colors.textTertiary} />
+      <Ionicons name="calendar-outline" size={56} color={colors.textTertiary} />
       <Text style={[styles.emptyTitle, { color: colors.text }]}>No Meetings Found</Text>
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         {isUserMeetingsView
@@ -58,7 +58,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
         <View style={styles.tableControls}>
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+            <Ionicons name="search" size={18} color={colors.textSecondary} style={styles.searchIcon} />
             <TextInput
               style={[styles.searchInput, { color: colors.text, borderColor: colors.border }]}
               placeholder="Search meetings..."
@@ -74,7 +74,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
             <Text style={[styles.filterButtonText, { color: colors.text }]}>
               {filterOptions.find(opt => opt.id === filterStatus)?.name || 'All'}
             </Text>
-            <Ionicons name={showFilterDropdown ? "chevron-up" : "chevron-down"} size={18} color={colors.textSecondary} />
+            <Ionicons name={showFilterDropdown ? "chevron-up" : "chevron-down"} size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -107,7 +107,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
                 {filter.name}
               </Text>
                {filterStatus === filter.id && (
-                 <Ionicons name="checkmark" size={16} color={colors.white} />
+                  <Ionicons name="checkmark" size={14} color={colors.white} />
                )}
             </TouchableOpacity>
           ))}
@@ -140,14 +140,14 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
           onAttend={handleAttend}
           onDelete={handleDelete}
         />
-        <View style={{ position: 'absolute', right: spacing.sm, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
+        <View style={{ position: 'absolute', right: spacing.md, bottom: 64, flexDirection: 'column', alignItems: 'center', gap: spacing.md, zIndex: 999 }}>
           <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} absolute={false} />
           {!isUserMeetingsView && (
             <TouchableOpacity
               style={[styles.fab, { backgroundColor: colors.primary }]}
               onPress={handleScheduleMeeting}
             >
-              <Ionicons name="add" size={24} color={colors.white} />
+              <Ionicons name="add" size={22} color={colors.white} />
             </TouchableOpacity>
           )}
         </View>
@@ -158,7 +158,7 @@ const ChamaMeetingsScreen = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, ...shadows.sm },
+  header: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, ...shadows.sm },
   tableControls: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.md },
   searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, height: 44 },
   searchIcon: { marginRight: spacing.sm },

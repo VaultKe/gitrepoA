@@ -62,21 +62,21 @@ const ChamaMeetingsTable = ({
             onPress={() => onViewSummary(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="eye" size={16} color={colors.white} />
+            <Ionicons name="eye" size={14} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButtonSmall, styles.actionButtonSuccess]}
             onPress={() => onAttend(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="play" size={16} color={colors.white} />
+            <Ionicons name="play" size={14} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButtonSmall, styles.actionButtonError]}
             onPress={() => onDelete(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="trash" size={16} color={colors.white} />
+            <Ionicons name="trash" size={14} color={colors.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -205,14 +205,16 @@ const createStyles = (colors) => StyleSheet.create({
     alignSelf: 'stretch',
   },
   tableCard: {
-    minHeight: 520,
+    flex: 1,
     borderRadius: 8,
-    width: '100%',
-    alignSelf: 'stretch',
-    backgroundColor: colors.surface,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   tableScrollContent: {
     flexGrow: 1,
@@ -223,7 +225,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.primary + '10',
     borderBottomWidth: 2,
@@ -251,7 +253,8 @@ const createStyles = (colors) => StyleSheet.create({
   actionsCell: {
     flex: 1.5,
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
+    marginLeft: spacing.md,
   },
   tableHeaderText: {
     fontWeight: typography.fontWeight.bold,
@@ -270,19 +273,19 @@ const createStyles = (colors) => StyleSheet.create({
   },
   tableRowEven: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    borderBottomColor: colors.border,
     alignItems: 'center',
     backgroundColor: colors.background,
   },
   tableRowOdd: {
     flexDirection: 'row',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    borderBottomColor: colors.border,
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
