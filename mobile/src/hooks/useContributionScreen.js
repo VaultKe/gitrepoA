@@ -22,6 +22,7 @@ import {
 } from '../utils/contributionValidation';
 import useContributionHelpers from './useContributionHelpers';
 import useMemberHelpers from './useMemberHelpers';
+import { isMemberVisible } from '../utils/chamaMembersUtils';
 
 const useContributionScreen = ({ route, navigation }) => {
   const { theme, user, refreshSpecificData } = useApp();
@@ -308,7 +309,8 @@ const useContributionScreen = ({ route, navigation }) => {
                 (participants.indexOf(participant) + 1),
             };
           });
-          setChamaMembers(eligibleMembers);
+          // filter out left/inactive participants
+          setChamaMembers(eligibleMembers.filter(isMemberVisible));
           return;
         }
       }
@@ -318,7 +320,7 @@ const useContributionScreen = ({ route, navigation }) => {
         `/contributions/chamas/${chamaId}/members`
       );
       if (response.success) {
-        setChamaMembers(response.data);
+        setChamaMembers((response.data || []).filter(isMemberVisible));
       }
     } catch (error) {
       console.error('Failed to load chama members:', error);
