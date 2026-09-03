@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -107,9 +108,13 @@ func (h *PollsHandlers) GetChamaPolls(c *gin.Context) {
 
 	polls, err := h.pollsService.GetChamaPolls(chamaID, limit, offset)
 	if err != nil {
+		// Log the error server-side for diagnosis
+		log.Printf("[POLLS] Failed to get polls for chama %s: %v", chamaID, err)
+
+		// Return more informative message in non-production may be configured
 		c.JSON(http.StatusInternalServerError, models.PollsListResponse{
 			Success: false,
-			Error:   "Failed to retrieve polls",
+			Error:   "Failed to retrieve polls: " + err.Error(),
 		})
 		return
 	}

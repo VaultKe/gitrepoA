@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Dimensions,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -74,7 +75,7 @@ const MerryGoRoundScreen = ({ route, navigation, onRouteChange }) => {
   };
 
 const [merryGoRounds, setMerryGoRounds] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRound, setSelectedRound] = useState(null);
   const selectedRoundRef = useRef(selectedRound);
@@ -91,7 +92,7 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
 
   const loadMerryGoRounds = async (silent = false) => {
     try {
-      if (!silent) setLoading(true);
+      setLoading(true);
       const response = await ApiService.getMerryGoRounds(chamaId);
       if (response.success) {
         let rounds = response.data || [];
@@ -114,14 +115,14 @@ const [merryGoRounds, setMerryGoRounds] = useState([]);
     } catch (error) {
       console.error('Failed to load merry-go-rounds:', error);
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     const initialize = async () => {
-      const hadCache = await loadCachedMerryGoRounds();
-      await loadMerryGoRounds(hadCache);
+      await loadCachedMerlyGoRounds();
+      await loadMerlyGoRounds();
     };
     initialize();
   }, [chamaId]);
