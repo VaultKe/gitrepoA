@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"vaultke-backend/internal/services"
+
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
-	"vaultke-backend/internal/services"
 )
 
 // LoginSession represents a user login session
@@ -117,12 +118,11 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Password changed successfully",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // GetLoginHistory retrieves user login history
@@ -320,7 +320,7 @@ func GetLoginHistory(c *gin.Context) {
 			"offset": offset,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // LogoutAllDevices logs out user from all other devices
@@ -367,7 +367,7 @@ func LogoutAllDevices(c *gin.Context) {
 		"success": true,
 		"message": fmt.Sprintf("Logged out from %d other devices", rowsAffected),
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // LogoutSpecificDevice logs out user from a specific device
@@ -426,12 +426,11 @@ func LogoutSpecificDevice(c *gin.Context) {
 		return
 	}
 
-
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Logged out from device successfully",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // RecordLoginSession records a new login session
@@ -468,6 +467,8 @@ func RecordLoginSession(db *sql.DB, userID, deviceUID, deviceType, deviceName, m
 	_, _ = db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS manufacturer TEXT`)
 	_, _ = db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS model TEXT`)
 	_, _ = db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS device_uid TEXT`)
+	// Ensure updated_at column exists for activity updates
+	_, _ = db.Exec(`ALTER TABLE login_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
 
 	// Mark all previous sessions as not current
 	_, err = db.Exec("UPDATE login_sessions SET is_current = FALSE WHERE user_id = $1", userID)
@@ -475,17 +476,52 @@ func RecordLoginSession(db *sql.DB, userID, deviceUID, deviceType, deviceName, m
 		fmt.Printf("Failed to update previous sessions: %v\n", err)
 	}
 
-	// Insert new session with debug logging
+	nowVal := time.Now()
+
+	// Try to find an existing session row for the same device UID so we update
+	// it instead of inserting duplicates. This keeps the login history concise
+	// for a single physical device while still tracking activity timestamps.
+	var existingSessionID string
+	err = db.QueryRow("SELECT id FROM login_sessions WHERE user_id = $1 AND device_uid = $2 LIMIT 1", userID, deviceUID).Scan(&existingSessionID)
+	if err == nil && existingSessionID != "" {
+		// Update the existing session row with fresh activity and mark it current
+		updateQuery := `
+			UPDATE login_sessions
+			SET device_type = $1,
+				device_name = $2,
+				manufacturer = $3,
+				model = $4,
+				operating_system = $5,
+				browser = $6,
+				ip_address = $7,
+				location = $8,
+				last_activity = $9,
+				login_time = $9,
+				status = 'active',
+				is_current = TRUE,
+				updated_at = $9
+			WHERE id = $10
+		`
+		_, err = db.Exec(updateQuery, deviceType, deviceName, manufacturer, model, os, browser, ipAddress, location, nowVal, existingSessionID)
+		if err != nil {
+			fmt.Printf("Failed to update existing login session %s: %v\n", existingSessionID, err)
+			return err
+		}
+		fmt.Printf("Updated existing login session %s for user %s\n", existingSessionID, userID)
+		return nil
+	}
+
+	// No existing session for this device UID — insert a new row
 	insertQuery := `
 		INSERT INTO login_sessions
-		(user_id, device_uid, device_type, device_name, manufacturer, model, operating_system, browser, ip_address, location, is_current)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)
+		(user_id, device_uid, device_type, device_name, manufacturer, model, operating_system, browser, ip_address, location, login_time, last_activity, status, is_current)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, 'active', TRUE)
 	`
 
-	fmt.Printf("Recording login session for user %s: deviceUID=%s, device=%s, name=%s, manufacturer=%s, model=%s, os=%s, browser=%s, ip=%s, location=%s\n",
+	fmt.Printf("Recording new login session for user %s: deviceUID=%s, device=%s, name=%s, manufacturer=%s, model=%s, os=%s, browser=%s, ip=%s, location=%s\n",
 		userID, deviceUID, deviceType, deviceName, manufacturer, model, os, browser, ipAddress, location)
 
-	_, err = db.Exec(insertQuery, userID, deviceUID, deviceType, deviceName, manufacturer, model, os, browser, ipAddress, location)
+	_, err = db.Exec(insertQuery, userID, deviceUID, deviceType, deviceName, manufacturer, model, os, browser, ipAddress, location, nowVal)
 	if err != nil {
 		fmt.Printf("Failed to record login session: %v\n", err)
 		return err
@@ -591,5 +627,5 @@ func ScanFile(c *gin.Context) {
 		"success": true,
 		"data":    response,
 	})
-		c.Abort()
+	c.Abort()
 }

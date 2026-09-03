@@ -10,7 +10,9 @@ export const setAppLogout = (fn) => {
 export const triggerAppLogout = async () => {
   // Prevent re-entrancy: if a logout is already in progress, return immediately.
   if (isLoggingOut) {
-    return new Promise(() => {});
+    // A previous logout is already running — return a resolved promise so
+    // callers awaiting this do not hang forever.
+    return Promise.resolve();
   }
 
   // Debounce: prevent logout loops by throttling to once per LOGOUT_COOLDOWN_MS
@@ -27,7 +29,22 @@ export const triggerAppLogout = async () => {
 
   try {
     const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
-    const authKeys = ['authToken', 'token', 'user', 'userRole', 'userData', 'refreshToken'];
+
+    // Attempt a non-blocking server-side logout so refresh tokens may be
+    // revoked remotely. Do this in the background and do not await it here
+    // to avoid network-induced deadlocks.
+    (async () => {
+      try {
+        const authApi = await import('../services/api/authEndpoints');
+        const timeout = new Promise((resolve) => setTimeout(resolve, 2000));
+        // Race logout call against a short timeout so it cannot stall.
+        await Promise.race([authApi.logout(), timeout]);
+      } catch (e) {
+        // swallow — we must not block logout on network errors
+      }
+    })();
+
+    const authKeys = ['authToken', 'token', 'user', 'userRole', 'userData', 'refreshToken', 'currentDeviceInfo'];
     await AsyncStorage.multiRemove(authKeys);
 
     if (appLogout) {
