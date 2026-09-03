@@ -509,10 +509,19 @@ export default function RegisterScreen({ navigation }) {
             {/* Registration Card - Consistent across all screen sizes */}
             <Card
               variant="outlined"
-              padding={isDesktop ? "xl" : "lg"}
+              padding="md"
               style={[
                 styles.registerCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: 8,
+                  shadowColor: 'transparent',
+                  shadowOpacity: 0,
+                  shadowRadius: 0,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 0,
+                },
                 !isDesktop && !isTablet && styles.mobileRegisterCard
               ]}
             >
@@ -557,7 +566,8 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.lg,
     paddingBottom: spacing.xl,
   },
   logoContainer: {
@@ -706,7 +716,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: '100%',
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.sm,
   },
   responsiveContainer: {
     width: '100%',
@@ -715,13 +725,13 @@ const styles = StyleSheet.create({
   },
   registerCard: {
     width: '100%',
-    borderRadius: borderRadius.xl,
-    marginTop: spacing.lg,
+    borderRadius: 8,
+    marginTop: spacing.md,
   },
   mobileRegisterCard: {
-    borderRadius: borderRadius.lg,
+    borderRadius: 8,
     marginTop: spacing.md,
-    marginHorizontal: 0,
+    marginHorizontal: spacing.sm,
   },
   desktopLogoText: {
     fontSize: typography.fontSize.xxxl,

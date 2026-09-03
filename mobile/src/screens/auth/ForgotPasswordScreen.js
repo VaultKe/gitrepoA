@@ -140,10 +140,19 @@ export default function ForgotPasswordScreen({ navigation }) {
       {/* Forgot Password Card */}
       <Card
         variant="outlined"
-        padding={isDesktop ? "xl" : "lg"}
+        padding="md"
         style={[
           styles.forgotPasswordCard,
-          { backgroundColor: colors.surface, borderColor: colors.border },
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 8,
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 0,
+          },
           !isDesktop && !isTablet && styles.mobileForgotPasswordCard
         ]}
       >
@@ -249,10 +258,19 @@ export default function ForgotPasswordScreen({ navigation }) {
       {/* Success Card */}
       <Card
         variant="outlined"
-        padding={isDesktop ? "xl" : "lg"}
+        padding="md"
         style={[
           styles.successCard,
-          { backgroundColor: colors.surface, borderColor: colors.border },
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: 8,
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 0,
+          },
           !isDesktop && !isTablet && styles.mobileSuccessCard
         ]}
       >
@@ -360,7 +378,8 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.lg,
   },
   logoContainer: {
     alignItems: 'center',
@@ -497,7 +516,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: '100%',
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.sm,
   },
   responsiveContainer: {
     width: '100%',
