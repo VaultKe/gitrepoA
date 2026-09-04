@@ -25,6 +25,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
+  // connIds that have confirmed (via screen-share-ack) they are actually
+  // receiving our current screen share's frames. Reset on every start/stop
+  // so a stale ack from a previous share can't count toward the new one.
+  const [screenShareViewerConnIds, setScreenShareViewerConnIds] = useState(() => new Set());
   // Identity of the participant currently sharing their screen, as announced by
   // the signaling server: { connId, userId }. Kept separately from the stream
   // list so the flag survives tiles being re-created or re-keyed.
@@ -50,6 +54,15 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const hasJoinedRef = useRef(false);
   const reconnectTimeoutRef = useRef(null);
   const screenShareRejectedRef = useRef(false);
+  // Mirrors isScreenSharing for the connectionStateChange listener, which is
+  // registered once in initializeWebRTC and would otherwise close over a
+  // stale value.
+  const isScreenSharingRef = useRef(false);
+  // Timer that checks, a few seconds after starting a share, whether anyone
+  // has actually acked it -- see handleToggleScreenShare.
+  const screenShareWatchdogRef = useRef(null);
+  // Mirrors screenShareViewerConnIds for the watchdog timer's closure.
+  const screenShareViewerConnIdsRef = useRef(new Set());
   const participantIdRef = useRef(null);
   // Becomes true once the initial participant roster has loaded, so we only
   // toast for genuinely *new* arrivals and not the burst of existing members
@@ -307,6 +320,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         connId: candidateConnId,
         userId,
         stream: null,
+        screenStream: null,
         name: resolvedName,
         isScreenSharing: false,
       }];
@@ -358,7 +372,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setLocalStream(stream);
     });
 
-    client.on('remoteStream', ({ connId, userId, stream, isScreenSharing = false }) => {
+    client.on('remoteStream', ({ connId, userId, stream, screenStream, isScreenSharing = false }) => {
       setRemoteStreams(prev => {
         const existingIndex = prev.findIndex(s =>
           (s.connId && connId && s.connId === connId) || (s.userId && userId && s.userId === userId)
@@ -369,6 +383,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
             connId: connId || userId,
             userId,
             stream,
+            screenStream: screenStream || null,
             isScreenSharing,
             name: truncateName(getHumanName({ displayName: userId ? undefined : undefined }, 'Guest')),
           }];
@@ -376,7 +391,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
         return prev.map((s, index) =>
           index === existingIndex
-            ? { ...s, connId: connId || s.connId, userId: userId || s.userId, stream, isScreenSharing }
+            ? {
+                ...s,
+                connId: connId || s.connId,
+                userId: userId || s.userId,
+                stream,
+                screenStream: screenStream || s.screenStream || null,
+                isScreenSharing,
+              }
             : s
         );
       });
@@ -422,17 +444,47 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     client.on('screenShareRejected', (payload) => {
       // Server rejected our screen share (someone else is already sharing).
       screenShareRejectedRef.current = true;
+      clearScreenShareWatchdog();
       if (webrtcClientRef.current?.screenStream) {
         webrtcClientRef.current?.stopScreenShare();
       }
       setScreenStream(null);
       setIsScreenSharing(false);
+      isScreenSharingRef.current = false;
       Toast.show({
         type: 'warning',
         text1: 'Screen share declined',
         text2: payload?.reason === 'another-participant-already-sharing'
           ? 'Another participant is already sharing their screen'
           : 'Unable to start screen sharing',
+      });
+    });
+
+    // Ground truth that our current screen share is actually visible
+    // somewhere: a viewer only sends this once real frames start arriving on
+    // their end (see webrtcClient's watchScreenTrackForAck).
+    client.on('screenShareAck', ({ connId, userId: viewerUserId }) => {
+      if (!isScreenSharingRef.current || !connId) return;
+      if (screenShareViewerConnIdsRef.current.has(connId)) return;
+      console.log('[ScreenShare] Viewer confirmed receiving our screen:', { connId, viewerUserId });
+      screenShareViewerConnIdsRef.current = new Set(screenShareViewerConnIdsRef.current).add(connId);
+      setScreenShareViewerConnIds(screenShareViewerConnIdsRef.current);
+    });
+
+    // Surface connection trouble specifically while we're sharing, since a
+    // dropped/failed peer connection silently blinds that one viewer without
+    // anything else in the UI changing.
+    client.on('connectionStateChange', ({ connId, state }) => {
+      if (!isScreenSharingRef.current) return;
+      if (state !== 'failed' && state !== 'disconnected') return;
+      console.warn('[ScreenShare] Peer connection went', state, 'while sharing:', connId);
+      const peer = participantsRef.current.find(part => (part.connId || part.payload?.connId) === connId);
+      const peerName = peer?.displayName || peer?.payload?.displayName || peer?.name || 'a participant';
+      Toast.show({
+        type: 'warning',
+        text1: 'Screen share may be interrupted',
+        text2: `Connection to ${truncateName(peerName)} is having trouble`,
+        position: 'top',
       });
     });
 
@@ -756,8 +808,19 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     }
   };
 
+  const clearScreenShareWatchdog = () => {
+    if (screenShareWatchdogRef.current) {
+      clearTimeout(screenShareWatchdogRef.current);
+      screenShareWatchdogRef.current = null;
+    }
+    screenShareViewerConnIdsRef.current = new Set();
+    setScreenShareViewerConnIds(new Set());
+  };
+
   const stopLocalScreenShare = async ({ notify = true } = {}) => {
     const client = webrtcClientRef.current;
+
+    clearScreenShareWatchdog();
 
     try {
       await client?.stopScreenShare();
@@ -767,6 +830,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
     setScreenStream(null);
     setIsScreenSharing(false);
+    isScreenSharingRef.current = false;
 
     if (notify) {
       client?.sendScreenShareStopped();
@@ -791,7 +855,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
         // Push the screen onto every peer connection *before* telling the room,
         // so the announcement can never arrive ahead of the media.
-        await webrtcClientRef.current?.replaceVideoTrack(stream);
+        await webrtcClientRef.current?.replaceScreenShareTrack(stream);
 
         // The server enforces one sharer per room: it either relays
         // `screen-share-started` to the other peers or replies with
@@ -805,6 +869,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
         setScreenStream(stream);
         setIsScreenSharing(true);
+        isScreenSharingRef.current = true;
+        clearScreenShareWatchdog();
 
         try {
           await meetingApi.updateParticipant(meetingId, { isScreenSharing: true });
@@ -817,6 +883,33 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           text1: 'Screen sharing started',
           text2: 'You are now sharing your screen',
         });
+
+        // Give viewers a few seconds to negotiate/unmute and ack, then check
+        // whether *anyone* actually confirmed seeing it. A silent failure
+        // here (e.g. the "safe" screen m-line still not reaching a peer)
+        // would otherwise look identical to a share nobody just happened to
+        // look at yet.
+        const otherPeers = webrtcClientRef.current?.getActiveConnectionCount() || 0;
+        if (otherPeers > 0) {
+          screenShareWatchdogRef.current = setTimeout(() => {
+            if (!isScreenSharingRef.current) return;
+            if (screenShareViewerConnIdsRef.current.size > 0) {
+              console.log('[ScreenShare] Confirmed visible to', screenShareViewerConnIdsRef.current.size, 'participant(s)');
+              return;
+            }
+            console.warn('[ScreenShare] No viewer has acked the share yet', {
+              otherPeers,
+              elapsedMs: 8000,
+            });
+            Toast.show({
+              type: 'warning',
+              text1: 'Screen share not confirmed',
+              text2: "Other participants may not be seeing your screen. Check your connection and try re-sharing if it doesn't clear up.",
+              position: 'top',
+              visibilityTime: 6000,
+            });
+          }, 8000);
+        }
       } else {
         await stopLocalScreenShare();
         Toast.show({
@@ -826,7 +919,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         });
       }
     } catch (error) {
+      clearScreenShareWatchdog();
       setIsScreenSharing(false);
+      isScreenSharingRef.current = false;
       setScreenStream(null);
       const isCancelled = /cancel|denied|permission/i.test(error?.message || '');
       Toast.show({
@@ -920,6 +1015,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+
+    if (screenShareWatchdogRef.current) {
+      clearTimeout(screenShareWatchdogRef.current);
+      screenShareWatchdogRef.current = null;
     }
 
     // Stop the polling interval
@@ -1026,6 +1126,10 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     participantsRef.current = participants;
   }, [participants]);
 
+  useEffect(() => {
+    isScreenSharingRef.current = isScreenSharing;
+  }, [isScreenSharing]);
+
   // Keep display names synced onto remote stream entries so the UI can label
   // each tile even when the name arrives after the first media track.
   useEffect(() => {
@@ -1065,6 +1169,10 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     isMicrophoneEnabled,
     isScreenSharing,
     screenStream,
+    // How many participants have actually confirmed (via screen-share-ack)
+    // that our current share is rendering real frames for them -- see
+    // handleToggleScreenShare's watchdog for what happens when this stays 0.
+    screenShareViewerCount: screenShareViewerConnIds.size,
     meetingTitle,
     userRole,
     meetingData,

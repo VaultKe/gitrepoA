@@ -45,6 +45,13 @@ export const SIGNALING_MESSAGE_TYPES = {
   SCREEN_SHARE_STARTED: 'screen-share-started',
   SCREEN_SHARE_STOPPED: 'screen-share-stopped',
   SCREEN_SHARE_REJECTED: 'screen-share-rejected',
+  // Sent by a receiver back to the sharer the moment the receiver's screen
+  // video track actually starts delivering frames (track 'unmute'), not just
+  // when it was negotiated. This is the only ground-truth signal that a
+  // screen share is actually visible somewhere -- everything else (local
+  // "sharing" state, a successful replaceTrack call, a connected ICE state)
+  // can be true while the other side still sees nothing.
+  SCREEN_SHARE_ACK: 'screen-share-ack',
 };
 
 // Lazy native module loader to avoid bundling react-native-webrtc on web
@@ -124,9 +131,11 @@ class WebRTCClient {
     this.reconnectDelay = 600;
     this.platformClasses = null;
     this.pendingIceCandidates = new Map();
-    // connId -> RTCRtpSender carrying our outgoing video, so the same m-line is
-    // reused when swapping camera <-> screen.
-    this.videoSenders = new Map();
+    // connId -> RTCRtpSender/RTCRtpTransceiver for the dedicated screen-share
+    // m-line (see createPeerConnection). Screen sharing only ever touches
+    // these, never the camera sender above.
+    this.screenSenders = new Map();
+    this.screenTransceivers = new Map();
     // connId -> { hasNegotiated, renegotiatePending }
     this.negotiationStates = new Map();
     // TURN servers handed back by the room join response (see setIceServers).
@@ -291,9 +300,10 @@ class WebRTCClient {
 
     await stopScreenCaptureService();
 
-    // Restore the camera track in every peer connection (or clear the sender
-    // when there is no camera, so peers don't sit on the last screen frame).
-    await this.replaceVideoTrack(this.localStream);
+    // Clear the outgoing track on the dedicated screen m-line for every peer.
+    // The camera m-line is never touched by screen sharing, so there is
+    // nothing to restore there.
+    await this.replaceScreenShareTrack(null);
 
     this.emit('screenShareStopped');
   }
@@ -504,6 +514,14 @@ class WebRTCClient {
         this.emit('screenShareRejected', message.payload || {});
         break;
 
+      case SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_ACK:
+        console.log('[ScreenShare] Received viewer ack -- frames are actually arriving there:', {
+          fromConnId: message.connId,
+          fromUserId: message.userId,
+        });
+        this.emit('screenShareAck', { connId: message.connId, userId: message.userId });
+        break;
+
       default:
         console.log('Unknown signaling message:', message.type);
     }
@@ -522,6 +540,19 @@ class WebRTCClient {
     this.sendSignalingMessage({
       type: SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_STOPPED,
       roomId: this.roomId,
+    });
+  }
+
+  // Tells the sharer at `sharerConnId` that their screen is actually
+  // rendering real frames on our end. Sent once per incoming screen track,
+  // from handleRemoteTrack's 'unmute' listener.
+  sendScreenShareAck(sharerConnId) {
+    if (!sharerConnId) return;
+    console.log('[ScreenShare] Sending viewer ack to sharer:', sharerConnId);
+    this.sendSignalingMessage({
+      type: SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_ACK,
+      roomId: this.roomId,
+      target: sharerConnId,
     });
   }
 
@@ -555,32 +586,40 @@ class WebRTCClient {
     // we don't drop them (and thus fail to connect) due to ordering.
     this.pendingIceCandidates.set(remoteConnId, []);
 
-    // Choose the tracks that should go OUT to this remote peer.
-    // While screen sharing, the outgoing video must be the screen (not the
-    // camera), so participants who join mid-share still receive the shared
-    // screen. Audio always follows the local microphone when available.
-    let outgoingVideo = null;
-    let outgoingAudio = null;
-
+    // Dedicated, always-negotiated screen-share video slot. Added first, on
+    // every connection, unconditionally — so starting/stopping a share later
+    // is always a plain replaceTrack() on an m-line that's already been
+    // through one full offer/answer, never a fresh mid-call renegotiation.
+    // That distinction matters: react-native-webrtc's replaceTrack() silently
+    // no-ops on native failure (it swallows the error instead of throwing),
+    // and swapping the *camera* sender's track from a camera-sourced track to
+    // a screen-capture-sourced one is exactly the case that trips it — the
+    // share never reached any peer even though the "sharing" signal did.
+    // Reserving this slot up front sidesteps that failure mode entirely: it's
+    // negotiated once, and every later toggle just changes what's on the wire
+    // for an m-line the other side is already listening on. `sendrecv` (not
+    // sendonly) because either side of this pairwise connection may end up
+    // being the one who shares, at different times.
+    const screenTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
+    this.screenSenders.set(remoteConnId, screenTransceiver.sender);
+    this.screenTransceivers.set(remoteConnId, screenTransceiver);
     if (this.screenStream) {
-      outgoingVideo = this.screenStream.getVideoTracks()[0] || null;
-      console.log('[ScreenShare] Using screen stream for outgoing video, connId:', remoteConnId);
+      const screenTrack = this.screenStream.getVideoTracks()[0];
+      if (screenTrack) {
+        screenTransceiver.sender.replaceTrack(screenTrack).catch(() => {});
+      }
     }
-    if (!outgoingVideo && this.localStream) {
-      outgoingVideo = this.localStream.getVideoTracks()[0] || null;
-    }
-    if (this.localStream) {
-      outgoingAudio = this.localStream.getAudioTracks()[0] || null;
-    }
+
+    // Camera/mic always go out as-is, independent of screen-share state —
+    // this m-line is never touched by screen sharing any more.
+    const outgoingVideo = this.localStream?.getVideoTracks()[0] || null;
+    let outgoingAudio = this.localStream?.getAudioTracks()[0] || null;
     if (!outgoingAudio && this.screenStream) {
       outgoingAudio = this.screenStream.getAudioTracks()[0] || null;
     }
 
     if (outgoingVideo) {
-      const videoSender = pc.addTrack(outgoingVideo, this.screenStream || this.localStream);
-      if (videoSender) {
-        this.videoSenders.set(remoteConnId, videoSender);
-      }
+      pc.addTrack(outgoingVideo, this.localStream);
     }
     if (outgoingAudio && outgoingAudio !== outgoingVideo) {
       pc.addTrack(outgoingAudio, this.localStream || this.screenStream);
@@ -589,7 +628,12 @@ class WebRTCClient {
     this.negotiationStates.set(remoteConnId, { hasNegotiated: false, renegotiatePending: false });
 
     pc.ontrack = (event) => {
-      this.handleRemoteTrack(remoteConnId, remoteUserId, event);
+      // The dedicated screen m-line is the only transceiver we add explicitly
+      // (addTransceiver above); every other video/audio track was added via
+      // addTrack. Comparing by reference tells camera/mic tracks apart from
+      // the screen-share track without relying on ordering or track ids.
+      const isScreenTrack = event.transceiver === screenTransceiver;
+      this.handleRemoteTrack(remoteConnId, remoteUserId, event, isScreenTrack);
     };
 
     // Renegotiation is driven explicitly by renegotiate() when tracks change.
@@ -753,7 +797,7 @@ class WebRTCClient {
     this.pendingIceCandidates.delete(connId);
   }
 
-  handleRemoteTrack(connId, userId, event) {
+  handleRemoteTrack(connId, userId, event, isScreenTrack = false) {
     const { MediaStream } = this.ensurePlatformClasses();
 
     // Guard against missing WebRTC support
@@ -766,26 +810,40 @@ class WebRTCClient {
       connId,
       trackKind: event.track?.kind,
       trackId: event.track?.id,
+      isScreenTrack,
       hasEntry: this.remoteStreams.has(connId),
     });
 
     if (!this.remoteStreams.has(connId)) {
-      this.remoteStreams.set(connId, { stream: new MediaStream(), userId, isScreenSharing: false });
+      this.remoteStreams.set(connId, { stream: new MediaStream(), screenStream: null, userId, isScreenSharing: false });
     }
 
     const entry = this.remoteStreams.get(connId);
     if (userId) {
       entry.userId = userId;
     }
-    const stream = entry.stream;
 
-    // When a track is replaced (e.g. camera -> screen share via replaceTrack),
-    // the receiver fires a new ontrack for the same kind. Remove any existing
-    // track of that kind first so we don't accumulate duplicate tracks in the
-    // same MediaStream (which would otherwise show stale camera frames when
-    // someone is screen sharing).
     const incomingTrack = event.track;
-    if (incomingTrack) {
+    if (!incomingTrack) return;
+
+    if (isScreenTrack) {
+      // The screen track lives on its own m-line, so it gets its own
+      // MediaStream entirely -- it must never share one with camera/mic,
+      // otherwise showing/hiding either would stomp on the other.
+      if (!entry.screenStream) {
+        entry.screenStream = new MediaStream();
+      }
+      entry.screenStream.getTracks().forEach(t => entry.screenStream.removeTrack(t));
+      entry.screenStream.addTrack(incomingTrack);
+      // This transceiver is negotiated for every connection up front (see
+      // createPeerConnection), so getting here only means a screen m-line
+      // exists -- not that anyone is actually sharing yet. Only ack once real
+      // frames start arriving.
+      this.watchScreenTrackForAck(connId, incomingTrack);
+    } else {
+      const stream = entry.stream;
+      // Guard against duplicate tracks of the same kind (e.g. a camera
+      // renegotiation) landing in the camera/mic stream.
       stream.getTracks().forEach(t => {
         if (t.kind === incomingTrack.kind) {
           stream.removeTrack(t);
@@ -796,11 +854,50 @@ class WebRTCClient {
 
     console.log('[ScreenShare] Emitting remoteStream:', {
       connId,
-      trackCount: stream.getTracks().length,
+      isScreenTrack,
+      streamTrackCount: entry.stream.getTracks().length,
+      screenTrackCount: entry.screenStream?.getTracks().length || 0,
       isScreenSharing: entry.isScreenSharing,
     });
 
-    this.emit('remoteStream', { connId, userId, stream, isScreenSharing: entry.isScreenSharing });
+    this.emit('remoteStream', {
+      connId,
+      userId,
+      stream: entry.stream,
+      screenStream: entry.screenStream,
+      isScreenSharing: entry.isScreenSharing,
+    });
+  }
+
+  // Sends `screen-share-ack` back to `connId` the moment `track` actually
+  // starts delivering frames. A negotiated track can sit muted indefinitely
+  // (nobody sharing yet, or sharing but the frames never make it here), so
+  // this is the one signal that distinguishes "negotiated" from "actually
+  // visible on the other end" -- see the emitted screen-share-ack handling
+  // in the hook for how the sharer surfaces the result.
+  watchScreenTrackForAck(connId, track) {
+    if (!track) return;
+
+    const ack = () => {
+      console.log('[ScreenShare] Local screen track unmuted -- frames are arriving:', {
+        connId,
+        trackId: track.id,
+      });
+      this.sendScreenShareAck(connId);
+    };
+
+    if (track.muted === false) {
+      // Frames were already flowing by the time we got here (e.g. the share
+      // was already live when this connection was created).
+      ack();
+      return;
+    }
+
+    if (typeof track.addEventListener === 'function') {
+      track.addEventListener('unmute', ack, { once: true });
+    } else {
+      track.onunmute = ack;
+    }
   }
 
   removePeerConnection(connId) {
@@ -810,7 +907,8 @@ class WebRTCClient {
       this.peerConnections.delete(connId);
     }
     this.remoteStreams.delete(connId);
-    this.videoSenders.delete(connId);
+    this.screenSenders.delete(connId);
+    this.screenTransceivers.delete(connId);
     this.negotiationStates.delete(connId);
     if (this.pendingIceCandidates) {
       this.pendingIceCandidates.delete(connId);
@@ -839,7 +937,7 @@ class WebRTCClient {
     if (!entry) {
       // Track the state even before any media has arrived, so the flag is
       // already correct when the first track shows up.
-      this.remoteStreams.set(connId || userId, { stream: null, userId: userId || null, isScreenSharing });
+      this.remoteStreams.set(connId || userId, { stream: null, screenStream: null, userId: userId || null, isScreenSharing });
       return;
     }
 
@@ -874,66 +972,47 @@ class WebRTCClient {
     }
   }
 
-  // Swaps the video track every peer receives from us (camera <-> screen).
-  // `newStream` may be null/without video, which clears the outgoing video.
-  async replaceVideoTrack(newStream) {
+  // Pushes (or clears, when newStream is null) the outgoing screen-share
+  // video track onto every peer connection's dedicated screen m-line. This
+  // never touches the camera sender: replaceTrack() on a sender that has
+  // ever carried a camera-sourced track silently no-ops on native when handed
+  // a screen-capture-sourced track instead (react-native-webrtc swallows the
+  // native failure -- see RTCRtpSender.replaceTrack), which is how a share
+  // used to reach nobody while every local signal said it had started. The
+  // screen sender's track only ever transitions null <-> screen-capture, so
+  // that failure mode never applies to it.
+  async replaceScreenShareTrack(newStream) {
     const videoTrack = newStream?.getVideoTracks?.()[0] || null;
 
-    console.log('[ScreenShare] Replacing outgoing video track in peer connections:', {
+    console.log('[ScreenShare] Replacing outgoing screen track in peer connections:', {
       connections: this.peerConnections.size,
       hasTrack: !!videoTrack,
     });
 
     for (const [connId, pc] of this.peerConnections) {
       try {
-        await this.setOutgoingVideoTrack(connId, pc, videoTrack, newStream);
+        await this.setOutgoingScreenTrack(connId, pc, videoTrack);
       } catch (error) {
-        console.error('[ScreenShare] Failed to swap video track for connection:', connId, error?.message || error);
+        console.error('[ScreenShare] Failed to set screen track for connection:', connId, error?.message || error);
       }
     }
   }
 
-  async setOutgoingVideoTrack(connId, pc, videoTrack, stream) {
-    // Prefer the sender we created for this connection: after a
-    // replaceTrack(null) the sender no longer has a track, so it can't be found
-    // by track kind any more, yet it is still the video m-line we must reuse.
-    let sender = this.videoSenders.get(connId);
+  async setOutgoingScreenTrack(connId, pc, videoTrack) {
+    const sender = this.screenSenders.get(connId);
     if (!sender || !pc.getSenders().includes(sender)) {
-      sender = pc.getSenders().find(s => s.track?.kind === 'video') || null;
+      console.warn('[ScreenShare] No dedicated screen sender for connection:', connId);
+      return;
     }
 
-    if (sender) {
-      await sender.replaceTrack(videoTrack);
+    await sender.replaceTrack(videoTrack);
 
-      // react-native-webrtc's replaceTrack swallows native failures (it just
-      // returns and leaves sender.track untouched), which is exactly how a
-      // screen share ends up never reaching the other side. Detect that and
-      // fall back to adding a new track, which forces a renegotiation.
-      const applied = videoTrack ? sender.track?.id === videoTrack.id : !sender.track;
-      if (applied) {
-        console.log('[ScreenShare] Track replaced for connection:', connId);
-        return;
-      }
-
-      console.warn('[ScreenShare] replaceTrack did not take effect, re-adding track for connection:', connId);
-      try {
-        pc.removeTrack(sender);
-      } catch (e) {
-        console.warn('[ScreenShare] removeTrack failed:', e?.message || e);
-      }
-      this.videoSenders.delete(connId);
+    const applied = videoTrack ? sender.track?.id === videoTrack.id : !sender.track;
+    if (applied) {
+      console.log('[ScreenShare] Screen track replaced for connection:', connId);
+    } else {
+      console.warn('[ScreenShare] Screen replaceTrack did not take effect for connection:', connId);
     }
-
-    if (!videoTrack) return;
-
-    // No video sender yet (e.g. the sharer joined without a camera, so the
-    // offer carried no video m-line). Adding the track triggers renegotiation.
-    console.log('[ScreenShare] Adding video track for connection:', connId);
-    const newSender = pc.addTrack(videoTrack, stream || undefined);
-    if (newSender) {
-      this.videoSenders.set(connId, newSender);
-    }
-    await this.renegotiate(connId, pc);
   }
 
   // Explicitly (re)negotiates a connection. `onnegotiationneeded` is not fired
@@ -1008,7 +1087,8 @@ class WebRTCClient {
     }
 
     this.remoteStreams.clear();
-    this.videoSenders.clear();
+    this.screenSenders.clear();
+    this.screenTransceivers.clear();
     this.negotiationStates.clear();
     this.pendingIceCandidates?.clear();
     this.reconnectAttempts = 0;
@@ -1027,6 +1107,7 @@ class WebRTCClient {
     return Array.from(this.remoteStreams.entries()).map(([connId, entry]) => ({
       connId,
       stream: entry.stream,
+      screenStream: entry.screenStream,
       userId: entry.userId,
       isScreenSharing: entry.isScreenSharing,
     }));

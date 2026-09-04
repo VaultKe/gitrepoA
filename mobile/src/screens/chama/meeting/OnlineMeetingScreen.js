@@ -70,6 +70,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     isMicrophoneEnabled,
     isScreenSharing,
     screenStream,
+    screenShareViewerCount,
     meetingTitle,
     userRole,
     participants,
@@ -287,12 +288,20 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             {expandedData.isLocal ? (
               isScreenSharing ? renderVideoElement(screenStream, true) : (localStream ? renderVideoElement(localStream, true) : renderVideoElement(null, true))
             ) : (
-              renderVideoElement(expandedData.participant.stream, false, expandedData.participant.connId)
+              renderVideoElement(
+                expandedData.participant.isScreenSharing && expandedData.participant.screenStream
+                  ? expandedData.participant.screenStream
+                  : expandedData.participant.stream,
+                false,
+                expandedData.participant.connId
+              )
             )}
             <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
               <Text style={styles.videoLabelText}>
                 {expandedData.isLocal
-                  ? (isScreenSharing ? 'Your Screen' : 'You')
+                  ? (isScreenSharing
+                      ? `Your Screen${screenShareViewerCount > 0 ? ` · Seen by ${screenShareViewerCount}` : ' · Not confirmed seen yet'}`
+                      : 'You')
                   : (expandedData.participant.isScreenSharing
                       ? `${truncateDisplayName(expandedData.participant.name || 'Guest')} (Screen)`
                       : truncateDisplayName(expandedData.participant.name || 'Guest'))}
@@ -315,9 +324,9 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           styles.videoGrid,
           showExpandedView && styles.videoGridWithExpanded
         ]}>
-          {gridRemoteParticipants.map(({ connId, userId, stream, name, isScreenSharing: sharing }) => (
+          {gridRemoteParticipants.map(({ connId, userId, stream, screenStream, name, isScreenSharing: sharing }) => (
             <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
-              {renderVideoElement(stream, false, connId)}
+              {renderVideoElement(sharing && screenStream ? screenStream : stream, false, connId)}
               <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
                 {sharing && (
                   <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
