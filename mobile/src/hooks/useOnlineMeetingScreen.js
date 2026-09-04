@@ -347,6 +347,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const initializeWebRTC = async (connectionData) => {
     const client = createWebRTCClient();
     webrtcClientRef.current = client;
+    // Without this, every peer connection was STUN-only: fine on the same
+    // network, but two participants on separate mobile-data NATs would never
+    // find each other's media path (signaling still works since it's not
+    // peer-to-peer), so their camera/screen just never showed up for the
+    // other side.
+    client.setIceServers(connectionData.turn, connectionData.turnCredentials);
 
     client.on('localStream', (stream) => {
       setLocalStream(stream);

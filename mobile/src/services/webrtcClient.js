@@ -129,6 +129,36 @@ class WebRTCClient {
     this.videoSenders = new Map();
     // connId -> { hasNegotiated, renegotiatePending }
     this.negotiationStates = new Map();
+    // TURN servers handed back by the room join response (see setIceServers).
+    this.extraIceServers = [];
+  }
+
+  // STUN alone can only connect two peers when at least one of them has a
+  // directly reachable (or easily NAT-reflexive) address. Two peers behind a
+  // symmetric or carrier-grade NAT — the common case on mobile data — can
+  // never find each other's real address that way, so their media (camera,
+  // screen share) silently never arrives even though the WebSocket signaling
+  // path keeps working fine (it isn't peer-to-peer, so it doesn't need NAT
+  // traversal). A TURN relay is the only fix for that pairing. The room join
+  // response already returns TURN credentials; this just has to be plugged
+  // into the peer connection config, which it previously wasn't.
+  setIceServers(turnUrls = [], turnCredentials = []) {
+    this.extraIceServers = (turnUrls || [])
+      .filter(Boolean)
+      .map((url, index) => {
+        const cred = turnCredentials?.[index] || '';
+        const sepIndex = cred.indexOf(':');
+        if (sepIndex <= 0) return { urls: url };
+        return {
+          urls: url,
+          username: cred.slice(0, sepIndex),
+          credential: cred.slice(sepIndex + 1),
+        };
+      });
+  }
+
+  getIceServers() {
+    return [...WEBRTC_CONFIG.iceServers, ...this.extraIceServers];
   }
 
   ensurePlatformClasses() {
@@ -519,7 +549,7 @@ class WebRTCClient {
       return null;
     }
 
-    const pc = new RTCPeerConnection(WEBRTC_CONFIG);
+    const pc = new RTCPeerConnection({ ...WEBRTC_CONFIG, iceServers: this.getIceServers() });
 
     // Buffer ICE candidates that arrive before a remote description is set so
     // we don't drop them (and thus fail to connect) due to ordering.
