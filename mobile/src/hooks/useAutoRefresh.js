@@ -21,15 +21,17 @@ export const useAutoRefresh = (refreshFunction, options = {}) => {
 
   // Handle app state changes (foreground/background)
   const handleAppStateChange = useCallback((nextAppState) => {
+    const safeNext = typeof nextAppState === 'string' ? nextAppState : '';
+    const safePrev = typeof appStateRef.current === 'string' ? appStateRef.current : '';
     if (
       enableOnFocus &&
-      appStateRef.current.match(/inactive|background/) &&
-      nextAppState === 'active'
+      safePrev.match(/inactive|background/) &&
+      safeNext === 'active'
     ) {
       DevHelper.log('🔄 App became active, refreshing data...');
       refreshFunction();
     }
-    appStateRef.current = nextAppState;
+    appStateRef.current = safeNext;
   }, [refreshFunction, enableOnFocus]);
 
   // Setup interval refresh

@@ -28,7 +28,8 @@ class NotificationService {
 
   setupAppStateListener() {
     this.appStateListener = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && !webSocketService.isConnected) {
+      const safeState = typeof nextAppState === 'string' ? nextAppState : '';
+      if (safeState === 'active' && !webSocketService.isConnected) {
         webSocketService.connect();
       }
     });

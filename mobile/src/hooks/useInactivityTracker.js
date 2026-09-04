@@ -109,15 +109,20 @@ const useInactivityTracker = (enabled = true) => {
     } else {
       // Native: listen to AppState changes AND touch events
       const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-        if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        // Guard against null/undefined/empty nextState — some Android RN
+        // versions briefly emit non-string values during transitions, and
+        // calling .match() on those crashes the JS bridge.
+        const safeNext = typeof nextState === 'string' ? nextState : '';
+        const safePrev = typeof appStateRef.current === 'string' ? appStateRef.current : '';
+        if (safePrev.match(/inactive|background/) && safeNext === 'active') {
           // App came to foreground - check if we exceeded inactivity timeout
           checkInactivity();
-        } else if (nextState.match(/inactive|background/)) {
+        } else if (safeNext.match(/inactive|background/)) {
           // App going to background - update last activity so we don't
           // immediately logout when returning if within timeout
           updateLastActivity();
         }
-        appStateRef.current = nextState;
+        appStateRef.current = safeNext;
       });
 
       // Periodic check for inactivity

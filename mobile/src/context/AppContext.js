@@ -561,7 +561,11 @@ const AppContext = createContext();
         // Stop loading immediately to show dashboard
         dispatch({ type: ActionTypes.SET_LOADING, payload: false });
 
-        // Load data in background (non-blocking) with lightning-fast preloading
+        // Load data in background (non-blocking) with lightning-fast preloading.
+        // Give the dashboard time to mount and render first so the user sees
+        // a responsive UI before any heavy parallel network work kicks in
+        // (important on native Android where 5+ parallel requests right after
+        // login can blow past the network stack and force-close the app).
         setTimeout(async () => {
           try {
             // Initialize lightning data service for the user
@@ -583,15 +587,23 @@ const AppContext = createContext();
               await loadUserChamas();
             }
 
-            // Start WebSocket connection with real-time updates (wired via cacheManagerService -> websocket)
-            webSocketService.connect().then(() => {
-            }).catch((wsError) => {
-              console.warn('WebSocket connection failed, using polling fallback:', wsError);
-            });
+            // Defer WebSocket until after the UI is fully settled — establishing
+            // a socket immediately on top of 5 parallel preload requests has
+            // been observed to crash the native bridge on Android.
+            setTimeout(() => {
+              try {
+                webSocketService.connect().then(() => {
+                }).catch((wsError) => {
+                  console.warn('WebSocket connection failed, using polling fallback:', wsError);
+                });
+              } catch (wsSyncError) {
+                console.warn('WebSocket connect threw synchronously:', wsSyncError);
+              }
+            }, 1500);
           } catch (error) {
             console.warn('Background data loading failed:', error);
           }
-        }, 100); // Small delay to ensure UI renders first
+        }, 600); // Defer to let the dashboard render first
 
         return { 
           success: true, 
@@ -726,7 +738,10 @@ const AppContext = createContext();
         // Stop loading immediately to show dashboard
         dispatch({ type: ActionTypes.SET_LOADING, payload: false });
 
-        // Load data in background (non-blocking)
+        // Load data in background (non-blocking). Defer so the dashboard
+        // mounts before heavy parallel network work begins — important on
+        // native Android where the combined pressure of 5+ parallel requests
+        // and a synchronous WebSocket dial can force-close the app.
         setTimeout(async () => {
           try {
             // Load local data first (faster)
@@ -735,15 +750,21 @@ const AppContext = createContext();
             // Then load remote data
             await loadUserChamas();
 
-            // Initialize WebSocket connection (non-critical)
-            webSocketService.connect().then(() => {
-            }).catch((wsError) => {
-              console.warn('WebSocket connection failed after registration:', wsError);
-            });
+            // Defer the WebSocket dial until after the UI is settled.
+            setTimeout(() => {
+              try {
+                webSocketService.connect().then(() => {
+                }).catch((wsError) => {
+                  console.warn('WebSocket connection failed after registration:', wsError);
+                });
+              } catch (wsSyncError) {
+                console.warn('WebSocket connect threw synchronously:', wsSyncError);
+              }
+            }, 1500);
           } catch (error) {
             console.warn('Background data loading after registration failed:', error);
           }
-        }, 100); // Small delay to ensure UI renders first
+        }, 600); // Defer to let the dashboard render first
 
         return { success: true };
       } else {

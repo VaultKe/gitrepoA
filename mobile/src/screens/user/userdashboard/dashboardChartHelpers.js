@@ -163,9 +163,10 @@ export const buildContributionTrendSeries = (transactions, points = 6) => {
 };
 
 export const getTrendPercent = (series) => {
-  if (!series || series.length < 2) return 0;
-  const first = series[0];
-  const last = series[series.length - 1];
+  if (!Array.isArray(series) || series.length < 2) return 0;
+  const first = Number(series[0]);
+  const last = Number(series[series.length - 1]);
+  if (!isFinite(first) || !isFinite(last)) return 0;
   if (!first) return last > 0 ? 100 : 0;
   return ((last - first) / first) * 100;
 };
@@ -182,13 +183,17 @@ export const getLastMonthsLabels = (count = 6) => {
 };
 
 export const formatCompact = (n) => {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K`;
-  return `${Math.round(n)}`;
+  const value = Number(n);
+  if (!isFinite(value)) return '0';
+  if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (Math.abs(value) >= 1000) return `${Math.round(value / 1000)}K`;
+  return `${Math.round(value)}`;
 };
 
 // Builds a smooth path (quadratic midpoint technique) through a set of points
 export const buildSmoothPath = (points) => {
+  if (!Array.isArray(points) || points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
   let path = `M ${points[0].x} ${points[0].y}`;
   for (let i = 0; i < points.length - 1; i++) {
     const curr = points[i];
@@ -204,19 +209,22 @@ export const buildSmoothPath = (points) => {
 // Small filled area mini-chart used inside each stat tile
 export const MiniAreaChart = ({ data = [], color, width = 84, height = 44, gradientId }) => {
   if (!data || data.length < 2) return null;
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const points = data.map((v, i) => ({
-    x: (i * width) / (data.length - 1),
-    y: height - ((v - min) / range) * (height - 8) - 4,
+  const safeWidth = Math.max(Number(width) || 0, 1);
+  const safeHeight = Math.max(Number(height) || 0, 1);
+  const numericData = data.map(v => (typeof v === 'number' && !isNaN(v) ? v : 0));
+  const max = Math.max(...numericData);
+  const min = Math.min(...numericData);
+  const range = (max - min) || 1;
+  const points = numericData.map((v, i) => ({
+    x: (i * safeWidth) / (numericData.length - 1),
+    y: safeHeight - ((v - min) / range) * (safeHeight - 8) - 4,
   }));
   const linePath = buildSmoothPath(points);
   const last = points[points.length - 1];
-  const areaPath = `${linePath} L ${last.x} ${height} L 0 ${height} Z`;
+  const areaPath = `${linePath} L ${last.x} ${safeHeight} L 0 ${safeHeight} Z`;
 
   return (
-    <Svg width={width} height={height}>
+    <Svg width={safeWidth} height={safeHeight}>
       <Defs>
         <SvgLinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={color} stopOpacity={0.4} />
@@ -232,18 +240,21 @@ export const MiniAreaChart = ({ data = [], color, width = 84, height = 44, gradi
 
 // Larger version used in the Wallet Overview card
 export const WalletTrendChart = ({ data = [], color, width: chartWidth, height = 140, gradientId }) => {
-  if (!data || data.length < 2 || chartWidth <= 0) return null;
-  const max = Math.max(...data, 1);
-  const points = data.map((v, i) => ({
-    x: (i * chartWidth) / (data.length - 1),
-    y: height - (v / max) * (height - 10) - 4,
+  if (!data || data.length < 2 || !chartWidth || chartWidth <= 0) return null;
+  const safeWidth = Math.max(Number(chartWidth) || 0, 1);
+  const safeHeight = Math.max(Number(height) || 0, 1);
+  const numericData = data.map(v => (typeof v === 'number' && !isNaN(v) ? v : 0));
+  const max = Math.max(...numericData, 1);
+  const points = numericData.map((v, i) => ({
+    x: (i * safeWidth) / (numericData.length - 1),
+    y: safeHeight - (v / max) * (safeHeight - 10) - 4,
   }));
   const linePath = buildSmoothPath(points);
   const last = points[points.length - 1];
-  const areaPath = `${linePath} L ${last.x} ${height} L 0 ${height} Z`;
+  const areaPath = `${linePath} L ${last.x} ${safeHeight} L 0 ${safeHeight} Z`;
 
   return (
-    <Svg width={chartWidth} height={height}>
+    <Svg width={safeWidth} height={safeHeight}>
       <Defs>
         <SvgLinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={color} stopOpacity={0.35} />
