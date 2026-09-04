@@ -411,12 +411,13 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 	// Handle signaling messages. This blocks until the connection closes.
 	client.ReadPump(func(msg *signaling.SignalingMessage) error {
 		switch msg.Type {
-		case "offer", "answer", "ice-candidate":
-			// Route WebRTC negotiation messages to the intended target only.
-			// The client sets `target` to the remote connection id. Broadcasting
-			// these to the whole room caused every participant to receive offers
-			// they never initiated, which broke peer-connection negotiation and
-			// let senders receive their own offers back (self-loops).
+		case "offer", "answer", "ice-candidate", "screen-share-ack":
+			// Route WebRTC negotiation messages, and the screen-share viewer
+			// ack, to the intended target only. The client sets `target` to the
+			// remote connection id. Broadcasting these to the whole room caused
+			// every participant to receive offers they never initiated, which
+			// broke peer-connection negotiation and let senders receive their
+			// own offers back (self-loops).
 			if msg.Target != "" {
 				h.signalingHub.SendToConnection(msg.Target, msg)
 			} else {
