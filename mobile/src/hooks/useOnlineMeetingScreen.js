@@ -851,9 +851,21 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     }
   };
 
+  // Leaving only ever removes the clicking participant, the same for every
+  // role — an online meeting keeps running for everyone else, same as
+  // Zoom/Meet/Teams. react-native-web's Alert.alert() is a no-op stub (it
+  // never shows anything and never calls a button handler), so on web the
+  // button silently did nothing; window.confirm is the web-safe equivalent.
   const handleEndCall = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to leave the meeting?')) {
+        leaveMeeting();
+      }
+      return;
+    }
+
     Alert.alert(
-      'End Meeting',
+      'Leave Meeting',
       'Are you sure you want to leave the meeting?',
       [
         { text: 'Cancel', style: 'cancel' },

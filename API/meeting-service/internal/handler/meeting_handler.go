@@ -63,6 +63,32 @@ func NewMeetingHandler(cfg *config.Config, rm *room.RoomManager, sfu *webrtc.SFU
 			return
 		}
 
+		// Mark the participant as left in the room manager too. Without this,
+		// an unclean disconnect (app killed, network drop, tab closed) only
+		// ever reached currently-connected sockets via the broadcast below —
+		// the roster REST endpoint and the polling loop read straight from
+		// roomManager, so a ghost participant who never sent an explicit
+		// "leave" stayed listed as present indefinitely, showing up as
+		// "already joined" to anyone who opened the meeting afterwards.
+		//
+		// Skip it if the same user already has another live connection in the
+		// room (a reconnect can register the new socket before this stale one
+		// times out via the ping deadline) — otherwise a brief network blip
+		// would wrongly drop a still-present participant.
+		stillConnected := false
+		for other := range h.signalingHub.GetRoomClients(info.RoomID) {
+			if other.UserID == info.UserID {
+				stillConnected = true
+				break
+			}
+		}
+		if !stillConnected {
+			if err := h.roomManager.LeaveRoom(info.RoomID, info.UserID); err != nil {
+				fmt.Printf("[Signal] LeaveRoom on disconnect failed | roomID=%s userID=%s err=%v\n",
+					info.RoomID, info.UserID, err)
+			}
+		}
+
 		// Broadcast participant-left to the room
 		h.signalingHub.BroadcastToRoom(info.RoomID, &signaling.SignalingMessage{
 			Type:        "participant-left",
