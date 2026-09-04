@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Alert, BackHandler, Linking, PermissionsAndroid, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
@@ -25,6 +25,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
+  // Identity of the participant currently sharing their screen, as announced by
+  // the signaling server: { connId, userId }. Kept separately from the stream
+  // list so the flag survives tiles being re-created or re-keyed.
+  const [remoteScreenSharer, setRemoteScreenSharer] = useState(null);
   const [meetingData, setMeetingData] = useState(null);
   const [connectionError, setConnectionError] = useState(
     meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.'
@@ -286,7 +290,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           index === existingIndex
             ? {
                 ...s,
-                connId: candidateConnId,
+                // Only a real signaling connId may overwrite an existing one.
+                // The REST roster has no connId, and letting its userId
+                // fallback win would re-key the tile so later connId-addressed
+                // events (screen share, ICE-driven stream updates) no longer
+                // match it.
+                connId: connId || s.connId || candidateConnId,
                 userId,
                 name: resolvedName,
               }
@@ -369,30 +378,39 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
     client.on('screenShareStarted', (data) => {
       console.log('[Meeting] screenShareStarted event received:', data);
-      if (data && (data.connId || data.userId)) {
-        setRemoteStreams(prev =>
-          prev.map(s =>
-            (s.connId === data.connId || s.userId === data.userId)
-              ? { ...s, connId: data.connId || s.connId, userId: data.userId || s.userId, isScreenSharing: true }
-              : s
-          )
-        );
-      }
+      if (!data || (!data.connId && !data.userId)) return;
+      if (data.userId && data.userId === user?.id) return;
+
+      setRemoteScreenSharer({ connId: data.connId || null, userId: data.userId || null });
+
+      const sharerName = data.displayName || getParticipantName(data.userId);
+      Toast.show({
+        type: 'info',
+        text1: `${truncateName(sharerName)} started sharing their screen`,
+        position: 'top',
+      });
     });
 
     client.on('screenShareStopped', (data) => {
       console.log('[Meeting] screenShareStopped event received:', data);
-      // When local user stops sharing, no data is passed
-      // When remote user stops sharing, data contains { connId, userId }
-      if (data && (data.connId || data.userId)) {
-        setRemoteStreams(prev =>
-          prev.map(s =>
-            (s.connId === data.connId || s.userId === data.userId)
-              ? { ...s, connId: data.connId || s.connId, userId: data.userId || s.userId, isScreenSharing: false }
-              : s
-          )
-        );
-      }
+      // The local user stopping their own share emits no data; a remote one
+      // carries { connId, userId }.
+      if (!data || (!data.connId && !data.userId)) return;
+      if (data.userId && data.userId === user?.id) return;
+
+      setRemoteScreenSharer(prev => {
+        if (!prev) return null;
+        const sameConn = data.connId && prev.connId === data.connId;
+        const sameUser = data.userId && prev.userId === data.userId;
+        return sameConn || sameUser ? null : prev;
+      });
+    });
+
+    // The share was ended outside the app (Android's "Stop sharing"
+    // notification / the browser's sharing bar), so tear our own state down.
+    client.on('screenShareEnded', () => {
+      console.log('[Meeting] Local screen share ended by the system');
+      stopLocalScreenShare({ notify: true });
     });
 
     client.on('screenShareRejected', (payload) => {
@@ -473,6 +491,15 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setRemoteStreams(prev => prev.filter(s =>
         !((message.userId && s.userId === message.userId) || (message.connId && s.connId === message.connId))
       ));
+
+      // If the participant who left was sharing, drop the share so the main
+      // stage falls back to the remaining participants.
+      setRemoteScreenSharer(prev => {
+        if (!prev) return null;
+        const sameConn = message.connId && prev.connId === message.connId;
+        const sameUser = message.userId && prev.userId === message.userId;
+        return sameConn || sameUser ? null : prev;
+      });
 
       // Remove from known IDs so polling doesn't re-add them
       if (message.userId) {
@@ -723,52 +750,69 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     }
   };
 
+  const stopLocalScreenShare = async ({ notify = true } = {}) => {
+    const client = webrtcClientRef.current;
+
+    try {
+      await client?.stopScreenShare();
+    } catch (e) {
+      console.warn('Failed to stop screen capture:', e?.message || e);
+    }
+
+    setScreenStream(null);
+    setIsScreenSharing(false);
+
+    if (notify) {
+      client?.sendScreenShareStopped();
+      try {
+        await meetingApi.updateParticipant(meetingId, { isScreenSharing: false });
+      } catch (e) {
+        console.warn('Failed to sync screen-share state to server:', e?.message);
+      }
+    }
+  };
+
   const handleToggleScreenShare = async () => {
     try {
       if (!isScreenSharing) {
         screenShareRejectedRef.current = false;
-        // Ask the server to coordinate: only one sharer per room. The server
-        // either broadcasts `screenShareStarted` to peers or, if someone else
-        // is already sharing, emits `screenShareRejected` (handled above).
+
+        // Capture first, then announce. Announcing up front made peers switch
+        // to a "screen" tile while it still carried the camera, and left them
+        // showing a phantom share if the capture prompt was cancelled.
+        const stream = await webrtcClientRef.current?.initScreenShare();
+        if (!stream) return;
+
+        // Push the screen onto every peer connection *before* telling the room,
+        // so the announcement can never arrive ahead of the media.
+        await webrtcClientRef.current?.replaceVideoTrack(stream);
+
+        // The server enforces one sharer per room: it either relays
+        // `screen-share-started` to the other peers or replies with
+        // `screen-share-rejected` (handled in initializeWebRTC).
         webrtcClientRef.current?.sendScreenShareStarted();
 
-        // Optimistically start. If the server rejects (screenShareRejected fires
-        // during the await below), we abort before replacing the outgoing track.
-        const screenStream = await webrtcClientRef.current?.initScreenShare();
         if (screenShareRejectedRef.current) {
+          await stopLocalScreenShare({ notify: false });
           return;
         }
-        if (screenStream) {
-          await webrtcClientRef.current?.replaceVideoTrack(screenStream);
-          if (screenShareRejectedRef.current) {
-            // Rejected while capturing; roll back.
-            await webrtcClientRef.current?.stopScreenShare();
-            setScreenStream(null);
-            return;
-          }
-          setScreenStream(screenStream);
-          setIsScreenSharing(true);
-          try {
-            await meetingApi.updateParticipant(meetingId, { isScreenSharing: true });
-          } catch (e) {
-            console.warn('Failed to sync screen-share state to server:', e?.message);
-          }
-          Toast.show({
-            type: 'success',
-            text1: 'Screen sharing started',
-            text2: 'You are now sharing your screen',
-          });
-        }
-      } else {
-        await webrtcClientRef.current?.stopScreenShare();
-        setScreenStream(null);
-        setIsScreenSharing(false);
-        webrtcClientRef.current?.sendScreenShareStopped();
+
+        setScreenStream(stream);
+        setIsScreenSharing(true);
+
         try {
-          await meetingApi.updateParticipant(meetingId, { isScreenSharing: false });
+          await meetingApi.updateParticipant(meetingId, { isScreenSharing: true });
         } catch (e) {
           console.warn('Failed to sync screen-share state to server:', e?.message);
         }
+
+        Toast.show({
+          type: 'success',
+          text1: 'Screen sharing started',
+          text2: 'You are now sharing your screen',
+        });
+      } else {
+        await stopLocalScreenShare();
         Toast.show({
           type: 'success',
           text1: 'Screen sharing stopped',
@@ -778,10 +822,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     } catch (error) {
       setIsScreenSharing(false);
       setScreenStream(null);
+      const isCancelled = /cancel|denied|permission/i.test(error?.message || '');
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: error.message || 'Failed to toggle screen sharing',
+        type: isCancelled ? 'info' : 'error',
+        text1: isCancelled ? 'Screen sharing cancelled' : 'Error',
+        text2: isCancelled ? 'You did not allow screen capture' : (error.message || 'Failed to toggle screen sharing'),
       });
     }
   };
@@ -974,6 +1019,26 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participants.length]);
 
+  // Flag the sharer's tile from the signaling identity rather than trusting the
+  // flag that happened to be attached when a stream event arrived. A tile is
+  // matched on connId *or* userId because the REST roster and the signaling
+  // channel identify participants differently.
+  const decoratedRemoteStreams = useMemo(() => {
+    if (!remoteScreenSharer) {
+      return remoteStreams.some(s => s.isScreenSharing)
+        ? remoteStreams.map(s => (s.isScreenSharing ? { ...s, isScreenSharing: false } : s))
+        : remoteStreams;
+    }
+
+    return remoteStreams.map((s) => {
+      const isSharer = Boolean(
+        (remoteScreenSharer.connId && s.connId === remoteScreenSharer.connId) ||
+        (remoteScreenSharer.userId && s.userId === remoteScreenSharer.userId)
+      );
+      return s.isScreenSharing === isSharer ? s : { ...s, isScreenSharing: isSharer };
+    });
+  }, [remoteStreams, remoteScreenSharer]);
+
   return {
     isConnecting,
     isConnected,
@@ -987,7 +1052,7 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     meetingData,
     connectionError,
     localStream,
-    remoteStreams,
+    remoteStreams: decoratedRemoteStreams,
     chatMessages,
     isChatOpen,
     handleToggleCamera,

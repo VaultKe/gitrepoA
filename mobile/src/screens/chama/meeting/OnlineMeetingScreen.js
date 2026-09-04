@@ -129,14 +129,16 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     if (remoteScreenSharer) {
       return { participant: remoteScreenSharer, isLocal: false };
     }
+    // Our own share outranks a pinned participant: otherwise the auto-pin
+    // (which always picks a remote tile) hid the local screen preview, leaving
+    // the sharer with no way to tell whether their share was actually live.
+    if (isScreenSharing) {
+      return { participant: { stream: screenStream }, isLocal: true };
+    }
     // If user manually pinned someone, show them
     if (pinnedParticipantId) {
       const pinned = remoteStreams.find(s => s.connId === pinnedParticipantId);
       if (pinned) return { participant: pinned, isLocal: false };
-    }
-    // If local user is screen sharing, show local
-    if (isScreenSharing) {
-      return { participant: { stream: screenStream }, isLocal: true };
     }
     // Show active participant
     if (activeParticipant) {

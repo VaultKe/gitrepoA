@@ -72,8 +72,17 @@ func NewMeetingHandler(cfg *config.Config, rm *room.RoomManager, sfu *webrtc.SFU
 			DisplayName: info.DisplayName,
 		})
 
-		// Clean up screen sharing if this client was sharing
-		h.clearScreenSharer(info.RoomID, info.ConnID)
+		// Clean up screen sharing if this client was sharing, and tell the room
+		// so nobody is left staring at a dead screen tile.
+		if h.clearScreenSharer(info.RoomID, info.ConnID) {
+			h.signalingHub.BroadcastToRoom(info.RoomID, &signaling.SignalingMessage{
+				Type:        "screen-share-stopped",
+				RoomID:      info.RoomID,
+				UserID:      info.UserID,
+				ConnID:      info.ConnID,
+				DisplayName: info.DisplayName,
+			})
+		}
 
 		fmt.Printf("[Signal] Client removed | roomID=%s userID=%s connID=%s reason=%d\n",
 			info.RoomID, info.UserID, info.ConnID, info.Reason)
@@ -397,16 +406,23 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			h.activeScreenSharers[roomID] = connID
 			h.ssMu.Unlock()
 
+			// Stamp the sharer's identity onto the broadcast. Clients match the
+			// incoming flag against their own participant tiles, and a tile can
+			// only be resolved by connId *or* userId, so both must be present.
 			msg.ConnID = connID
-			fmt.Printf("[Signal] screen-share-started | roomID=%s connID=%s | broadcasting to room\n", roomID, connID)
+			msg.UserID = firstNonEmpty(client.UserID, userID, msg.UserID)
+			msg.DisplayName = firstNonEmpty(client.DisplayName, msg.DisplayName)
+			fmt.Printf("[Signal] screen-share-started | roomID=%s connID=%s userID=%s | broadcasting to room\n", roomID, connID, msg.UserID)
 			h.signalingHub.BroadcastToRoomExcept(roomID, connID, msg)
 
 		case "screen-share-stopped":
-			h.ssMu.Lock()
-			delete(h.activeScreenSharers, roomID)
-			h.ssMu.Unlock()
+			// Only the active sharer may release the slot; a stale "stopped"
+			// from another peer must not free it for everyone else.
+			h.clearScreenSharer(roomID, connID)
 			msg.ConnID = connID
-			fmt.Printf("[Signal] screen-share-stopped | roomID=%s connID=%s | broadcasting to room\n", roomID, connID)
+			msg.UserID = firstNonEmpty(client.UserID, userID, msg.UserID)
+			msg.DisplayName = firstNonEmpty(client.DisplayName, msg.DisplayName)
+			fmt.Printf("[Signal] screen-share-stopped | roomID=%s connID=%s userID=%s | broadcasting to room\n", roomID, connID, msg.UserID)
 			h.signalingHub.BroadcastToRoomExcept(roomID, connID, msg)
 
 		case "join":
@@ -449,6 +465,7 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			// peer connections immediately instead of waiting for a delayed sync.
 			existing := h.signalingHub.GetRoomClients(roomID)
 			fmt.Printf("[Signal] join | roomID=%s userID=%s connID=%s | clientsInRoom=%d\n", roomID, msg.UserID, connID, h.signalingHub.GetRoomClientCount(roomID))
+			sharerConnID, someoneSharing := h.activeScreenSharer(roomID)
 			for other := range existing {
 				if other.ConnID == connID {
 					continue
@@ -465,6 +482,21 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 						"role":   other.Role,
 					},
 				})
+
+				// Catch the newcomer up on an in-progress screen share, which is
+				// only announced once (when it starts). Without this a participant
+				// who joins mid-share never marks that peer as sharing and so
+				// never promotes the shared screen to the main view.
+				if someoneSharing && other.ConnID == sharerConnID {
+					fmt.Printf("[Signal] join | roomID=%s connID=%s | replaying screen-share-started from %s\n", roomID, connID, sharerConnID)
+					h.signalingHub.SendToConnection(connID, &signaling.SignalingMessage{
+						Type:        "screen-share-started",
+						RoomID:      roomID,
+						UserID:      other.UserID,
+						ConnID:      other.ConnID,
+						DisplayName: other.DisplayName,
+					})
+				}
 			}
 
 		case "leave":
@@ -523,13 +555,34 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 }
 
 // clearScreenSharer removes a connection from the active screen-sharer registry
-// (if it was the one sharing) and is safe to call when there is none.
-func (h *MeetingHandler) clearScreenSharer(roomID, connID string) {
+// (if it was the one sharing) and is safe to call when there is none. It
+// reports whether the connection was in fact the active sharer.
+func (h *MeetingHandler) clearScreenSharer(roomID, connID string) bool {
 	h.ssMu.Lock()
 	defer h.ssMu.Unlock()
 	if existing, ok := h.activeScreenSharers[roomID]; ok && existing == connID {
 		delete(h.activeScreenSharers, roomID)
+		return true
 	}
+	return false
+}
+
+// activeScreenSharer returns the connection id currently sharing in a room.
+func (h *MeetingHandler) activeScreenSharer(roomID string) (string, bool) {
+	h.ssMu.Lock()
+	defer h.ssMu.Unlock()
+	connID, ok := h.activeScreenSharers[roomID]
+	return connID, ok
+}
+
+// firstNonEmpty returns the first non-empty string of the given values.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // GetStats returns meeting service statistics.

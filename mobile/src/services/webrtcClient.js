@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { getMeetingWsUrl } from '../services/meetingConfig';
 import { getMeetingAuthToken } from '../services/meetingApi';
+import { startScreenCaptureService, stopScreenCaptureService } from '../services/screenCaptureService';
 
 // WebRTC configuration for the meeting client
 export const WEBRTC_CONFIG = {
@@ -123,6 +124,11 @@ class WebRTCClient {
     this.reconnectDelay = 600;
     this.platformClasses = null;
     this.pendingIceCandidates = new Map();
+    // connId -> RTCRtpSender carrying our outgoing video, so the same m-line is
+    // reused when swapping camera <-> screen.
+    this.videoSenders = new Map();
+    // connId -> { hasNegotiated, renegotiatePending }
+    this.negotiationStates = new Map();
   }
 
   ensurePlatformClasses() {
@@ -192,7 +198,9 @@ class WebRTCClient {
     }
   }
 
-   async initScreenShare() {
+  async initScreenShare() {
+    let serviceStarted = false;
+
     try {
       const native = loadNativeWebRTC();
 
@@ -202,20 +210,46 @@ class WebRTCClient {
           audio: true,
         });
       } else if (native && native.mediaDevices && typeof native.mediaDevices.getDisplayMedia === 'function') {
-        this.screenStream = await native.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
+        // The mediaProjection foreground service must already be running when
+        // the capturer starts (Android 14+), otherwise the capture is rejected
+        // by the platform and silently yields a track with no frames.
+        serviceStarted = await startScreenCaptureService();
+        // react-native-webrtc's getDisplayMedia takes no constraints; it always
+        // captures the whole screen (and never system audio).
+        this.screenStream = await native.mediaDevices.getDisplayMedia();
       } else {
         throw new Error('Screen sharing is not available on this build');
       }
 
+      this.watchScreenTrackEnded();
       this.emit('screenStream', this.screenStream);
       return this.screenStream;
     } catch (error) {
       console.error('Failed to get screen share:', error);
+      if (serviceStarted) {
+        await stopScreenCaptureService();
+      }
       this.emit('error', { type: 'screen', error });
       throw error;
+    }
+  }
+
+  // The share can be revoked outside the app (Android's "Stop sharing"
+  // notification, the browser's "Stop sharing" bar). Surface that as an event so
+  // the UI and the other participants are told the share is over.
+  watchScreenTrackEnded() {
+    const track = this.screenStream?.getVideoTracks?.()[0];
+    if (!track) return;
+
+    const onEnded = () => {
+      console.log('[ScreenShare] Screen track ended outside the app');
+      this.emit('screenShareEnded');
+    };
+
+    if (typeof track.addEventListener === 'function') {
+      track.addEventListener('ended', onEnded);
+    } else {
+      track.onended = onEnded;
     }
   }
 
@@ -224,12 +258,14 @@ class WebRTCClient {
       this.screenStream.getTracks().forEach(track => track.stop());
       this.screenStream = null;
     }
-    this.emit('screenShareStopped');
 
-    // Restore camera track in peer connections
-    if (this.localStream) {
-      await this.replaceVideoTrack(this.localStream);
-    }
+    await stopScreenCaptureService();
+
+    // Restore the camera track in every peer connection (or clear the sender
+    // when there is no camera, so peers don't sit on the last screen frame).
+    await this.replaceVideoTrack(this.localStream);
+
+    this.emit('screenShareStopped');
   }
 
   async connectSignaling(roomId, userId, participantId, displayName = null) {
@@ -420,6 +456,7 @@ class WebRTCClient {
         this.emit('screenShareStarted', {
           connId: message.connId,
           userId: message.userId,
+          displayName: message.displayName,
         });
         break;
 
@@ -429,6 +466,7 @@ class WebRTCClient {
         this.emit('screenShareStopped', {
           connId: message.connId,
           userId: message.userId,
+          displayName: message.displayName,
         });
         break;
 
@@ -509,33 +547,29 @@ class WebRTCClient {
     }
 
     if (outgoingVideo) {
-      pc.addTrack(outgoingVideo, this.screenStream || this.localStream);
+      const videoSender = pc.addTrack(outgoingVideo, this.screenStream || this.localStream);
+      if (videoSender) {
+        this.videoSenders.set(remoteConnId, videoSender);
+      }
     }
     if (outgoingAudio && outgoingAudio !== outgoingVideo) {
       pc.addTrack(outgoingAudio, this.localStream || this.screenStream);
     }
 
+    this.negotiationStates.set(remoteConnId, { hasNegotiated: false, renegotiatePending: false });
+
     pc.ontrack = (event) => {
       this.handleRemoteTrack(remoteConnId, remoteUserId, event);
     };
 
-    // Handle renegotiation needed (e.g., when adding screen share track after initial connection)
-    pc.onnegotiationneeded = async () => {
-      try {
-        console.log('[ScreenShare] Negotiation needed for connection:', remoteConnId);
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        this.sendSignalingMessage({
-          type: SIGNALING_MESSAGE_TYPES.OFFER,
-          roomId: this.roomId,
-          target: remoteConnId,
-          payload: offer,
-        });
-        console.log('[ScreenShare] Renegotiation offer sent to:', remoteConnId);
-      } catch (err) {
-        console.error('[ScreenShare] Renegotiation failed:', err);
-      }
+    // Renegotiation is driven explicitly by renegotiate() when tracks change.
+    // Acting on negotiationneeded as well would make both peers offer during
+    // the initial exchange (glare) and duplicate every screen-share offer.
+    pc.onnegotiationneeded = () => {
+      const state = this.negotiationStates.get(remoteConnId);
+      if (!state?.hasNegotiated) return;
+      console.log('[ScreenShare] Negotiation needed for connection:', remoteConnId);
+      this.renegotiate(remoteConnId, pc);
     };
 
     pc.onicecandidate = (event) => {
@@ -604,15 +638,45 @@ class WebRTCClient {
       target: message.connId,
       payload: answer,
     });
+
+    this.markNegotiated(message.connId, pc);
   }
 
   async handleAnswer(message) {
     const pc = this.peerConnections.get(message.connId);
-    if (pc) {
+    if (!pc) return;
+
+    // Ignore answers that no longer apply, e.g. the offer they answer was
+    // rolled back because of an offer collision.
+    if (pc.signalingState !== 'have-local-offer') {
+      console.warn('[Meeting] Ignoring answer in signalingState:', pc.signalingState);
+      return;
+    }
+
+    try {
       const { RTCSessionDescription } = this.ensurePlatformClasses();
       await pc.setRemoteDescription(new RTCSessionDescription(message.payload));
       this.flushPendingIceCandidates(message.connId);
+      this.markNegotiated(message.connId, pc);
+    } catch (error) {
+      console.error('[Meeting] Failed to apply answer:', error?.message || error);
     }
+  }
+
+  // Marks the initial offer/answer exchange for a connection as complete and
+  // runs any renegotiation (screen share) that had to wait for it.
+  markNegotiated(connId, pc) {
+    const state = this.negotiationStates.get(connId) || { hasNegotiated: false, renegotiatePending: false };
+    state.hasNegotiated = true;
+
+    if (state.renegotiatePending) {
+      state.renegotiatePending = false;
+      this.negotiationStates.set(connId, state);
+      this.renegotiate(connId, pc);
+      return;
+    }
+
+    this.negotiationStates.set(connId, state);
   }
 
   async handleIceCandidate(message) {
@@ -716,31 +780,43 @@ class WebRTCClient {
       this.peerConnections.delete(connId);
     }
     this.remoteStreams.delete(connId);
+    this.videoSenders.delete(connId);
+    this.negotiationStates.delete(connId);
     if (this.pendingIceCandidates) {
       this.pendingIceCandidates.delete(connId);
     }
     this.emit('peerConnectionRemoved', { connId });
   }
 
-  // Toggles the remote screen-share flag for a connection and re-emits the
-  // remoteStream event so the UI can update its display (e.g. show "Screen"
-  // label / switch the tile to the screen track).
+  // Records the remote screen-share flag for a connection. This deliberately
+  // does NOT re-emit `remoteStream`: that event carries the stream, and when the
+  // flag arrives before the first track it would push a null stream onto a tile
+  // that already had media, turning the sharer's tile into a blank placeholder.
+  // The UI learns about the flag from screenShareStarted/Stopped instead.
   setRemoteScreenShare(connId, userId, isScreenSharing) {
-    let entry = this.remoteStreams.get(connId);
-    let stream = null;
-    if (!entry) {
-      // Track screen-share state even before a remoteStream has arrived so the
-      // flag is correct when the first track does arrive.
-      entry = { stream: null, userId, isScreenSharing };
-      this.remoteStreams.set(connId, entry);
-    } else {
-      entry.isScreenSharing = isScreenSharing;
-      if (userId) {
-        entry.userId = userId;
+    if (!connId && !userId) return;
+
+    let entry = connId ? this.remoteStreams.get(connId) : null;
+    if (!entry && userId) {
+      for (const candidate of this.remoteStreams.values()) {
+        if (candidate.userId && candidate.userId === userId) {
+          entry = candidate;
+          break;
+        }
       }
-      stream = entry.stream;
     }
-    this.emit('remoteStream', { connId, userId: entry.userId, stream, isScreenSharing });
+
+    if (!entry) {
+      // Track the state even before any media has arrived, so the flag is
+      // already correct when the first track shows up.
+      this.remoteStreams.set(connId || userId, { stream: null, userId: userId || null, isScreenSharing });
+      return;
+    }
+
+    entry.isScreenSharing = isScreenSharing;
+    if (userId) {
+      entry.userId = userId;
+    }
   }
 
   toggleAudio(enabled) {
@@ -768,24 +844,101 @@ class WebRTCClient {
     }
   }
 
+  // Swaps the video track every peer receives from us (camera <-> screen).
+  // `newStream` may be null/without video, which clears the outgoing video.
   async replaceVideoTrack(newStream) {
-    const videoTrack = newStream.getVideoTracks()[0];
-    if (!videoTrack) {
-      console.log('[ScreenShare] No video track in new stream');
+    const videoTrack = newStream?.getVideoTracks?.()[0] || null;
+
+    console.log('[ScreenShare] Replacing outgoing video track in peer connections:', {
+      connections: this.peerConnections.size,
+      hasTrack: !!videoTrack,
+    });
+
+    for (const [connId, pc] of this.peerConnections) {
+      try {
+        await this.setOutgoingVideoTrack(connId, pc, videoTrack, newStream);
+      } catch (error) {
+        console.error('[ScreenShare] Failed to swap video track for connection:', connId, error?.message || error);
+      }
+    }
+  }
+
+  async setOutgoingVideoTrack(connId, pc, videoTrack, stream) {
+    // Prefer the sender we created for this connection: after a
+    // replaceTrack(null) the sender no longer has a track, so it can't be found
+    // by track kind any more, yet it is still the video m-line we must reuse.
+    let sender = this.videoSenders.get(connId);
+    if (!sender || !pc.getSenders().includes(sender)) {
+      sender = pc.getSenders().find(s => s.track?.kind === 'video') || null;
+    }
+
+    if (sender) {
+      await sender.replaceTrack(videoTrack);
+
+      // react-native-webrtc's replaceTrack swallows native failures (it just
+      // returns and leaves sender.track untouched), which is exactly how a
+      // screen share ends up never reaching the other side. Detect that and
+      // fall back to adding a new track, which forces a renegotiation.
+      const applied = videoTrack ? sender.track?.id === videoTrack.id : !sender.track;
+      if (applied) {
+        console.log('[ScreenShare] Track replaced for connection:', connId);
+        return;
+      }
+
+      console.warn('[ScreenShare] replaceTrack did not take effect, re-adding track for connection:', connId);
+      try {
+        pc.removeTrack(sender);
+      } catch (e) {
+        console.warn('[ScreenShare] removeTrack failed:', e?.message || e);
+      }
+      this.videoSenders.delete(connId);
+    }
+
+    if (!videoTrack) return;
+
+    // No video sender yet (e.g. the sharer joined without a camera, so the
+    // offer carried no video m-line). Adding the track triggers renegotiation.
+    console.log('[ScreenShare] Adding video track for connection:', connId);
+    const newSender = pc.addTrack(videoTrack, stream || undefined);
+    if (newSender) {
+      this.videoSenders.set(connId, newSender);
+    }
+    await this.renegotiate(connId, pc);
+  }
+
+  // Explicitly (re)negotiates a connection. `onnegotiationneeded` is not fired
+  // reliably by react-native-webrtc, so track changes drive this directly.
+  async renegotiate(connId, pc) {
+    const state = this.negotiationStates.get(connId);
+    if (state && !state.hasNegotiated) {
+      // The initial exchange has not finished. If an offer is already in flight
+      // it cannot carry the new track, so queue a renegotiation for afterwards;
+      // otherwise the upcoming initial offer will include it anyway.
+      if (pc.signalingState !== 'stable') {
+        state.renegotiatePending = true;
+      }
       return;
     }
 
-    console.log('[ScreenShare] Replacing video track in peer connections, count:', this.peerConnections.size);
-    for (const [connId, pc] of this.peerConnections) {
-      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) {
-        console.log('[ScreenShare] Replacing track for connection:', connId);
-        await sender.replaceTrack(videoTrack);
-      } else {
-        // No video sender exists (e.g., user had no camera), add the screen track as a new sender
-        console.log('[ScreenShare] No video sender found, adding new track for connection:', connId);
-        pc.addTrack(videoTrack, newStream);
-      }
+    if (pc.signalingState !== 'stable') {
+      console.log('[ScreenShare] Deferring renegotiation, signalingState:', pc.signalingState);
+      if (state) state.renegotiatePending = true;
+      return;
+    }
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      this.sendSignalingMessage({
+        type: SIGNALING_MESSAGE_TYPES.OFFER,
+        roomId: this.roomId,
+        target: connId,
+        payload: offer,
+      });
+      console.log('[ScreenShare] Renegotiation offer sent to:', connId);
+    } catch (error) {
+      console.error('[ScreenShare] Renegotiation failed for connection:', connId, error?.message || error);
     }
   }
 
@@ -816,6 +969,7 @@ class WebRTCClient {
     if (this.screenStream) {
       this.screenStream.getTracks().forEach(track => track.stop());
       this.screenStream = null;
+      stopScreenCaptureService();
     }
 
     if (this.ws) {
@@ -824,6 +978,8 @@ class WebRTCClient {
     }
 
     this.remoteStreams.clear();
+    this.videoSenders.clear();
+    this.negotiationStates.clear();
     this.pendingIceCandidates?.clear();
     this.reconnectAttempts = 0;
     this.emit('disconnected');
