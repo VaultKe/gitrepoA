@@ -216,13 +216,35 @@ class WebRTCClient {
     try {
       const { MediaStream } = this.ensurePlatformClasses();
 
+      let stream;
       if (Platform.OS === 'web') {
-        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
       } else {
         const native = loadNativeWebRTC();
         if (!native) throw new Error('react-native-webrtc not available');
-        const stream = await native.mediaDevices.getUserMedia(constraints);
-        this.localStream = new MediaStream(stream);
+        const nativeStream = await native.mediaDevices.getUserMedia(constraints);
+        stream = new MediaStream(nativeStream);
+      }
+
+      if (this.localStream) {
+        // Merge into the existing local stream rather than replacing it
+        // outright. getUserMedia() is atomic -- if a caller was only denied
+        // the camera, say, requesting camera+mic together to recover would
+        // fail the whole call again even though the mic was never a problem.
+        // Callers recovering from a partial failure pass constraints for just
+        // the one kind they're re-requesting, and merging here keeps whatever
+        // was already working intact.
+        stream.getTracks().forEach(track => {
+          this.localStream.getTracks()
+            .filter(t => t.kind === track.kind)
+            .forEach(t => {
+              t.stop();
+              this.localStream.removeTrack(t);
+            });
+          this.localStream.addTrack(track);
+        });
+      } else {
+        this.localStream = stream;
       }
 
       this.emit('localStream', this.localStream);
@@ -230,10 +252,41 @@ class WebRTCClient {
     } catch (error) {
       console.error('Failed to get local media:', error);
       this.emit('error', { type: 'media', error });
-      const friendly = new Error(
-        'Camera and microphone access is required to join the meeting. Please allow permissions and try again.'
-      );
+      const wantsVideo = !!constraints?.video;
+      const wantsAudio = !!constraints?.audio;
+      const kind = wantsVideo && wantsAudio ? 'Camera and microphone' : wantsVideo ? 'Camera' : 'Microphone';
+      const friendly = new Error(`${kind} access is required. Please allow permissions and try again.`);
       throw friendly;
+    }
+  }
+
+  // Wires a just-(re)acquired local camera/mic track into every existing peer
+  // connection. toggleVideo()/toggleAudio() alone only flip `enabled` on
+  // tracks that are already attached to a connection's senders -- if the
+  // track didn't exist when a connection was created (permission was denied
+  // at join time and granted later, mid-call), nothing was ever sending it,
+  // so the remote side stays blind/deaf to it until this runs.
+  async attachLocalTrack(kind) {
+    const track = kind === 'video'
+      ? this.localStream?.getVideoTracks?.()[0]
+      : this.localStream?.getAudioTracks?.()[0];
+    if (!track) return;
+
+    for (const [connId, pc] of this.peerConnections) {
+      try {
+        // Exclude the dedicated screen-share sender: it also carries 'video'
+        // tracks, but must never be reused for the camera.
+        const screenSender = this.screenSenders.get(connId);
+        const existingSender = pc.getSenders().find(s => s !== screenSender && s.track?.kind === kind);
+        if (existingSender) {
+          await existingSender.replaceTrack(track);
+        } else {
+          pc.addTrack(track, this.localStream);
+          await this.renegotiate(connId, pc);
+        }
+      } catch (error) {
+        console.error(`[Meeting] Failed to attach local ${kind} track for connection:`, connId, error?.message || error);
+      }
     }
   }
 
@@ -886,7 +939,16 @@ class WebRTCClient {
       this.sendScreenShareAck(connId);
     };
 
-    if (track.muted === false) {
+    // react-native-webrtc marks every freshly negotiated remote track as
+    // unmuted the instant `ontrack` fires (see its RTCPeerConnection source),
+    // regardless of whether any real frames have arrived -- and the screen
+    // m-line here is negotiated up front on every connection, long before
+    // anyone may actually share. Trusting `track.muted` immediately on native
+    // would therefore ack right away, every time, making this whole check a
+    // no-op. Browsers get the initial muted state right (per spec), so the
+    // fast path below is only trustworthy there; native always waits for a
+    // real 'unmute' transition, driven by libwebrtc's own RTP-arrival signal.
+    if (Platform.OS === 'web' && track.muted === false) {
       // Frames were already flowing by the time we got here (e.g. the share
       // was already live when this connection was created).
       ack();

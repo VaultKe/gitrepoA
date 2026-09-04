@@ -22,7 +22,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
-  const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(true);
+  // Meetings join muted by default -- see initializeWebRTC.
+  const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
   // connIds that have confirmed (via screen-share-ack) they are actually
@@ -193,9 +194,6 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         text1: isPreview ? 'Preview mode active' : 'Connected to meeting',
         text2: isPreview ? 'You are previewing the meeting room' : 'You have successfully joined the meeting',
       });
-
-      setIsCameraEnabled(true);
-      setIsMicrophoneEnabled(true);
     } catch (error) {
       console.error('Failed to initialize meeting:', error);
       setConnectionError(error.message);
@@ -632,13 +630,25 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     let stream = null;
     try {
       stream = await client.initLocalMedia();
+      // Meetings join muted by default -- the mic track exists (so unmuting
+      // later never needs to re-request permission) but doesn't transmit
+      // until the user explicitly turns it on.
+      client.toggleAudio(false);
     } catch (mediaError) {
       console.warn('Could not initialize local media, continuing without it:', mediaError);
-      // Keep camera/mic disabled; user can try enabling later
-      setIsCameraEnabled(false);
-      setIsMicrophoneEnabled(false);
     }
     setLocalStream(stream);
+    // Reflect what was actually acquired, not what we hoped for: camera on
+    // only if a video track exists, mic always starts muted. This used to be
+    // force-set to true unconditionally after the meeting finished
+    // connecting (see initializeMeeting), which left the button showing
+    // "on" even when permission had been denied and no track existed --
+    // pressing it then just flipped that already-wrong flag to "off"
+    // (a no-op, since there was nothing to disable) instead of retrying
+    // acquisition, so it looked like the button didn't work until a second
+    // press finally toggled it back to "on" and triggered a real retry.
+    setIsCameraEnabled(!!stream?.getVideoTracks?.().length);
+    setIsMicrophoneEnabled(false);
 
     await client.connectSignaling(
       connectionData.roomId || meetingId,
@@ -702,10 +712,21 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
    const handleToggleCamera = async () => {
     const newState = !isCameraEnabled;
 
-    // If turning on but we have no local stream yet, try to re-acquire media
-    if (newState && !localStream && webrtcClientRef.current) {
+    // If turning on but we don't actually have a camera track yet (denied at
+    // join time, or never requested), acquire just that. Requesting it
+    // together with the mic -- getUserMedia({audio, video}) -- fails the
+    // *entire* call if only one of the two was ever denied, even though the
+    // other permission was fine, which used to make it look like neither
+    // could ever be turned on again.
+    const hasVideoTrack = (webrtcClientRef.current?.localStream?.getVideoTracks?.() || []).length > 0;
+    if (newState && !hasVideoTrack && webrtcClientRef.current) {
       try {
-        await webrtcClientRef.current.initLocalMedia();
+        await webrtcClientRef.current.initLocalMedia({ video: MEDIA_CONSTRAINTS.video });
+        // Existing peer connections were negotiated without a camera m-line
+        // if we joined without one; wire the newly acquired track into them
+        // so the other participants actually receive it too.
+        await webrtcClientRef.current.attachLocalTrack('video');
+        setLocalStream(webrtcClientRef.current.localStream);
       } catch (e) {
         Toast.show({
           type: 'error',
@@ -747,10 +768,17 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const handleToggleMicrophone = async () => {
     const newState = !isMicrophoneEnabled;
 
-    // If turning on but we have no local stream yet, try to re-acquire media
-    if (newState && !localStream && webrtcClientRef.current) {
+    // Mirrors handleToggleCamera: only re-acquire if there's genuinely no
+    // audio track yet (mic permission denied at join time), and scope the
+    // request to audio alone so a camera-only failure can't take the mic
+    // down with it. A fresh track also needs wiring into any peer
+    // connections that were negotiated without an audio m-line.
+    const hasAudioTrack = (webrtcClientRef.current?.localStream?.getAudioTracks?.() || []).length > 0;
+    if (newState && !hasAudioTrack && webrtcClientRef.current) {
       try {
-        await webrtcClientRef.current.initLocalMedia();
+        await webrtcClientRef.current.initLocalMedia({ audio: MEDIA_CONSTRAINTS.audio });
+        await webrtcClientRef.current.attachLocalTrack('audio');
+        setLocalStream(webrtcClientRef.current.localStream);
       } catch (e) {
         Toast.show({
           type: 'error',
