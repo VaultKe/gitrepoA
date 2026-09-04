@@ -396,7 +396,19 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 	// Register client
 	h.signalingHub.RegisterClient(client)
 
-	// Handle signaling messages
+	// Start the write pump before the (blocking) read loop below, so
+	// outgoing messages queued on client.Send -- pings, broadcasts, relayed
+	// offers/answers/ICE candidates -- are actually drained for the whole
+	// lifetime of the connection. Starting it after ReadPump (which only
+	// returns once the connection is already dead) left nothing consuming
+	// client.Send while the connection was alive: pings never went out, nothing
+	// reached the client, and once the 256-message buffer filled up (trickle
+	// ICE alone can do that in seconds) the hub force-closed the raw
+	// connection, which is what surfaced client-side as a repeating
+	// WebSocket code-1006 disconnect/reconnect loop.
+	go client.WritePump()
+
+	// Handle signaling messages. This blocks until the connection closes.
 	client.ReadPump(func(msg *signaling.SignalingMessage) error {
 		switch msg.Type {
 		case "offer", "answer", "ice-candidate":
@@ -549,29 +561,9 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 		return nil
 	})
 
-	// Start write pump
-	go client.WritePump()
-
-	// Wait for connection to close. ReadPump returns when the WebSocket
-	// connection is closed (either gracefully or unexpectedly).
-	// We use a done channel to avoid blocking forever if the client was
-	// already removed from the hub (e.g., due to ping timeout).
-	done := make(chan struct{})
-	go func() {
-		// Block on the Send channel - it will be closed when the client
-		// is removed from the hub via removeClient
-		<-client.Send
-		close(done)
-	}()
-
-	// Also monitor for context cancellation (client disconnected)
-	select {
-	case <-done:
-		// Client Send channel was closed (client removed from hub)
-	case <-c.Request.Context().Done():
-		// HTTP request context cancelled (client disconnected)
-		fmt.Printf("[Signal] Context cancelled | roomID=%s connID=%s\n", roomID, connID)
-	}
+	// ReadPump above already blocked for the entire lifetime of the
+	// connection and only returns once it's closed (gracefully or not), so
+	// there is nothing left to wait for here.
 
 	// Cleanup: ensure the client is removed from the hub and participant-left
 	// is broadcast. The OnClientRemoved callback in NewMeetingHandler handles
