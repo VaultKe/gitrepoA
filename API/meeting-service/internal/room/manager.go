@@ -505,6 +505,48 @@ func (rm *RoomManager) ActiveOnlineMeetingForChama(chamaID, excludeRoomID string
 	return "", false
 }
 
+// Attendee is one person's attendance record for a room.
+type Attendee struct {
+	UserID      string     `json:"userId"`
+	DisplayName string     `json:"displayName"`
+	Role        string     `json:"role"`
+	JoinedAt    time.Time  `json:"joinedAt"`
+	LeftAt      *time.Time `json:"leftAt,omitempty"`
+}
+
+// GetAttendance returns everyone who joined the room at any point, including
+// those who have since left. GetParticipants deliberately reports only who is
+// present right now, which is nobody once a meeting is over -- so it cannot
+// answer "who attended this meeting", which is what a finished meeting's
+// record needs.
+func (rm *RoomManager) GetAttendance(roomID string) ([]*Attendee, error) {
+	rows, err := rm.db.Query(`
+		SELECT user_id, display_name, role, joined_at, left_at
+		FROM participants
+		WHERE room_id = $1
+		ORDER BY joined_at
+	`, roomID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query attendance: %w", err)
+	}
+	defer rows.Close()
+
+	attendees := []*Attendee{}
+	for rows.Next() {
+		var a Attendee
+		var leftAt sql.NullTime
+		if err := rows.Scan(&a.UserID, &a.DisplayName, &a.Role, &a.JoinedAt, &leftAt); err != nil {
+			continue
+		}
+		if leftAt.Valid {
+			a.LeftAt = &leftAt.Time
+		}
+		attendees = append(attendees, &a)
+	}
+
+	return attendees, nil
+}
+
 // LeaveRoom removes a participant from a room.
 func (rm *RoomManager) LeaveRoom(roomID, userID string) error {
 	rm.mu.Lock()

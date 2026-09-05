@@ -174,6 +174,9 @@ func main() {
 		api.GET("/rooms/:roomID", h.GetRoom)
 		api.POST("/rooms/:roomID/end", h.EndRoom)
 		api.GET("/rooms/:roomID/participants", h.GetParticipants)
+		// Who attended -- including people who have since left, which is what
+		// a finished meeting needs and GetParticipants cannot answer.
+		api.GET("/rooms/:roomID/attendance", h.GetRoomAttendance)
 
 		// WebSocket signaling - intentionally NOT behind the JWT auth group.
 		// The meeting client connects here with the userId carried in the JOIN

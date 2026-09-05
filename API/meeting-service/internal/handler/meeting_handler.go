@@ -252,18 +252,29 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	// One chama runs one online meeting at a time. Scheduling already refuses
-	// to create overlapping online meetings, so this is the runtime half of
-	// that same rule -- it catches anything that slipped past scheduling (an
-	// old meeting still live, a room started out of band). It only applies
-	// when the caller told us its chama: without one there is nothing to
-	// compare against, so joins are never blocked by a missing chamaId.
+	// One chama runs one online meeting at a time. Rather than refuse the
+	// meeting the user just chose, close the one that is still running and let
+	// them through: the person opting into this meeting is the clearest signal
+	// of which one should be live, and the stale room is usually one everybody
+	// has already walked away from. Everyone still in it is told it ended, so
+	// nobody is left sitting in a room that no longer exists.
+	// Only applies when the caller told us its chama -- without one there is
+	// nothing to compare against, so joins are never disrupted by a missing
+	// chamaId.
 	if blockingRoomID, busy := h.roomManager.ActiveOnlineMeetingForChama(req.ChamaID, roomID); busy {
-		fmt.Printf("[JoinRoom] blocked | chamaID=%s roomID=%s | already live: %s\n", req.ChamaID, roomID, blockingRoomID)
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "This chama already has an online meeting in progress. Only one online meeting can run at a time — join that one, or wait for it to end.",
+		fmt.Printf("[JoinRoom] chamaID=%s roomID=%s | ending previous live meeting %s\n", req.ChamaID, roomID, blockingRoomID)
+
+		if err := h.roomManager.EndRoom(blockingRoomID); err != nil {
+			fmt.Printf("[JoinRoom] failed to end previous meeting %s: %v\n", blockingRoomID, err)
+		}
+		h.clearScreenSharerForRoom(blockingRoomID)
+		h.signalingHub.BroadcastToRoom(blockingRoomID, &signaling.SignalingMessage{
+			Type:   "room-ended",
+			RoomID: blockingRoomID,
+			Payload: map[string]interface{}{
+				"message": "This meeting was ended because another online meeting started for this chama.",
+			},
 		})
-		return
 	}
 
 	participant, err := h.roomManager.JoinRoom(roomID, userID, req.DisplayName, userRole, req.ChamaID)
@@ -603,6 +614,14 @@ func (h *MeetingHandler) clearScreenSharer(roomID, connID string) bool {
 	return false
 }
 
+// clearScreenSharerForRoom drops a room's screen-share registration outright,
+// whoever held it. Used when a room is ended on everyone's behalf.
+func (h *MeetingHandler) clearScreenSharerForRoom(roomID string) {
+	h.ssMu.Lock()
+	defer h.ssMu.Unlock()
+	delete(h.activeScreenSharers, roomID)
+}
+
 // activeScreenSharer returns the connection id currently sharing in a room.
 func (h *MeetingHandler) activeScreenSharer(roomID string) (string, bool) {
 	h.ssMu.Lock()
@@ -658,6 +677,20 @@ type RoomChatMessage struct {
 }
 
 // SendRoomChatMessage sends a chat message to a room.
+// GetRoomAttendance returns everyone who joined this room, so a finished
+// meeting can show its own attendance record.
+func (h *MeetingHandler) GetRoomAttendance(c *gin.Context) {
+	roomID := c.Param("roomID")
+
+	attendees, err := h.roomManager.GetAttendance(roomID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"attendees": attendees})
+}
+
 func (h *MeetingHandler) SendRoomChatMessage(c *gin.Context) {
 	roomID := c.Param("roomID")
 	userID := getUserID(c)
