@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"vaultke-backend/internal/services"
+	"vaultke-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -91,7 +92,8 @@ func SendChamaInvitation(c *gin.Context) {
 
 	// Parse request body
 	var req struct {
-		Email           string `json:"email" binding:"required,email"`
+		Email           string `json:"email,omitempty"`
+		UserID          string `json:"user_id,omitempty"`
 		PhoneNumber     string `json:"phone_number,omitempty"`
 		Message         string `json:"message,omitempty"`
 		Role            string `json:"role,omitempty"`
@@ -107,14 +109,43 @@ func SendChamaInvitation(c *gin.Context) {
 		return
 	}
 
+	targetEmail := utils.NormalizeEmail(req.Email)
+
+	// Inviting a specific, already-identified account -- e.g. one found via
+	// search, whose email/phone the search API deliberately returns masked
+	// (privacy: a search shouldn't hand out another user's real contact
+	// details). The client can only ever submit that masked value back, so
+	// when it instead tells us *which account* by id, resolve the real email
+	// here, server-side, rather than trusting anything the client sent for it.
+	if req.UserID != "" {
+		var resolvedEmail string
+		err := database.QueryRow("SELECT email FROM users WHERE id = $1", req.UserID).Scan(&resolvedEmail)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Selected user not found",
+			})
+			return
+		}
+		targetEmail = utils.NormalizeEmail(resolvedEmail)
+	}
+
+	if targetEmail == "" || !utils.IsValidEmail(targetEmail) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "A valid email or user_id is required",
+		})
+		return
+	}
+
 	// Send invitation
 	fmt.Printf("  - Chama ID: %s\n", chamaID)
 	fmt.Printf("  - User ID: %s\n", userID.(string))
-	fmt.Printf("  - Email: %s\n", req.Email)
+	fmt.Printf("  - Email: %s\n", targetEmail)
 	fmt.Printf("  - Phone: %s\n", req.PhoneNumber)
 	fmt.Printf("  - Message: %s\n", req.Message)
 
-	invitationID, err := chamaService.SendInvitation(chamaID, userID.(string), req.Email, req.PhoneNumber, req.Message, req.Role, req.RoleName, req.RoleDescription)
+	invitationID, err := chamaService.SendInvitation(chamaID, userID.(string), targetEmail, req.PhoneNumber, req.Message, req.Role, req.RoleName, req.RoleDescription)
 	if err != nil {
 		fmt.Printf("❌ Chama invitation failed: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{

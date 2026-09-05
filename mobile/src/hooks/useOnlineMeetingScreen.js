@@ -143,6 +143,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // registered once in initializeWebRTC and would otherwise close over a
   // stale value.
   const isScreenSharingRef = useRef(false);
+  // Mirrors remoteScreenSharer for the screenTrackMuted/Unmuted listeners,
+  // which are registered once in initializeWebRTC and would otherwise close
+  // over a stale value.
+  const remoteScreenSharerRef = useRef(null);
   // Timer that checks, a few seconds after starting a share, whether anyone
   // has actually acked it -- see handleToggleScreenShare.
   const screenShareWatchdogRef = useRef(null);
@@ -649,6 +653,25 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       });
     });
 
+    // Fast, independent confirmation off the WebRTC track itself (see
+    // webrtcClient's watchScreenTrackLifecycle) rather than the signaling
+    // message above -- a safety net for exactly the case where that message
+    // never arrives. Only acts when it disagrees with what we currently
+    // believe, so the normal signaling-driven path stays untouched.
+    client.on('screenTrackMuted', ({ userId: mutedUserId }) => {
+      if (!mutedUserId || mutedUserId === user?.id) return;
+      if (remoteScreenSharerRef.current?.userId !== mutedUserId) return;
+      console.log('[ScreenShare] Track muted for the current sharer -- verifying with the server:', mutedUserId);
+      verifyRemoteScreenSharer(mutedUserId);
+    });
+
+    client.on('screenTrackUnmuted', ({ userId: unmutedUserId }) => {
+      if (!unmutedUserId || unmutedUserId === user?.id) return;
+      if (remoteScreenSharerRef.current?.userId === unmutedUserId) return;
+      console.log('[ScreenShare] Track unmuted for someone not marked as sharing -- verifying with the server:', unmutedUserId);
+      verifyRemoteScreenSharer(unmutedUserId);
+    });
+
     // The share was ended outside the app (Android's "Stop sharing"
     // notification / the browser's sharing bar), so tear our own state down.
     client.on('screenShareEnded', () => {
@@ -677,7 +700,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
     // Ground truth that our current screen share is actually visible
     // somewhere: a viewer only sends this once real frames start arriving on
-    // their end (see webrtcClient's watchScreenTrackForAck).
+    // their end (see webrtcClient's watchScreenTrackLifecycle).
     client.on('screenShareAck', ({ connId, userId: viewerUserId }) => {
       if (!isScreenSharingRef.current || !connId) return;
       if (screenShareViewerConnIdsRef.current.has(connId)) return;
@@ -916,6 +939,36 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
   const participantUserIdOf = (entry) =>
     entry?.userId || entry?.payload?.userId || entry?.memberId || null;
+
+  // Immediately re-checks the server's record for one participant's
+  // screen-share flag and reconciles remoteScreenSharer to match, instead of
+  // waiting for the next scheduled roster poll (see startParticipantPolling).
+  //
+  // This is the fast path triggered by the WebRTC track's own mute/unmute
+  // transitions (see webrtcClient's watchScreenTrackLifecycle) rather than by
+  // the signaling `screen-share-started`/`stopped` messages. Those media-plane
+  // transitions alone aren't trustworthy enough to act on blindly -- a track
+  // can go quiet just because someone is sharing a static, unchanging screen,
+  // not because they stopped -- so every trigger is confirmed against the
+  // server before anything actually changes.
+  const verifyRemoteScreenSharer = async (candidateUserId) => {
+    if (!candidateUserId) return;
+    try {
+      const response = await meetingApi.getParticipants(meetingId);
+      const record = (response?.participants || []).find(p => participantUserIdOf(p) === candidateUserId);
+      const stillSharing = !!record && (record.isScreenSharing === true || record.payload?.isScreenSharing === true);
+
+      setRemoteScreenSharer((prev) => {
+        if (stillSharing) {
+          if (prev?.userId === candidateUserId) return prev;
+          return { connId: prev?.userId === candidateUserId ? prev.connId : null, userId: candidateUserId };
+        }
+        return prev?.userId === candidateUserId ? null : prev;
+      });
+    } catch (error) {
+      console.warn('[ScreenShare] Fast verification failed:', error?.message || error);
+    }
+  };
 
   const updateParticipantsList = async () => {
     try {
@@ -1627,6 +1680,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   useEffect(() => {
     isScreenSharingRef.current = isScreenSharing;
   }, [isScreenSharing]);
+
+  useEffect(() => {
+    remoteScreenSharerRef.current = remoteScreenSharer;
+  }, [remoteScreenSharer]);
 
   useEffect(() => {
     remoteStreamsRef.current = remoteStreams;

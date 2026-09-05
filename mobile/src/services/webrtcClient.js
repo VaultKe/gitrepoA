@@ -960,7 +960,7 @@ class WebRTCClient {
       // createPeerConnection), so getting here only means a screen m-line
       // exists -- not that anyone is actually sharing yet. Only ack once real
       // frames start arriving.
-      this.watchScreenTrackForAck(connId, incomingTrack);
+      this.watchScreenTrackLifecycle(connId, incomingTrack);
     } else {
       const stream = entry.stream;
       // Guard against duplicate tracks of the same kind (e.g. a camera
@@ -990,43 +990,68 @@ class WebRTCClient {
     });
   }
 
-  // Sends `screen-share-ack` back to `connId` the moment `track` actually
-  // starts delivering frames. A negotiated track can sit muted indefinitely
+  // Watches a remote screen track for both directions of its mute
+  // transition, for the lifetime of the connection (not just once).
+  //
+  // Unmuting (real frames arriving) sends `screen-share-ack` -- see
+  // sendScreenShareAck. A negotiated track can sit muted indefinitely
   // (nobody sharing yet, or sharing but the frames never make it here), so
-  // this is the one signal that distinguishes "negotiated" from "actually
-  // visible on the other end" -- see the emitted screen-share-ack handling
-  // in the hook for how the sharer surfaces the result.
-  watchScreenTrackForAck(connId, track) {
+  // that's the one signal that distinguishes "negotiated" from "actually
+  // visible on the other end".
+  //
+  // Muting is the other half, emitted as `screenTrackMuted`: an independent,
+  // purely media-plane signal that sharing has stopped, sourced from
+  // libwebrtc's own RTP-arrival detection rather than from any
+  // application-level message. `screen-share-stopped` over the signaling
+  // socket is still what the UI keys off, but it's a single best-effort send
+  // that can be lost (a reconnect at exactly the wrong moment, a dropped
+  // packet) -- and when it is, nothing else ever told a viewer the share had
+  // ended, so the last frame stayed on screen indefinitely. This can't be
+  // lost the same way, since it doesn't depend on the network path that
+  // dropped it. The hook treats it as a trigger to verify against the
+  // server rather than as proof on its own -- see its screenTrackMuted
+  // handler for why a muted track isn't quite trustworthy enough to act on
+  // blindly (a very static, unchanging share can trip it too).
+  //
+  // Listeners are persistent, not one-shot: a single connection can live
+  // through several share/stop/re-share cycles, and each needs its own
+  // transition.
+  watchScreenTrackLifecycle(connId, track) {
     if (!track) return;
 
-    const ack = () => {
-      console.log('[ScreenShare] Local screen track unmuted -- frames are arriving:', {
-        connId,
-        trackId: track.id,
-      });
+    const emitTransition = (event) => {
+      const entry = this.remoteStreams.get(connId);
+      console.log(`[ScreenShare] Local screen track ${event}:`, { connId, trackId: track.id });
+      this.emit(event, { connId, userId: entry?.userId || null });
+    };
+
+    const onUnmute = () => {
+      emitTransition('screenTrackUnmuted');
       this.sendScreenShareAck(connId);
     };
+    const onMute = () => emitTransition('screenTrackMuted');
 
     // react-native-webrtc marks every freshly negotiated remote track as
     // unmuted the instant `ontrack` fires (see its RTCPeerConnection source),
     // regardless of whether any real frames have arrived -- and the screen
     // m-line here is negotiated up front on every connection, long before
     // anyone may actually share. Trusting `track.muted` immediately on native
-    // would therefore ack right away, every time, making this whole check a
-    // no-op. Browsers get the initial muted state right (per spec), so the
-    // fast path below is only trustworthy there; native always waits for a
-    // real 'unmute' transition, driven by libwebrtc's own RTP-arrival signal.
+    // would therefore fire this right away, every time. Browsers get the
+    // initial muted state right (per spec), so this fast path is only
+    // trustworthy there; native always waits for a real 'unmute' transition,
+    // driven by libwebrtc's own RTP-arrival signal.
     if (Platform.OS === 'web' && track.muted === false) {
       // Frames were already flowing by the time we got here (e.g. the share
       // was already live when this connection was created).
-      ack();
-      return;
+      onUnmute();
     }
 
     if (typeof track.addEventListener === 'function') {
-      track.addEventListener('unmute', ack, { once: true });
+      track.addEventListener('unmute', onUnmute);
+      track.addEventListener('mute', onMute);
     } else {
-      track.onunmute = ack;
+      track.onunmute = onUnmute;
+      track.onmute = onMute;
     }
   }
 
