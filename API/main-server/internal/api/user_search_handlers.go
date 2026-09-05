@@ -46,6 +46,11 @@ func buildPhoneSearchPatterns(query string, startIndex int) (string, []interface
 				patterns = append(patterns, fmt.Sprintf("phone LIKE $%d", idx))
 				args = append(args, "%"+stripped+"%")
 				idx++
+
+				normalized := "+254" + stripped
+				patterns = append(patterns, fmt.Sprintf("phone LIKE $%d", idx))
+				args = append(args, normalized+"%")
+				idx++
 			}
 		}
 
@@ -267,17 +272,17 @@ func (h *UserSearchHandlers) GetUserProfile(c *gin.Context) {
 		return
 	}
 
-	user := map[string]interface{}{
-		"id":        id,
-		"firstName": firstName,
-		"lastName":  lastName,
-		"email":     utils.MaskEmail(email),
-		"createdAt": createdAt,
-	}
+		user := map[string]interface{}{
+			"id":        id,
+			"firstName": firstName,
+			"lastName":  lastName,
+			"email":     email,
+			"createdAt": createdAt,
+		}
 
-	if phoneNumber.Valid {
-		user["phoneNumber"] = utils.MaskPhone(phoneNumber.String)
-	}
+		if phoneNumber.Valid {
+			user["phoneNumber"] = phoneNumber.String
+		}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -390,12 +395,12 @@ func (h *UserSearchHandlers) SearchUsersAdvanced(c *gin.Context) {
 			"id":        id,
 			"firstName": firstName,
 			"lastName":  lastName,
-			"email":     utils.MaskEmail(email),
+			"email":     email,
 			"createdAt": createdAt,
 		}
 
 		if phoneNumber.Valid {
-			user["phoneNumber"] = utils.MaskPhone(phoneNumber.String)
+			user["phoneNumber"] = phoneNumber.String
 		}
 
 		users = append(users, user)

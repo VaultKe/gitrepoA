@@ -761,7 +761,7 @@ func SearchUserByPhone(c *gin.Context) {
 
 	userData := map[string]interface{}{
 		"id":         id.String,
-		"email":      utils.MaskEmail(email.String),
+		"email":      email.String,
 		"phone":      phoneNum.String,
 		"firstName":  firstName.String,
 		"lastName":   lastName.String,
