@@ -575,11 +575,17 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 				fmt.Printf("[Signal] leave | roomID=%s userID=%s | RoomManager leave failed: %v\n", roomID, msg.UserID, err)
 			}
 
+			// Carry the name on the notice itself. Without it, everyone else
+			// had to find the person in their own roster to label the "left
+			// the meeting" message -- and since the roster drops them at the
+			// same moment, that lookup often missed and the notice came out
+			// as an anonymous "someone".
 			h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
-				Type:   "participant-left",
-				RoomID: roomID,
-				UserID: msg.UserID,
-				ConnID: connID,
+				Type:        "participant-left",
+				RoomID:      roomID,
+				UserID:      msg.UserID,
+				ConnID:      connID,
+				DisplayName: firstNonEmpty(client.DisplayName, msg.DisplayName),
 			})
 			h.signalingHub.UnregisterClient(client)
 
