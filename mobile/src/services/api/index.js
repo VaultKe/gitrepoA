@@ -10,7 +10,7 @@ import * as invitationEndpoints from './invitationEndpoints';
 import * as contributionEndpoints from './contributionEndpoints';
 import * as welfareEndpoints from './welfareEndpoints';
 import * as meetingEndpoints from './meetingEndpoints';
-import { makeRequest, makeRequestWithRetry, checkBackendConnectivity, checkHealth, invalidateCache, API_BASE_URL, REQUEST_TIMEOUT } from './client';
+import { makeRequest, makeRequestWithRetry, checkBackendConnectivity, checkHealth, invalidateCache, clearApiCache, API_BASE_URL, REQUEST_TIMEOUT } from './client';
 import { getAuthToken, setAuthToken, removeAuthToken, storeUserData, getDeviceInfo } from './auth';
 
 // Static/uploaded assets (avatars, rules PDFs, etc.) are served by the backend
@@ -36,6 +36,7 @@ const ApiService = {
   checkBackendConnectivity,
   checkHealth,
   invalidateCache,
+  clearApiCache,
   getAuthToken,
   setAuthToken,
   removeAuthToken,

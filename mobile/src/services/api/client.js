@@ -53,6 +53,21 @@ const invalidateCache = (pattern) => {
 };
 
 /**
+ * Wipe the entire in-memory GET cache and any in-flight request promises.
+ *
+ * The response cache is keyed only by method+endpoint+body, NOT by user. It is
+ * module-level state that survives a logout (the JS bundle is not reloaded when
+ * a user signs out), so without an explicit clear a freshly logged-in user can
+ * be served the previous account's cached responses — e.g. GET /chamas/my —
+ * for up to CACHE_TTL_MS. Call this on every login and logout so cached data
+ * never crosses an account boundary.
+ */
+const clearApiCache = () => {
+  responseCache.clear();
+  inFlightRequests.clear();
+};
+
+/**
  * Endpoints that never return PII and should bypass the expensive
  * maskSensitiveData deep-clone in makeRequest.  Matching is done with
  * String.prototype.includes so a single prefix like "/chamas" covers
@@ -626,6 +641,7 @@ export {
   checkBackendConnectivity,
   checkHealth,
   invalidateCache,
+  clearApiCache,
   API_BASE_URL,
   REQUEST_TIMEOUT,
 };

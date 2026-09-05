@@ -7,6 +7,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const CHAMAS_CACHE_KEY = 'cached_user_chamas';
 const CHAMAS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// "My Chamas" must only ever show chamas the current user is an ACTIVE member
+// of. The backend already enforces this, but the instant-display cache below is
+// a second place the list comes from — so every read is filtered here too, and
+// the cache envelope records which user it belongs to so a different account on
+// the same device can never be shown the previous account's chamas.
+const isActiveMembership = (chama) =>
+  !!chama && chama.membership_is_active !== false;
+
 const useMyChamas = ({ navigation, route }) => {
   const { theme, user, switchToChamaDashboard } = useApp();
 
@@ -20,14 +28,20 @@ const useMyChamas = ({ navigation, route }) => {
 
   const loadCachedChamas = async () => {
     try {
+      // Without a known user we cannot prove the cache belongs to this account.
+      if (!user?.id) {
+        return false;
+      }
       const cached = await AsyncStorage.getItem(CHAMAS_CACHE_KEY);
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
+        const { data, timestamp, userId } = JSON.parse(cached);
+        // Reject a cache written by (or before we tracked) a different account.
+        if (userId !== user.id) {
+          await AsyncStorage.removeItem(CHAMAS_CACHE_KEY);
+          return false;
+        }
         if (Date.now() - timestamp < CHAMAS_CACHE_TTL) {
-          const activeOnly = (data || []).filter(chama => {
-            return chama.membership_is_active !== false;
-          });
-          setChamas(activeOnly);
+          setChamas((data || []).filter(isActiveMembership));
           return true;
         }
       }
@@ -39,9 +53,13 @@ const useMyChamas = ({ navigation, route }) => {
 
   const cacheChamas = async (data) => {
     try {
+      if (!user?.id) {
+        return;
+      }
       await AsyncStorage.setItem(CHAMAS_CACHE_KEY, JSON.stringify({
         data,
         timestamp: Date.now(),
+        userId: user.id,
       }));
     } catch (error) {
       // Silent fail for cache write
@@ -50,11 +68,14 @@ const useMyChamas = ({ navigation, route }) => {
 
   useEffect(() => {
     const initialize = async () => {
+      // Drop anything from a previous account before showing/fetching.
+      setChamas([]);
+      setFilteredChamas([]);
       await loadCachedChamas();
       await loadUserChamas();
     };
     initialize();
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     applyFiltersAndSort();
@@ -75,9 +96,7 @@ const useMyChamas = ({ navigation, route }) => {
       const response = await ApiService.getUserChamas(50, 0);
 
       if (response.success) {
-        const data = (response.data || []).filter(chama => {
-          return chama.membership_is_active !== false;
-        });
+        const data = (response.data || []).filter(isActiveMembership);
         setChamas(data);
         await cacheChamas(data);
       } else {
@@ -103,12 +122,9 @@ const useMyChamas = ({ navigation, route }) => {
   };
 
   const applyFiltersAndSort = () => {
-    let filtered = [...chamas];
-
-    // Filter out chamas where the user has left (membership is inactive)
-    filtered = filtered.filter(chama => {
-      return chama.membership_is_active !== false;
-    });
+    // Only active memberships belong on "My Chamas" — never a chama the user
+    // has left or was removed from, and never one from another account.
+    let filtered = chamas.filter(isActiveMembership);
 
     // Apply category filter
     if (selectedCategory !== 'all') {

@@ -892,6 +892,15 @@ const AppContext = createContext();
   // added later under the same convention is covered automatically too.
   const clearLocalDataCaches = async () => {
     try {
+      // In-memory API response cache is keyed by endpoint only, not by user,
+      // and outlives a logout — clear it so the next account cannot read the
+      // previous account's cached responses.
+      try {
+        ApiService.clearApiCache();
+      } catch (e) {
+        // best-effort
+      }
+
       const keys = await AsyncStorage.getAllKeys();
       const cacheKeys = keys.filter((key) => key.startsWith('cached_'));
       if (cacheKeys.length > 0) {
@@ -1150,6 +1159,15 @@ const AppContext = createContext();
   // Clear storage cache to fix quota issues
   const clearStorageCache = async () => {
     try {
+      // Drop the in-memory API response cache too — it is keyed by endpoint
+      // only (not by user) and survives across accounts, so a new login could
+      // otherwise be served the previous user's cached responses.
+      try {
+        ApiService.clearApiCache();
+      } catch (e) {
+        // best-effort
+      }
+
       // Get all keys
       const keys = await AsyncStorage.getAllKeys();
 
