@@ -21,7 +21,12 @@ export const MEDIA_CONSTRAINTS = {
     noiseSuppression: true,
     autoGainControl: true,
     sampleRate: 48000,
-    channelCount: 2,
+    // Mono, deliberately. Acoustic echo cancellers work on a single channel,
+    // and asking for stereo capture makes the browser/WebRTC stack degrade or
+    // skip echo cancellation entirely -- which is how a speaker's own voice
+    // comes back through everyone else's mics. Conferencing audio is mono
+    // everywhere for this reason; stereo buys nothing for speech.
+    channelCount: 1,
   },
   video: {
     width: { ideal: 1280, max: 1920 },
@@ -497,6 +502,20 @@ class WebRTCClient {
   }
 
   handleSignalingMessage(message) {
+    // Meetings are independent even when they belong to the same chama, so
+    // anything stamped with a different room is not ours to act on. The
+    // server already delivers per-room; this is the second line of defence,
+    // so a routing mistake there can never make one meeting's peers, chat or
+    // screen share surface inside another meeting.
+    if (message.roomId && this.roomId && message.roomId !== this.roomId) {
+      console.warn('[Meeting] Ignoring signaling message for a different room:', {
+        received: message.roomId,
+        expected: this.roomId,
+        type: message.type,
+      });
+      return;
+    }
+
     // Log received signaling messages for debugging presence
     if (message.type === SIGNALING_MESSAGE_TYPES.PARTICIPANT_JOINED) {
       console.log('[Meeting] Received participant-joined:', {

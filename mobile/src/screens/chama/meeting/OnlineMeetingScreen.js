@@ -57,7 +57,6 @@ const truncateDisplayName = (value, maxLength = 18) => {
 const OnlineMeetingScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
-  const { isReadOnly = false } = route.params || {};
   const screen = useOnlineMeetingScreen({ route, navigation });
   const chatScrollRef = useRef(null);
   // Whether the user has minimised the big "stage" tile. This is the user's
@@ -93,6 +92,9 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     handleToggleScreenShare,
     handleEndCall,
     handleSendChatMessage,
+    isChatReadOnly,
+    isEndedMeeting,
+    attendanceRecord,
     setIsChatOpen,
   } = screen;
 
@@ -226,18 +228,127 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   const visibleRosterParticipants = rosterParticipants.slice(0, 6);
   const hiddenRosterCount = Math.max(0, rosterParticipants.length - visibleRosterParticipants.length);
 
-  if (isReadOnly) {
+  // A finished meeting is reviewed, not joined -- so no video area, no
+  // controls, and (in the hook) no camera or microphone is ever requested.
+  // What remains is its record: the chat that took place and who was there.
+  if (isEndedMeeting) {
+    const { attendees = [], absentees = [] } = attendanceRecord || {};
+
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.readOnlyContainer}>
-          <Ionicons name="calendar-outline" size={64} color={colors.textSecondary} />
-          <Text style={[styles.readOnlyTitle, { color: colors.text }]}>
-            Meeting Ended
-          </Text>
-          <Text style={[styles.readOnlySubtitle, { color: colors.textSecondary }]}>
-            This online meeting has already ended. You can view past meeting details but cannot join.
-          </Text>
+        <View style={[styles.reviewHeader, { borderBottomColor: colors.border }]}>
+          <Ionicons name="calendar-outline" size={22} color={colors.textSecondary} />
+          <View style={styles.reviewHeaderText}>
+            <Text style={[styles.reviewTitle, { color: colors.text }]} numberOfLines={1}>
+              {meetingTitle || 'Meeting'} — ended
+            </Text>
+            <Text style={[styles.reviewSubtitle, { color: colors.textSecondary }]}>
+              Read-only record. You cannot join or send messages.
+            </Text>
+          </View>
         </View>
+
+        <ScrollView style={styles.reviewBody} contentContainerStyle={styles.reviewBodyContent}>
+          <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.reviewCardHeader, { borderBottomColor: colors.border }]}>
+              <Ionicons name="people-outline" size={18} color={colors.textSecondary} />
+              <Text style={[styles.reviewCardTitle, { color: colors.text }]}>Attendance</Text>
+            </View>
+
+            {/* Counts share one row split by a vertical rule -- boxing each
+                one added four more edges to a card that already has plenty. */}
+            <View style={styles.reviewSummary}>
+              <View style={styles.reviewStat}>
+                <Text style={[styles.reviewStatValue, { color: colors.success }]}>{attendees.length}</Text>
+                <Text style={[styles.reviewStatLabel, { color: colors.textSecondary }]}>Attended</Text>
+              </View>
+              <View style={[styles.reviewStatDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.reviewStat}>
+                <Text style={[styles.reviewStatValue, { color: colors.textTertiary }]}>{absentees.length}</Text>
+                <Text style={[styles.reviewStatLabel, { color: colors.textSecondary }]}>Absent</Text>
+              </View>
+            </View>
+
+            <Text style={[styles.reviewGroupLabel, { color: colors.textSecondary }]}>
+              Attended
+            </Text>
+            {attendees.length === 0 ? (
+              <Text style={[styles.reviewEmpty, { color: colors.textSecondary }]}>
+                No one joined this meeting.
+              </Text>
+            ) : (
+              attendees.map((person, index) => (
+                <View key={person.userId || `attendee-${index}`}>
+                  {index > 0 && (
+                    <View style={[styles.reviewSeparator, { borderBottomColor: colors.border }]} />
+                  )}
+                  <View style={styles.reviewRow}>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                    <Text style={[styles.reviewRowText, { color: colors.text }]}>{person.name}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+
+            <Text style={[styles.reviewGroupLabel, { color: colors.textSecondary }]}>
+              Absent
+            </Text>
+            {absentees.length === 0 ? (
+              <Text style={[styles.reviewEmpty, { color: colors.textSecondary }]}>
+                No absentees recorded.
+              </Text>
+            ) : (
+              absentees.map((person, index) => (
+                <View key={person.userId || `absentee-${index}`}>
+                  {index > 0 && (
+                    <View style={[styles.reviewSeparator, { borderBottomColor: colors.border }]} />
+                  )}
+                  <View style={styles.reviewRow}>
+                    <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+                    <Text style={[styles.reviewRowText, { color: colors.textSecondary }]}>{person.name}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.reviewCardHeader, { borderBottomColor: colors.border }]}>
+              <Ionicons name="chatbubbles-outline" size={18} color={colors.textSecondary} />
+              <Text style={[styles.reviewCardTitle, { color: colors.text }]}>
+                Chat ({chatMessages.length})
+              </Text>
+            </View>
+            {chatMessages.length === 0 ? (
+              <Text style={[styles.reviewEmpty, { color: colors.textSecondary }]}>
+                No messages were sent in this meeting.
+              </Text>
+            ) : (
+              <View style={styles.reviewChatList}>
+              {chatMessages.map((msg, index) => {
+                const isOwn = msg.isOwn || msg.senderId === user?.id;
+                return (
+                  <View
+                    key={msg.id || `msg-${index}`}
+                    style={[styles.chatMessage, styles.reviewChatMessage, isOwn ? styles.chatMessageOwn : styles.chatMessageOther]}
+                  >
+                    <View
+                      style={[
+                        styles.chatBubble,
+                        { backgroundColor: isOwn ? colors.primary : colors.backgroundTertiary },
+                      ]}
+                    >
+                      <Text style={[styles.chatMessageText, { color: isOwn ? '#fff' : colors.text }]}>
+                        {msg.content}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+              </View>
+            )}
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -256,9 +367,13 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     return <OnlineMeetingErrorView theme={theme} error={connectionError} />;
   }
 
-  const renderVideoElement = (stream, isLocal = false, connId = null) => {
+  // `isScreen` marks content that is a screen share rather than a camera
+  // feed. It matters for the local preview: the camera-off placeholder below
+  // must not swallow your own screen share, which is why the presenter saw
+  // "Camera off" while everyone else was watching their screen just fine.
+  const renderVideoElement = (stream, isLocal = false, connId = null, isScreen = false) => {
     // Show placeholder when local camera is disabled
-    if (isLocal && !isCameraEnabled) {
+    if (isLocal && !isScreen && !isCameraEnabled) {
       return (
         <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
           <Ionicons
@@ -275,7 +390,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
     // Show placeholder for remote participants without media streams
     // (e.g., they joined but haven't enabled camera/microphone yet)
-    if (!isLocal && !stream) {
+    if (!stream && (!isLocal || isScreen)) {
       const placeholderName = 'Guest';
       return (
         <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}> 
@@ -294,7 +409,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       // (keyed to the stream itself, avoiding shared-ref / timing bugs).
       return (
         <WebVideo
-          key={isLocal ? `local-${isCameraEnabled}` : `remote-${connId}`}
+          key={isLocal ? `local-${isScreen ? 'screen' : `camera-${isCameraEnabled}`}` : `remote-${connId}-${isScreen ? 'screen' : 'camera'}`}
           stream={stream}
           muted={isLocal}
           style={styles.video}
@@ -306,11 +421,11 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       const streamUrl = stream.toURL();
       return (
         <RTCView
-          key={isLocal ? `local-${isCameraEnabled}` : `remote-${connId}`}
+          key={isLocal ? `local-${isScreen ? 'screen' : `camera-${isCameraEnabled}`}` : `remote-${connId}-${isScreen ? 'screen' : 'camera'}`}
           streamURL={streamUrl}
           style={styles.video}
           objectFit="cover"
-          mirror={isLocal}
+          mirror={isLocal && !isScreen}
           zOrder={0}
         />
       );
@@ -336,15 +451,38 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         {showExpandedView && expandedData && (
           <View style={[styles.expandedVideoContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {expandedData.isLocal ? (
-              isScreenSharing ? renderVideoElement(screenStream, true) : (localStream ? renderVideoElement(localStream, true) : renderVideoElement(null, true))
+              isScreenSharing
+                ? renderVideoElement(screenStream, true, null, true)
+                : (localStream ? renderVideoElement(localStream, true) : renderVideoElement(null, true))
             ) : (
               renderVideoElement(
                 expandedData.participant.isScreenSharing && expandedData.participant.screenStream
                   ? expandedData.participant.screenStream
                   : expandedData.participant.stream,
                 false,
-                expandedData.participant.connId
+                expandedData.participant.connId,
+                !!(expandedData.participant.isScreenSharing && expandedData.participant.screenStream)
               )
+            )}
+            {/* Their screen travels on its own track, separate from their
+                camera and mic. Showing the screen alone would leave that
+                mic track with nowhere to play on web, so the sharer goes
+                silent exactly while they're presenting. Keep an audio-only
+                sink alive for them. Native plays remote audio without a
+                view, so this is web-only -- and it is the single sink for
+                this participant, since the grid excludes whoever is on the
+                stage, so it cannot double up and echo. */}
+            {isWeb
+              && !expandedData.isLocal
+              && expandedData.participant.isScreenSharing
+              && expandedData.participant.screenStream
+              && expandedData.participant.stream && (
+              <WebVideo
+                key={`stage-audio-${expandedData.participant.connId}`}
+                stream={expandedData.participant.stream}
+                muted={false}
+                style={styles.audioOnlySink}
+              />
             )}
             <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
               <Text style={styles.videoLabelText}>
@@ -382,7 +520,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         ]}>
           {gridRemoteParticipants.map(({ connId, userId, stream, screenStream, name, isScreenSharing: sharing }) => (
             <View key={connId} style={[styles.gridVideoWrapper, { backgroundColor: colors.card, borderColor: colors.border }, showExpandedView && styles.gridVideoWrapperExpanded]}>
-              {renderVideoElement(sharing && screenStream ? screenStream : stream, false, connId)}
+              {renderVideoElement(sharing && screenStream ? screenStream : stream, false, connId, !!(sharing && screenStream))}
               <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
                 {sharing && (
                   <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
@@ -516,6 +654,13 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               );
             })}
           </ScrollView>
+          {isChatReadOnly ? (
+            <View style={[styles.chatInput, { borderTopColor: colors.border }]}>
+              <Text style={[styles.chatReadOnlyNote, { color: colors.textSecondary }]}>
+                This meeting has ended — chat is read-only.
+              </Text>
+            </View>
+          ) : (
           <View style={[styles.chatInput, { borderTopColor: colors.border }]}>
             <TextInput
               style={[styles.chatInputField, { color: colors.text, backgroundColor: colors.background }]}
@@ -543,6 +688,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               />
             </TouchableOpacity>
           </View>
+          )}
         </View>
       )}
 
@@ -554,22 +700,118 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  readOnlyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  reviewHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.xl,
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderBottomWidth: 1,
   },
-  readOnlyTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+  reviewHeaderText: {
+    flex: 1,
   },
-  readOnlySubtitle: {
+  reviewTitle: {
     fontSize: typography.fontSize.base,
-    textAlign: 'center',
-    lineHeight: 22,
+    fontWeight: '600',
+  },
+  reviewSubtitle: {
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
+  },
+  reviewBody: {
+    flex: 1,
+  },
+  reviewBodyContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  // Ended meetings are a record, not a live surface: flat, bordered cards,
+  // deliberately no elevation/shadow.
+  reviewCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  reviewCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  reviewCardTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: '700',
+  },
+  reviewSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  reviewStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  // Vertical rule, so splitting the two counts costs no extra horizontal line.
+  reviewStatDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginVertical: spacing.xs,
+  },
+  reviewStatValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: '700',
+  },
+  reviewStatLabel: {
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
+  },
+  reviewGroupLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  reviewChatMessage: {
+    paddingHorizontal: spacing.md,
+  },
+  // Without this the first bubble sat flush against the card header.
+  reviewChatList: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  // Dotted and inset from the card edges: enough to separate two names,
+  // not enough to read as another rule across the card. borderRadius is
+  // required for Android to honour a dotted border at all.
+  reviewSeparator: {
+    marginHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderStyle: 'dotted',
+    borderRadius: 1,
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 1,
+  },
+  reviewRowText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+  },
+  reviewEmpty: {
+    fontSize: typography.fontSize.sm,
+    fontStyle: 'italic',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
   },
   videoArea: {
     flex: 1,
@@ -626,6 +868,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#374151',
     zIndex: 10,
+  },
+  // Carries a participant's audio while only their screen is on display.
+  // Sized away rather than display:none, which can stop playback.
+  audioOnlySink: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0,
   },
   stageToggle: {
     position: 'absolute',
@@ -770,6 +1020,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: typography.fontSize.sm,
+  },
+  chatReadOnlyNote: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: typography.fontSize.sm,
+    paddingVertical: spacing.sm,
   },
   chatSendButton: {
     width: 40,

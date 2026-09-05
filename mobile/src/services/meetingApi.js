@@ -180,6 +180,21 @@ export const meetingApi = {
     return response.json();
   },
 
+  // Everyone who joined this room at any point, including those who left --
+  // what a finished meeting's attendance record needs.
+  async getAttendance(roomId) {
+    const response = await fetch(`${getMeetingApiUrl()}/rooms/${roomId}/attendance`, {
+      headers: await getAuthHeader(),
+    });
+
+    if (!response.ok) {
+      const error = await parseJsonSafe(response);
+      throw new Error(error.error || 'Failed to get attendance');
+    }
+
+    return response.json();
+  },
+
   async getParticipants(roomId) {
     const response = await fetch(`${getMeetingApiUrl()}/rooms/${roomId}/participants`, {
       headers: await getAuthHeader(),

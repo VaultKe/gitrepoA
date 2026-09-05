@@ -175,9 +175,10 @@ const useChamaMeetingsScreen = ({ route, navigation }) => {
         isReadOnly: isEnded,
       };
 
-      if (meetingTypeLower === 'physical' || meetingTypeLower === 'hybrid') {
-        params.chamaId = chamaId || meeting?.chamaId;
-      }
+      // Every meeting type carries its chama now: the online meeting screen
+      // sends it on join so the service can hold a chama to one live online
+      // meeting at a time.
+      params.chamaId = chamaId || meeting?.chamaId;
 
       console.log('Navigating to:', screenName, 'isEnded:', isEnded, 'status:', meeting?.status, 'params:', params);
       navigation.navigate(screenName, params);

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Alert, BackHandler, Linking, PermissionsAndroid, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
+import api from '../services/api';
 import { meetingApi, setMeetingAuthToken, clearMeetingAuthToken } from '../services/meetingApi';
 import { getWebRTCClient, createWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES, isWebRTCAvailable } from '../services/webrtcClient';
 import { getAuthToken as getMainAuthToken } from '../services/api/auth';
@@ -40,7 +41,44 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     isPreview = false,
     previewData = null,
     isReadOnly = false,
+    chamaId: routeChamaId,
+    meetingData: routeMeetingData,
   } = route.params || {};
+
+  // Sent with the join so the service can keep one chama to one live online
+  // meeting. Virtual meetings aren't navigated to with an explicit chamaId,
+  // so fall back to the meeting record we were handed.
+  const chamaId = routeChamaId || routeMeetingData?.chamaId || routeMeetingData?.chama_id || '';
+
+  // A meeting counts as over once it is marked so, or once its scheduled
+  // window has elapsed -- the meetings list already treats a passed window as
+  // ENDED, so a meeting can be reachable with its status still "scheduled".
+  // Chat is read-only from that point on.
+  const hasMeetingWindowPassed = () => {
+    const status = String(routeMeetingData?.status || '').toLowerCase();
+    if (status === 'completed' || status === 'ended' || status === 'cancelled') return true;
+
+    const startedAt = routeMeetingData?.startTime || routeMeetingData?.scheduledAt || routeMeetingData?.date;
+    if (!startedAt) return false;
+    const start = new Date(startedAt).getTime();
+    if (Number.isNaN(start)) return false;
+
+    const durationMinutes = Number(routeMeetingData?.duration) > 0 ? Number(routeMeetingData.duration) : 60;
+    return Date.now() > start + durationMinutes * 60000;
+  };
+
+  // Evaluated once per meeting rather than on every render: a meeting that
+  // overruns its scheduled window must not suddenly eject the people already
+  // sitting in it.
+  const isEndedMeeting = useMemo(
+    () => isReadOnly || hasMeetingWindowPassed(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [meetingId, isReadOnly]
+  );
+
+  // Who actually attended, and which chama members never showed up. Only
+  // loaded for a finished meeting, where it is the record being reviewed.
+  const [attendanceRecord, setAttendanceRecord] = useState({ attendees: [], absentees: [] });
 
   const [isConnecting, setIsConnecting] = useState(!meetingId);
   const [isConnected, setIsConnected] = useState(false);
@@ -59,6 +97,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // list so the flag survives tiles being re-created or re-keyed.
   const [remoteScreenSharer, setRemoteScreenSharer] = useState(null);
   const [meetingData, setMeetingData] = useState(null);
+  // Set when the host ends the room while we're still in it, so chat locks
+  // immediately rather than waiting on navigation.
+  const [hasRoomEnded, setHasRoomEnded] = useState(false);
   const [connectionError, setConnectionError] = useState(
     meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.'
   );
@@ -106,16 +147,55 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const knownParticipantIdsRef = useRef(new Set());
 
 
-  // Initialize meeting
+  // Initialize meeting.
+  //
+  // Keyed to meetingId, and every piece of per-meeting state is wiped first.
+  // This effect used to run once with an empty dependency list, which broke as
+  // soon as the navigator reused this screen for a different meeting (it
+  // updates route params rather than remounting): the hook never
+  // re-initialised, so the second meeting opened showing the first meeting's
+  // participants, streams and chat. Resetting here fixes it whether or not the
+  // component is remounted.
   useEffect(() => {
-    if (isReadOnly) {
+    // Tear down anything still live from the meeting we were previously in
+    // before adopting the new one's identity.
+    cleanup();
+
+    setIsConnected(false);
+    setParticipants([]);
+    setRemoteStreams([]);
+    setChatMessages([]);
+    setLocalStream(null);
+    setScreenStream(null);
+    setIsScreenSharing(false);
+    setRemoteScreenSharer(null);
+    setScreenShareViewerConnIds(new Set());
+    setMeetingData(null);
+    setHasRoomEnded(false);
+    setIsChatOpen(false);
+    setConnectionError(meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.');
+
+    hasJoinedRef.current = false;
+    isScreenSharingRef.current = false;
+    screenShareRejectedRef.current = false;
+    screenShareViewerConnIdsRef.current = new Set();
+    participantIdRef.current = null;
+    initialLoadDoneRef.current = false;
+    participantsRef.current = [];
+    knownParticipantIdsRef.current = new Set();
+    mediaPermissionsRef.current = { camera: true, microphone: true };
+
+    // A finished meeting is reviewed, not joined: no permission prompts, no
+    // camera, no microphone, no signalling. Just its record.
+    if (isEndedMeeting) {
       setIsConnecting(false);
-      return;
+      loadEndedMeetingRecord();
+      return undefined;
     }
 
     if (!meetingId) {
       setIsConnecting(false);
-      return;
+      return undefined;
     }
 
     initializeMeeting().catch((error) => {
@@ -130,7 +210,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       backHandler.remove();
       cleanup();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId, isEndedMeeting]);
 
   const initializeMeeting = async () => {
     try {
@@ -174,6 +255,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
             displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
             role: userRole,
             userId: user?.id, // Pass userId so backend can create participant with correct user_id
+            chamaId, // lets the service enforce one live online meeting per chama
           }),
         });
 
@@ -182,6 +264,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
             displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
             role: userRole,
             userId: user?.id, // Pass userId for unauthenticated joins
+            chamaId,
           });
           if (!response) {
             throw new Error('Failed to join meeting');
@@ -202,10 +285,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       // Initialize WebRTC
       await initializeWebRTC(connectionData);
 
-      // Mark attendance
-      if (!isPreview) {
-        await markAttendance();
-      }
+      // Attendance is recorded server-side by joining the room (the
+      // participants table), so nothing extra is needed here. This used to
+      // post a "Joined meeting" system message into the room chat, which is
+      // what filled the chat panel with join notices -- joins already surface
+      // as toasts and in the participant list.
 
        // Load participants
        await updateParticipantsList();
@@ -669,6 +753,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     });
 
     client.on('roomEnded', () => {
+      setHasRoomEnded(true);
       Toast.show({
         type: 'info',
         text1: 'Meeting Ended',
@@ -748,14 +833,6 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     );
   };
 
-  const markAttendance = async () => {
-    try {
-      await meetingApi.sendChatMessage(meetingId, 'Joined meeting', 'system');
-    } catch (error) {
-      console.error('Failed to mark attendance:', error);
-    }
-  };
-
   const updateParticipantsList = async () => {
     try {
       const response = await meetingApi.getParticipants(meetingId);
@@ -789,15 +866,74 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
      try {
        const response = await meetingApi.getChatMessages(meetingId);
        if (response && response.messages) {
-         setChatMessages(response.messages.map(msg => ({
-           ...msg,
-           isOwn: msg.userId === user?.id,
-         })));
+         setChatMessages(
+           response.messages
+             // Rooms used before this change still have "Joined meeting"
+             // system rows stored against them; keep those out of the panel
+             // so old meetings don't show join notices as chat.
+             .filter(msg => (msg.messageType || msg.message_type) !== 'system')
+             .map(msg => ({
+               ...msg,
+               isOwn: msg.userId === user?.id,
+             }))
+         );
        }
      } catch (error) {
        console.error('Failed to load chat history:', error);
      }
    };
+
+  // A finished meeting is reviewed, never joined: this pulls only its record
+  // -- the chat backlog plus who attended and who did not. Deliberately no
+  // permission request, no getUserMedia and no signalling connection, because
+  // there is nothing to capture or transmit for a meeting that is over.
+  const loadEndedMeetingRecord = async () => {
+    try {
+      const token = await getAuthToken();
+      if (token) {
+        await setMeetingAuthToken(token);
+      }
+    } catch (e) {
+      console.warn('[Meeting] Could not set auth token for review:', e?.message || e);
+    }
+
+    await loadChatHistory();
+
+    try {
+      const [attendanceResponse, membersResponse] = await Promise.all([
+        meetingApi.getAttendance(meetingId),
+        chamaId ? api.getChamaMembers(chamaId) : Promise.resolve(null),
+      ]);
+
+      const attendees = (attendanceResponse?.attendees || []).map((entry) => ({
+        userId: entry.userId,
+        name: getHumanName(entry.displayName, 'Guest'),
+        joinedAt: entry.joinedAt,
+      }));
+
+      const attendedIds = new Set(attendees.map(a => a.userId).filter(Boolean));
+      const members = membersResponse?.data || membersResponse?.members || [];
+      const absentees = members
+        // Someone who has left the chama shouldn't be recorded as having
+        // missed a meeting they were no longer part of.
+        .filter(member => member.is_active !== false)
+        .map((member) => {
+          const userId = member.user_id || member.userId || member.user?.id;
+          const first = member.user?.first_name || '';
+          const last = member.user?.last_name || '';
+          const fullName = `${first} ${last}`.trim();
+          return {
+            userId,
+            name: getHumanName(fullName || member.displayName || member.name, 'Member'),
+          };
+        })
+        .filter(member => member.userId && !attendedIds.has(member.userId));
+
+      setAttendanceRecord({ attendees, absentees });
+    } catch (error) {
+      console.warn('[Meeting] Could not load attendance record:', error?.message || error);
+    }
+  };
 
    const handleToggleCamera = async () => {
     const newState = !isCameraEnabled;
@@ -950,18 +1086,33 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
     clearScreenShareWatchdog();
 
-    try {
-      await client?.stopScreenShare();
-    } catch (e) {
-      console.warn('Failed to stop screen capture:', e?.message || e);
+    // Announce first, tear down after. Everyone else stops showing the share
+    // the moment this one small socket message lands, so cancelling is
+    // instant for them. It used to be sent only after stopScreenShare()
+    // finished -- and that awaits an Android foreground-service teardown plus
+    // one replaceTrack per peer connection, so viewers kept watching a share
+    // that had already been cancelled for as long as that took (and forever,
+    // if any of it hung).
+    //
+    // Starting a share deliberately does the opposite (capture, then
+    // announce) so peers never switch to a share that failed to start. There
+    // is no such risk when stopping: the worst case is peers stop showing it
+    // a moment before the last frame drains, which is exactly what we want.
+    if (notify) {
+      client?.sendScreenShareStopped();
     }
 
     setScreenStream(null);
     setIsScreenSharing(false);
     isScreenSharingRef.current = false;
 
+    try {
+      await client?.stopScreenShare();
+    } catch (e) {
+      console.warn('Failed to stop screen capture:', e?.message || e);
+    }
+
     if (notify) {
-      client?.sendScreenShareStopped();
       try {
         await meetingApi.updateParticipant(meetingId, { isScreenSharing: false });
       } catch (e) {
@@ -1061,6 +1212,17 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const handleSendChatMessage = async (content) => {
+    // Guarded here as well as in the UI, so an ended meeting stays read-only
+    // no matter which path reaches this.
+    if (isChatReadOnly) {
+      Toast.show({
+        type: 'info',
+        text1: 'Meeting has ended',
+        text2: 'You can read the chat, but no new messages can be sent.',
+      });
+      return;
+    }
+
     try {
       const response = await meetingApi.sendChatMessage(meetingId, content);
       setChatMessages(prev => appendChatMessage(prev, { ...response, isOwn: true }));
@@ -1266,6 +1428,10 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
   // flag that happened to be attached when a stream event arrived. A tile is
   // matched on connId *or* userId because the REST roster and the signaling
   // channel identify participants differently.
+  // Read-only once the meeting is over: explicitly marked read-only on entry,
+  // ended by the host while we were in it, or simply past its window.
+  const isChatReadOnly = isEndedMeeting || hasRoomEnded;
+
   const decoratedRemoteStreams = useMemo(() => {
     if (!remoteScreenSharer) {
       return remoteStreams.some(s => s.isScreenSharing)
@@ -1308,6 +1474,9 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     handleToggleScreenShare,
     handleEndCall,
     handleSendChatMessage,
+    isChatReadOnly,
+    isEndedMeeting,
+    attendanceRecord,
     setIsChatOpen,
     leaveMeeting,
   };
