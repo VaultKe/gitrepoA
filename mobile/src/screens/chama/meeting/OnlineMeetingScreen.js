@@ -121,7 +121,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     isMicrophoneEnabled,
     isScreenSharing,
     screenStream,
-    screenShareViewerCount,
     isSelfSpeaking,
     meetingTitle,
     userRole,
@@ -201,7 +200,12 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   const hasRemoteScreenSharer = remoteStreams.some(s => s.isScreenSharing);
   const isAnyScreenShare = isScreenSharing || hasRemoteScreenSharer;
 
-  const expandedTile = !isAnyScreenShare && expandedTileKey
+  // A screen share used to always win the stage, with no way to look closely
+  // at someone else while it was up. Now an explicit tap on a tile's expand
+  // control outranks it: the share doesn't stop, it just steps down into the
+  // strip like any other tile (still showing its "(Screen)" thumbnail there)
+  // while the person you tapped takes the big view.
+  const expandedTile = expandedTileKey
     ? (expandedTileKey === 'self'
         ? { isLocal: true, participant: null }
         : (() => {
@@ -214,6 +218,10 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   const showExpandedView = hasStageContent && !isStageCollapsed;
 
   const getExpandedParticipant = () => {
+    // A deliberate choice by the user outranks the automatic screen-share
+    // focus.
+    if (expandedTile) return expandedTile;
+
     const remoteScreenSharer = remoteStreams.find(s => s.isScreenSharing);
     if (remoteScreenSharer) {
       return { participant: remoteScreenSharer, isLocal: false };
@@ -221,8 +229,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     if (isScreenSharing) {
       return { participant: { stream: screenStream }, isLocal: true };
     }
-    // A tile the user expanded themselves.
-    if (expandedTile) return expandedTile;
     return null;
   };
 
@@ -242,9 +248,16 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
   const isOneToOne = !isAnyScreenShare && !expandedTile && remoteStreams.length === 1;
 
+ 
+  const showMiniStageCard = hasStageContent && isStageCollapsed;
+
   const galleryTiles = [
+    ...(showMiniStageCard ? [{ key: 'stage-mini', isStageMini: true }] : []),
+   
     { key: 'self', isSelf: true },
-    ...remoteStreams.map(participant => ({ key: participant.connId, isSelf: false, participant })),
+    ...remoteStreams
+      .filter(p => !(showMiniStageCard && !expandedData?.isLocal && p.connId === expandedData?.participant?.connId))
+      .map(participant => ({ key: participant.connId, isSelf: false, participant })),
   ];
 
   const gridColumns = windowWidth >= 1100 ? 3 : 2;
@@ -520,6 +533,55 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     );
   };
 
+  // The compact stand-in for the stage while it's minimised -- same content
+  // as the full stage (see the stage view below), just small and first in
+  // the grid, so a minimised screen share is still there to glance at and
+  // tap back open rather than disappearing until someone remembers the
+  // toggle button.
+  const renderMiniStageTile = (sizeStyle = null) => {
+    if (!expandedData) return null;
+
+    const stream = expandedData.isLocal
+      ? (isScreenSharing ? screenStream : localStream)
+      : (expandedData.participant.isScreenSharing && expandedData.participant.screenStream
+          ? expandedData.participant.screenStream
+          : expandedData.participant.stream);
+
+    const label = expandedData.isLocal
+      ? (isScreenSharing ? 'Your Screen' : 'You')
+      : (expandedData.participant.isScreenSharing
+          ? `${nameForParticipant(expandedData.participant)} (Screen)`
+          : nameForParticipant(expandedData.participant));
+
+    return (
+      <TouchableOpacity
+        key="stage-mini"
+        activeOpacity={0.9}
+        onPress={() => setIsStageCollapsed(false)}
+        style={[
+          styles.gridVideoWrapper,
+          { backgroundColor: colors.card, borderColor: colors.primary, borderWidth: 2 },
+          sizeStyle,
+        ]}
+        accessibilityLabel="Restore the shared screen"
+      >
+        {renderVideoElement(
+          stream,
+          expandedData.isLocal,
+          expandedData.isLocal ? null : expandedData.participant.connId,
+          isStageScreenShare,
+          label
+        )}
+        <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+          <Text style={styles.videoLabelText}>{label}</Text>
+        </View>
+        <View style={[styles.tileExpand, { backgroundColor: colors.overlay }]}>
+          <Ionicons name="expand" size={16} color="#fff" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   // One tile definition shared by the horizontal strip (`compact`) and the
   // wrapped grid, so the two layouts can never drift apart.
   const renderParticipantTile = (participant, compact, sizeStyle = null) => {
@@ -627,9 +689,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
               <Text style={styles.videoLabelText}>
                 {expandedData.isLocal
-                  ? (isScreenSharing
-                      ? `Your Screen${screenShareViewerCount > 0 ? ` · Seen by ${screenShareViewerCount}` : ' · Not confirmed seen yet'}`
-                      : 'You')
+                  ? (isScreenSharing ? 'Your Screen' : 'You')
                   : (expandedData.participant.isScreenSharing
                       ? `${nameForParticipant(expandedData.participant)} (Screen)`
                       : nameForParticipant(expandedData.participant))}
@@ -644,7 +704,12 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={[styles.stageToggle, { backgroundColor: colors.overlay }]}
             onPress={() => {
-              if (expandedTile && !isAnyScreenShare) {
+              // Closing a tile someone expanded hands the stage back to
+              // whatever it would show automatically -- the screen share, if
+              // one is running, otherwise the grid. Only when nothing is
+              // manually expanded does this button minimise the share itself
+              // (which is never ours to end from here).
+              if (expandedTile) {
                 setExpandedTileKey(null);
                 setIsStageCollapsed(false);
                 return;
@@ -685,9 +750,11 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             showsVerticalScrollIndicator={isGalleryExpanded}
           >
             {visibleGalleryTiles.map(tile => (
-              tile.isSelf
-                ? renderSelfTile(false, galleryTileStyle())
-                : renderParticipantTile(tile.participant, false, galleryTileStyle())
+              tile.isStageMini
+                ? renderMiniStageTile(galleryTileStyle())
+                : tile.isSelf
+                  ? renderSelfTile(false, galleryTileStyle())
+                  : renderParticipantTile(tile.participant, false, galleryTileStyle())
             ))}
 
             {overflowGalleryCount > 0 && (
