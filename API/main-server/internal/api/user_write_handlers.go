@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"vaultke-backend/internal/services"
 	"vaultke-backend/internal/utils"
+	phonenorm "vaultke-backend/internal/utils/phone"
 )
 
 func UpdateProfile(c *gin.Context) {
@@ -72,8 +73,20 @@ func UpdateProfile(c *gin.Context) {
 		args = append(args, request.LastName)
 	}
 	if request.Phone != "" {
+		// Reject anything that is not a real Kenyan phone number. Without this a
+		// client that submits a masked value (e.g. "*******5678", which the app
+		// used to receive from the profile endpoint) would silently overwrite
+		// the stored number with garbage.
+		canonicalPhone, err := phonenorm.NormalizeKenyanPhone(request.Phone)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid phone number",
+			})
+			return
+		}
 		setParts = append(setParts, "phone = $3")
-		args = append(args, utils.FormatPhoneNumber(request.Phone))
+		args = append(args, canonicalPhone)
 	}
 	if request.County != "" {
 		setParts = append(setParts, "county = $4")
