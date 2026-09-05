@@ -91,6 +91,7 @@ const ChamaMeetingsTable = ({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tableScrollContent}
           pointerEvents="box-none"
+          style={{ flex: 1 }}
         >
           <View style={styles.tableContent}>
             <View style={styles.tableHeader}>
@@ -203,6 +204,7 @@ const createStyles = (colors) => StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
     alignSelf: 'stretch',
+    flex: 1,
   },
   tableCard: {
     flex: 1,

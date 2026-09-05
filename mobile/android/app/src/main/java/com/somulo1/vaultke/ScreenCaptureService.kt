@@ -28,7 +28,7 @@ class ScreenCaptureService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {
-            startForeground(NOTIFICATION_ID, buildNotification())
+            startForegroundCompat(NOTIFICATION_ID, buildNotification())
         } catch (e: Exception) {
             // Starting the service is best effort: if the platform rejects it we
             // still let the capture attempt proceed so the user gets the real
@@ -41,7 +41,7 @@ class ScreenCaptureService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startForeground(id: Int, notification: Notification) {
+    private fun startForegroundCompat(id: Int, notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } else {
