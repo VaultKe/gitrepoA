@@ -247,9 +247,14 @@ func GetProfile(c *gin.Context) {
 		return
 	}
 
+	// This endpoint only ever returns the authenticated caller's OWN profile
+	// (keyed on the userID from the token), so email / phone / national ID are
+	// returned in full. Masking them here breaks the profile edit screen, which
+	// pre-fills its form from this response and PUTs the values back — a masked
+	// "k*******@gmail.com" / "12****5678" would then be written to the database.
 	userMap := map[string]interface{}{
 		"id":              user.ID,
-		"email":           utils.MaskEmail(user.Email),
+		"email":           user.Email,
 		"firstName":       user.FirstName,
 		"lastName":        user.LastName,
 		"role":            user.Role,
@@ -305,7 +310,7 @@ func GetProfile(c *gin.Context) {
 		userMap["gender"] = user.Gender.String
 	}
 	if user.IDNumber.Valid {
-		userMap["idNumber"] = utils.MaskID(user.IDNumber.String)
+		userMap["idNumber"] = user.IDNumber.String
 	}
 	userMap["registrationFeePaid"] = user.RegistrationFeePaid
 
