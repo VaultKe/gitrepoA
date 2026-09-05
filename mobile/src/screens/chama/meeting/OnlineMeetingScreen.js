@@ -26,6 +26,7 @@ import useOnlineMeetingScreen from '../../../hooks/useOnlineMeetingScreen';
 import OnlineMeetingLoading from '../../../components/chama-meeting/OnlineMeetingLoading';
 import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeetingErrorView';
 import WebVideo from '../../../components/chama-meeting/WebVideo';
+import MeetingMinutesCard from '../../../components/chama-meeting/MeetingMinutesCard';
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 const MAX_GRID_PARTICIPANTS = 3;
@@ -168,6 +169,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   // which is truthy whenever anyone else is in the call -- so the stage was
   // always shown and pressing minimise only ever flipped the icon.
   const showExpandedView = hasStageContent && !isStageCollapsed;
+  const isAnyScreenShare = isScreenSharing || hasRemoteScreenSharer;
 
   // Get the participant to show in expanded view
   // Priority: 1. Remote screen sharer (always show when someone is sharing)
@@ -197,6 +199,11 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const expandedData = getExpandedParticipant();
+  const isStageScreenShare = !!expandedData && (
+    expandedData.isLocal
+      ? isScreenSharing
+      : !!(expandedData.participant.isScreenSharing && expandedData.participant.screenStream)
+  );
 
   // The stage only "uses up" a participant while it's actually on screen --
   // once minimised they belong back in the grid, otherwise minimising would
@@ -348,6 +355,15 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               </View>
             )}
           </View>
+
+          <MeetingMinutesCard
+            meetingId={route.params?.meetingId}
+            meetingTitle={meetingTitle}
+            chamaId={route.params?.chamaId || route.params?.meetingData?.chamaId}
+            userRole={userRole}
+            colors={colors}
+            navigation={navigation}
+          />
         </ScrollView>
       </SafeAreaView>
     );
@@ -445,11 +461,83 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     );
   };
 
+  // One tile definition shared by the horizontal strip (`compact`) and the
+  // wrapped grid, so the two layouts can never drift apart.
+  const renderParticipantTile = (participant, compact) => {
+    const { connId, stream, screenStream: participantScreen, name, isScreenSharing: sharing } = participant;
+    return (
+      <View
+        key={connId}
+        style={[
+          styles.gridVideoWrapper,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          compact && styles.gridVideoWrapperExpanded,
+        ]}
+      >
+        {renderVideoElement(
+          sharing && participantScreen ? participantScreen : stream,
+          false,
+          connId,
+          !!(sharing && participantScreen)
+        )}
+        <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
+          {sharing && (
+            <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
+          )}
+          <Text style={styles.videoLabelText}>
+            {sharing ? `${truncateDisplayName(name || 'Guest')} (Screen)` : truncateDisplayName(name || 'Guest')}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderSelfTile = (compact) => (
+    <View
+      key="self"
+      style={[
+        styles.gridVideoWrapper,
+        { backgroundColor: colors.card, borderColor: colors.border },
+        compact && styles.gridVideoWrapperExpanded,
+      ]}
+    >
+      {renderVideoElement(localStream, true)}
+      <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+        <Text style={styles.videoLabelText}>{isScreenSharing ? 'You · Camera' : 'You'}</Text>
+      </View>
+    </View>
+  );
+
+  const renderOthersTile = (compact) => (
+    <View
+      key="others"
+      style={[
+        styles.gridVideoWrapper,
+        compact && styles.gridVideoWrapperExpanded,
+        styles.hiddenParticipantsBadge,
+      ]}
+    >
+      <View style={styles.hiddenParticipantsContent}>
+        <Ionicons name="people" size={compact ? 22 : 32} color="#fff" />
+        <Text style={styles.hiddenParticipantsText}>+{hiddenParticipantsCount} others</Text>
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.videoArea}>
         {showExpandedView && expandedData && (
-          <View style={[styles.expandedVideoContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.expandedVideoContainer,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              // A shared screen is the thing everyone is meant to be looking
+              // at, so the stage is set apart from the participant tiles
+              // rather than just being a bigger one of them.
+              isStageScreenShare && [styles.stageSharing, { borderColor: colors.primary }],
+            ]}
+          >
             {expandedData.isLocal ? (
               isScreenSharing
                 ? renderVideoElement(screenStream, true, null, true)
@@ -514,42 +602,40 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         )}
 
-        <View style={[
-          styles.videoGrid,
-          showExpandedView && styles.videoGridWithExpanded
-        ]}>
-          {gridRemoteParticipants.map(({ connId, userId, stream, screenStream, name, isScreenSharing: sharing }) => (
-            <View key={connId} style={[styles.gridVideoWrapper, { backgroundColor: colors.card, borderColor: colors.border }, showExpandedView && styles.gridVideoWrapperExpanded]}>
-              {renderVideoElement(sharing && screenStream ? screenStream : stream, false, connId, !!(sharing && screenStream))}
-              <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
-                {sharing && (
-                  <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
-                )}
-                <Text style={styles.videoLabelText}>
-                  {sharing ? `${truncateDisplayName(name || 'Guest')} (Screen)` : truncateDisplayName(name || 'Guest')}
-                </Text>
-              </View>
-            </View>
-          ))}
-
-          {hiddenParticipantsCount > 0 && (
-            <View style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded, styles.hiddenParticipantsBadge]}>
-              <View style={styles.hiddenParticipantsContent}>
-                <Ionicons name="people" size={32} color="#fff" />
-                <Text style={styles.hiddenParticipantsText}>
-                  +{hiddenParticipantsCount} others
-                </Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        <View style={[styles.selfViewPiP, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {renderVideoElement(localStream, true)}
-          <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
-            <Text style={styles.videoLabelText}>{isScreenSharing ? 'You · Camera' : 'You'}</Text>
+        {/* Participants sit in a row beneath the stage and scroll sideways.
+            This used to be a plain View relying on `overflowX: auto`, which is
+            a web CSS property React Native ignores -- so on a phone the tiles
+            past the third were simply unreachable. */}
+        {showExpandedView ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.participantStrip}
+            contentContainerStyle={styles.participantStripContent}
+          >
+            {isAnyScreenShare && renderSelfTile(true)}
+            {gridRemoteParticipants.map(participant => renderParticipantTile(participant, true))}
+            {hiddenParticipantsCount > 0 && renderOthersTile(true)}
+          </ScrollView>
+        ) : (
+          <View style={styles.videoGrid}>
+            {isAnyScreenShare && renderSelfTile(false)}
+            {gridRemoteParticipants.map(participant => renderParticipantTile(participant, false))}
+            {hiddenParticipantsCount > 0 && renderOthersTile(false)}
           </View>
-        </View>
+        )}
+
+        {/* The floating self-view is fine over a face, but it would cover part
+            of whatever is being presented -- so while any screen is shared it
+            steps down into the strip and takes its turn like everyone else. */}
+        {!isAnyScreenShare && (
+          <View style={[styles.selfViewPiP, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {renderVideoElement(localStream, true)}
+            <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+              <Text style={styles.videoLabelText}>You</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={[styles.controls, { backgroundColor: colors.surface + 'E6' }]}>
@@ -833,11 +919,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.sm,
   },
-  videoGridWithExpanded: {
-    flexWrap: 'nowrap',
-    justifyContent: 'flex-start',
-    overflowX: 'auto',
-    paddingVertical: spacing.md,
+  // Fixed height so the strip never steals room from the stage above it.
+  participantStrip: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  participantStripContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  stageSharing: {
+    borderWidth: 2,
   },
   gridVideoWrapper: {
     width: '48%',
