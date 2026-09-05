@@ -220,6 +220,7 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 		DisplayName string `json:"displayName"`
 		Role        string `json:"role"`
 		UserID      string `json:"userId"` // Allow passing userId for debug/unauthenticated joins
+		ChamaID     string `json:"chamaId"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -251,7 +252,21 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	participant, err := h.roomManager.JoinRoom(roomID, userID, req.DisplayName, userRole)
+	// One chama runs one online meeting at a time. Scheduling already refuses
+	// to create overlapping online meetings, so this is the runtime half of
+	// that same rule -- it catches anything that slipped past scheduling (an
+	// old meeting still live, a room started out of band). It only applies
+	// when the caller told us its chama: without one there is nothing to
+	// compare against, so joins are never blocked by a missing chamaId.
+	if blockingRoomID, busy := h.roomManager.ActiveOnlineMeetingForChama(req.ChamaID, roomID); busy {
+		fmt.Printf("[JoinRoom] blocked | chamaID=%s roomID=%s | already live: %s\n", req.ChamaID, roomID, blockingRoomID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "This chama already has an online meeting in progress. Only one online meeting can run at a time — join that one, or wait for it to end.",
+		})
+		return
+	}
+
+	participant, err := h.roomManager.JoinRoom(roomID, userID, req.DisplayName, userRole, req.ChamaID)
 	if err != nil {
 		if errors.Is(err, room.ErrRoomFull) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "room is full"})
@@ -475,7 +490,9 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			// between HTTP joins and WebSocket joins. This ensures the participant
 			// appears in GetParticipants() and Redis presence is set.
 			participantID := ""
-			participant, err := h.roomManager.JoinRoom(roomID, msg.UserID, msg.DisplayName, userRole)
+			// The websocket join carries no chamaId; the REST join that
+			// precedes it already recorded one, so pass empty to leave it be.
+			participant, err := h.roomManager.JoinRoom(roomID, msg.UserID, msg.DisplayName, userRole, "")
 			if err != nil {
 				fmt.Printf("[Signal] join | roomID=%s userID=%s | RoomManager join failed: %v\n", roomID, msg.UserID, err)
 			} else {

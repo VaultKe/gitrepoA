@@ -79,7 +79,6 @@ type SignalingHub struct {
 	// Local connections
 	clients    map[*SignalingClient]bool
 	rooms      map[string]map[*SignalingClient]bool
-	broadcast  chan []byte
 	register   chan *SignalingClient
 	unregister chan *SignalingClient
 
@@ -99,7 +98,6 @@ func NewSignalingHub(redisClient *redis.Client, redisChannel string) *SignalingH
 	hub := &SignalingHub{
 		clients:      make(map[*SignalingClient]bool),
 		rooms:        make(map[string]map[*SignalingClient]bool),
-		broadcast:    make(chan []byte, 65536),
 		register:     make(chan *SignalingClient, 1024),
 		unregister:   make(chan *SignalingClient, 1024),
 		redisClient:  redisClient,
@@ -149,22 +147,6 @@ func (h *SignalingHub) Run() {
 		case client := <-h.unregister:
 			h.removeClient(client, ClientLeft)
 
-		case message := <-h.broadcast:
-			h.mu.RLock()
-			for client := range h.clients {
-				select {
-				case client.Send <- message:
-				default:
-					// Client's send buffer is full - close and clean up
-					close(client.Send)
-					// Need to unlock before calling removeClient to avoid deadlock
-					h.mu.RUnlock()
-					h.removeClient(client, ClientDropped)
-					h.mu.RLock()
-				}
-			}
-			h.mu.RUnlock()
-
 		case <-pingTicker.C:
 			h.mu.RLock()
 			for client := range h.clients {
@@ -203,8 +185,11 @@ func (h *SignalingHub) listenRedis() {
 			RoomID string `json:"roomId"`
 		}
 		if err := json.Unmarshal([]byte(msg.Payload), &parsedMsg); err != nil {
-			// If we can't parse, broadcast to all (backward compatibility)
-			h.broadcast <- []byte(msg.Payload)
+			// Unparseable payloads used to be fanned out to every connected
+			// client. Meetings are independent even within one chama, so a
+			// message we cannot attribute to a room must be dropped rather
+			// than delivered into every other ongoing meeting.
+			fmt.Printf("[Signal] Dropping unparseable Redis payload (cannot attribute to a room)\n")
 			continue
 		}
 
@@ -222,8 +207,12 @@ func (h *SignalingHub) listenRedis() {
 			}
 			h.mu.RUnlock()
 		} else {
-			// No room ID - broadcast to all (for global events like room-ended)
-			h.broadcast <- []byte(msg.Payload)
+			// Same reasoning as above: without a room id there is no safe
+			// audience for this message. Every event the service emits carries
+			// its roomId, so reaching here means something is malformed --
+			// delivering it room-wide would leak one meeting's signalling
+			// (and chat) into every other meeting on this instance.
+			fmt.Printf("[Signal] Dropping Redis payload with no roomId\n")
 		}
 	}
 }

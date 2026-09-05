@@ -441,6 +441,48 @@ func CreateMeeting(c *gin.Context) {
 		meetingType = "physical"
 	}
 
+	// A chama may only ever have one online meeting running at a time, so two
+	// online meetings must never be scheduled over the same window. Enforcing
+	// it here — at the only point where an online meeting comes into
+	// existence — is what makes that guarantee hold at runtime too: if no two
+	// online meetings can overlap in time, no two can be live at once.
+	// Overlap is the standard half-open interval test: the meetings clash when
+	// each one starts before the other ends.
+	if meetingType == "virtual" || meetingType == "hybrid" {
+		var clashTitle string
+		var clashStart time.Time
+		err = db.(*sql.DB).QueryRow(`
+			SELECT title, scheduled_at
+			FROM meetings
+			WHERE chama_id = $1
+			  AND meeting_type IN ('virtual', 'hybrid')
+			  AND COALESCE(status, '') NOT IN ('cancelled', 'completed', 'ended')
+			  AND scheduled_at < $2
+			  AND (scheduled_at + (COALESCE(NULLIF(duration, 0), 60) * INTERVAL '1 minute')) > $3
+			ORDER BY scheduled_at
+			LIMIT 1
+		`, req.ChamaID, endTime, meetingTime).Scan(&clashTitle, &clashStart)
+
+		if err != nil && err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to check for conflicting online meetings",
+			})
+			return
+		}
+
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error": fmt.Sprintf(
+					"This chama already has an online meeting (\"%s\") scheduled for %s. Only one online meeting can run at a time — pick a slot that does not overlap it.",
+					clashTitle, clashStart.Format("2 Jan 2006 15:04"),
+				),
+			})
+			return
+		}
+	}
+
 	location := req.Location
 	if location == "" {
 		location = "TBD"

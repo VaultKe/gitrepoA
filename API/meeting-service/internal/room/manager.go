@@ -351,9 +351,17 @@ func (rm *RoomManager) EndRoom(roomID string) error {
 }
 
 // JoinRoom adds a participant to a room.
-func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role string) (*models.Participant, error) {
+// JoinRoom adds a participant to a room. chamaID is optional: when the caller
+// knows which chama the meeting belongs to it is recorded on the room, which
+// is what lets the service tell one chama's meetings apart from another's.
+func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role, chamaID string) (*models.Participant, error) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
+
+	roomChamaID := chamaID
+	if roomChamaID == "" {
+		roomChamaID = "default"
+	}
 
 	room, exists := rm.rooms[roomID]
 	if !exists {
@@ -365,7 +373,7 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role string) (*mode
 			// Auto-create room if it doesn't exist
 			room = &models.Room{
 				ID:             roomID,
-				ChamaID:        "default",
+				ChamaID:        roomChamaID,
 				Name:           "Auto-created Room",
 				Type:           models.RoomTypeVirtual,
 				Status:         models.RoomStatusWaiting,
@@ -391,6 +399,15 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role string) (*mode
 			room = &dbRoom
 			rm.rooms[roomID] = room
 		}
+	}
+
+	// Rooms created before the caller started sending a chamaId (or created by
+	// the auto-create path above) sit on the "default" placeholder. Adopt the
+	// real one as soon as we learn it, so per-chama checks have something
+	// meaningful to work with.
+	if chamaID != "" && room.ChamaID != chamaID {
+		room.ChamaID = chamaID
+		_, _ = rm.db.Exec(`UPDATE rooms SET chama_id = $1 WHERE id = $2`, chamaID, roomID)
 	}
 
 	// Check capacity
@@ -451,6 +468,41 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role string) (*mode
 	rm.stats.mu.Unlock()
 
 	return participant, nil
+}
+
+// ActiveOnlineMeetingForChama reports another room in the same chama that is
+// currently live -- meaning it still has at least one connected participant.
+// A chama may only run one online meeting at a time, and liveness is measured
+// by real presence rather than by room status: a room whose status was never
+// explicitly ended, but which everybody has since left, must not block a new
+// meeting from starting.
+//
+// Returns the blocking room's id and true when one exists. An empty or
+// placeholder chamaID matches nothing, so callers that do not know their chama
+// are never blocked.
+func (rm *RoomManager) ActiveOnlineMeetingForChama(chamaID, excludeRoomID string) (string, bool) {
+	if chamaID == "" || chamaID == "default" {
+		return "", false
+	}
+
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	for roomID, room := range rm.rooms {
+		if roomID == excludeRoomID || room.ChamaID != chamaID {
+			continue
+		}
+		if room.Status == models.RoomStatusEnded {
+			continue
+		}
+		for _, participant := range rm.participants[roomID] {
+			if participant.LeftAt == nil {
+				return roomID, true
+			}
+		}
+	}
+
+	return "", false
 }
 
 // LeaveRoom removes a participant from a room.
