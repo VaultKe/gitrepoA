@@ -348,6 +348,12 @@ func GetUserTransactions(c *gin.Context) {
 		}
 		if tx.Metadata != nil {
 			m["metadata"] = tx.Metadata
+			// Surface the Safaricom-issued M-Pesa receipt code (captured from the
+			// STK callback) as a top-level field so clients don't have to dig
+			// through metadata, and never confuse it with the internal id.
+			if code := safeMeta(tx.Metadata, "mpesa_receipt_number"); code != "" {
+				m["mpesaReceiptNumber"] = code
+			}
 		}
 		walletTxns = append(walletTxns, m)
 		existingIDs[tx.ID] = true
