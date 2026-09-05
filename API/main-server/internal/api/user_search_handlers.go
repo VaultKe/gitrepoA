@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,6 +20,53 @@ type UserSearchHandlers struct {
 // NewUserSearchHandlers creates a new instance of UserSearchHandlers
 func NewUserSearchHandlers(db *sql.DB) *UserSearchHandlers {
 	return &UserSearchHandlers{db: db}
+}
+
+// buildPhoneSearchPatterns returns PostgreSQL-style LIKE conditions and args for
+// flexible phone search against canonical E.164 phones. It matches local formats
+// like 0712..., 254712..., and +254712... against stored values like +254712345678.
+func buildPhoneSearchPatterns(query string, startIndex int) (string, []interface{}) {
+	digits := strings.ReplaceAll(query, " ", "")
+	digits = strings.ReplaceAll(digits, "-", "")
+	digits = strings.ReplaceAll(digits, "(", "")
+	digits = strings.ReplaceAll(digits, ")", "")
+
+	var patterns []string
+	var args []interface{}
+	idx := startIndex
+
+	patterns = append(patterns, fmt.Sprintf("phone LIKE $%d", idx))
+	args = append(args, "%"+query+"%")
+	idx++
+
+	if len(digits) >= 2 {
+		if strings.HasPrefix(digits, "0") {
+			stripped := digits[1:]
+			if stripped != "" {
+				patterns = append(patterns, fmt.Sprintf("phone LIKE $%d", idx))
+				args = append(args, "%"+stripped+"%")
+				idx++
+			}
+		}
+
+		if strings.HasPrefix(digits, "254") {
+			patterns = append(patterns, fmt.Sprintf("phone LIKE $%d", idx))
+			args = append(args, "%+"+digits+"%")
+			idx++
+		}
+
+		if strings.HasPrefix(digits, "+254") {
+			local := "0" + digits[4:]
+			patterns = append(patterns, fmt.Sprintf("phone LIKE $%d", idx))
+			args = append(args, "%"+local+"%")
+		}
+	}
+
+	if len(patterns) == 0 {
+		return fmt.Sprintf("phone LIKE $%d", startIndex), []interface{}{"%" + query + "%"}
+	}
+
+	return strings.Join(patterns, " OR "), args
 }
 
 // SearchUsers searches for users by name, email, or phone number
@@ -72,6 +120,9 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 	var args []interface{}
 
 	if excludeCurrentUser == "true" {
+		phonePatterns, phoneArgs := buildPhoneSearchPatterns(query, 5)
+		phoneCount := len(phoneArgs)
+		orderIndex := 5 + phoneCount
 		sqlQuery = `
 			SELECT id, first_name, last_name, email, phone, created_at
 			FROM users
@@ -79,24 +130,27 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 				LOWER(first_name) LIKE LOWER($2) OR
 				LOWER(last_name) LIKE LOWER($3) OR
 				LOWER(email) LIKE LOWER($4) OR
-				phone LIKE $5
+				` + phonePatterns + `
 			)
 			ORDER BY
 				CASE
-					WHEN LOWER(first_name) LIKE LOWER($6) THEN 1
-					WHEN LOWER(last_name) LIKE LOWER($7) THEN 2
-					WHEN LOWER(email) LIKE LOWER($8) THEN 3
+					WHEN LOWER(first_name) LIKE LOWER($` + fmt.Sprint(orderIndex) + `) THEN 1
+					WHEN LOWER(last_name) LIKE LOWER($` + fmt.Sprint(orderIndex+1) + `) THEN 2
+					WHEN LOWER(email) LIKE LOWER($` + fmt.Sprint(orderIndex+2) + `) THEN 3
 					ELSE 4
 				END,
 				first_name, last_name
-			LIMIT $9 OFFSET $10
+			LIMIT $` + fmt.Sprint(orderIndex+3) + ` OFFSET $` + fmt.Sprint(orderIndex+4) + `
 		`
 		args = []interface{}{
-			userID, searchPattern, searchPattern, searchPattern, searchPattern,
-			searchPattern, searchPattern, searchPattern,
-			limit, offset,
+			userID, searchPattern, searchPattern, searchPattern,
 		}
+		args = append(args, phoneArgs...)
+		args = append(args, searchPattern, searchPattern, searchPattern, limit, offset)
 	} else {
+		phonePatterns, phoneArgs := buildPhoneSearchPatterns(query, 4)
+		phoneCount := len(phoneArgs)
+		orderIndex := 4 + phoneCount
 		sqlQuery = `
 			SELECT id, first_name, last_name, email, phone, created_at
 			FROM users
@@ -104,22 +158,22 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 				LOWER(first_name) LIKE LOWER($1) OR
 				LOWER(last_name) LIKE LOWER($2) OR
 				LOWER(email) LIKE LOWER($3) OR
-				phone LIKE $4
+				` + phonePatterns + `
 			ORDER BY
 				CASE
-					WHEN LOWER(first_name) LIKE LOWER($5) THEN 1
-					WHEN LOWER(last_name) LIKE LOWER($6) THEN 2
-					WHEN LOWER(email) LIKE LOWER($7) THEN 3
+					WHEN LOWER(first_name) LIKE LOWER($` + fmt.Sprint(orderIndex) + `) THEN 1
+					WHEN LOWER(last_name) LIKE LOWER($` + fmt.Sprint(orderIndex+1) + `) THEN 2
+					WHEN LOWER(email) LIKE LOWER($` + fmt.Sprint(orderIndex+2) + `) THEN 3
 					ELSE 4
 				END,
 				first_name, last_name
-			LIMIT $8 OFFSET $9
+			LIMIT $` + fmt.Sprint(orderIndex+3) + ` OFFSET $` + fmt.Sprint(orderIndex+4) + `
 		`
 		args = []interface{}{
-			searchPattern, searchPattern, searchPattern, searchPattern,
 			searchPattern, searchPattern, searchPattern,
-			limit, offset,
 		}
+		args = append(args, phoneArgs...)
+		args = append(args, searchPattern, searchPattern, searchPattern, limit, offset)
 	}
 
 	rows, err := h.db.Query(sqlQuery, args...)
@@ -282,24 +336,32 @@ func (h *UserSearchHandlers) SearchUsersAdvanced(c *gin.Context) {
 		whereConditions = append(whereConditions, "LOWER(email) LIKE LOWER($4)")
 		args = append(args, searchPattern)
 	case "phone":
-		whereConditions = append(whereConditions, "phone LIKE $5")
-		args = append(args, searchPattern)
+		phonePatterns, phoneArgs := buildPhoneSearchPatterns(query, 2)
+		whereConditions = append(whereConditions, phonePatterns)
+		args = append(args, phoneArgs...)
 	default: // "all"
-		whereConditions = append(whereConditions, "(LOWER(first_name) LIKE LOWER($6) OR LOWER(last_name) LIKE LOWER($7) OR LOWER(email) LIKE LOWER($8) OR phone LIKE $9)")
-		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
+		phonePatterns, phoneArgs := buildPhoneSearchPatterns(query, 6)
+		whereConditions = append(whereConditions, "(LOWER(first_name) LIKE LOWER($2) OR LOWER(last_name) LIKE LOWER($3) OR LOWER(email) LIKE LOWER($4) OR "+phonePatterns+")")
+		args = append(args, searchPattern, searchPattern, searchPattern)
+		args = append(args, phoneArgs...)
 	}
 
 	if excludeCurrentUser == "true" {
-		whereConditions = append(whereConditions, "id != $10")
-		args = append(args, userID)
+		whereConditions = append(whereConditions, "id != $1")
+		args = append([]interface{}{userID}, args...)
 	}
+
+	// Calculate LIMIT/OFFSET placeholder numbers based on arg count
+	argCount := len(args)
+	limitIndex := argCount + 1
+	offsetIndex := argCount + 2
 
 	sqlQuery := `
 		SELECT id, first_name, last_name, email, phone, created_at
 		FROM users
 		WHERE ` + strings.Join(whereConditions, " AND ") + `
 		ORDER BY first_name, last_name
-		LIMIT $9 OFFSET $10
+		LIMIT $` + fmt.Sprint(limitIndex) + ` OFFSET $` + fmt.Sprint(offsetIndex) + `
 	`
 
 	args = append(args, limit, offset)
