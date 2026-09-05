@@ -32,6 +32,49 @@ import MeetingMinutesCard from '../../../components/chama-meeting/MeetingMinutes
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 const CARD_CONTROL_TIMEOUT_MS = 4000;
+// Used only to break ties between column counts that fill the box equally
+// well (see computeGridLayout) -- tiles are never locked to this ratio, they
+// fill whatever box the grid gives them and the video inside is
+// centre-cropped to it (objectFit: cover in renderVideoElement).
+const IDEAL_TILE_ASPECT_RATIO = 16 / 9;
+const MIN_TILE_WIDTH = 80;
+const MIN_TILE_HEIGHT = 60;
+
+// Picks rows x columns for `count` tiles that fill an availW x availH box
+// completely -- one person gets the whole screen, two split it in half, and
+// it keeps dividing as more join. A fixed aspect ratio per tile was leaving
+// most of the screen empty below/beside the grid whenever the tile count
+// didn't happen to produce that exact ratio (a lone caller's tile, sized to
+// the full width, came out only as tall as a 16:9 strip). Every tile's box
+// here is instead exactly availW/columns by availH/rows, so the grid always
+// uses the space it's given; aspect ratio only decides *which* column count
+// to prefer when more than one would fit without scrolling.
+const computeGridLayout = (count, availW, availH) => {
+  if (count <= 0 || availW <= 0 || availH <= 0) {
+    return { columns: 1, rows: 1 };
+  }
+
+  let best = null;
+
+  for (let columns = 1; columns <= count; columns++) {
+    const tileWidth = availW / columns;
+    if (tileWidth < MIN_TILE_WIDTH && columns > 1) break;
+
+    const rows = Math.ceil(count / columns);
+    const tileHeight = availH / rows;
+    if (tileHeight < MIN_TILE_HEIGHT && rows > 1) continue;
+
+    const aspect = tileWidth / tileHeight;
+    const aspectPenalty = Math.abs(Math.log(aspect / IDEAL_TILE_ASPECT_RATIO));
+
+    if (!best || aspectPenalty < best.aspectPenalty) {
+      best = { columns, rows, aspectPenalty };
+    }
+  }
+
+  if (!best) return { columns: 1, rows: count };
+  return { columns: best.columns, rows: best.rows };
+};
 
 const SpeakingIndicator = ({ color }) => {
   const bars = useRef([new Animated.Value(0.35), new Animated.Value(0.35), new Animated.Value(0.35)]).current;
@@ -95,6 +138,14 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   const chatScrollRef = useRef(null);
   const [isStageCollapsed, setIsStageCollapsed] = useState(false);
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
+  // Measured size of the gallery's own container (not the window), so the
+  // puzzle-fit math below sizes tiles against the space actually available
+  // once the header, controls and any stage strip have taken their share.
+  const [galleryAreaSize, setGalleryAreaSize] = useState({ width: 0, height: 0 });
+  const onGalleryLayout = (e) => {
+    const { width, height } = e.nativeEvent.layout;
+    setGalleryAreaSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+  };
   const [expandedTileKey, setExpandedTileKey] = useState(null);
   const [revealedTileKey, setRevealedTileKey] = useState(null);
   const revealTimerRef = useRef(null);
@@ -260,15 +311,35 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       .map(participant => ({ key: participant.connId, isSelf: false, participant })),
   ];
 
-  const gridColumns = windowWidth >= 1100 ? 3 : 2;
-  const gridRows = 3;
-  const gridCapacity = gridColumns * gridRows;
+  // Small screens fold into "+N more" a tile sooner (6, not 8) so cards never
+  // shrink past readable -- the puzzle-fit math below would otherwise just
+  // keep dividing them smaller as more people join.
+  const isSmallDevice = windowWidth < 380 || windowHeight < 650;
+  const maxVisibleTiles = isSmallDevice ? 6 : 8;
 
-  const galleryOverflows = !isGalleryExpanded && galleryTiles.length > gridCapacity;
+  const galleryOverflows = !isGalleryExpanded && galleryTiles.length > maxVisibleTiles;
   const visibleGalleryTiles = galleryOverflows
-    ? galleryTiles.slice(0, gridCapacity - 1)
+    ? galleryTiles.slice(0, maxVisibleTiles - 1)
     : galleryTiles;
   const overflowGalleryCount = galleryTiles.length - visibleGalleryTiles.length;
+
+  // One person fills the screen, two divide it, and it keeps dividing as
+  // more join -- rather than a fixed tile size that left a lone caller with
+  // empty space around them. The "+N more" card counts as one of the tiles
+  // being packed, so it sizes consistently with the rest. Falls back to the
+  // window size until the gallery's own container has been measured (see
+  // onGalleryLayout).
+  const packedTileCount = visibleGalleryTiles.length + (overflowGalleryCount > 0 ? 1 : 0);
+  // Sized as if only a screen's worth were showing, even once "+N more" has
+  // been expanded to reveal the rest -- otherwise fitting every tile at once
+  // would keep shrinking them as the list grows, when the actual intent of
+  // expanding is to scroll to the rest at a normal, readable size.
+  const layoutTileCount = Math.min(packedTileCount, maxVisibleTiles);
+  const { columns: gridColumns, rows: gridRows } = computeGridLayout(
+    layoutTileCount,
+    galleryAreaSize.width || windowWidth,
+    galleryAreaSize.height || windowHeight
+  );
 
   const rosterParticipants = participants
     .filter((entry) => {
@@ -508,10 +579,26 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     );
   };
 
+  // Both dimensions are explicit here, on purpose: an explicit width with
+  // height left to aspectRatio (the old approach) is exactly what capped a
+  // lone caller's tile at a 16:9 strip and left the rest of the screen
+  // empty. Explicit width *and* height together override that aspectRatio
+  // entirely (Yoga only falls back to it when a dimension is missing), so
+  // the tile actually fills its full share of the measured gallery area.
   const galleryTileStyle = () => {
     const gutter = spacing.xs * 2;
-    const available = Math.max(0, windowWidth - spacing.sm * 2);
-    return { width: Math.max(80, available / gridColumns - gutter) };
+    const outerPadding = spacing.sm * 2;
+    const containerWidth = galleryAreaSize.width || windowWidth;
+    const containerHeight = galleryAreaSize.height || windowHeight;
+    const availableWidth = Math.max(0, containerWidth - outerPadding);
+    const availableHeight = Math.max(0, containerHeight - outerPadding);
+    return {
+      width: Math.max(MIN_TILE_WIDTH, availableWidth / gridColumns - gutter),
+      height: Math.max(MIN_TILE_HEIGHT, availableHeight / gridRows - gutter),
+      // Belt and suspenders alongside the explicit height above -- see the
+      // same pattern (and its comment) on oneToOneRemote/oneToOneSelf.
+      aspectRatio: undefined,
+    };
   };
 
   const renderTileExpandControl = (tileKey) => {
@@ -748,6 +835,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             style={styles.gallery}
             contentContainerStyle={styles.videoGrid}
             showsVerticalScrollIndicator={isGalleryExpanded}
+            onLayout={onGalleryLayout}
           >
             {visibleGalleryTiles.map(tile => (
               tile.isStageMini
@@ -778,7 +866,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         )}
 
         {/* Once expanded, offer the way back to the compact grid. */}
-        {!showExpandedView && isGalleryExpanded && galleryTiles.length > gridCapacity && (
+        {!showExpandedView && isGalleryExpanded && galleryTiles.length > maxVisibleTiles && (
           <TouchableOpacity
             style={[styles.galleryCollapse, { backgroundColor: colors.overlay }]}
             onPress={() => setIsGalleryExpanded(false)}

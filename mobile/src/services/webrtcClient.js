@@ -50,13 +50,10 @@ export const SIGNALING_MESSAGE_TYPES = {
   SCREEN_SHARE_STARTED: 'screen-share-started',
   SCREEN_SHARE_STOPPED: 'screen-share-stopped',
   SCREEN_SHARE_REJECTED: 'screen-share-rejected',
-  // Sent by a receiver back to the sharer the moment the receiver's screen
-  // video track actually starts delivering frames (track 'unmute'), not just
-  // when it was negotiated. This is the only ground-truth signal that a
-  // screen share is actually visible somewhere -- everything else (local
-  // "sharing" state, a successful replaceTrack call, a connected ICE state)
-  // can be true while the other side still sees nothing.
+  
   SCREEN_SHARE_ACK: 'screen-share-ack',
+  
+  SPEAKING_STATE: 'speaking-state',
 };
 
 // Lazy native module loader to avoid bundling react-native-webrtc on web
@@ -119,12 +116,7 @@ export const isWebRTCAvailable = () => {
   return !!native;
 };
 
-// Browsers only expose navigator.mediaDevices in a secure context: https://,
-// or localhost. Serving the same build over a LAN address (http://192.168.x.x)
-// leaves it undefined, so the call below would blow up with an opaque
-// "cannot read property getUserMedia of undefined" -- which is exactly why the
-// meeting works on the dev machine (localhost is treated as secure) but fails
-// on another phone on the same network. Detect it and say what's actually wrong.
+
 const assertWebMediaAvailable = () => {
   if (navigator?.mediaDevices?.getUserMedia) return;
 
@@ -166,23 +158,11 @@ class WebRTCClient {
     this.extraIceServers = [];
     // Interval handle for the active-speaker poll.
     this.audioLevelTimer = null;
-    // Set once disconnect() runs so the socket's own close event can tell a
-    // deliberate exit from a dropped connection. Without it, leaving a meeting
-    // closed the socket, the close handler treated that as a network failure,
-    // and ~600ms later the client silently rejoined the room it had just left
-    // -- which is why someone who left kept reappearing in everyone's grid.
+    
     this.hasLeft = false;
   }
 
-  // STUN alone can only connect two peers when at least one of them has a
-  // directly reachable (or easily NAT-reflexive) address. Two peers behind a
-  // symmetric or carrier-grade NAT — the common case on mobile data — can
-  // never find each other's real address that way, so their media (camera,
-  // screen share) silently never arrives even though the WebSocket signaling
-  // path keeps working fine (it isn't peer-to-peer, so it doesn't need NAT
-  // traversal). A TURN relay is the only fix for that pairing. The room join
-  // response already returns TURN credentials; this just has to be plugged
-  // into the peer connection config, which it previously wasn't.
+  
   setIceServers(turnUrls = [], turnCredentials = []) {
     this.extraIceServers = (turnUrls || [])
       .filter(Boolean)
@@ -260,13 +240,7 @@ class WebRTCClient {
       }
 
       if (this.localStream) {
-        // Merge into the existing local stream rather than replacing it
-        // outright. getUserMedia() is atomic -- if a caller was only denied
-        // the camera, say, requesting camera+mic together to recover would
-        // fail the whole call again even though the mic was never a problem.
-        // Callers recovering from a partial failure pass constraints for just
-        // the one kind they're re-requesting, and merging here keeps whatever
-        // was already working intact.
+        
         stream.getTracks().forEach(track => {
           this.localStream.getTracks()
             .filter(t => t.kind === track.kind)
@@ -285,10 +259,7 @@ class WebRTCClient {
     } catch (error) {
       console.error('Failed to get local media:', error);
       this.emit('error', { type: 'media', error });
-      // Keep the specific explanation when we already have one worth showing
-      // (e.g. the insecure-origin case) rather than flattening it into the
-      // generic "allow permissions" message, which would be misleading --
-      // there is no permission prompt to accept over plain http.
+      
       if (error?.isMediaUnavailable) {
         throw error;
       }
@@ -300,12 +271,7 @@ class WebRTCClient {
     }
   }
 
-  // Wires a just-(re)acquired local camera/mic track into every existing peer
-  // connection. toggleVideo()/toggleAudio() alone only flip `enabled` on
-  // tracks that are already attached to a connection's senders -- if the
-  // track didn't exist when a connection was created (permission was denied
-  // at join time and granted later, mid-call), nothing was ever sending it,
-  // so the remote side stays blind/deaf to it until this runs.
+ 
   async attachLocalTrack(kind) {
     const track = kind === 'video'
       ? this.localStream?.getVideoTracks?.()[0]
@@ -344,9 +310,7 @@ class WebRTCClient {
           audio: true,
         });
       } else if (native && native.mediaDevices && typeof native.mediaDevices.getDisplayMedia === 'function') {
-        // The mediaProjection foreground service must already be running when
-        // the capturer starts (Android 14+), otherwise the capture is rejected
-        // by the platform and silently yields a track with no frames.
+        
         serviceStarted = await startScreenCaptureService();
         // react-native-webrtc's getDisplayMedia takes no constraints; it always
         // captures the whole screen (and never system audio).
@@ -518,11 +482,7 @@ class WebRTCClient {
   }
 
   handleSignalingMessage(message) {
-    // Meetings are independent even when they belong to the same chama, so
-    // anything stamped with a different room is not ours to act on. The
-    // server already delivers per-room; this is the second line of defence,
-    // so a routing mistake there can never make one meeting's peers, chat or
-    // screen share surface inside another meeting.
+    
     if (message.roomId && this.roomId && message.roomId !== this.roomId) {
       console.warn('[Meeting] Ignoring signaling message for a different room:', {
         received: message.roomId,
@@ -564,10 +524,7 @@ class WebRTCClient {
         const remoteConnId = message.connId || message.payload?.connId;
         if (!remoteConnId) break;
 
-        // Determine a stable initiator without relying on the server's stale
-        // metadata. When two peers join nearly simultaneously, exactly one side
-        // should create the offer; otherwise both sides race and negotiation
-        // fails, leaving remote tiles blank.
+        
         const currentUserId = String(this.userId || '');
         const remoteUserId = String(message.userId || '');
         const shouldInitiate = currentUserId.localeCompare(remoteUserId) < 0;
@@ -643,6 +600,14 @@ class WebRTCClient {
         this.emit('screenShareAck', { connId: message.connId, userId: message.userId });
         break;
 
+      case SIGNALING_MESSAGE_TYPES.SPEAKING_STATE:
+        this.emit('remoteSpeakingChanged', {
+          connId: message.connId,
+          userId: message.userId,
+          isSpeaking: !!message.payload?.isSpeaking,
+        });
+        break;
+
       default:
         console.log('Unknown signaling message:', message.type);
     }
@@ -674,6 +639,17 @@ class WebRTCClient {
       type: SIGNALING_MESSAGE_TYPES.SCREEN_SHARE_ACK,
       roomId: this.roomId,
       target: sharerConnId,
+    });
+  }
+
+  // Tells the room whether our own mic is currently picking up speech. See
+  // the SPEAKING_STATE comment for why this is broadcast rather than left
+  // for each listener to detect from received audio.
+  sendSpeakingState(isSpeaking) {
+    this.sendSignalingMessage({
+      type: SIGNALING_MESSAGE_TYPES.SPEAKING_STATE,
+      roomId: this.roomId,
+      payload: { isSpeaking },
     });
   }
 
@@ -1234,57 +1210,46 @@ class WebRTCClient {
     return stats;
   }
 
-  // Polls each connection for how loud its audio currently is and emits the
-  // result, so the UI can show who is speaking and float them to the front.
-  //
-  // `audioLevel` comes from the WebRTC stats themselves rather than from an
-  // AudioContext analyser: the stats route is the only one that works
-  // identically on the browser and on the native build, where remote audio
-  // never passes through a JS audio graph we could tap.
+  // Polls our own outgoing audio level and emits it, so the UI can show
+  // whether *we* are speaking. Only ever reads the local level -- see the
+  // SPEAKING_STATE comment for why remote speaking is announced over
+  // signaling instead of read off received-audio stats here: react-native-
+  // webrtc's getStats() does populate `audioLevel` for the local capture
+  // (media-source/outbound-rtp), which is what this relies on, but not
+  // reliably for inbound-rtp on received audio, so polling a peer
+  // connection for how loud a remote participant is never actually reports
+  // a level on native.
   startAudioLevelMonitoring(intervalMs = 500) {
     this.stopAudioLevelMonitoring();
 
     this.audioLevelTimer = setInterval(async () => {
-      if (!this.peerConnections.size) return;
-
-      const levels = {};
-      // Our own microphone is the same device on every connection, so it is
-      // read from whichever report happens to carry it rather than polling
-      // again per peer.
-      let localLevel = 0;
       const micEnabled = !!this.localStream?.getAudioTracks?.()[0]?.enabled;
+      if (!micEnabled || !this.peerConnections.size) {
+        this.emit('audioLevels', { local: 0 });
+        return;
+      }
 
-      for (const [connId, pc] of this.peerConnections) {
+      let localLevel = 0;
+
+      // The local capture is the same across every connection, so the first
+      // one that reports a level is enough -- no need to poll them all.
+      for (const pc of this.peerConnections.values()) {
         try {
-          // One stats pass per connection, pulling both directions out of it.
-          // Reading them separately meant two full getStats() calls per peer
-          // every tick, which is real work to repeat twice a second on a
-          // phone that is already encoding video.
           const report = await pc.getStats();
-          let inbound = 0;
-
           report.forEach((entry) => {
             if (typeof entry?.audioLevel !== 'number') return;
             const isAudio = entry.kind === 'audio' || entry.mediaType === 'audio';
-
-            if (entry.type === 'inbound-rtp' && isAudio) {
-              inbound = Math.max(inbound, entry.audioLevel);
-            } else if ((entry.type === 'media-source' && isAudio) || (entry.type === 'outbound-rtp' && isAudio)) {
+            if ((entry.type === 'media-source' || entry.type === 'outbound-rtp') && isAudio) {
               localLevel = Math.max(localLevel, entry.audioLevel);
             }
           });
-
-          levels[connId] = inbound;
+          if (localLevel > 0) break;
         } catch (e) {
-          // A connection can close mid-poll; it simply has no level.
+          // A connection can close mid-poll; try the next one.
         }
       }
 
-      // A disabled track still reports a level on some platforms, so treat
-      // muted as silent rather than trusting the number.
-      levels.local = micEnabled ? localLevel : 0;
-
-      this.emit('audioLevels', levels);
+      this.emit('audioLevels', { local: localLevel });
     }, intervalMs);
   }
 

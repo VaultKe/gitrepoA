@@ -178,9 +178,16 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // Mirror of remoteStreams for the poll, which runs on an interval and would
   // otherwise close over a stale copy.
   const remoteStreamsRef = useRef([]);
-  // connId (or 'local') -> timestamp we last heard them speak, used to apply
-  // SPEAKING_HOLD_MS before dropping the indicator.
-  const lastSpokeAtRef = useRef(new Map());
+  // Timestamp we last measured our own mic above SPEAKING_LEVEL_THRESHOLD,
+  // used to apply SPEAKING_HOLD_MS before dropping our own indicator (and
+  // before announcing to the room that we've stopped -- see the audioLevels
+  // handler). Remote participants' speaking state isn't measured locally at
+  // all; it arrives ready-made over signaling, already debounced by the
+  // sender's own copy of this same logic.
+  const lastSpokeAtRef = useRef(0);
+  // Whether the audioLevels handler last told the room we were speaking, so
+  // it only sends on an actual transition rather than every 500ms tick.
+  const wasLocalSpeakingRef = useRef(false);
 
 
   // Initialize meeting.
@@ -565,25 +572,40 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setLocalStream(stream);
     });
 
-    client.on('audioLevels', (levels) => {
+    // Our own speaking state, measured locally and then announced to the
+    // room -- see SPEAKING_STATE in webrtcClient for why remote speaking
+    // can't be measured this same way from received audio.
+    client.on('audioLevels', ({ local: level = 0 } = {}) => {
       const now = Date.now();
-      const lastSpokeAt = lastSpokeAtRef.current;
+      if (level >= SPEAKING_LEVEL_THRESHOLD) lastSpokeAtRef.current = now;
 
-      Object.entries(levels || {}).forEach(([key, level]) => {
-        if (level >= SPEAKING_LEVEL_THRESHOLD) lastSpokeAt.set(key, now);
-      });
+      const isLocalSpeakingNow = now - lastSpokeAtRef.current <= SPEAKING_HOLD_MS;
 
-      const speaking = new Set();
-      lastSpokeAt.forEach((at, key) => {
-        if (now - at <= SPEAKING_HOLD_MS) speaking.add(key);
-        else lastSpokeAt.delete(key);
-      });
+      if (isLocalSpeakingNow !== wasLocalSpeakingRef.current) {
+        wasLocalSpeakingRef.current = isLocalSpeakingNow;
+        client.sendSpeakingState(isLocalSpeakingNow);
+      }
 
       setSpeakingConnIds((prev) => {
-        // Only re-render when the set actually changes -- this fires twice a
-        // second and would otherwise re-render the whole grid every tick.
-        if (prev.size === speaking.size && [...speaking].every(id => prev.has(id))) return prev;
-        return speaking;
+        if (prev.has('local') === isLocalSpeakingNow) return prev;
+        const next = new Set(prev);
+        if (isLocalSpeakingNow) next.add('local');
+        else next.delete('local');
+        return next;
+      });
+    });
+
+    // A remote participant's own speaking transition, straight from their
+    // device. Applied directly (no local threshold/hold) since the sender
+    // already debounced it with the same logic before sending.
+    client.on('remoteSpeakingChanged', ({ connId, isSpeaking }) => {
+      if (!connId) return;
+      setSpeakingConnIds((prev) => {
+        if (prev.has(connId) === isSpeaking) return prev;
+        const next = new Set(prev);
+        if (isSpeaking) next.add(connId);
+        else next.delete(connId);
+        return next;
       });
     });
 
@@ -810,6 +832,18 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         const sameUser = message.userId && prev.userId === message.userId;
         return sameConn || sameUser ? null : prev;
       });
+
+      // Someone who left mid-sentence never gets to send a final "stopped"
+      // speaking-state message, which would otherwise leave their tile
+      // marked as speaking forever.
+      if (message.connId) {
+        setSpeakingConnIds(prev => {
+          if (!prev.has(message.connId)) return prev;
+          const next = new Set(prev);
+          next.delete(message.connId);
+          return next;
+        });
+      }
 
       // Remove from known IDs so polling doesn't re-add them
       if (message.userId) {
