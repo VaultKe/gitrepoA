@@ -986,6 +986,24 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         }
       });
 
+      // Self-heal a missed screen-share-stopped notice. That signal is a
+      // single best-effort WebSocket message; if it's ever lost (a reconnect
+      // at exactly the wrong moment, a dropped packet) nothing else would
+      // tell a viewer the share had ended, and the last frame would stay on
+      // screen indefinitely. Stopping a share always also persists
+      // isScreenSharing:false on this same participant record, so this
+      // roster poll is a second, independent source of truth to fall back
+      // on. Deliberately one-directional -- it only clears a stale "sharing"
+      // flag, never sets a new one -- so it can't race the WS-driven state
+      // right as someone starts sharing, which the REST record lags by one
+      // request.
+      setRemoteScreenSharer((prev) => {
+        if (!prev) return prev;
+        const sharerRecord = nextParticipants.find(p => participantUserIdOf(p) === prev.userId);
+        const stillSharing = !!sharerRecord && (sharerRecord.isScreenSharing === true || sharerRecord.payload?.isScreenSharing === true);
+        return stillSharing ? prev : null;
+      });
+
       console.log('[Meeting] Participants synced:', nextParticipants.length);
     } catch (error) {
       console.error('Failed to update participants:', error);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Toast } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { getThemeColors } from '../utils/theme';
 import api from '../services/api';

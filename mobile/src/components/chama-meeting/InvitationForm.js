@@ -29,6 +29,7 @@ const InvitationForm = ({
   setSearchQuery,
   searchLoading,
   searchResults,
+  searchError,
   selectedUsers,
   showUserSearch,
   searchUsers,
@@ -128,12 +129,12 @@ const InvitationForm = ({
       {invitationMode === 'users' && (
         <View style={[styles.formCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Search & Select Users
+            Search Users by Phone
           </Text>
 
           <View style={styles.inputGroup}>
             <Text style={[styles.inputLabel, { color: colors.text }]}>
-              Search Users
+              Search by Phone Number
             </Text>
             <View style={styles.searchContainer}>
               <TextInput
@@ -143,9 +144,10 @@ const InvitationForm = ({
                   setSearchQuery(text);
                   searchUsers(text);
                 }}
-                placeholder="Search by name, email, or phone..."
+                placeholder="Search by phone number..."
                 placeholderTextColor={colors.textSecondary}
                 autoCapitalize="none"
+                keyboardType="phone-pad"
               />
               {searchLoading && (
                 <ActivityIndicator size="small" color={colors.primary} style={styles.searchLoader} />
@@ -159,6 +161,15 @@ const InvitationForm = ({
             onSelectUser={addSelectedUser}
             colors={colors}
           />
+
+          {searchError ? (
+            <View style={[styles.searchErrorContainer, { borderColor: colors.error }]}>
+              <Ionicons name="alert-circle" size={18} color={colors.error} />
+              <Text style={[styles.searchErrorText, { color: colors.error }]}>
+                {searchError}
+              </Text>
+            </View>
+          ) : null}
 
           <SelectedUsersList
             selectedUsers={selectedUsers}
@@ -318,6 +329,21 @@ const styles = {
     position: 'absolute',
     right: 12,
     top: 12,
+  },
+  searchErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    marginTop: 8,
+  },
+  searchErrorText: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
   },
   accessDeniedContainer: {
     flex: 1,

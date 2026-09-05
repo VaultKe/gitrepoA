@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Toast } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { getThemeColors } from '../utils/theme';
 import api from '../services/api';
@@ -17,6 +17,7 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [invitationMode, setInvitationMode] = useState('email');
@@ -119,26 +120,86 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
   }, [invitationMode, email, phoneNumber, selectedUsers, message, selectedRole, validateField]);
 
   const searchUsers = useCallback(async (query) => {
+    console.log('[DEBUG] searchUsers called with query:', query);
+
     if (!query || query.length < 2) {
       setSearchResults([]);
+      setSearchError('');
       return;
     }
 
     try {
       setSearchLoading(true);
-      const response = await api.searchUsers(query);
+      setSearchError('');
+      const trimmed = query.trim();
+      const digits = trimmed.replace(/\D/g, '');
 
-      if (response.success && response.data) {
-        const filteredResults = response.data.filter(searchUser =>
-          searchUser.id !== user?.id &&
-          !selectedUsers.some(selected => selected.id === searchUser.id)
-        );
-        setSearchResults(filteredResults);
-      } else {
+      console.log('[DEBUG] searchUsers trimmed:', trimmed, 'digits:', digits);
+
+      if (digits.length < 2) {
         setSearchResults([]);
+        setSearchLoading(false);
+        return;
       }
+
+      console.log('[DEBUG] Calling searchUsers API with digits:', digits);
+      const partialResponse = await api.searchUsers(digits);
+      console.log('[DEBUG] Partial search response:', partialResponse);
+
+      const exactResponse = digits.length >= 9
+        ? await api.searchUserByPhone(trimmed).then(r => {
+            console.log('[DEBUG] Exact phone search response:', r);
+            return r;
+          }).catch(err => {
+            console.log('[DEBUG] Exact phone search error:', err);
+            return { success: false, data: null };
+          })
+        : { success: false, data: null };
+
+      const results = [];
+      const seen = new Set();
+
+      const addUser = (user) => {
+        if (!user || !user.id || seen.has(user.id)) return;
+        seen.add(user.id);
+        results.push({
+          id: user.id,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
+          phone: user.phone || user.phoneNumber || '',
+        });
+      };
+
+      if (partialResponse.success && Array.isArray(partialResponse.data)) {
+        console.log('[DEBUG] Adding partial search users:', partialResponse.data.length);
+        partialResponse.data.forEach(addUser);
+      } else {
+        console.log('[DEBUG] Partial search failed or no data:', partialResponse);
+      }
+
+      if (exactResponse.success && exactResponse.data && exactResponse.data.id) {
+        console.log('[DEBUG] Adding exact phone search user:', exactResponse.data);
+        addUser(exactResponse.data);
+      } else {
+        console.log('[DEBUG] Exact phone search no match or failed:', exactResponse);
+      }
+
+      const filteredResults = results.filter(searchUser =>
+        searchUser.id !== user?.id &&
+        !selectedUsers.some(selected => selected.id === searchUser.id)
+      );
+
+      console.log('[DEBUG] Final filtered results:', filteredResults);
+
+      if (filteredResults.length === 0) {
+        setSearchError('No user found with this phone number');
+      }
+
+      setSearchResults(filteredResults);
     } catch (error) {
-      console.error('User search failed:', error);
+      console.error('[DEBUG] User search failed:', error);
+      setSearchError(error.message || 'Search failed. Please try again.');
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
@@ -154,6 +215,7 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
     setUserRoles(prev => ({ ...prev, [selectedUser.id]: selectedRole }));
     setSearchQuery('');
     setSearchResults([]);
+    setSearchError('');
   }, [selectedRole]);
 
   const removeSelectedUser = useCallback((userId) => {
@@ -175,6 +237,17 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
   }, []);
 
   const handleSendInvitation = useCallback(async () => {
+    console.log('[DEBUG] handleSendInvitation called', {
+      canInvite,
+      invitationMode,
+      selectedUsersCount: selectedUsers.length,
+      selectedUsers: selectedUsers.map(u => ({ id: u.id, email: u.email, phone: u.phone })),
+      emailModeEmail: email,
+      emailModePhone: phoneNumber,
+      selectedRole,
+      chamaId,
+    });
+
     if (!canInvite) {
       Toast.show({
         type: 'error',
@@ -185,6 +258,12 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
     }
 
     if (!validateForm()) {
+      const errors = {};
+      Object.assign(errors, validateField('email', email));
+      Object.assign(errors, validateField('phone', phoneNumber));
+      Object.assign(errors, validateField('message', message));
+      Object.assign(errors, validateField('role', selectedRole));
+      console.log('[DEBUG] Form validation failed', errors);
       Toast.show({
         type: 'error',
         text1: 'Form Validation Failed',
@@ -216,6 +295,8 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
           role_description: roleInfo.description,
         };
 
+        console.log('[DEBUG] Sending email invitation', invitationData);
+
         const finalValidation = [
           invitationData.email.length > 0 && invitationData.email.length <= 254,
           /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(invitationData.email),
@@ -224,11 +305,14 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
           availableRoles.some(r => r.id === invitationData.role)
         ];
 
+        console.log('[DEBUG] Email invitation validation', finalValidation);
+
         if (!finalValidation.every(Boolean)) {
           throw new Error('Security validation failed. Please check your inputs.');
         }
 
         const response = await api.sendChamaInvitation(chamaId, invitationData);
+        console.log('[DEBUG] Email invitation response', response);
 
         if (response.success) {
           successCount = 1;
@@ -251,6 +335,12 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
       } else {
         const baseMessage = message.trim() || `You have been invited to join ${chamaName}!`;
 
+        console.log('[DEBUG] Sending user invitations', {
+          selectedUsers: selectedUsers.map(u => ({ id: u.id, email: u.email, phone: u.phone, role: u.assignedRole })),
+          userRoles,
+          selectedRole,
+        });
+
         for (const user of selectedUsers) {
           try {
             const userRole = userRoles[user.id] || selectedRole;
@@ -270,6 +360,8 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
               role_description: roleInfo.description,
             };
 
+            console.log('[DEBUG] Sending user invitation payload', { userId: user.id, invitationData });
+
             const userValidation = [
               invitationData.email.length > 0 && invitationData.email.length <= 254,
               /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(invitationData.email),
@@ -278,13 +370,16 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
               availableRoles.some(r => r.id === invitationData.role)
             ];
 
+            console.log('[DEBUG] User invitation validation', { userId: user.id, userValidation });
+
             if (!userValidation.every(Boolean)) {
-              console.error(`Security validation failed for user ${user.email}`);
+              console.error(`Security validation failed for user ${user.email}`, { user, invitationData });
               failureCount++;
               continue;
             }
 
             const response = await api.sendChamaInvitation(chamaId, invitationData);
+            console.log('[DEBUG] User invitation response', { userId: user.id, response });
 
             if (response.success) {
               successCount++;
@@ -297,6 +392,8 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
             console.error(`Error inviting ${user.email}:`, error);
           }
         }
+
+        console.log('[DEBUG] User invitation summary', { successCount, failureCount });
 
         if (successCount > 0 && failureCount === 0) {
           Toast.show({
@@ -321,6 +418,8 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
           });
         }
 
+        console.log('[DEBUG] Invitation result', { successCount, failureCount, willNavigate: (invitationMode === 'email') || (invitationMode === 'users' && successCount > 0) });
+
         setSelectedUsers([]);
         setUserRoles({});
         setMessage('');
@@ -330,12 +429,15 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
       }
 
       if ((invitationMode === 'email') || (invitationMode === 'users' && successCount > 0)) {
+        console.log('[DEBUG] Navigating back after successful invitation');
         setTimeout(() => {
           navigation.goBack();
         }, 2000);
+      } else {
+        console.log('[DEBUG] Staying on page because no successful invitations');
       }
     } catch (error) {
-      console.error('Error sending invitation:', error);
+      console.error('[DEBUG] Error sending invitation:', error);
       Toast.show({
         type: 'error',
         text1: 'Failed to Send',
@@ -354,6 +456,7 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
     searchQuery, setSearchQuery,
     searchResults, setSearchResults,
     searchLoading, setSearchLoading,
+    searchError, setSearchError,
     selectedUsers, setSelectedUsers,
     showUserSearch, setShowUserSearch,
     invitationMode, setInvitationMode,

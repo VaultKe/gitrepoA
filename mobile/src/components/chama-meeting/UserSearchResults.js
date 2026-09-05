@@ -30,11 +30,11 @@ const UserSearchResults = ({ searchResults, searchLoading, onSelectUser, colors 
             <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
               {user.email}
             </Text>
-            {user.phone && (
+            {user.phone || user.phoneNumber ? (
               <Text style={[styles.userPhone, { color: colors.textSecondary }]}>
-                {user.phone}
+                {user.phone || user.phoneNumber}
               </Text>
-            )}
+            ) : null}
           </View>
           <Ionicons name="add-circle" size={24} color={colors.primary} />
         </TouchableOpacity>

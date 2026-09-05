@@ -148,7 +148,7 @@ const searchUserByPhone = async (phone) => {
 };
 
 const searchUsers = async (query) => {
-  return await makeRequest(`/users/search?q=${encodeURIComponent(query)}`);
+  return await makeRequest(`/user-search/search?query=${encodeURIComponent(query)}`);
 };
 
 const getAllUsersForAdmin = async (limit = 15, offset = 0, query = '') => {
