@@ -31,20 +31,25 @@ export const generatePDFOptimizedReceiptHTML = (transaction, chamaName, performe
     return `${digits.slice(0, visibleStart)}***${digits.slice(-2)}`;
   };
 
+  // The "M-Pesa Transaction Code" must be the code Safaricom issued (captured
+  // from the STK callback into the transaction, usually under metadata), NOT an
+  // internal id or checkout-request reference — putting one of those on a
+  // receipt row labelled "M-Pesa Transaction Code" makes the receipt look
+  // verifiable on the M-Pesa portal when it is not.
+  const meta = transaction.metadata && typeof transaction.metadata === 'object'
+    ? transaction.metadata
+    : (() => { try { return JSON.parse(transaction.metadata); } catch { return {}; } })();
   const getTransactionCode = () => getValue(
-    transaction.transactionCode,
-    transaction.transaction_code,
+    transaction.mpesaReceiptNumber,
+    transaction.mpesa_receipt_number,
     transaction.mpesaCode,
     transaction.mpesa_code,
     transaction.mPesaCode,
     transaction.m_pesa_code,
-    transaction.mpesaReceiptNumber,
-    transaction.mpesa_receipt_number,
-    transaction.code,
-    transaction.reference,
-    transaction.ref,
-    transaction.transactionId,
-    transaction.transaction_id
+    meta.mpesa_receipt_number,
+    meta.mpesaReceiptNumber,
+    meta.receipt_number,
+    meta.receiptNumber
   );
 
   const getSenderPhone = () => getValue(

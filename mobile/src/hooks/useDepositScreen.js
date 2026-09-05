@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { useApp } from '../context/AppContext';
 import ApiService from '../services/api';
@@ -12,17 +12,95 @@ const normalizeMpesaPhone = (raw) => {
   return '254' + digits;
 };
 
+// How long / how often to wait for Safaricom's STK callback to land before we
+// stop actively polling. The callback normally arrives within 10-30s of the
+// user entering their PIN.
+const POLL_INTERVAL_MS = 5000;
+const POLL_MAX_ATTEMPTS = 24; // ~2 minutes
+
+const parseMetadata = (md) => {
+  if (!md) return {};
+  if (typeof md === 'string') {
+    try {
+      return JSON.parse(md);
+    } catch {
+      return {};
+    }
+  }
+  return md;
+};
+
+// The only code worth showing the user is the one Safaricom issues (e.g.
+// "SGH7XYZ123") — it is what appears on their M-Pesa statement and is
+// verifiable on the Safaricom portal. It is captured from the STK callback
+// into the transaction metadata; the internal "TXN_..." id is not it.
+const extractMpesaCode = (txn) => {
+  const meta = parseMetadata(txn?.metadata);
+  return (
+    txn?.mpesaReceiptNumber ||
+    txn?.mpesa_receipt_number ||
+    meta.mpesa_receipt_number ||
+    meta.mpesaReceiptNumber ||
+    meta.receipt_number ||
+    meta.receiptNumber ||
+    null
+  );
+};
+
 const useDepositScreen = ({ navigation }) => {
   const { user } = useApp();
   const [amount, setAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(user?.phone || '');
   const [loading, setLoading] = useState(false);
-  const [lastTransactionId, setLastTransactionId] = useState(null);
+  // null | { status: 'pending' | 'completed' | 'failed' | 'timeout', mpesaCode: string|null, amount: number }
+  const [deposit, setDeposit] = useState(null);
+  const pollRef = useRef(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopPolling, [stopPolling]);
+
+  const pollForConfirmation = useCallback((transactionId, expectedAmount, attempt = 0) => {
+    stopPolling();
+    pollRef.current = setTimeout(async () => {
+      try {
+        // Bypass the 30s GET cache so each poll sees the latest status.
+        ApiService.invalidateCache('/wallets/transactions');
+        const res = await ApiService.getTransactions(50, 0);
+        const txn = (res?.data || []).find((t) => t.id === transactionId);
+        if (txn) {
+          const status = String(txn.status || '').toLowerCase();
+          if (status === 'completed' || status === 'success') {
+            setDeposit({ status: 'completed', mpesaCode: extractMpesaCode(txn), amount: expectedAmount });
+            stopPolling();
+            return;
+          }
+          if (status === 'failed' || status === 'cancelled' || status === 'reversed') {
+            setDeposit({ status: 'failed', mpesaCode: null, amount: expectedAmount });
+            stopPolling();
+            return;
+          }
+        }
+      } catch (e) {
+        // transient — fall through and retry
+      }
+
+      if (attempt + 1 >= POLL_MAX_ATTEMPTS) {
+        setDeposit((prev) => (prev && prev.status === 'pending' ? { ...prev, status: 'timeout' } : prev));
+        stopPolling();
+        return;
+      }
+      pollForConfirmation(transactionId, expectedAmount, attempt + 1);
+    }, POLL_INTERVAL_MS);
+  }, [stopPolling]);
 
   const handleDeposit = useCallback(async () => {
     const depositAmount = parseFloat(amount) || 0;
-
-    console.log('[Deposit] button clicked', { amount: depositAmount, phoneNumber });
 
     if (!depositAmount || depositAmount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount');
@@ -30,7 +108,6 @@ const useDepositScreen = ({ navigation }) => {
     }
 
     const normalizedPhone = normalizeMpesaPhone(phoneNumber);
-    console.log('[Deposit] normalized phone', normalizedPhone);
 
     if (!normalizedPhone || normalizedPhone.length !== 12) {
       Alert.alert(
@@ -42,40 +119,31 @@ const useDepositScreen = ({ navigation }) => {
 
     try {
       setLoading(true);
-      console.log('[Deposit] calling API', { depositAmount, normalizedPhone });
+      stopPolling();
+      setDeposit(null);
+
       const response = await ApiService.initiateDeposit(depositAmount, 'mpesa', '', '', normalizedPhone);
-      console.log('[Deposit] API response', response);
+      const transactionId = response?.data?.id || response?.data?.transactionId || null;
 
-      const transactionId = response?.data?.transactionId || response?.data?.id || null;
-      if (transactionId) {
-        setLastTransactionId(transactionId);
-      }
-
+      setDeposit({ status: 'pending', mpesaCode: null, amount: depositAmount });
       Alert.alert(
-        'Deposit Initiated',
-        `M-Pesa STK push sent to ${normalizedPhone} for KES ${depositAmount.toLocaleString()}${transactionId ? `\nTransaction: ${transactionId}` : ''}`,
+        'Check your phone',
+        `Enter your M-Pesa PIN to authorise KES ${depositAmount.toLocaleString()}. The M-Pesa confirmation code will appear here once Safaricom confirms the payment.`,
         [{ text: 'OK' }]
       );
 
       setAmount('');
-    } catch (error) {
-      console.log('[Deposit] API error', error);
-      const transactionId = error?.response?.data?.data?.transactionId || error?.response?.data?.transactionId || null;
-      if (transactionId) {
-        setLastTransactionId(transactionId);
-        Alert.alert(
-          'Deposit Recorded',
-          `Transaction recorded with code: ${transactionId}\n${error.message || 'Please try again.'}`,
-          [{ text: 'OK' }]
-        );
-        return;
-      }
 
+      if (transactionId) {
+        pollForConfirmation(transactionId, depositAmount);
+      }
+    } catch (error) {
+      setDeposit(null);
       Alert.alert('Deposit Failed', error.message);
     } finally {
       setLoading(false);
     }
-  }, [amount, phoneNumber]);
+  }, [amount, phoneNumber, pollForConfirmation, stopPolling]);
 
   return {
     amount,
@@ -83,7 +151,7 @@ const useDepositScreen = ({ navigation }) => {
     phoneNumber,
     setPhoneNumber,
     loading,
-    lastTransactionId,
+    deposit,
     handleDeposit,
   };
 };

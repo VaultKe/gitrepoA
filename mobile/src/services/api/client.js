@@ -1,7 +1,6 @@
 import { API_BASE_URL, REQUEST_TIMEOUT, getAuthToken, getRefreshToken, setAuthToken, setRefreshToken, getDeviceInfo, sanitizeHeaderValue } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { triggerAppLogout, getLoggingOut } from '../../utils/authLogout';
-import { maskSensitiveData } from '../../utils/formatters';
 
 let isRefreshing = false;
 let refreshPromise = null;
@@ -66,30 +65,6 @@ const clearApiCache = () => {
   responseCache.clear();
   inFlightRequests.clear();
 };
-
-/**
- * Endpoints that never return PII and should bypass the expensive
- * maskSensitiveData deep-clone in makeRequest.  Matching is done with
- * String.prototype.includes so a single prefix like "/chamas" covers
- * /chamas/my, /chamas/:id, /chamas/:id/members, etc.
- */
-const UNMASKED_ENDPOINTS = [
-  '/chamas/',          // chama listings, details, members, transactions
-  '/transactions',
-  '/meetings',
-  '/contributions',
-  '/wallets/',
-  '/merry-go-rounds',
-  '/notifications',
-  '/groups',
-  '/activity',
-  '/dashboard',
-  '/polls',
-  '/votes',
-];
-
-const isUnmaskedEndpoint = (endpoint) =>
-  UNMASKED_ENDPOINTS.some((pattern) => endpoint.includes(pattern));
 
 /**
  * Pre-authentication entry points. These endpoints are how a user gets INTO the
@@ -382,20 +357,18 @@ const refreshAccessToken = async () => {
             throw new Error(data.error || `HTTP error! status: ${response.status}`);
           }
 
-          const result = data?.success !== undefined ? data : { success: true, data };
-
-          // maskSensitiveData deep-clones and recursively processes every field in the
-          // response — extremely expensive for large payloads (e.g. chama listings with
-          // 50+ items).  Only apply it to endpoints that may return PII.  Everything
-          // else returns the original parsed object, avoiding the memory/CPU overhead
-          // of a full deep clone.
+          // Return the response body exactly as the server sent it. Do NOT
+          // mask PII here: this object is the app's data model, not a log line.
+          // Screens populate their edit forms from it and PUT the values back —
+          // masking email/phone in the response causes masked strings like
+          // "k****t@gmail.com" / "*******5678" to be saved to the database on
+          // the next profile save. Masking for logging is done at the log site.
+          const finalResult = data?.success !== undefined ? data : { success: true, data };
           if (isAuthEndpoint) {
             inFlightRequests.delete(cacheKey);
-            return result;
+            return finalResult;
           }
 
-          const shouldMask = !isUnmaskedEndpoint(endpoint);
-          const finalResult = shouldMask ? maskSensitiveData(result) : result;
           setCachedResponse(cacheKey, finalResult);
           inFlightRequests.delete(cacheKey);
           return finalResult;
@@ -487,7 +460,7 @@ const refreshAccessToken = async () => {
               throw new Error(retryData?.error || retryResponse.statusText || 'Request failed after token refresh');
             }
 
-            return maskSensitiveData(retryData?.success !== undefined ? retryData : { success: true, data: retryData });
+            return retryData?.success !== undefined ? retryData : { success: true, data: retryData };
           }
         } catch (refreshError) {
           if (!getLoggingOut()) {
@@ -508,14 +481,9 @@ const refreshAccessToken = async () => {
       throw new Error(data.error || `HTTP error! status: ${response.status}`);
     }
 
-    const result = data?.success !== undefined ? data : { success: true, data };
-
-    if (isAuthEndpoint) {
-      return result;
-    }
-
-    const shouldMask = !isUnmaskedEndpoint(endpoint);
-    const finalResult = shouldMask ? maskSensitiveData(result) : result;
+    // Return the parsed body unchanged — see the note in the GET path above on
+    // why response PII must not be masked here.
+    const finalResult = data?.success !== undefined ? data : { success: true, data };
 
     // Invalidate related GET cache entries after mutations so stale data
     // is not served from cache on the next read.

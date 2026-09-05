@@ -24,7 +24,7 @@ const DepositScreen = ({ navigation }) => {
     phoneNumber,
     setPhoneNumber,
     loading,
-    lastTransactionId,
+    deposit,
     handleDeposit,
   } = useDepositScreen({ navigation });
 
@@ -68,17 +68,71 @@ const DepositScreen = ({ navigation }) => {
             </Text>
           </Card>
 
-          {lastTransactionId ? (
-            <Card variant="outlined" style={{ marginTop: spacing.lg, padding: spacing.lg, borderColor: colors.warning }}>
-              <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.warning, marginBottom: spacing.xs }]}>
-                M-Pesa Transaction Code
-              </Text>
-              <Text style={[{ fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold, color: colors.text }]}>
-                {lastTransactionId}
-              </Text>
-              <Text style={[{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }]}>
-                Use this code to track your deposit status
-              </Text>
+          {deposit ? (
+            <Card
+              variant="outlined"
+              style={{
+                marginTop: spacing.lg,
+                padding: spacing.lg,
+                borderColor:
+                  deposit.status === 'completed'
+                    ? colors.success
+                    : deposit.status === 'failed'
+                    ? colors.error
+                    : colors.warning,
+              }}
+            >
+              {deposit.status === 'pending' && (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+                    <Ionicons name="time-outline" size={16} color={colors.warning} style={{ marginRight: spacing.xs }} />
+                    <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.warning }]}>
+                      Waiting for M-Pesa confirmation…
+                    </Text>
+                  </View>
+                  <Text style={[{ fontSize: typography.fontSize.xs, color: colors.textSecondary }]}>
+                    Enter your M-Pesa PIN on your phone to authorise this payment. Safaricom’s confirmation code will appear here once the payment goes through.
+                  </Text>
+                </>
+              )}
+
+              {deposit.status === 'completed' && (
+                <>
+                  <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.success, marginBottom: spacing.xs }]}>
+                    M-Pesa Confirmation Code
+                  </Text>
+                  <Text style={[{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.text, letterSpacing: 1 }]}>
+                    {deposit.mpesaCode || 'Payment confirmed'}
+                  </Text>
+                  <Text style={[{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: spacing.xs }]}>
+                    {deposit.mpesaCode
+                      ? 'This is the Safaricom code for your deposit — you can verify it against your M-Pesa statement.'
+                      : 'Your deposit was received. The M-Pesa code will show on your transaction history and receipt shortly.'}
+                  </Text>
+                </>
+              )}
+
+              {deposit.status === 'failed' && (
+                <>
+                  <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.error, marginBottom: spacing.xs }]}>
+                    Payment not completed
+                  </Text>
+                  <Text style={[{ fontSize: typography.fontSize.xs, color: colors.textSecondary }]}>
+                    The payment was cancelled or failed. If any money was deducted it is reversed automatically.
+                  </Text>
+                </>
+              )}
+
+              {deposit.status === 'timeout' && (
+                <>
+                  <Text style={[{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium, color: colors.warning, marginBottom: spacing.xs }]}>
+                    Still waiting for confirmation
+                  </Text>
+                  <Text style={[{ fontSize: typography.fontSize.xs, color: colors.textSecondary }]}>
+                    This is taking longer than usual. Check your M-Pesa messages, then open your transaction history for the confirmation code.
+                  </Text>
+                </>
+              )}
             </Card>
           ) : null}
 
