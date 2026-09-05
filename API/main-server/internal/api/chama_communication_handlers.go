@@ -148,6 +148,23 @@ func SendChamaInvitation(c *gin.Context) {
 	invitationID, err := chamaService.SendInvitation(chamaID, userID.(string), targetEmail, req.PhoneNumber, req.Message, req.Role, req.RoleName, req.RoleDescription)
 	if err != nil {
 		fmt.Printf("❌ Chama invitation failed: %v\n", err)
+
+		// SendInvitation returns these two for perfectly normal, expected
+		// situations -- not a server malfunction -- but they were being sent
+		// back as 500s along with every genuine failure. The mobile client
+		// deliberately discards the real message on any 5xx response (it
+		// isn't safe to show raw server-error text to a user) and shows a
+		// generic "Server error occurred" instead, so what should have read
+		// as "you already invited this person" looked exactly like the app
+		// had broken.
+		if isExpectedInvitationError(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to send invitation: " + err.Error(),
@@ -163,6 +180,16 @@ func SendChamaInvitation(c *gin.Context) {
 		},
 	})
 		c.Abort()
+}
+
+// isExpectedInvitationError reports whether err from SendInvitation
+// describes a normal outcome (already a member, already invited) rather than
+// a genuine system failure. Matched by message rather than a sentinel error
+// type to match SendInvitation's existing plain fmt.Errorf style; add a
+// clause here if that function grows another expected-failure message.
+func isExpectedInvitationError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "already a member") || strings.Contains(msg, "invitation already sent")
 }
 
 // RespondToInvitation handles accepting or rejecting a chama invitation
