@@ -405,7 +405,12 @@ func CancelInvitation(c *gin.Context) {
 
 	// Get chama ID from URL (using :id parameter to match route pattern)
 	chamaID := c.Param("id")
-	if chamaID != "" {
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
 	}
 
 	// Get user ID from context
@@ -427,13 +432,36 @@ func CancelInvitation(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
+
+	// Any of the chama's leadership may cancel a pending invitation, not only
+	// whoever happened to send it -- this used to require an exact
+	// inviter_id match, which silently blocked (a 404, indistinguishable from
+	// the invitation not existing) a chairperson from cancelling an
+	// invitation a secretary or treasurer had sent.
+	chamaService := services.NewChamaService(database)
+	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "You are not a member of this chama",
+		})
+		return
+	}
+	if !isLeadershipRole(userRole) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Only chairperson, secretary, and treasurer can cancel invitations",
+		})
+		return
+	}
 
 	// Update invitation status to cancelled
-	result, err := db.(*sql.DB).Exec(`
+	result, err := database.Exec(`
 		UPDATE chama_invitations
 		SET status = 'cancelled', responded_at = $1
-		WHERE id = $2 AND inviter_id = $3 AND status = 'pending'
-	`, time.Now(), invitationID, userID.(string))
+		WHERE id = $2 AND chama_id = $3 AND status = 'pending'
+	`, time.Now(), invitationID, chamaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -485,7 +513,12 @@ func ResendInvitation(c *gin.Context) {
 
 	// Get chama ID from URL (using :id parameter to match route pattern)
 	chamaID := c.Param("id")
-	if chamaID != "" {
+	if chamaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Chama ID is required",
+		})
+		return
 	}
 
 	// Get user ID from context
@@ -507,6 +540,27 @@ func ResendInvitation(c *gin.Context) {
 		})
 		return
 	}
+	database := db.(*sql.DB)
+
+	// Any of the chama's leadership may resend a pending invitation, not only
+	// whoever happened to send it -- see the matching comment in
+	// CancelInvitation for why this used to silently block that.
+	chamaService := services.NewChamaService(database)
+	userRole, err := chamaService.GetUserRoleInChama(chamaID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "You are not a member of this chama",
+		})
+		return
+	}
+	if !isLeadershipRole(userRole) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Only chairperson, secretary, and treasurer can resend invitations",
+		})
+		return
+	}
 
 	// Get invitation details first
 	var invitation struct {
@@ -516,11 +570,11 @@ func ResendInvitation(c *gin.Context) {
 		InvitationToken string
 	}
 
-	err := db.(*sql.DB).QueryRow(`
+	err = database.QueryRow(`
 			SELECT email, chama_id, message, invitation_token
 			FROM chama_invitations
-			WHERE id = $1 AND inviter_id = $2 AND status = 'pending'
-		`, invitationID, userID.(string)).Scan(&invitation.Email, &invitation.ChamaID, &invitation.Message, &invitation.InvitationToken)
+			WHERE id = $1 AND chama_id = $2 AND status = 'pending'
+		`, invitationID, chamaID).Scan(&invitation.Email, &invitation.ChamaID, &invitation.Message, &invitation.InvitationToken)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -538,11 +592,11 @@ func ResendInvitation(c *gin.Context) {
 	}
 
 	// Update invitation with new expiry date
-	result, err := db.(*sql.DB).Exec(`
+	result, err := database.Exec(`
 		UPDATE chama_invitations
 		SET expires_at = $1
-		WHERE id = $2 AND inviter_id = $3 AND status = 'pending'
-	`, time.Now().Add(7*24*time.Hour), invitationID, userID.(string))
+		WHERE id = $2 AND chama_id = $3 AND status = 'pending'
+	`, time.Now().Add(7*24*time.Hour), invitationID, chamaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -560,12 +614,9 @@ func ResendInvitation(c *gin.Context) {
 		return
 	}
 
-	// Create chama service and resend the email
-	chamaService := services.NewChamaService(db.(*sql.DB))
-
 	// Get chama and inviter details for email
 	var chamaName, inviterFirstName, inviterLastName string
-	err = db.(*sql.DB).QueryRow(`
+	err = database.QueryRow(`
 		SELECT c.name, u.first_name, u.last_name
 		FROM chamas c
 		INNER JOIN users u ON u.id = $1
