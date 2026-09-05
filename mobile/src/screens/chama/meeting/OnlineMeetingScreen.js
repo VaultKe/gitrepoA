@@ -32,48 +32,52 @@ import MeetingMinutesCard from '../../../components/chama-meeting/MeetingMinutes
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 const CARD_CONTROL_TIMEOUT_MS = 4000;
-// Used only to break ties between column counts that fill the box equally
-// well (see computeGridLayout) -- tiles are never locked to this ratio, they
-// fill whatever box the grid gives them and the video inside is
-// centre-cropped to it (objectFit: cover in renderVideoElement).
+// Used only to prefer one column count over another when several would
+// divide the tiles into a reasonable number of rows -- tiles are never
+// locked to this ratio. Width is handled by flex (see renderGalleryRows):
+// each row's tiles get flex:1 and split whatever width the row has evenly,
+// so there is no per-tile width arithmetic left to get wrong. Only the
+// height needs deciding, and only once per row, which is what column count
+// determines (fewer columns -> more rows -> shorter rows).
 const IDEAL_TILE_ASPECT_RATIO = 16 / 9;
-const MIN_TILE_WIDTH = 80;
 const MIN_TILE_HEIGHT = 60;
 
-// Picks rows x columns for `count` tiles that fill an availW x availH box
-// completely -- one person gets the whole screen, two split it in half, and
-// it keeps dividing as more join. A fixed aspect ratio per tile was leaving
-// most of the screen empty below/beside the grid whenever the tile count
-// didn't happen to produce that exact ratio (a lone caller's tile, sized to
-// the full width, came out only as tall as a 16:9 strip). Every tile's box
-// here is instead exactly availW/columns by availH/rows, so the grid always
-// uses the space it's given; aspect ratio only decides *which* column count
-// to prefer when more than one would fit without scrolling.
-const computeGridLayout = (count, availW, availH) => {
-  if (count <= 0 || availW <= 0 || availH <= 0) {
-    return { columns: 1, rows: 1 };
-  }
+// Picks how many tiles go in each row. One person is always 1 (fills the
+// screen); everything else searches column counts from 1 up to `count` and
+// keeps whichever produces rows closest to IDEAL_TILE_ASPECT_RATIO once
+// availH is divided evenly among them, stopping once rows would be shorter
+// than MIN_TILE_HEIGHT.
+const computeGridColumns = (count, availW, availH) => {
+  if (count <= 1 || availW <= 0) return 1;
 
-  let best = null;
+  let bestColumns = 1;
+  let bestPenalty = Infinity;
 
   for (let columns = 1; columns <= count; columns++) {
-    const tileWidth = availW / columns;
-    if (tileWidth < MIN_TILE_WIDTH && columns > 1) break;
-
     const rows = Math.ceil(count / columns);
-    const tileHeight = availH / rows;
-    if (tileHeight < MIN_TILE_HEIGHT && rows > 1) continue;
+    const tileWidth = availW / columns;
+    const tileHeight = availH > 0 ? availH / rows : tileWidth / IDEAL_TILE_ASPECT_RATIO;
+    if (availH > 0 && tileHeight < MIN_TILE_HEIGHT && rows > 1) continue;
 
-    const aspect = tileWidth / tileHeight;
-    const aspectPenalty = Math.abs(Math.log(aspect / IDEAL_TILE_ASPECT_RATIO));
-
-    if (!best || aspectPenalty < best.aspectPenalty) {
-      best = { columns, rows, aspectPenalty };
+    const penalty = Math.abs(Math.log((tileWidth / tileHeight) / IDEAL_TILE_ASPECT_RATIO));
+    if (penalty < bestPenalty) {
+      bestPenalty = penalty;
+      bestColumns = columns;
     }
   }
 
-  if (!best) return { columns: 1, rows: count };
-  return { columns: best.columns, rows: best.rows };
+  return bestColumns;
+};
+
+// Splits a flat tile list into rows of `columns` each, for renderGalleryRows.
+// A short last row (e.g. 7 tiles in 3 columns -> 3/3/1) is expected and fine:
+// its tiles just get a bigger share of that row's width via flex:1.
+const chunkIntoRows = (items, columns) => {
+  const rows = [];
+  for (let i = 0; i < items.length; i += columns) {
+    rows.push(items.slice(i, i + columns));
+  }
+  return rows;
 };
 
 const SpeakingIndicator = ({ color }) => {
@@ -335,11 +339,12 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   // would keep shrinking them as the list grows, when the actual intent of
   // expanding is to scroll to the rest at a normal, readable size.
   const layoutTileCount = Math.min(packedTileCount, maxVisibleTiles);
-  const { columns: gridColumns, rows: gridRows } = computeGridLayout(
+  const gridColumns = computeGridColumns(
     layoutTileCount,
     galleryAreaSize.width || windowWidth,
     galleryAreaSize.height || windowHeight
   );
+  const gridRows = Math.max(1, Math.ceil(layoutTileCount / gridColumns));
 
   const rosterParticipants = participants
     .filter((entry) => {
@@ -579,24 +584,33 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     );
   };
 
-  // Both dimensions are explicit here, on purpose: an explicit width with
-  // height left to aspectRatio (the old approach) is exactly what capped a
-  // lone caller's tile at a 16:9 strip and left the rest of the screen
-  // empty. Explicit width *and* height together override that aspectRatio
-  // entirely (Yoga only falls back to it when a dimension is missing), so
-  // the tile actually fills its full share of the measured gallery area.
-  const galleryTileStyle = () => {
+  // Width is deliberately not computed here at all: each tile gets flex: 1
+  // inside its row (see renderGalleryRows) and flexbox splits that row's
+  // width evenly among however many tiles are actually in it -- which also
+  // means a short last row (say, 1 tile left over in a 3-column grid) gives
+  // that tile the row's full width automatically, instead of leaving empty
+  // space beside it the way a fixed per-column width would.
+  //
+  // Height still has to be computed: it's an explicit, equal share of the
+  // gallery's measured height per row, set *and* paired with
+  // aspectRatio: undefined so nothing falls back to the tile's default 16:9
+  // (Yoga only applies aspectRatio when a dimension is missing -- the same
+  // pattern already used on oneToOneRemote/oneToOneSelf). A fixed aspect
+  // ratio here is exactly what used to cap a lone caller's tile at a short
+  // 16:9 strip and leave the rest of the screen empty.
+  const galleryTileSizeStyle = () => {
     const gutter = spacing.xs * 2;
     const outerPadding = spacing.sm * 2;
-    const containerWidth = galleryAreaSize.width || windowWidth;
     const containerHeight = galleryAreaSize.height || windowHeight;
-    const availableWidth = Math.max(0, containerWidth - outerPadding);
     const availableHeight = Math.max(0, containerHeight - outerPadding);
     return {
-      width: Math.max(MIN_TILE_WIDTH, availableWidth / gridColumns - gutter),
+      flex: 1,
+      // Overrides the base gridVideoWrapper's fixed width: '48%' the same
+      // way aspectRatio: undefined overrides its fixed aspect ratio below --
+      // flex governs width here, not a percentage meant for the old
+      // fixed-column layout.
+      width: undefined,
       height: Math.max(MIN_TILE_HEIGHT, availableHeight / gridRows - gutter),
-      // Belt and suspenders alongside the explicit height above -- see the
-      // same pattern (and its comment) on oneToOneRemote/oneToOneSelf.
       aspectRatio: undefined,
     };
   };
@@ -837,31 +851,39 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             showsVerticalScrollIndicator={isGalleryExpanded}
             onLayout={onGalleryLayout}
           >
-            {visibleGalleryTiles.map(tile => (
-              tile.isStageMini
-                ? renderMiniStageTile(galleryTileStyle())
-                : tile.isSelf
-                  ? renderSelfTile(false, galleryTileStyle())
-                  : renderParticipantTile(tile.participant, false, galleryTileStyle())
+            {chunkIntoRows(
+              [
+                ...visibleGalleryTiles.map(tile => (
+                  tile.isStageMini
+                    ? renderMiniStageTile(galleryTileSizeStyle())
+                    : tile.isSelf
+                      ? renderSelfTile(false, galleryTileSizeStyle())
+                      : renderParticipantTile(tile.participant, false, galleryTileSizeStyle())
+                )),
+                ...(overflowGalleryCount > 0 ? [
+                  <TouchableOpacity
+                    key="gallery-more"
+                    style={[
+                      styles.gridVideoWrapper,
+                      galleryTileSizeStyle(),
+                      styles.hiddenParticipantsBadge,
+                    ]}
+                    onPress={() => setIsGalleryExpanded(true)}
+                    accessibilityLabel={`Show ${overflowGalleryCount} more participants`}
+                  >
+                    <View style={styles.hiddenParticipantsContent}>
+                      <Ionicons name="people" size={28} color="#fff" />
+                      <Text style={styles.hiddenParticipantsText}>+{overflowGalleryCount} more</Text>
+                    </View>
+                  </TouchableOpacity>,
+                ] : []),
+              ],
+              gridColumns
+            ).map((rowItems, rowIndex) => (
+              <View key={`gallery-row-${rowIndex}`} style={styles.galleryRow}>
+                {rowItems}
+              </View>
             ))}
-
-            {overflowGalleryCount > 0 && (
-              <TouchableOpacity
-                key="gallery-more"
-                style={[
-                  styles.gridVideoWrapper,
-                  galleryTileStyle(),
-                  styles.hiddenParticipantsBadge,
-                ]}
-                onPress={() => setIsGalleryExpanded(true)}
-                accessibilityLabel={`Show ${overflowGalleryCount} more participants`}
-              >
-                <View style={styles.hiddenParticipantsContent}>
-                  <Ionicons name="people" size={28} color="#fff" />
-                  <Text style={styles.hiddenParticipantsText}>+{overflowGalleryCount} more</Text>
-                </View>
-              </TouchableOpacity>
-            )}
           </ScrollView>
         )}
 
@@ -1192,15 +1214,16 @@ const styles = StyleSheet.create({
     margin: 0,
     zIndex: 10,
   },
+  // Rows are now explicit children (see renderGalleryRows/galleryRow) rather
+  // than left to flexWrap, so each tile's width can be flex: 1 of its own
+  // row -- a flexWrap layout has no concept of "this row only has one tile
+  // left, give it the full row" the way explicit rows naturally do.
   videoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    // Rows fill from the start so every row lines up on the same left edge;
-    // centring made a short last row sit out of step with the ones above it.
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
-    alignContent: 'flex-start',
+    flexDirection: 'column',
     padding: spacing.sm,
+  },
+  galleryRow: {
+    flexDirection: 'row',
   },
   galleryCollapse: {
     position: 'absolute',
@@ -1346,18 +1369,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: spacing.xs,
   },
+  // With up to six buttons possible (mic, camera, camera-switch,
+  // screen-share, end-call, chat), the old spacing.lg gap plus spacing.lg
+  // padding needed ~456px of width -- wider than most phone screens -- so
+  // the row overflowed and the outer buttons ended up crowded against, or
+  // past, the screen edges. Tighter gap and padding keeps everything inside
+  // the screen with real space at both ends instead of buttons sitting flush
+  // against them.
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.lg,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
   },
   controlButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
