@@ -879,6 +879,29 @@ const AppContext = createContext();
     }
   };
 
+  // Several screens cache their own data locally under keys like
+  // 'cached_user_chamas' or `cached_chama_members_${chamaId}` (see
+  // useMyChamas, useChamaMembersScreen, useMerryGoRoundScreen, useViewMember)
+  // so the UI has something to show instantly before the network responds.
+  // None of that was ever scoped to *which* account it belonged to, and
+  // nothing cleared it on logout -- so on a shared or reused device, logging
+  // in as a different account could show that new account "My Chamas" full
+  // of chamas the previous account belonged to (and this one may not even be
+  // a member of), until the real fetch happened to overwrite it. Sweeping
+  // every 'cached_' key here, rather than hardcoding each one, means a cache
+  // added later under the same convention is covered automatically too.
+  const clearLocalDataCaches = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cacheKeys = keys.filter((key) => key.startsWith('cached_'));
+      if (cacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(cacheKeys);
+      }
+    } catch (error) {
+      console.warn('Failed to clear local data caches on logout:', error);
+    }
+  };
+
   const logout = async () => {
     try {
       try {
@@ -896,6 +919,7 @@ const AppContext = createContext();
         'userData',
         'userRole'
       ]);
+      await clearLocalDataCaches();
 
       dispatch({ type: ActionTypes.LOGOUT });
     } catch (error) {
@@ -907,6 +931,7 @@ const AppContext = createContext();
           'userData',
           'userRole'
         ]);
+        await clearLocalDataCaches();
       } catch (storageError) {
         console.error('Failed to clear AsyncStorage during logout:', storageError);
       }
@@ -1114,8 +1139,8 @@ const AppContext = createContext();
         'authToken',
         'userData',
         'userRole',
-        'cached_avatar_data' // Also clear cached avatar data
       ]);
+      await clearLocalDataCaches();
       dispatch({ type: ActionTypes.LOGOUT });
     } catch (error) {
       console.error('Failed to clear auth data:', error);

@@ -229,7 +229,7 @@ const useChamaMembersScreen = ({ route, navigation, onRouteChange, user }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await ApiService.cancelInvitation(invitationId);
+              const response = await ApiService.cancelInvitation(chamaId, invitationId);
               if (response.success) {
                 Toast.show({
                   type: 'success',
@@ -255,7 +255,7 @@ const useChamaMembersScreen = ({ route, navigation, onRouteChange, user }) => {
 
   const handleResendInvitation = async (invitationId) => {
     try {
-      const response = await ApiService.resendInvitation(invitationId);
+      const response = await ApiService.resendInvitation(chamaId, invitationId);
       if (response.success) {
         Toast.show({
           type: 'success',

@@ -25,14 +25,20 @@ const getChamaSentInvitations = async (chamaId) => {
   return await makeRequest(`/chamas/${chamaId}/invitations/sent`);
 };
 
-const cancelInvitation = async (invitationId) => {
-  return await makeRequest(`/chamas/invitations/${invitationId}/cancel`, {
+// The registered route is /chamas/:id/invitations/:invitationId/cancel --
+// chamaId is not optional here (unlike respondToInvitation, this is a
+// leadership action scoped to one chama). Calling without it used to hit
+// /chamas/invitations/:invitationId/cancel, which matches no route at all
+// (a 404), so the "Cancel" button in the sent-invitations list silently did
+// nothing.
+const cancelInvitation = async (chamaId, invitationId) => {
+  return await makeRequest(`/chamas/${chamaId}/invitations/${invitationId}/cancel`, {
     method: 'POST',
   });
 };
 
-const resendInvitation = async (invitationId) => {
-  return await makeRequest(`/chamas/invitations/${invitationId}/resend`, {
+const resendInvitation = async (chamaId, invitationId) => {
+  return await makeRequest(`/chamas/${chamaId}/invitations/${invitationId}/resend`, {
     method: 'POST',
   });
 };

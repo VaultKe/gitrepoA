@@ -341,7 +341,14 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
           selectedRole,
         });
 
+        // Collected so the toast below can say *why* an invite failed
+        // ("already invited", "already a member") instead of just a bare
+        // count -- a failure with no reason shown is indistinguishable from
+        // the app being broken.
+        const failureReasons = [];
+
         for (const user of selectedUsers) {
+          const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'this person';
           try {
             const userRole = userRoles[user.id] || selectedRole;
             const roleInfo = availableRoles.find(r => r.id === userRole);
@@ -351,9 +358,20 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
               `Responsibilities: ${roleInfo.description}\n\n` +
               `Please accept this invitation to become part of our chama.`;
 
+            // `user.email`/`user.phone` here come straight from the search
+            // results, and the search API deliberately returns *masked*
+            // values for both (e.g. "e**@gmail.com", "+254*******14") --
+            // privacy: a search should never hand back another user's real
+            // contact details. They were never submittable data. Sanitizing
+            // the masked email did nothing to fix it (an email regex rejects
+            // "*" outright), and sanitizing the masked phone mangled it into
+            // a garbled, truncated number -- either way, every invitation
+            // sent this way failed the same "Security validation failed"
+            // check regardless of who was selected. We already know exactly
+            // which account this is, though, so send its id instead and let
+            // the server resolve the real email itself.
             const invitationData = {
-              email: sanitizeInput(user.email, 'email'),
-              phone_number: sanitizeInput(user.phone, 'phone') || undefined,
+              user_id: user.id,
               message: sanitizeInput(enhancedMessage, 'message'),
               role: userRole,
               role_name: roleInfo.name,
@@ -363,9 +381,7 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
             console.log('[DEBUG] Sending user invitation payload', { userId: user.id, invitationData });
 
             const userValidation = [
-              invitationData.email.length > 0 && invitationData.email.length <= 254,
-              /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(invitationData.email),
-              !invitationData.phone_number || /^[\+]?[0-9\s\-()]{7,20}$/.test(invitationData.phone_number),
+              !!invitationData.user_id,
               invitationData.message.length <= 500,
               availableRoles.some(r => r.id === invitationData.role)
             ];
@@ -375,6 +391,7 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
             if (!userValidation.every(Boolean)) {
               console.error(`Security validation failed for user ${user.email}`, { user, invitationData });
               failureCount++;
+              failureReasons.push(`${userName}: invalid invitation data`);
               continue;
             }
 
@@ -385,15 +402,26 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
               successCount++;
             } else {
               failureCount++;
+              failureReasons.push(`${userName}: ${response.error || 'unknown error'}`);
               console.error(`Failed to invite ${user.email}:`, response.error);
             }
           } catch (error) {
             failureCount++;
+            failureReasons.push(`${userName}: ${error.message || 'unknown error'}`);
             console.error(`Error inviting ${user.email}:`, error);
           }
         }
 
-        console.log('[DEBUG] User invitation summary', { successCount, failureCount });
+        console.log('[DEBUG] User invitation summary', { successCount, failureCount, failureReasons });
+
+        // Reporting *why* an invite failed, not just how many did, is what
+        // tells someone "you already invited this person" apart from "the
+        // app is broken" -- a bare count can't do that.
+        const reasonsText = failureReasons.length > 0
+          ? failureReasons.length === 1
+            ? failureReasons[0]
+            : `${failureReasons[0]} (+${failureReasons.length - 1} more)`
+          : '';
 
         if (successCount > 0 && failureCount === 0) {
           Toast.show({
@@ -406,15 +434,15 @@ const useInviteMembers = ({ route, navigation, onRouteChange }) => {
           Toast.show({
             type: 'info',
             text1: 'Partial Success',
-            text2: `${successCount} sent, ${failureCount} failed`,
-            visibilityTime: 4000,
+            text2: `${successCount} sent, ${failureCount} failed${reasonsText ? ` -- ${reasonsText}` : ''}`,
+            visibilityTime: 5000,
           });
         } else {
           Toast.show({
             type: 'error',
             text1: 'All Invitations Failed',
-            text2: 'Failed to send any invitations',
-            visibilityTime: 4000,
+            text2: reasonsText || 'Failed to send any invitations',
+            visibilityTime: 5000,
           });
         }
 
