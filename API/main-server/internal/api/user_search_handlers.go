@@ -101,19 +101,19 @@ func (h *UserSearchHandlers) SearchUsers(c *gin.Context) {
 			SELECT id, first_name, last_name, email, phone, created_at
 			FROM users
 			WHERE
-				LOWER(first_name) LIKE LOWER($2) OR
-				LOWER(last_name) LIKE LOWER($3) OR
-				LOWER(email) LIKE LOWER($4) OR
-				phone LIKE $5
+				LOWER(first_name) LIKE LOWER($1) OR
+				LOWER(last_name) LIKE LOWER($2) OR
+				LOWER(email) LIKE LOWER($3) OR
+				phone LIKE $4
 			ORDER BY
 				CASE
-					WHEN LOWER(first_name) LIKE LOWER($6) THEN 1
-					WHEN LOWER(last_name) LIKE LOWER($7) THEN 2
-					WHEN LOWER(email) LIKE LOWER($8) THEN 3
+					WHEN LOWER(first_name) LIKE LOWER($5) THEN 1
+					WHEN LOWER(last_name) LIKE LOWER($6) THEN 2
+					WHEN LOWER(email) LIKE LOWER($7) THEN 3
 					ELSE 4
 				END,
 				first_name, last_name
-			LIMIT $9 OFFSET $10
+			LIMIT $8 OFFSET $9
 		`
 		args = []interface{}{
 			searchPattern, searchPattern, searchPattern, searchPattern,
