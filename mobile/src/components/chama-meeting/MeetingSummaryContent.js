@@ -3,7 +3,6 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../common/Card';
 import { spacing, typography, borderRadius } from '../../utils/theme';
-import MeetingSummaryHeader from './MeetingSummaryHeader';
 import AttendanceTable from './AttendanceTable';
 import MeetingMinutesCard from './MeetingMinutesCard';
 import MeetingDocumentsCard from './MeetingDocumentsCard';
@@ -17,9 +16,7 @@ const MeetingSummaryContent = ({
   getAttendanceStats,
   attendanceData,
   totalAttendanceItems,
-  meetingMinutes,
   meetingDocuments,
-  getRecorderName,
   handleDocumentPress,
   downloadingDocId,
   attendancePage,
@@ -28,6 +25,10 @@ const MeetingSummaryContent = ({
   getAttendeeName,
   onRefresh,
   refreshing,
+  meetingId,
+  chamaId,
+  userRole,
+  navigation,
 }) => {
   if (!meeting) {
     return (
@@ -39,23 +40,32 @@ const MeetingSummaryContent = ({
     );
   }
 
+  // The minutes file is already presented by the minutes card above, with its
+  // approval state. Listing it again under Meeting Documents made one upload
+  // look like two, which is what made "Minutes: Not uploaded" sitting above
+  // "Meeting Documents (1)" so contradictory.
+  const otherDocuments = (meetingDocuments || []).filter(
+    doc => String(doc?.documentType || '').toLowerCase() !== 'meeting_minutes'
+  );
+
+  const stats = getAttendanceStats();
+  const attendanceRate = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+
   return (
     <View style={styles.detailsContainer}>
       <Card variant="outlined" style={styles.overviewCard}>
         <Text style={[styles.detailsTitle, { color: colors.text }]}>Attendance Summary</Text>
         <View style={styles.attendanceStats}>
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.success }]}>{getAttendanceStats().present}</Text>
+            <Text style={[styles.statValue, { color: colors.success }]}>{stats.present}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Present</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.error }]}>{getAttendanceStats().absent}</Text>
+            <Text style={[styles.statValue, { color: colors.error }]}>{stats.absent}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Absent</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>
-              {getAttendanceStats().total > 0 ? Math.round((getAttendanceStats().present / getAttendanceStats().total) * 100) : 0}%
-            </Text>
+            <Text style={[styles.statValue, { color: colors.primary }]}>{attendanceRate}%</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Rate</Text>
           </View>
         </View>
@@ -73,14 +83,25 @@ const MeetingSummaryContent = ({
         />
       </Card>
 
+      {/* This was handed `meetingMinutes`/`getRecorderName`, neither of which
+          the card accepts -- it loads the record itself and needs the meeting
+          to do it. Without `meetingId` that fetch had nothing to look up, so
+          the card always reported "Not uploaded" even while the uploaded file
+          sat in the documents list right below it. Passing the real props
+          means this page and the meeting room now read the same record, and
+          the chairperson gets the approve action in both places. */}
       <MeetingMinutesCard
-        meetingMinutes={meetingMinutes}
-        getRecorderName={getRecorderName}
+        meetingId={meetingId || meeting.id}
+        meetingTitle={meeting.title}
+        chamaId={chamaId || meeting.chamaId}
+        userRole={userRole}
+        navigation={navigation}
         colors={colors}
+        readOnly
       />
 
       <MeetingDocumentsCard
-        meetingDocuments={meetingDocuments}
+        meetingDocuments={otherDocuments}
         onDocumentPress={handleDocumentPress}
         downloadingDocId={downloadingDocId}
         colors={colors}

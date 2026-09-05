@@ -8,6 +8,8 @@ import {
   ScrollView,
   TextInput,
   Platform,
+  useWindowDimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -29,9 +31,39 @@ import WebVideo from '../../../components/chama-meeting/WebVideo';
 import MeetingMinutesCard from '../../../components/chama-meeting/MeetingMinutesCard';
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
-const MAX_GRID_PARTICIPANTS = 3;
+const CARD_CONTROL_TIMEOUT_MS = 4000;
 
-const getDisplayName = (value, fallback = 'Guest') => {
+const SpeakingIndicator = ({ color }) => {
+  const bars = useRef([new Animated.Value(0.35), new Animated.Value(0.35), new Animated.Value(0.35)]).current;
+
+  useEffect(() => {
+    const animations = bars.map((bar, index) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(index * 120),
+          Animated.timing(bar, { toValue: 1, duration: 260, useNativeDriver: true }),
+          Animated.timing(bar, { toValue: 0.35, duration: 260, useNativeDriver: true }),
+        ])
+      )
+    );
+
+    animations.forEach(animation => animation.start());
+    return () => animations.forEach(animation => animation.stop());
+  }, [bars]);
+
+  return (
+    <View style={styles.speakingIndicator} accessibilityLabel="Speaking">
+      {bars.map((bar, index) => (
+        <Animated.View
+          key={index}
+          style={[styles.speakingBar, { backgroundColor: color, transform: [{ scaleY: bar }] }]}
+        />
+      ))}
+    </View>
+  );
+};
+
+const getDisplayName = (value, fallback = '') => {
   if (!value) return fallback;
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -50,7 +82,8 @@ const getDisplayName = (value, fallback = 'Guest') => {
 };
 
 const truncateDisplayName = (value, maxLength = 18) => {
-  const name = getDisplayName(value, 'Guest');
+  const name = getDisplayName(value, '');
+  if (!name) return '';
   if (name.length <= maxLength) return name;
   return `${name.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
 };
@@ -60,15 +93,24 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   const colors = getThemeColors(theme);
   const screen = useOnlineMeetingScreen({ route, navigation });
   const chatScrollRef = useRef(null);
-  // Whether the user has minimised the big "stage" tile. This is the user's
-  // own choice, kept separate from whether there is anything worth showing
-  // there, so the minimise button can actually collapse it.
   const [isStageCollapsed, setIsStageCollapsed] = useState(false);
-  const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
+  const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
+  const [expandedTileKey, setExpandedTileKey] = useState(null);
+  const [revealedTileKey, setRevealedTileKey] = useState(null);
+  const revealTimerRef = useRef(null);
+
+  const revealTileControls = (key) => {
+    setRevealedTileKey(key);
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    revealTimerRef.current = setTimeout(() => setRevealedTileKey(null), CARD_CONTROL_TIMEOUT_MS);
+  };
+
+  useEffect(() => () => {
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+  }, []);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [chatDraft, setChatDraft] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
-  // How many messages the user has already been shown, and whether the
-  // backlog fetched on join has landed yet (that backlog isn't "unread").
   const seenChatCountRef = useRef(0);
   const chatBacklogSettledRef = useRef(false);
 
@@ -80,6 +122,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     isScreenSharing,
     screenStream,
     screenShareViewerCount,
+    isSelfSpeaking,
     meetingTitle,
     userRole,
     participants,
@@ -99,6 +142,24 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     setIsChatOpen,
   } = screen;
 
+  const nameForParticipant = (participant) => {
+    const own = truncateDisplayName(participant?.name);
+    if (own) return own;
+
+    const entry = participants.find((part) => {
+      const partUserId = part.userId || part.payload?.userId || part.memberId;
+      const partConnId = part.connId || part.payload?.connId;
+      return (
+        (participant?.userId && partUserId && partUserId === participant.userId) ||
+        (participant?.connId && partConnId && partConnId === participant.connId)
+      );
+    });
+
+    return truncateDisplayName(
+      entry?.displayName || entry?.payload?.displayName || entry?.name || entry?.payload?.name || entry
+    );
+  };
+
   // Auto-scroll to bottom when new chat messages arrive
   useEffect(() => {
     if (isChatOpen && chatScrollRef.current) {
@@ -106,14 +167,10 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     }
   }, [chatMessages, isChatOpen]);
 
-  // Unread badge for the chat button: counts messages from others that
-  // arrived while the panel was closed, and clears as soon as it's opened.
   useEffect(() => {
     if (isConnecting) return;
 
     if (!chatBacklogSettledRef.current) {
-      // History loaded on join is already "read" -- don't open the meeting
-      // with a badge counting the whole conversation so far.
       chatBacklogSettledRef.current = true;
       seenChatCountRef.current = chatMessages.length;
       return;
@@ -141,60 +198,31 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     setChatDraft('');
   };
 
-  // Determine the active participant for expanded view
-  // Priority: 1. Remote screen sharer, 2. Active speaker, 3. First remote participant
-  const getActiveParticipant = () => {
-    const remoteScreenSharer = remoteStreams.find(s => s.isScreenSharing);
-    if (remoteScreenSharer) return remoteScreenSharer;
-
-    const remoteActiveSpeaker = remoteStreams.find(s => s.isActive || s.isSpeaking);
-    if (remoteActiveSpeaker) return remoteActiveSpeaker;
-
-    return remoteStreams.length > 0 ? remoteStreams[0] : null;
-  };
-
-  const activeParticipant = getActiveParticipant();
-
-  // Auto-pin active participant when they change
-  useEffect(() => {
-    if (activeParticipant) {
-      setPinnedParticipantId(activeParticipant.connId);
-    }
-  }, [activeParticipant?.connId]);
-
-  // Is there anything worth putting on the big stage at all?
   const hasRemoteScreenSharer = remoteStreams.some(s => s.isScreenSharing);
-  const hasStageContent = isScreenSharing || hasRemoteScreenSharer || !!activeParticipant;
-  // The minimise button used to be OR'd into this alongside `activeParticipant`,
-  // which is truthy whenever anyone else is in the call -- so the stage was
-  // always shown and pressing minimise only ever flipped the icon.
-  const showExpandedView = hasStageContent && !isStageCollapsed;
   const isAnyScreenShare = isScreenSharing || hasRemoteScreenSharer;
 
-  // Get the participant to show in expanded view
-  // Priority: 1. Remote screen sharer (always show when someone is sharing)
-  //           2. User pinned participant, 3. Local screen sharing, 4. Active participant
+  const expandedTile = !isAnyScreenShare && expandedTileKey
+    ? (expandedTileKey === 'self'
+        ? { isLocal: true, participant: null }
+        : (() => {
+            const match = remoteStreams.find(s => s.connId === expandedTileKey);
+            return match ? { isLocal: false, participant: match } : null;
+          })())
+    : null;
+
+  const hasStageContent = isAnyScreenShare || !!expandedTile;
+  const showExpandedView = hasStageContent && !isStageCollapsed;
+
   const getExpandedParticipant = () => {
-    // Always show remote screen sharer in expanded view (highest priority)
     const remoteScreenSharer = remoteStreams.find(s => s.isScreenSharing);
     if (remoteScreenSharer) {
       return { participant: remoteScreenSharer, isLocal: false };
     }
-    // Our own share outranks a pinned participant: otherwise the auto-pin
-    // (which always picks a remote tile) hid the local screen preview, leaving
-    // the sharer with no way to tell whether their share was actually live.
     if (isScreenSharing) {
       return { participant: { stream: screenStream }, isLocal: true };
     }
-    // If user manually pinned someone, show them
-    if (pinnedParticipantId) {
-      const pinned = remoteStreams.find(s => s.connId === pinnedParticipantId);
-      if (pinned) return { participant: pinned, isLocal: false };
-    }
-    // Show active participant
-    if (activeParticipant) {
-      return { participant: activeParticipant, isLocal: false };
-    }
+    // A tile the user expanded themselves.
+    if (expandedTile) return expandedTile;
     return null;
   };
 
@@ -205,18 +233,29 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       : !!(expandedData.participant.isScreenSharing && expandedData.participant.screenStream)
   );
 
-  // The stage only "uses up" a participant while it's actually on screen --
-  // once minimised they belong back in the grid, otherwise minimising would
-  // make that person vanish from the call entirely.
   const stageHoldsParticipant = showExpandedView && !!expandedData && !expandedData.isLocal;
 
-  const gridRemoteParticipants = remoteStreams
-    .filter(s => !stageHoldsParticipant || s.connId !== expandedData.participant.connId)
-    .slice(0, MAX_GRID_PARTICIPANTS);
+  const stripRemoteParticipants = remoteStreams
+    .filter(s => !stageHoldsParticipant || s.connId !== expandedData.participant.connId);
 
-  const hiddenParticipantsCount = Math.max(0,
-    remoteStreams.length - gridRemoteParticipants.length - (stageHoldsParticipant ? 1 : 0)
-  );
+  const showSelfInStrip = isAnyScreenShare || (!!expandedTile && !expandedTile.isLocal);
+
+  const isOneToOne = !isAnyScreenShare && !expandedTile && remoteStreams.length === 1;
+
+  const galleryTiles = [
+    { key: 'self', isSelf: true },
+    ...remoteStreams.map(participant => ({ key: participant.connId, isSelf: false, participant })),
+  ];
+
+  const gridColumns = windowWidth >= 1100 ? 3 : 2;
+  const gridRows = 3;
+  const gridCapacity = gridColumns * gridRows;
+
+  const galleryOverflows = !isGalleryExpanded && galleryTiles.length > gridCapacity;
+  const visibleGalleryTiles = galleryOverflows
+    ? galleryTiles.slice(0, gridCapacity - 1)
+    : galleryTiles;
+  const overflowGalleryCount = galleryTiles.length - visibleGalleryTiles.length;
 
   const rosterParticipants = participants
     .filter((entry) => {
@@ -225,19 +264,19 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     })
     .map((entry) => {
       const entryUserId = entry.userId || entry.payload?.userId || entry.memberId;
-      const fallbackName = getDisplayName(entry.displayName || entry.payload?.displayName || entry.name || entry.payload?.name || 'Guest');
+      const resolvedName = getDisplayName(
+        entry.displayName || entry.payload?.displayName || entry.name || entry.payload?.name || entry
+      );
       return {
-        id: entryUserId || entry.connId || `${entry.displayName || 'guest'}-${Math.random()}`,
-        name: truncateDisplayName(fallbackName, 18),
+        id: entryUserId || entry.connId || resolvedName,
+        name: truncateDisplayName(resolvedName, 18),
       };
-    });
+    })
+    .filter(entry => !!entry.name);
 
   const visibleRosterParticipants = rosterParticipants.slice(0, 6);
   const hiddenRosterCount = Math.max(0, rosterParticipants.length - visibleRosterParticipants.length);
 
-  // A finished meeting is reviewed, not joined -- so no video area, no
-  // controls, and (in the hook) no camera or microphone is ever requested.
-  // What remains is its record: the chat that took place and who was there.
   if (isEndedMeeting) {
     const { attendees = [], absentees = [] } = attendanceRecord || {};
 
@@ -383,11 +422,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     return <OnlineMeetingErrorView theme={theme} error={connectionError} />;
   }
 
-  // `isScreen` marks content that is a screen share rather than a camera
-  // feed. It matters for the local preview: the camera-off placeholder below
-  // must not swallow your own screen share, which is why the presenter saw
-  // "Camera off" while everyone else was watching their screen just fine.
-  const renderVideoElement = (stream, isLocal = false, connId = null, isScreen = false) => {
+  const renderVideoElement = (stream, isLocal = false, connId = null, isScreen = false, placeholderName = '') => {
     // Show placeholder when local camera is disabled
     if (isLocal && !isScreen && !isCameraEnabled) {
       return (
@@ -404,18 +439,17 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
       );
     }
 
-    // Show placeholder for remote participants without media streams
-    // (e.g., they joined but haven't enabled camera/microphone yet)
     if (!stream && (!isLocal || isScreen)) {
-      const placeholderName = 'Guest';
       return (
-        <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}> 
-          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}> 
+        <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
             <Ionicons name="person" size={36} color="#fff" />
           </View>
-          <Text style={[styles.placeholderText, { color: colors.textSecondary }]}> 
-            {truncateDisplayName(placeholderName, 18)}
-          </Text>
+          {!!placeholderName && (
+            <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
+              {truncateDisplayName(placeholderName, 18)}
+            </Text>
+          )}
         </View>
       );
     }
@@ -448,80 +482,108 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     }
 
     return (
-      <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}> 
+      <View style={[styles.videoPlaceholder, { backgroundColor: colors.surface }]}>
         <Ionicons
           name={isLocal ? 'person' : 'people'}
           size={48}
           color={colors.textSecondary}
         />
-        <Text style={[styles.placeholderText, { color: colors.textSecondary }]}> 
-          {isLocal ? 'You' : 'Guest'}
+        <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
+          {isLocal ? 'You' : truncateDisplayName(placeholderName, 18)}
         </Text>
       </View>
     );
   };
 
+  const galleryTileStyle = () => {
+    const gutter = spacing.xs * 2;
+    const available = Math.max(0, windowWidth - spacing.sm * 2);
+    return { width: Math.max(80, available / gridColumns - gutter) };
+  };
+
+  const renderTileExpandControl = (tileKey) => {
+    if (revealedTileKey !== tileKey) return null;
+    const isExpanded = expandedTileKey === tileKey;
+
+    return (
+      <TouchableOpacity
+        style={[styles.tileExpand, { backgroundColor: colors.overlay }]}
+        onPress={() => {
+          setExpandedTileKey(isExpanded ? null : tileKey);
+          setIsStageCollapsed(false);
+          setRevealedTileKey(null);
+        }}
+        accessibilityLabel={isExpanded ? 'Minimise this participant' : 'Expand this participant'}
+      >
+        <Ionicons name={isExpanded ? 'contract' : 'expand'} size={16} color="#fff" />
+      </TouchableOpacity>
+    );
+  };
+
   // One tile definition shared by the horizontal strip (`compact`) and the
   // wrapped grid, so the two layouts can never drift apart.
-  const renderParticipantTile = (participant, compact) => {
-    const { connId, stream, screenStream: participantScreen, name, isScreenSharing: sharing } = participant;
+  const renderParticipantTile = (participant, compact, sizeStyle = null) => {
+    const { connId, stream, screenStream: participantScreen, isScreenSharing: sharing, isSpeaking } = participant;
+    const label = nameForParticipant(participant);
+
     return (
-      <View
+      <TouchableOpacity
         key={connId}
+        activeOpacity={0.9}
+        onPress={() => revealTileControls(connId)}
         style={[
           styles.gridVideoWrapper,
           { backgroundColor: colors.card, borderColor: colors.border },
           compact && styles.gridVideoWrapperExpanded,
+          sizeStyle,
+          // A speaking participant is outlined, the way the tile itself
+          // signals who has the floor before you even read the name.
+          isSpeaking && { borderColor: colors.success, borderWidth: 2 },
         ]}
       >
         {renderVideoElement(
           sharing && participantScreen ? participantScreen : stream,
           false,
           connId,
-          !!(sharing && participantScreen)
+          !!(sharing && participantScreen),
+          label
         )}
-        <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
-          {sharing && (
-            <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
-          )}
-          <Text style={styles.videoLabelText}>
-            {sharing ? `${truncateDisplayName(name || 'Guest')} (Screen)` : truncateDisplayName(name || 'Guest')}
-          </Text>
-        </View>
-      </View>
+        {!!label && (
+          <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
+            {sharing && (
+              <Ionicons name="desktop" size={14} color={colors.primary} style={{ marginRight: 4 }} />
+            )}
+            {isSpeaking && <SpeakingIndicator color={colors.success} />}
+            <Text style={styles.videoLabelText}>
+              {sharing ? `${label} (Screen)` : label}
+            </Text>
+          </View>
+        )}
+        {renderTileExpandControl(connId)}
+      </TouchableOpacity>
     );
   };
 
-  const renderSelfTile = (compact) => (
-    <View
+  const renderSelfTile = (compact, sizeStyle = null) => (
+    <TouchableOpacity
       key="self"
+      activeOpacity={0.9}
+      onPress={() => revealTileControls('self')}
       style={[
         styles.gridVideoWrapper,
         { backgroundColor: colors.card, borderColor: colors.border },
         compact && styles.gridVideoWrapperExpanded,
+        sizeStyle,
+        isSelfSpeaking && { borderColor: colors.success, borderWidth: 2 },
       ]}
     >
       {renderVideoElement(localStream, true)}
       <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
+        {isSelfSpeaking && <SpeakingIndicator color={colors.success} />}
         <Text style={styles.videoLabelText}>{isScreenSharing ? 'You · Camera' : 'You'}</Text>
       </View>
-    </View>
-  );
-
-  const renderOthersTile = (compact) => (
-    <View
-      key="others"
-      style={[
-        styles.gridVideoWrapper,
-        compact && styles.gridVideoWrapperExpanded,
-        styles.hiddenParticipantsBadge,
-      ]}
-    >
-      <View style={styles.hiddenParticipantsContent}>
-        <Ionicons name="people" size={compact ? 22 : 32} color="#fff" />
-        <Text style={styles.hiddenParticipantsText}>+{hiddenParticipantsCount} others</Text>
-      </View>
-    </View>
+      {renderTileExpandControl('self')}
+    </TouchableOpacity>
   );
 
   return (
@@ -532,9 +594,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             style={[
               styles.expandedVideoContainer,
               { backgroundColor: colors.card, borderColor: colors.border },
-              // A shared screen is the thing everyone is meant to be looking
-              // at, so the stage is set apart from the participant tiles
-              // rather than just being a bigger one of them.
               isStageScreenShare && [styles.stageSharing, { borderColor: colors.primary }],
             ]}
           >
@@ -552,14 +611,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
                 !!(expandedData.participant.isScreenSharing && expandedData.participant.screenStream)
               )
             )}
-            {/* Their screen travels on its own track, separate from their
-                camera and mic. Showing the screen alone would leave that
-                mic track with nowhere to play on web, so the sharer goes
-                silent exactly while they're presenting. Keep an audio-only
-                sink alive for them. Native plays remote audio without a
-                view, so this is web-only -- and it is the single sink for
-                this participant, since the grid excludes whoever is on the
-                stage, so it cannot double up and echo. */}
+            
             {isWeb
               && !expandedData.isLocal
               && expandedData.participant.isScreenSharing
@@ -579,8 +631,8 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
                       ? `Your Screen${screenShareViewerCount > 0 ? ` · Seen by ${screenShareViewerCount}` : ' · Not confirmed seen yet'}`
                       : 'You')
                   : (expandedData.participant.isScreenSharing
-                      ? `${truncateDisplayName(expandedData.participant.name || 'Guest')} (Screen)`
-                      : truncateDisplayName(expandedData.participant.name || 'Guest'))}
+                      ? `${nameForParticipant(expandedData.participant)} (Screen)`
+                      : nameForParticipant(expandedData.participant))}
               </Text>
             </View>
           </View>
@@ -591,7 +643,14 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         {hasStageContent && (
           <TouchableOpacity
             style={[styles.stageToggle, { backgroundColor: colors.overlay }]}
-            onPress={() => setIsStageCollapsed(!isStageCollapsed)}
+            onPress={() => {
+              if (expandedTile && !isAnyScreenShare) {
+                setExpandedTileKey(null);
+                setIsStageCollapsed(false);
+                return;
+              }
+              setIsStageCollapsed(!isStageCollapsed);
+            }}
             accessibilityLabel={isStageCollapsed ? 'Expand main view' : 'Minimise main view'}
           >
             <Ionicons
@@ -602,10 +661,6 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         )}
 
-        {/* Participants sit in a row beneath the stage and scroll sideways.
-            This used to be a plain View relying on `overflowX: auto`, which is
-            a web CSS property React Native ignores -- so on a phone the tiles
-            past the third were simply unreachable. */}
         {showExpandedView ? (
           <ScrollView
             horizontal
@@ -613,35 +668,65 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             style={styles.participantStrip}
             contentContainerStyle={styles.participantStripContent}
           >
-            {isAnyScreenShare && renderSelfTile(true)}
-            {gridRemoteParticipants.map(participant => renderParticipantTile(participant, true))}
-            {hiddenParticipantsCount > 0 && renderOthersTile(true)}
+            {showSelfInStrip && renderSelfTile(true)}
+            {stripRemoteParticipants.map(participant => renderParticipantTile(participant, true))}
           </ScrollView>
-        ) : (
-          <View style={styles.videoGrid}>
-            {isAnyScreenShare && renderSelfTile(false)}
-            {gridRemoteParticipants.map(participant => renderParticipantTile(participant, false))}
-            {hiddenParticipantsCount > 0 && renderOthersTile(false)}
+        ) : isOneToOne ? (
+          
+          <View style={styles.oneToOneArea}>
+            {renderParticipantTile(remoteStreams[0], false, styles.oneToOneRemote)}
+            {renderSelfTile(false, styles.oneToOneSelf)}
           </View>
+        ) : (
+          
+          <ScrollView
+            style={styles.gallery}
+            contentContainerStyle={styles.videoGrid}
+            showsVerticalScrollIndicator={isGalleryExpanded}
+          >
+            {visibleGalleryTiles.map(tile => (
+              tile.isSelf
+                ? renderSelfTile(false, galleryTileStyle())
+                : renderParticipantTile(tile.participant, false, galleryTileStyle())
+            ))}
+
+            {overflowGalleryCount > 0 && (
+              <TouchableOpacity
+                key="gallery-more"
+                style={[
+                  styles.gridVideoWrapper,
+                  galleryTileStyle(),
+                  styles.hiddenParticipantsBadge,
+                ]}
+                onPress={() => setIsGalleryExpanded(true)}
+                accessibilityLabel={`Show ${overflowGalleryCount} more participants`}
+              >
+                <View style={styles.hiddenParticipantsContent}>
+                  <Ionicons name="people" size={28} color="#fff" />
+                  <Text style={styles.hiddenParticipantsText}>+{overflowGalleryCount} more</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         )}
 
-        {/* The floating self-view is fine over a face, but it would cover part
-            of whatever is being presented -- so while any screen is shared it
-            steps down into the strip and takes its turn like everyone else. */}
-        {!isAnyScreenShare && (
-          <View style={[styles.selfViewPiP, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {renderVideoElement(localStream, true)}
-            <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
-              <Text style={styles.videoLabelText}>You</Text>
-            </View>
-          </View>
+        {/* Once expanded, offer the way back to the compact grid. */}
+        {!showExpandedView && isGalleryExpanded && galleryTiles.length > gridCapacity && (
+          <TouchableOpacity
+            style={[styles.galleryCollapse, { backgroundColor: colors.overlay }]}
+            onPress={() => setIsGalleryExpanded(false)}
+            accessibilityLabel="Show fewer participants"
+          >
+            <Ionicons name="contract" size={16} color="#fff" />
+            <Text style={styles.galleryCollapseText}>Show less</Text>
+          </TouchableOpacity>
         )}
       </View>
 
       <View style={[styles.controls, { backgroundColor: colors.surface + 'E6' }]}>
         <TouchableOpacity
           style={[styles.controlButton, !isMicrophoneEnabled && styles.controlButtonOff]}
-          onPress={screen.handleToggleMicrophone}
+          onPress={handleToggleMicrophone}
         >
           <Ionicons
             name={isMicrophoneEnabled ? 'mic' : 'mic-off'}
@@ -652,7 +737,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
         <TouchableOpacity
           style={[styles.controlButton, !isCameraEnabled && styles.controlButtonOff]}
-          onPress={screen.handleToggleCamera}
+          onPress={handleToggleCamera}
         >
           <Ionicons
             name={isCameraEnabled ? 'videocam' : 'videocam-off'}
@@ -660,6 +745,18 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
             color={isCameraEnabled ? colors.text : colors.error}
           />
         </TouchableOpacity>
+
+        {/* Front/back camera flip. Native only -- switching a webcam this way
+            isn't a thing on web, and handleSwitchCamera is a no-op there. */}
+        {!isWeb && isCameraEnabled && (
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={handleSwitchCamera}
+            accessibilityLabel="Switch camera"
+          >
+            <Ionicons name="camera-reverse-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[
@@ -912,12 +1009,83 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#374151',
   },
+  gallery: {
+    flex: 1,
+  },
+  oneToOneArea: {
+    flex: 1,
+    position: 'relative',
+    padding: spacing.sm,
+  },
+  // The other participant takes the whole area rather than a fixed 16:9 tile,
+  // so a one-to-one call uses the screen it has.
+  oneToOneRemote: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    aspectRatio: undefined,
+    margin: 0,
+  },
+  // Bigger than the old floating preview, and back in the top-right corner.
+  oneToOneSelf: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 150,
+    height: 210,
+    aspectRatio: undefined,
+    margin: 0,
+    zIndex: 10,
+  },
   videoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    // Rows fill from the start so every row lines up on the same left edge;
+    // centring made a short last row sit out of step with the ones above it.
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    alignContent: 'flex-start',
+    padding: spacing.sm,
+  },
+  galleryCollapse: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    zIndex: 10,
+  },
+  galleryCollapseText: {
+    color: '#fff',
+    fontSize: typography.fontSize.xs,
+    fontWeight: '600',
+  },
+  tileExpand: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.sm,
+    zIndex: 5,
+  },
+  speakingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginRight: 5,
+    height: 12,
+  },
+  speakingBar: {
+    width: 3,
+    height: 12,
+    borderRadius: 2,
   },
   // Fixed height so the strip never steals room from the stage above it.
   participantStrip: {
@@ -949,19 +1117,6 @@ const styles = StyleSheet.create({
     minWidth: 120,
     height: 80,
     margin: spacing.xs,
-  },
-  selfViewPiP: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    width: 132,
-    height: 184,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1,
-    borderColor: '#374151',
-    zIndex: 10,
   },
   // Carries a participant's audio while only their screen is on display.
   // Sized away rather than display:none, which can stop playback.

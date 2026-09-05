@@ -32,7 +32,11 @@ const readMinutes = (record) => {
 
 const isApproved = (record) => String(record?.status || '').toLowerCase() === 'approved';
 
-const MeetingMinutesCard = ({ meetingId, meetingTitle, chamaId, userRole, colors, navigation }) => {
+// `readOnly` turns the card into a record of what was filed: the minutes are
+// shown and can be opened, but nothing can be uploaded or approved from here.
+// The meeting summary uses it that way, so minutes are handled in one place --
+// the meeting room -- rather than being actionable from two screens.
+const MeetingMinutesCard = ({ meetingId, meetingTitle, chamaId, userRole, colors, navigation, readOnly = false }) => {
   const { user } = useApp();
   const [minutes, setMinutes] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -168,8 +172,8 @@ const MeetingMinutesCard = ({ meetingId, meetingTitle, chamaId, userRole, colors
   // Both the secretary and the chairperson can put minutes up, and only while
   // nothing has been approved yet — once the chairperson signs off, the record
   // is final and the upload action goes away for everyone, themselves included.
-  const canUpload = (isSecretary || isChairperson) && !approved;
-  const canApprove = isChairperson && hasFile && !approved;
+  const canUpload = !readOnly && (isSecretary || isChairperson) && !approved;
+  const canApprove = !readOnly && isChairperson && hasFile && !approved;
 
   const statusLabel = !minutes ? 'Not uploaded' : approved ? 'Approved' : 'Awaiting approval';
   const statusColor = !minutes ? colors.textTertiary : approved ? colors.success : colors.warning;
@@ -201,7 +205,7 @@ const MeetingMinutesCard = ({ meetingId, meetingTitle, chamaId, userRole, colors
               <Text style={[styles.note, { color: colors.text }]}>{file.text}</Text>
             ) : (
               <Text style={[styles.note, { color: colors.textSecondary }]}>
-                {isSecretary || isChairperson
+                {!readOnly && (isSecretary || isChairperson)
                   ? 'No minutes yet. Upload a document or a photo of the minutes for this meeting.'
                   : 'Minutes for this meeting have not been uploaded yet.'}
               </Text>

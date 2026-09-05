@@ -32,6 +32,22 @@ const appendChatMessage = (prev, incoming) => {
   return isDuplicate ? prev : [...prev, incoming];
 };
 
+// Above this audio level someone counts as talking rather than as background
+// noise. WebRTC reports the level as 0..1.
+const SPEAKING_LEVEL_THRESHOLD = 0.02;
+// Once someone is marked as speaking they stay marked for this long after
+// they go quiet. Speech has natural gaps between words, and without the hold
+// the indicator would strobe on every pause.
+const SPEAKING_HOLD_MS = 1200;
+
+// How long a socket-reported departure keeps overriding the REST roster,
+// which takes a moment to catch up.
+const RECENT_LEAVE_GRACE_MS = 15000;
+// Consecutive participant polls someone must be missing from the roster
+// before their tile is dropped. One miss could just be a hiccup; a run of
+// them means they are gone and we never got the socket notice.
+const ROSTER_MISSES_BEFORE_DROP = 2;
+
 const useOnlineMeetingScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const {
@@ -92,6 +108,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // receiving our current screen share's frames. Reset on every start/stop
   // so a stale ack from a previous share can't count toward the new one.
   const [screenShareViewerConnIds, setScreenShareViewerConnIds] = useState(() => new Set());
+  // connIds currently talking, plus 'local' for ourselves. Drives the green
+  // indicator and floats active speakers to the front of the grid.
+  const [speakingConnIds, setSpeakingConnIds] = useState(() => new Set());
   // Identity of the participant currently sharing their screen, as announced by
   // the signaling server: { connId, userId }. Kept separately from the stream
   // list so the flag survives tiles being re-created or re-keyed.
@@ -145,6 +164,19 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const pollIntervalRef = useRef(null);
   // Track known participant IDs for detecting joins/leaves via polling
   const knownParticipantIdsRef = useRef(new Set());
+  // userId -> timestamp of a departure we were told about over the socket.
+  // The REST roster lags behind that by a moment, and the participant poll
+  // reads straight from it, so without this the poll kept resurrecting the
+  // tile of someone who had already left.
+  const recentlyLeftRef = useRef(new Map());
+  // userId -> consecutive polls they've been absent from the server roster.
+  const rosterMissesRef = useRef(new Map());
+  // Mirror of remoteStreams for the poll, which runs on an interval and would
+  // otherwise close over a stale copy.
+  const remoteStreamsRef = useRef([]);
+  // connId (or 'local') -> timestamp we last heard them speak, used to apply
+  // SPEAKING_HOLD_MS before dropping the indicator.
+  const lastSpokeAtRef = useRef(new Map());
 
 
   // Initialize meeting.
@@ -183,6 +215,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     initialLoadDoneRef.current = false;
     participantsRef.current = [];
     knownParticipantIdsRef.current = new Set();
+    recentlyLeftRef.current = new Map();
+    rosterMissesRef.current = new Map();
+    remoteStreamsRef.current = [];
     mediaPermissionsRef.current = { camera: true, microphone: true };
 
     // A finished meeting is reviewed, not joined: no permission prompts, no
@@ -409,7 +444,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     }
   };
 
-  const getHumanName = (value, fallback = 'Guest') => {
+  // Fallback defaults to empty rather than "Guest": a blank result lets the
+  // caller fall through to another source for the person's real name, whereas
+  // a placeholder would be mistaken for one and stick to their tile.
+  const getHumanName = (value, fallback = '') => {
     if (!value) return fallback;
     if (typeof value === 'string') {
       const trimmed = value.trim();
@@ -430,7 +468,8 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const truncateName = (value, maxLength = 18) => {
-    const name = getHumanName(value, 'Guest');
+    const name = getHumanName(value, '');
+    if (!name) return '';
     if (name.length <= maxLength) return name;
     return `${name.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
   };
@@ -444,7 +483,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         (s.userId && s.userId === userId) || (s.connId && s.connId === candidateConnId)
       );
 
-      const resolvedName = truncateName(displayName || 'Guest');
+      // Prefer whatever name came with this event, then the roster. Never
+      // overwrite a name we already have with nothing.
+      const resolvedName = truncateName(displayName) || truncateName(getParticipantName(userId, connId));
 
       if (existingIndex >= 0) {
         return prev.map((s, index) =>
@@ -458,7 +499,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
                 // match it.
                 connId: connId || s.connId || candidateConnId,
                 userId,
-                name: resolvedName,
+                name: resolvedName || s.name,
               }
             : s
         );
@@ -520,6 +561,28 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setLocalStream(stream);
     });
 
+    client.on('audioLevels', (levels) => {
+      const now = Date.now();
+      const lastSpokeAt = lastSpokeAtRef.current;
+
+      Object.entries(levels || {}).forEach(([key, level]) => {
+        if (level >= SPEAKING_LEVEL_THRESHOLD) lastSpokeAt.set(key, now);
+      });
+
+      const speaking = new Set();
+      lastSpokeAt.forEach((at, key) => {
+        if (now - at <= SPEAKING_HOLD_MS) speaking.add(key);
+        else lastSpokeAt.delete(key);
+      });
+
+      setSpeakingConnIds((prev) => {
+        // Only re-render when the set actually changes -- this fires twice a
+        // second and would otherwise re-render the whole grid every tick.
+        if (prev.size === speaking.size && [...speaking].every(id => prev.has(id))) return prev;
+        return speaking;
+      });
+    });
+
     client.on('remoteStream', ({ connId, userId, stream, screenStream, isScreenSharing = false }) => {
       setRemoteStreams(prev => {
         const existingIndex = prev.findIndex(s =>
@@ -533,7 +596,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
             stream,
             screenStream: screenStream || null,
             isScreenSharing,
-            name: truncateName(getHumanName({ displayName: userId ? undefined : undefined }, 'Guest')),
+            // Look the person up in the roster. This used to pass an object
+            // whose only field was hard-coded undefined, so the expression
+            // could only ever produce the "Guest" fallback -- every tile born
+            // from a media track was labelled Guest no matter who it was.
+            name: truncateName(getParticipantName(userId, connId)),
           }];
         }
 
@@ -651,7 +718,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         upsertRemoteStreamPlaceholder(
           message.userId,
           message.connId || message.payload?.connId,
-          message.displayName || message.payload?.displayName || message.name || 'Guest'
+          message.displayName || message.payload?.displayName || message.name || ''
         );
       }
 
@@ -686,6 +753,20 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     });
 
     client.on('participantLeft', (message) => {
+      // Resolve who this was *before* dropping them from the roster, so the
+      // notice can name them.
+      const departedName =
+        truncateName(message.displayName || message.payload?.displayName) ||
+        truncateName(getParticipantName(message.userId, message.connId));
+
+      // The REST roster can still list someone for a moment after the socket
+      // says they left, and the participant poll would then put their tile
+      // straight back. Remember the departure briefly so the poll ignores
+      // them until the server catches up.
+      if (message.userId) {
+        recentlyLeftRef.current.set(message.userId, Date.now());
+      }
+
       setParticipants(prev => prev.filter(p => {
         const currentUserId = p.userId || p.payload?.userId;
         const currentConnId = p.connId || p.payload?.connId;
@@ -720,15 +801,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       });
 
       if (initialLoadDoneRef.current && message.userId !== user?.id) {
-        const left = participantsRef.current.find(p => p.userId === message.userId);
-        const name =
-          left?.displayName ||
-          left?.payload?.displayName ||
-          left?.name ||
-          'Someone';
         Toast.show({
           type: 'info',
-          text1: `${name} left the meeting`,
+          text1: departedName
+            ? `${departedName} left the meeting`
+            : 'A participant left the meeting',
           position: 'top',
         });
       }
@@ -831,32 +908,85 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       connectionData.participantId,
       connectionData.displayName || `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim()
     );
+
+    // Watch who is talking, for the speaking indicator and the ordering that
+    // keeps active speakers on the first page of tiles.
+    client.startAudioLevelMonitoring();
   };
+
+  const participantUserIdOf = (entry) =>
+    entry?.userId || entry?.payload?.userId || entry?.memberId || null;
 
   const updateParticipantsList = async () => {
     try {
       const response = await meetingApi.getParticipants(meetingId);
-      if (response && response.participants) {
-        const nextParticipants = response.participants;
-        setParticipants(prev => {
-          const merged = nextParticipants.reduce((acc, participant) => mergeParticipantEntry(acc, participant), prev);
-          return merged;
-        });
-        knownParticipantIdsRef.current = new Set(nextParticipants.map(p => p.userId || p.payload?.userId || p.memberId).filter(Boolean));
+      if (!response || !response.participants) return;
 
-        nextParticipants.forEach((participant) => {
-          const participantUserId = participant.userId || participant.payload?.userId || participant.memberId;
-          if (participantUserId && participantUserId !== user?.id) {
-            upsertRemoteStreamPlaceholder(
-              participantUserId,
-              participant.connId || participant.payload?.connId || participant.userId,
-              participant.displayName || participant.name || participant.payload?.displayName || participant.payload?.name || 'Guest'
-            );
-          }
-        });
+      // Expire departures we were told about a while ago: past that point the
+      // server roster has caught up and is the better source of truth again.
+      const now = Date.now();
+      recentlyLeftRef.current.forEach((leftAt, leftUserId) => {
+        if (now - leftAt > RECENT_LEAVE_GRACE_MS) recentlyLeftRef.current.delete(leftUserId);
+      });
 
-        console.log('[Meeting] Participants synced:', nextParticipants.length);
-      }
+      const nextParticipants = response.participants.filter((participant) => {
+        const id = participantUserIdOf(participant);
+        return !(id && recentlyLeftRef.current.has(id));
+      });
+
+      const liveUserIds = new Set(nextParticipants.map(participantUserIdOf).filter(Boolean));
+
+      // Count how many consecutive polls each known person has been missing
+      // from the roster. Acting on a single miss would make tiles flicker on
+      // a hiccup, but a sustained absence means they are gone -- this is the
+      // safety net for a departure whose socket notice never arrived.
+      const misses = rosterMissesRef.current;
+      const knownIds = new Set([
+        ...remoteStreamsRef.current.map(s => s.userId),
+        ...participantsRef.current.map(participantUserIdOf),
+      ].filter(id => id && id !== user?.id));
+
+      knownIds.forEach((id) => {
+        if (liveUserIds.has(id)) misses.delete(id);
+        else misses.set(id, (misses.get(id) || 0) + 1);
+      });
+      liveUserIds.forEach(id => misses.delete(id));
+
+      const isGone = (userId) =>
+        !!userId && (recentlyLeftRef.current.has(userId) || (misses.get(userId) || 0) >= ROSTER_MISSES_BEFORE_DROP);
+
+      setParticipants((prev) => {
+        const merged = nextParticipants.reduce(
+          (acc, participant) => mergeParticipantEntry(acc, participant),
+          prev
+        );
+        // The roster is authoritative about who is still here. The merge on
+        // its own could only ever grow the list, so anyone whose departure
+        // wasn't caught over the socket stayed listed forever.
+        return merged.filter((entry) => {
+          const entryUserId = participantUserIdOf(entry);
+          if (!entryUserId) return true;
+          if (entryUserId === user?.id) return true;
+          return !isGone(entryUserId);
+        });
+      });
+
+      setRemoteStreams(prev => prev.filter(s => !isGone(s.userId)));
+
+      knownParticipantIdsRef.current = new Set(liveUserIds);
+
+      nextParticipants.forEach((participant) => {
+        const participantUserId = participantUserIdOf(participant);
+        if (participantUserId && participantUserId !== user?.id) {
+          upsertRemoteStreamPlaceholder(
+            participantUserId,
+            participant.connId || participant.payload?.connId || participant.userId,
+            participant.displayName || participant.name || participant.payload?.displayName || participant.payload?.name || ''
+          );
+        }
+      });
+
+      console.log('[Meeting] Participants synced:', nextParticipants.length);
     } catch (error) {
       console.error('Failed to update participants:', error);
     }
@@ -907,7 +1037,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
       const attendees = (attendanceResponse?.attendees || []).map((entry) => ({
         userId: entry.userId,
-        name: getHumanName(entry.displayName, 'Guest'),
+        name: getHumanName(entry.displayName || entry.name || entry, ''),
         joinedAt: entry.joinedAt,
       }));
 
@@ -1268,23 +1398,47 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const leaveMeeting = async () => {
+    hasJoinedRef.current = false;
+
+    // Tell the room first, over the socket that is still open, so everyone
+    // else drops this tile immediately.
+    if (webrtcClientRef.current) {
+      webrtcClientRef.current.sendSignalingMessage({
+        type: SIGNALING_MESSAGE_TYPES.LEAVE,
+        roomId: meetingId,
+        userId: user?.id,
+        connId: webrtcClientRef.current.connId,
+        displayName: getSelfDisplayName(),
+      });
+
+      // Then hand the camera and microphone straight back to the OS, before
+      // the REST call below. Leaving has to be instant on this device: the
+      // meeting carries on without us, so there is nothing left to capture,
+      // and waiting on a request that can take seconds would keep the camera
+      // light on well after the user thinks they're out.
+      webrtcClientRef.current.stopLocalMedia();
+    }
+
+    // Nothing is being captured or received any more, so drop it from the UI
+    // as well rather than leaving dead tiles on screen for the last frame.
+    setLocalStream(null);
+    setScreenStream(null);
+    setRemoteStreams([]);
+    setIsScreenSharing(false);
+    isScreenSharingRef.current = false;
+
     try {
-      hasJoinedRef.current = false;
-
-      if (webrtcClientRef.current) {
-        webrtcClientRef.current.sendSignalingMessage({
-          type: SIGNALING_MESSAGE_TYPES.LEAVE,
-          roomId: meetingId,
-          userId: user?.id,
-          connId: webrtcClientRef.current.connId,
-        });
-      }
-
       await meetingApi.leaveRoom(meetingId);
-      cleanup();
-      navigation.goBack();
     } catch (error) {
-      console.error('Failed to leave meeting:', error);
+      // Losing the REST call is not a reason to stay in the meeting.
+      console.error('Failed to notify the server we left:', error);
+    } finally {
+      // Always tear down, whatever the server said. This used to sit inside
+      // the try *after* the await, so a failed leaveRoom call skipped it
+      // entirely: the camera and microphone stayed live and every peer
+      // connection stayed open, so someone who had "left" was still being
+      // heard and could still hear the room.
+      cleanup();
       navigation.goBack();
     }
   };
@@ -1328,48 +1482,52 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         const response = await meetingApi.getParticipants(meetingId);
         if (!response || !response.participants) return;
 
-        const apiParticipants = response.participants;
-const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userId || p.memberId).filter(Boolean));
-      const previousIds = new Set(knownParticipantIdsRef.current);
+        const apiParticipants = response.participants.filter((p) => {
+          const id = participantUserIdOf(p);
+          return !(id && recentlyLeftRef.current.has(id));
+        });
+        const currentIds = new Set(apiParticipants.map(participantUserIdOf).filter(Boolean));
+        const previousIds = new Set(knownParticipantIdsRef.current);
 
-      // Detect new joins
-      const newJoins = apiParticipants.filter(p => {
-        const id = p.userId || p.payload?.userId || p.memberId;
-        return id && !previousIds.has(id);
-      });
-        const leftIds = [...previousIds].filter(id => !currentIds.has(id));
+        const newJoins = apiParticipants.filter((p) => {
+          const id = participantUserIdOf(p);
+          return id && !previousIds.has(id) && id !== user?.id;
+        });
+        const leftIds = [...previousIds].filter(id => !currentIds.has(id) && id !== user?.id);
 
-        knownParticipantIdsRef.current = currentIds;
-
+        // Announce first, using names resolved while the roster still holds
+        // the people involved. All the actual list reconciliation (including
+        // dropping anyone the server no longer lists, and closing their peer
+        // connection) is left to updateParticipantsList below, so the two
+        // paths can't disagree about who is in the room.
         for (const joined of newJoins) {
-          if (joined.userId === user?.id) continue;
-          console.log('[Meeting] Poll: participant joined:', joined.userId);
-          setParticipants(prev => mergeParticipantEntry(prev, joined));
-          upsertRemoteStreamPlaceholder(
-            joined.userId,
-            joined.connId || joined.userId,
-            joined.displayName || joined.name || 'Participant'
-          );
-          if (initialLoadDoneRef.current) {
+          const joinedName =
+            truncateName(joined.displayName || joined.name || joined.payload?.displayName) ||
+            truncateName(getParticipantName(participantUserIdOf(joined)));
+          console.log('[Meeting] Poll: participant joined:', participantUserIdOf(joined));
+          if (initialLoadDoneRef.current && joinedName) {
             setTimeout(() => {
-              Toast.show({ type: 'info', text1: `${joined.displayName || 'Someone'} joined`, position: 'top' });
+              Toast.show({ type: 'info', text1: `${joinedName} joined the meeting`, position: 'top' });
             }, 120);
           }
         }
 
         for (const leftId of leftIds) {
+          const leftName = truncateName(getParticipantName(leftId));
           console.log('[Meeting] Poll: participant left:', leftId);
-          setParticipants(prev => prev.filter(p => {
-            const candidateId = p.userId || p.payload?.userId || p.memberId;
-            return candidateId !== leftId;
-          }));
-          setRemoteStreams(prev => prev.filter(s => (s.userId || s.payload?.userId) !== leftId));
+          // Close the connection to them as well, so their audio stops
+          // straight away rather than lingering on a tile that's about to go.
+          webrtcClientRef.current?.removePeerConnectionsForUser?.(leftId);
           if (initialLoadDoneRef.current) {
-            const left = participantsRef.current.find(p => (p.userId || p.payload?.userId || p.memberId) === leftId);
-            const leftName = left?.displayName || left?.payload?.displayName || left?.name || 'Someone';
-            Toast.show({ type: 'info', text1: `${leftName} left`, position: 'top' });
+            Toast.show({
+              type: 'info',
+              text1: leftName ? `${leftName} left the meeting` : 'A participant left the meeting',
+              position: 'top',
+            });
           }
         }
+
+        await updateParticipantsList();
       } catch (error) {
         console.warn('[Meeting] Poll failed:', error.message);
       }
@@ -1393,15 +1551,54 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     };
   }, [isConnected, isReadOnly]);
 
-  // Build a userId -> displayName lookup from the participants list (API + signaling).
-  const getParticipantName = (userId) => {
-    if (!userId) return 'Guest';
-    const p = participants.find(part => part.userId === userId);
-    if (p && (p.displayName || p.name)) return p.displayName || p.name;
-    const joined = participants.find(part => part.payload?.userId === userId);
-    if (joined && joined.payload?.displayName) return joined.payload.displayName;
-    return 'Guest';
+  // Build a userId -> displayName lookup from the participants list (API +
+  // signaling). Returns '' when the roster genuinely has nothing yet, so
+  // callers can keep whatever better name they already had instead of
+  // replacing a real person's name with a placeholder.
+  const getParticipantName = (userId, connId = null) => {
+    if (!userId && !connId) return '';
+
+    const roster = participantsRef.current?.length ? participantsRef.current : participants;
+    const entry = roster.find((part) => {
+      const partUserId = part.userId || part.payload?.userId || part.memberId;
+      const partConnId = part.connId || part.payload?.connId;
+      return (
+        (userId && partUserId && partUserId === userId) ||
+        (connId && partConnId && partConnId === connId)
+      );
+    });
+    if (!entry) return '';
+
+    // The same person arrives shaped differently depending on whether they
+    // came from the REST roster or the signaling channel, so check every
+    // spelling before giving up.
+    const candidate =
+      entry.displayName ||
+      entry.payload?.displayName ||
+      entry.name ||
+      entry.payload?.name ||
+      entry.fullName ||
+      entry.user?.displayName ||
+      entry.user?.name ||
+      ([entry.firstName, entry.lastName].filter(Boolean).join(' ').trim() || null) ||
+      ([entry.user?.firstName, entry.user?.lastName].filter(Boolean).join(' ').trim() || null);
+
+    return typeof candidate === 'string' ? candidate.trim() : '';
   };
+
+  // Our own name, in the same shape everyone else's arrives in, so the room
+  // is told who left rather than just that "someone" did.
+  const getSelfDisplayName = () =>
+    getHumanName(
+      {
+        displayName: user?.displayName,
+        name: user?.name,
+        fullName: user?.fullName,
+        firstName: user?.firstName,
+        lastName: user?.lastName,
+      },
+      ''
+    ) || '';
 
   // Keep a live mirror of the participants list for event handlers that close
   // over stale state (so join/leave toasts can read the latest roster).
@@ -1413,16 +1610,33 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     isScreenSharingRef.current = isScreenSharing;
   }, [isScreenSharing]);
 
+  useEffect(() => {
+    remoteStreamsRef.current = remoteStreams;
+  }, [remoteStreams]);
+
   // Keep display names synced onto remote stream entries so the UI can label
   // each tile even when the name arrives after the first media track.
+  //
+  // This only ever upgrades a tile to a better name. It used to overwrite
+  // unconditionally with a lookup that returned "Guest" on a miss, so a tile
+  // that already knew the person's name from the signaling payload got
+  // relabelled "Guest" the moment the REST roster lagged behind -- which is
+  // why named participants kept showing up as guests. It also keyed off
+  // participants.length alone, so a name that filled in later (same roster
+  // size) never reached the tile at all.
   useEffect(() => {
     setRemoteStreams(prev => {
-      const needsUpdate = prev.some(s => s.name !== getParticipantName(s.userId));
-      if (!needsUpdate) return prev;
-      return prev.map(s => ({ ...s, name: getParticipantName(s.userId) }));
+      let changed = false;
+      const next = prev.map((s) => {
+        const resolved = truncateName(getParticipantName(s.userId, s.connId));
+        if (!resolved || resolved === s.name) return s;
+        changed = true;
+        return { ...s, name: resolved };
+      });
+      return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participants.length]);
+  }, [participants]);
 
   // Flag the sharer's tile from the signaling identity rather than trusting the
   // flag that happened to be attached when a stream event arrived. A tile is
@@ -1448,6 +1662,27 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     });
   }, [remoteStreams, remoteScreenSharer]);
 
+  // Tag who is talking and float them to the front, so an active speaker is
+  // always among the first tiles rather than buried behind a "+N more" card.
+  // Ordering is otherwise left alone, so tiles don't shuffle around while
+  // nobody is speaking.
+  const orderedRemoteStreams = useMemo(() => {
+    const withSpeaking = decoratedRemoteStreams.map(s => ({
+      ...s,
+      isSpeaking: speakingConnIds.has(s.connId),
+    }));
+
+    if (!withSpeaking.some(s => s.isSpeaking)) return withSpeaking;
+
+    return withSpeaking
+      .map((stream, index) => ({ stream, index }))
+      .sort((a, b) => {
+        if (a.stream.isSpeaking !== b.stream.isSpeaking) return a.stream.isSpeaking ? -1 : 1;
+        return a.index - b.index;
+      })
+      .map(entry => entry.stream);
+  }, [decoratedRemoteStreams, speakingConnIds]);
+
   return {
     isConnecting,
     isConnected,
@@ -1465,7 +1700,10 @@ const currentIds = new Set(apiParticipants.map(p => p.userId || p.payload?.userI
     meetingData,
     connectionError,
     localStream,
-    remoteStreams: decoratedRemoteStreams,
+    remoteStreams: orderedRemoteStreams,
+    // True while our own microphone is picking up speech, for the local tile's
+    // indicator.
+    isSelfSpeaking: speakingConnIds.has('local') && isMicrophoneEnabled,
     chatMessages,
     isChatOpen,
     handleToggleCamera,

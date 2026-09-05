@@ -27,26 +27,55 @@ class ScreenCaptureService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        try {
-            startForegroundCompat(NOTIFICATION_ID, buildNotification())
-        } catch (e: Exception) {
-            // Starting the service is best effort: if the platform rejects it we
-            // still let the capture attempt proceed so the user gets the real
-            // error from WebRTC instead of a silent no-op.
-            Log.w(TAG, "Failed to enter the foreground: ${e.message}")
+        // We were launched with startForegroundService(), which is a promise to
+        // the platform that startForeground() will follow within ~5 seconds.
+        // Breaking that promise is fatal and *cannot* be caught: the system
+        // kills the process with ForegroundServiceDidNotStartInTimeException.
+        // So every path below has to end in a successful startForeground(),
+        // even a degraded one -- the previous version caught the failure and
+        // called stopSelf(), which does not satisfy the contract and so turned
+        // a recoverable error into the app closing mid-meeting.
+        if (!enterForeground()) {
+            Log.w(TAG, "Could not enter the foreground at all; stopping")
             stopSelf()
-            return START_NOT_STICKY
         }
 
         return START_NOT_STICKY
     }
 
-    private fun startForegroundCompat(id: Int, notification: Notification) {
+    /**
+     * Returns true once the service is legally in the foreground.
+     *
+     * The mediaProjection type is what makes the capture legal on Android 14+,
+     * so it is tried first. If the platform refuses that specific type we fall
+     * back to a plain foreground service: the screen share itself may then fail
+     * (WebRTC swallows that and the share comes through black), but the app
+     * stays alive and the user sees a failed share instead of a crash.
+     */
+    private fun enterForeground(): Boolean {
+        val notification = try {
+            buildNotification()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to build the notification: ${e.message}")
+            return false
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-        } else {
+            try {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+                return true
+            } catch (e: Exception) {
+                Log.w(TAG, "mediaProjection foreground type rejected: ${e.message}")
+            }
+        }
+
+        return try {
             @Suppress("DEPRECATION")
-            super.startForeground(id, notification)
+            startForeground(NOTIFICATION_ID, notification)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to enter the foreground: ${e.message}")
+            false
         }
     }
 
@@ -67,7 +96,7 @@ class ScreenCaptureService : Service() {
             return Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(text)
-                .setSmallIcon(applicationInfo.icon)
+                .setSmallIcon(SMALL_ICON)
                 .setOngoing(true)
                 .build()
         }
@@ -76,7 +105,7 @@ class ScreenCaptureService : Service() {
         return Notification.Builder(this)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(applicationInfo.icon)
+            .setSmallIcon(SMALL_ICON)
             .setOngoing(true)
             .setPriority(Notification.PRIORITY_LOW)
             .build()
@@ -89,5 +118,14 @@ class ScreenCaptureService : Service() {
         private const val TAG = "ScreenCaptureService"
         private const val CHANNEL_ID = "screen_capture"
         private const val NOTIFICATION_ID = 4242
+
+        // A plain system drawable, deliberately not the launcher icon. Expo's
+        // launcher icon is an adaptive icon (an XML drawable), and handing one
+        // of those to setSmallIcon() makes the platform reject the whole
+        // notification -- which for a foreground service means the system
+        // kills the app with BadForegroundServiceNotificationException the
+        // moment sharing starts. A guaranteed-valid bitmap icon avoids that
+        // entire class of failure.
+        private val SMALL_ICON = android.R.drawable.ic_menu_camera
     }
 }

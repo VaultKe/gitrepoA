@@ -164,6 +164,14 @@ class WebRTCClient {
     this.negotiationStates = new Map();
     // TURN servers handed back by the room join response (see setIceServers).
     this.extraIceServers = [];
+    // Interval handle for the active-speaker poll.
+    this.audioLevelTimer = null;
+    // Set once disconnect() runs so the socket's own close event can tell a
+    // deliberate exit from a dropped connection. Without it, leaving a meeting
+    // closed the socket, the close handler treated that as a network failure,
+    // and ~600ms later the client silently rejoined the room it had just left
+    // -- which is why someone who left kept reappearing in everyone's grid.
+    this.hasLeft = false;
   }
 
   // STUN alone can only connect two peers when at least one of them has a
@@ -400,6 +408,9 @@ class WebRTCClient {
     this.userId = userId;
     this.participantId = participantId;
     this.displayName = displayName;
+    // Connecting on purpose clears any earlier deliberate exit, so genuine
+    // reconnects keep working normally.
+    this.hasLeft = false;
     // connId will be set by the server after the first participant-joined event
     // (or our own join confirmation). Until then, keep it null so we can match it.
     this.connId = null;
@@ -459,8 +470,13 @@ class WebRTCClient {
         wasClean: event.wasClean,
         roomId: this.roomId,
         userId: this.userId,
+        hasLeft: this.hasLeft,
       });
       this.emit('disconnected');
+      // A close we asked for is the end of the meeting for us, not a fault to
+      // recover from. Reconnecting here rejoined the room seconds after the
+      // user left it.
+      if (this.hasLeft) return;
       this.handleReconnect();
     };
 
@@ -564,6 +580,10 @@ class WebRTCClient {
       case SIGNALING_MESSAGE_TYPES.PARTICIPANT_LEFT:
         this.emit('participantLeft', message);
         this.removePeerConnection(message.connId);
+        // Also close anything else of theirs still open: after a reconnect
+        // the same person can hold a connection under an older connId, which
+        // the line above would skip, leaving their audio playing.
+        this.removePeerConnectionsForUser(message.userId);
         break;
 
       case SIGNALING_MESSAGE_TYPES.OFFER:
@@ -1026,6 +1046,21 @@ class WebRTCClient {
     this.emit('peerConnectionRemoved', { connId });
   }
 
+  // Closes every connection belonging to a user, whatever connId it was made
+  // under. A participant who reconnects gets a fresh connId from the server,
+  // so a departure addressed by connId alone can miss an older connection and
+  // leave it open -- still carrying their audio into the room.
+  removePeerConnectionsForUser(userId) {
+    if (!userId) return;
+
+    const connIds = [];
+    this.remoteStreams.forEach((entry, connId) => {
+      if (entry?.userId && entry.userId === userId) connIds.push(connId);
+    });
+
+    connIds.forEach(connId => this.removePeerConnection(connId));
+  }
+
   // Records the remote screen-share flag for a connection. This deliberately
   // does NOT re-emit `remoteStream`: that event carries the stream, and when the
   // flag arrives before the first track it would push a null stream onto a tile
@@ -1174,9 +1209,83 @@ class WebRTCClient {
     return stats;
   }
 
-  disconnect() {
+  // Polls each connection for how loud its audio currently is and emits the
+  // result, so the UI can show who is speaking and float them to the front.
+  //
+  // `audioLevel` comes from the WebRTC stats themselves rather than from an
+  // AudioContext analyser: the stats route is the only one that works
+  // identically on the browser and on the native build, where remote audio
+  // never passes through a JS audio graph we could tap.
+  startAudioLevelMonitoring(intervalMs = 500) {
+    this.stopAudioLevelMonitoring();
+
+    this.audioLevelTimer = setInterval(async () => {
+      if (!this.peerConnections.size) return;
+
+      const levels = {};
+      // Our own microphone is the same device on every connection, so it is
+      // read from whichever report happens to carry it rather than polling
+      // again per peer.
+      let localLevel = 0;
+      const micEnabled = !!this.localStream?.getAudioTracks?.()[0]?.enabled;
+
+      for (const [connId, pc] of this.peerConnections) {
+        try {
+          // One stats pass per connection, pulling both directions out of it.
+          // Reading them separately meant two full getStats() calls per peer
+          // every tick, which is real work to repeat twice a second on a
+          // phone that is already encoding video.
+          const report = await pc.getStats();
+          let inbound = 0;
+
+          report.forEach((entry) => {
+            if (typeof entry?.audioLevel !== 'number') return;
+            const isAudio = entry.kind === 'audio' || entry.mediaType === 'audio';
+
+            if (entry.type === 'inbound-rtp' && isAudio) {
+              inbound = Math.max(inbound, entry.audioLevel);
+            } else if ((entry.type === 'media-source' && isAudio) || (entry.type === 'outbound-rtp' && isAudio)) {
+              localLevel = Math.max(localLevel, entry.audioLevel);
+            }
+          });
+
+          levels[connId] = inbound;
+        } catch (e) {
+          // A connection can close mid-poll; it simply has no level.
+        }
+      }
+
+      // A disabled track still reports a level on some platforms, so treat
+      // muted as silent rather than trusting the number.
+      levels.local = micEnabled ? localLevel : 0;
+
+      this.emit('audioLevels', levels);
+    }, intervalMs);
+  }
+
+  stopAudioLevelMonitoring() {
+    if (this.audioLevelTimer) {
+      clearInterval(this.audioLevelTimer);
+      this.audioLevelTimer = null;
+    }
+  }
+
+  // Hands the camera, microphone and screen capture back to the OS and closes
+  // every peer connection, without touching the signaling socket.
+  //
+  // Kept separate from disconnect() so leaving can release the hardware
+  // *before* any network round trip: the recording indicator must go out the
+  // moment someone leaves, not once a REST call they're not waiting for has
+  // finished, which on a poor connection is many seconds later.
+  stopLocalMedia() {
+    this.stopAudioLevelMonitoring();
+
     this.peerConnections.forEach((pc) => {
-      pc.close();
+      try {
+        pc.close();
+      } catch (e) {
+        console.warn('[Meeting] Failed to close a peer connection:', e?.message || e);
+      }
     });
     this.peerConnections.clear();
 
@@ -1190,6 +1299,29 @@ class WebRTCClient {
       this.screenStream = null;
       stopScreenCaptureService();
     }
+
+    this.remoteStreams.clear();
+    this.screenSenders.clear();
+    this.screenTransceivers.clear();
+    this.negotiationStates.clear();
+  }
+
+  disconnect() {
+    // Announce the exit while the socket is still open. The server also
+    // notices the close on its own, but that path is slower and only fires
+    // once the read loop errors out -- telling the room first is what makes
+    // the tile disappear for everyone straight away.
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && !this.hasLeft) {
+      this.sendSignalingMessage({
+        type: SIGNALING_MESSAGE_TYPES.LEAVE,
+        roomId: this.roomId,
+        userId: this.userId,
+        displayName: this.displayName,
+      });
+    }
+    this.hasLeft = true;
+
+    this.stopLocalMedia();
 
     if (this.ws) {
       this.ws.close(1000, 'Normal closure');

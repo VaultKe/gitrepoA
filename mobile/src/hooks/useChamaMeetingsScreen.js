@@ -5,6 +5,34 @@ import { useApp } from '../context/AppContext';
 import ApiService from '../services/api';
 import { toEAT, nowEAT } from '../utils/dateUtils';
 
+// A meeting's start is whichever of these the record carries, and it runs for
+// `duration` minutes from there. Everything that reasons about status goes
+// through these two so the badge, the filter and the ordering can never
+// disagree about when a meeting is.
+const getMeetingStart = (meeting) => toEAT(meeting?.startTime || meeting?.scheduledAt || meeting?.date);
+
+const getMeetingEnd = (meeting) => {
+  const start = getMeetingStart(meeting);
+  if (!start) return null;
+  return new Date(start.getTime() + (meeting?.duration || 60) * 60000);
+};
+
+const getMeetingStatus = (meeting) => {
+  const start = getMeetingStart(meeting);
+  const end = getMeetingEnd(meeting);
+  const now = nowEAT();
+  const markedOver = ['completed', 'ended', 'cancelled'].includes(String(meeting?.status || '').toLowerCase());
+
+  if (markedOver || (end && end <= now)) return 'ENDED';
+  if (start && start <= now && end && end > now) return 'ONGOING';
+  return 'SCHEDULED';
+};
+
+// What is happening now matters more than what is happening in March. Sorting
+// purely by date let meetings scheduled months ahead fill the top of the
+// table and push the live one out of sight.
+const STATUS_ORDER = { ONGOING: 0, SCHEDULED: 1, ENDED: 2 };
+
 const useChamaMeetingsScreen = ({ route, navigation }) => {
   const { chamaId, chamaName, newMeeting, refresh, fromUserDashboard } = route.params || {};
   const { theme, user } = useApp();
@@ -96,38 +124,41 @@ const useChamaMeetingsScreen = ({ route, navigation }) => {
     }
 
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(m => {
-        const meetingDate = toEAT(m.scheduledAt || m.date);
-        const now = nowEAT();
-        const end = new Date(meetingDate.getTime() + (m.duration || 60) * 60000);
-        const isActive = meetingDate <= now && end > now;
-        const isEnded = end <= now || m.status === 'completed' || m.status === 'ended';
-        if (filterStatus === 'ongoing') return isActive;
-        if (filterStatus === 'ended') return isEnded;
-        if (filterStatus === 'scheduled') return !isEnded && !isActive;
-        return true;
-      });
+      // Filtering off the same status the badge shows, so "Ongoing" can never
+      // list a meeting whose row reads SCHEDULED.
+      const wanted = filterStatus.toUpperCase();
+      filtered = filtered.filter(m => getMeetingStatus(m) === wanted);
     }
+
+    // Ongoing first, then what's coming up, then what's finished -- ordered
+    // before paging so the grouping holds across the whole list rather than
+    // just within the current page.
+    const sorted = [...filtered].sort((a, b) => {
+      const statusA = getMeetingStatus(a);
+      const statusB = getMeetingStatus(b);
+      if (STATUS_ORDER[statusA] !== STATUS_ORDER[statusB]) {
+        return STATUS_ORDER[statusA] - STATUS_ORDER[statusB];
+      }
+
+      const timeA = getMeetingStart(a)?.getTime() ?? 0;
+      const timeB = getMeetingStart(b)?.getTime() ?? 0;
+      // Finished meetings read newest first; anything still to come reads
+      // soonest first, so the next thing to join is always at the top.
+      return statusA === 'ENDED' ? timeB - timeA : timeA - timeB;
+    });
 
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const paginated = filtered.slice(startIndex, endIndex);
+    const paginated = sorted.slice(startIndex, endIndex);
 
     return {
       meetings: paginated,
-      totalCount: filtered.length,
-      totalPages: Math.ceil(filtered.length / itemsPerPage),
+      totalCount: sorted.length,
+      totalPages: Math.ceil(sorted.length / itemsPerPage),
     };
   };
 
-  const getDynamicStatus = (meeting) => {
-    const meetingDate = toEAT(meeting.startTime || meeting.scheduledAt || meeting.date);
-    const now = nowEAT();
-    const end = new Date(meetingDate.getTime() + (meeting.duration || 60) * 60000);
-    if (end <= now || meeting.status === 'completed' || meeting.status === 'ended') return 'ENDED';
-    if (meetingDate <= now && end > now) return 'ONGOING';
-    return 'SCHEDULED';
-  };
+  const getDynamicStatus = (meeting) => getMeetingStatus(meeting);
 
   const formatMeetingDate = (dateString) => {
     const eatDate = toEAT(dateString);

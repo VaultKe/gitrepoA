@@ -79,7 +79,8 @@ const createTableStyles = (colors, spacing, typography, shadows) => ({
 });
 
 const MeetingSummaryScreen = ({ route, navigation }) => {
-  const { theme } = useApp();
+  const { theme, user } = useApp();
+  const { meetingId, chamaId } = route.params || {};
   const screen = useMeetingSummaryScreen({ route, navigation });
   const colors = getThemeColors(theme);
   const tableStyles = createTableStyles(colors, spacing, typography, shadows);
@@ -91,10 +92,8 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
     meetingDetails,
     attendanceData,
     totalAttendanceItems,
-    meetingMinutes,
     meetingDocuments,
     handleDocumentPress,
-    getRecorderName,
     getAttendeeName,
     formatDate,
     formatTime,
@@ -143,29 +142,8 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
     const meeting = meetingDetails;
     if (!meeting) return null;
 
-    const stats = getAttendanceStats();
-    const attendanceRate = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
-
     return (
       <View style={{ gap: spacing.md }}>
-        <Card variant="outlined" style={styles.overviewCard}>
-          <Text style={[styles.detailsTitle, { color: colors.text }]}>Attendance Summary</Text>
-          <View style={styles.attendanceStats}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.success }]}>{stats.present}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Present</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.error }]}>{stats.absent}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Absent</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>{attendanceRate}%</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Rate</Text>
-            </View>
-          </View>
-        </Card>
-
         <MeetingSummaryContent
           meeting={meeting}
           colors={colors}
@@ -175,15 +153,17 @@ const MeetingSummaryScreen = ({ route, navigation }) => {
           getAttendanceStats={getAttendanceStats}
           attendanceData={attendanceData}
           totalAttendanceItems={totalAttendanceItems}
-          meetingMinutes={meetingMinutes}
           meetingDocuments={meetingDocuments}
-          getRecorderName={getRecorderName}
           handleDocumentPress={handleDocumentPress}
           downloadingDocId={downloadingDocId}
           attendancePage={attendancePage}
           totalAttendancePages={totalAttendancePages}
           onPageChange={setAttendancePage}
           getAttendeeName={getAttendeeName}
+          meetingId={meetingId || meeting.id}
+          chamaId={chamaId || meeting.chamaId}
+          userRole={user?.role}
+          navigation={navigation}
         />
       </View>
     );

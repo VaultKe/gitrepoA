@@ -5,7 +5,50 @@ import * as Sharing from 'expo-sharing';
 import { useApp } from '../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
 import api from '../services/api';
+import { meetingApi, setMeetingAuthToken } from '../services/meetingApi';
+import { getAuthToken as getMainAuthToken } from '../services/api/auth';
 import Toast from 'react-native-toast-message';
+
+const isOnlineMeeting = (meeting) =>
+  ['virtual', 'hybrid', 'online'].includes(String(meeting?.meetingType || meeting?.type || '').toLowerCase());
+
+// An online meeting's attendance is held by the meeting service, which is what
+// the meeting room itself reports and so the only accurate record of who was
+// actually there. The chama's main API only knows about attendance that was
+// marked for a physical meeting, so for a virtual one it comes back empty --
+// which is why these summaries showed nobody present.
+const buildOnlineAttendance = (attendanceResponse, members) => {
+  const attendees = attendanceResponse?.attendees || [];
+  const attendedIds = new Set(attendees.map(a => a.userId).filter(Boolean));
+
+  const present = attendees.map((entry, index) => ({
+    id: entry.userId || `online-attendee-${index}`,
+    userId: entry.userId,
+    userName: entry.displayName || entry.name || '',
+    isPresent: true,
+    attendanceType: 'Online',
+    joinedAt: entry.joinedAt,
+  }));
+
+  // Anyone still on the roster who never joined is absent. Members who have
+  // since left the chama aren't counted against the meeting.
+  const absent = (members || [])
+    .filter(member => member.is_active !== false)
+    .map((member) => {
+      const userId = member.user_id || member.userId || member.user?.id;
+      const fullName = `${member.user?.first_name || member.first_name || ''} ${member.user?.last_name || member.last_name || ''}`.trim();
+      return {
+        id: userId || `online-absentee-${fullName}`,
+        userId,
+        userName: fullName || member.name || member.displayName || '',
+        isPresent: false,
+        attendanceType: 'Online',
+      };
+    })
+    .filter(member => member.userId && !attendedIds.has(member.userId));
+
+  return [...present, ...absent];
+};
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
   tableContainer: { flex: 1 },
@@ -335,15 +378,34 @@ const useMeetingSummaryScreen = ({ route, navigation }) => {
         console.warn('Failed to load meeting details from API:', detailsResult.status === 'fulfilled' ? detailsResult.value : detailsResult.reason);
       }
 
-      if (attendanceResult.status === 'fulfilled' && attendanceResult.value.success) {
-        const attendance = attendanceResult.value.data || [];
+      const resolvedMeeting =
+        (detailsResult.status === 'fulfilled' && detailsResult.value?.data) || meetingData || meetingDetails;
+      const members =
+        (membersResult && membersResult.status === 'fulfilled' && membersResult.value?.data) || chamaMembers || [];
+
+      let attendance =
+        attendanceResult.status === 'fulfilled' && attendanceResult.value.success
+          ? attendanceResult.value.data || []
+          : [];
+
+      if (!attendance.length && isOnlineMeeting(resolvedMeeting)) {
+        // Fall back to the meeting service's own record of who joined the
+        // room -- the same data the meeting screen shows once it has ended.
+        try {
+          const token = await getMainAuthToken();
+          if (token) await setMeetingAuthToken(token);
+          const onlineAttendance = await meetingApi.getAttendance(meetingId);
+          attendance = buildOnlineAttendance(onlineAttendance, members);
+        } catch (error) {
+          console.warn('Online attendance load failed:', error?.message || error);
+        }
+      }
+
+      if (attendance.length || attendanceResult.status === 'fulfilled') {
         setAllAttendanceData(attendance);
         setTotalAttendanceItems(attendance.length);
-        setTotalAttendancePages(Math.ceil(attendance.length / attendancePageSize));
-
-        const startIndex = 0;
-        const endIndex = attendancePageSize;
-        setAttendanceData(attendance.slice(startIndex, endIndex));
+        setTotalAttendancePages(Math.max(1, Math.ceil(attendance.length / attendancePageSize)));
+        setAttendanceData(attendance.slice(0, attendancePageSize));
         setAttendancePage(1);
       } else {
         console.warn('Attendance load failed:', attendanceResult.status === 'fulfilled' ? attendanceResult.value : attendanceResult.reason);
@@ -410,18 +472,22 @@ const useMeetingSummaryScreen = ({ route, navigation }) => {
     }
   };
 
+  // Counts the whole attendance record, not the page of it currently on
+  // screen. This used to read `attendanceData`, which is the paginated slice
+  // -- so a chama with more than ten members could never report more than ten
+  // present, and the rate was wrong by however much the rest of the list held.
   const getAttendanceStats = useCallback(() => {
-    let totalMembers = chamaMembers.length || 0;
-    if (totalMembers === 0 && attendanceData && attendanceData.length > 0) {
-      totalMembers = attendanceData.length;
-    }
-    if (!attendanceData || !Array.isArray(attendanceData) || attendanceData.length === 0) {
-      return { present: 0, absent: totalMembers, total: totalMembers };
-    }
-    const present = attendanceData.filter(att => att && att.isPresent).length;
+    const records = Array.isArray(allAttendanceData) ? allAttendanceData : [];
+    const present = records.filter(att => att && att.isPresent).length;
+
+    // The roster is the truth about how many people *could* attend. Falling
+    // back to the attendance rows only matters when members haven't loaded,
+    // and those rows already cover everyone who was invited.
+    const totalMembers = chamaMembers.length || records.length;
     const absent = Math.max(0, totalMembers - present);
+
     return { present, absent, total: totalMembers };
-  }, [chamaMembers.length, attendanceData]);
+  }, [chamaMembers.length, allAttendanceData]);
 
   return {
     isHistoryMode,
