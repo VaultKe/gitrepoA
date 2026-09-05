@@ -114,6 +114,25 @@ export const isWebRTCAvailable = () => {
   return !!native;
 };
 
+// Browsers only expose navigator.mediaDevices in a secure context: https://,
+// or localhost. Serving the same build over a LAN address (http://192.168.x.x)
+// leaves it undefined, so the call below would blow up with an opaque
+// "cannot read property getUserMedia of undefined" -- which is exactly why the
+// meeting works on the dev machine (localhost is treated as secure) but fails
+// on another phone on the same network. Detect it and say what's actually wrong.
+const assertWebMediaAvailable = () => {
+  if (navigator?.mediaDevices?.getUserMedia) return;
+
+  const insecure = typeof window !== 'undefined' && window.isSecureContext === false;
+  const error = new Error(
+    insecure
+      ? 'Camera and microphone need a secure connection. This page is served over plain http, and browsers only allow media access over https:// or on localhost — open the site via https (or a tunnel) to join with camera and mic.'
+      : 'This browser does not support camera and microphone access.'
+  );
+  error.isMediaUnavailable = true;
+  throw error;
+};
+
 class WebRTCClient {
   constructor() {
     this.peerConnections = new Map();
@@ -218,6 +237,7 @@ class WebRTCClient {
 
       let stream;
       if (Platform.OS === 'web') {
+        assertWebMediaAvailable();
         stream = await navigator.mediaDevices.getUserMedia(constraints);
       } else {
         const native = loadNativeWebRTC();
@@ -252,6 +272,13 @@ class WebRTCClient {
     } catch (error) {
       console.error('Failed to get local media:', error);
       this.emit('error', { type: 'media', error });
+      // Keep the specific explanation when we already have one worth showing
+      // (e.g. the insecure-origin case) rather than flattening it into the
+      // generic "allow permissions" message, which would be misleading --
+      // there is no permission prompt to accept over plain http.
+      if (error?.isMediaUnavailable) {
+        throw error;
+      }
       const wantsVideo = !!constraints?.video;
       const wantsAudio = !!constraints?.audio;
       const kind = wantsVideo && wantsAudio ? 'Camera and microphone' : wantsVideo ? 'Camera' : 'Microphone';
@@ -297,6 +324,8 @@ class WebRTCClient {
       const native = loadNativeWebRTC();
 
       if (Platform.OS === 'web') {
+        // Same secure-context rule as getUserMedia -- see assertWebMediaAvailable.
+        assertWebMediaAvailable();
         this.screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: { cursor: 'always' },
           audio: true,

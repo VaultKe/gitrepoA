@@ -3,7 +3,6 @@
     "name": "VaultKe",
     "slug": "vaultke",
     "version": "1.0.0",
-    "main": "index.js",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -36,7 +35,6 @@
     "experiments": {
       "typedRoutes": false
     },
-    "useNextNotificationsApi": true,
     "plugins": [
       [
         "expo-notifications",
@@ -44,7 +42,8 @@
           "icon": "./assets/app-icon.png",
           "color": "#ffffff"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {

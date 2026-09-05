@@ -60,8 +60,17 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   const { isReadOnly = false } = route.params || {};
   const screen = useOnlineMeetingScreen({ route, navigation });
   const chatScrollRef = useRef(null);
-  const [isVideoExpanded, setIsVideoExpanded] = useState(false);
+  // Whether the user has minimised the big "stage" tile. This is the user's
+  // own choice, kept separate from whether there is anything worth showing
+  // there, so the minimise button can actually collapse it.
+  const [isStageCollapsed, setIsStageCollapsed] = useState(false);
   const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
+  const [chatDraft, setChatDraft] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  // How many messages the user has already been shown, and whether the
+  // backlog fetched on join has landed yet (that backlog isn't "unread").
+  const seenChatCountRef = useRef(0);
+  const chatBacklogSettledRef = useRef(false);
 
   const {
     isConnecting,
@@ -94,6 +103,41 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     }
   }, [chatMessages, isChatOpen]);
 
+  // Unread badge for the chat button: counts messages from others that
+  // arrived while the panel was closed, and clears as soon as it's opened.
+  useEffect(() => {
+    if (isConnecting) return;
+
+    if (!chatBacklogSettledRef.current) {
+      // History loaded on join is already "read" -- don't open the meeting
+      // with a badge counting the whole conversation so far.
+      chatBacklogSettledRef.current = true;
+      seenChatCountRef.current = chatMessages.length;
+      return;
+    }
+
+    if (isChatOpen) {
+      seenChatCountRef.current = chatMessages.length;
+      setUnreadCount(0);
+      return;
+    }
+
+    const arrived = chatMessages
+      .slice(seenChatCountRef.current)
+      .filter((msg) => !(msg.isOwn || msg.senderId === user?.id));
+    seenChatCountRef.current = chatMessages.length;
+    if (arrived.length > 0) {
+      setUnreadCount((count) => count + arrived.length);
+    }
+  }, [chatMessages, isChatOpen, isConnecting, user?.id]);
+
+  const submitChatMessage = () => {
+    const text = chatDraft.trim();
+    if (!text) return;
+    handleSendChatMessage(text);
+    setChatDraft('');
+  };
+
   // Determine the active participant for expanded view
   // Priority: 1. Remote screen sharer, 2. Active speaker, 3. First remote participant
   const getActiveParticipant = () => {
@@ -115,11 +159,13 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     }
   }, [activeParticipant?.connId]);
 
-  // Determine if expanded view should be shown
-  // Show expanded when: user expanded, someone is screen sharing (local or remote),
-  // or there's an active participant
+  // Is there anything worth putting on the big stage at all?
   const hasRemoteScreenSharer = remoteStreams.some(s => s.isScreenSharing);
-  const showExpandedView = isVideoExpanded || isScreenSharing || hasRemoteScreenSharer || !!activeParticipant;
+  const hasStageContent = isScreenSharing || hasRemoteScreenSharer || !!activeParticipant;
+  // The minimise button used to be OR'd into this alongside `activeParticipant`,
+  // which is truthy whenever anyone else is in the call -- so the stage was
+  // always shown and pressing minimise only ever flipped the icon.
+  const showExpandedView = hasStageContent && !isStageCollapsed;
 
   // Get the participant to show in expanded view
   // Priority: 1. Remote screen sharer (always show when someone is sharing)
@@ -150,13 +196,17 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
   const expandedData = getExpandedParticipant();
 
-  // Grid participants (excluding the expanded participant)
+  // The stage only "uses up" a participant while it's actually on screen --
+  // once minimised they belong back in the grid, otherwise minimising would
+  // make that person vanish from the call entirely.
+  const stageHoldsParticipant = showExpandedView && !!expandedData && !expandedData.isLocal;
+
   const gridRemoteParticipants = remoteStreams
-    .filter(s => !expandedData || expandedData.isLocal || s.connId !== expandedData.participant.connId)
+    .filter(s => !stageHoldsParticipant || s.connId !== expandedData.participant.connId)
     .slice(0, MAX_GRID_PARTICIPANTS);
 
   const hiddenParticipantsCount = Math.max(0,
-    remoteStreams.length - gridRemoteParticipants.length - (expandedData && !expandedData.isLocal ? 1 : 0)
+    remoteStreams.length - gridRemoteParticipants.length - (stageHoldsParticipant ? 1 : 0)
   );
 
   const rosterParticipants = participants
@@ -281,10 +331,10 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.videoArea}>
         {showExpandedView && expandedData && (
-          <View style={styles.expandedVideoContainer}>
+          <View style={[styles.expandedVideoContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {expandedData.isLocal ? (
               isScreenSharing ? renderVideoElement(screenStream, true) : (localStream ? renderVideoElement(localStream, true) : renderVideoElement(null, true))
             ) : (
@@ -306,18 +356,24 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
                       ? `${truncateDisplayName(expandedData.participant.name || 'Guest')} (Screen)`
                       : truncateDisplayName(expandedData.participant.name || 'Guest'))}
               </Text>
-              <TouchableOpacity
-                style={styles.expandButton}
-                onPress={() => setIsVideoExpanded(!isVideoExpanded)}
-              >
-                <Ionicons
-                  name={isVideoExpanded ? 'contract' : 'expand'}
-                  size={18}
-                  color="#fff"
-                />
-              </TouchableOpacity>
             </View>
           </View>
+        )}
+
+        {/* Sits over the video area rather than inside the stage tile, so it
+            is still reachable to restore the stage once it's minimised. */}
+        {hasStageContent && (
+          <TouchableOpacity
+            style={[styles.stageToggle, { backgroundColor: colors.overlay }]}
+            onPress={() => setIsStageCollapsed(!isStageCollapsed)}
+            accessibilityLabel={isStageCollapsed ? 'Expand main view' : 'Minimise main view'}
+          >
+            <Ionicons
+              name={isStageCollapsed ? 'expand' : 'contract'}
+              size={18}
+              color="#fff"
+            />
+          </TouchableOpacity>
         )}
 
         <View style={[
@@ -325,7 +381,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           showExpandedView && styles.videoGridWithExpanded
         ]}>
           {gridRemoteParticipants.map(({ connId, userId, stream, screenStream, name, isScreenSharing: sharing }) => (
-            <View key={connId} style={[styles.gridVideoWrapper, showExpandedView && styles.gridVideoWrapperExpanded]}>
+            <View key={connId} style={[styles.gridVideoWrapper, { backgroundColor: colors.card, borderColor: colors.border }, showExpandedView && styles.gridVideoWrapperExpanded]}>
               {renderVideoElement(sharing && screenStream ? screenStream : stream, false, connId)}
               <View style={[styles.videoLabel, { backgroundColor: colors.textSecondary + '40' }]}>
                 {sharing && (
@@ -350,7 +406,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
           )}
         </View>
 
-        <View style={styles.selfViewPiP}>
+        <View style={[styles.selfViewPiP, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {renderVideoElement(localStream, true)}
           <View style={[styles.videoLabel, { backgroundColor: colors.primary + '40' }]}>
             <Text style={styles.videoLabelText}>{isScreenSharing ? 'You · Camera' : 'You'}</Text>
@@ -401,6 +457,25 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
         >
           <Ionicons name="call" size={24} color="#fff" />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.controlButton, isChatOpen && { backgroundColor: colors.primary + '40' }]}
+          onPress={() => setIsChatOpen(!isChatOpen)}
+          accessibilityLabel={unreadCount > 0 ? `Chat, ${unreadCount} unread` : 'Chat'}
+        >
+          <Ionicons
+            name="chatbubbles"
+            size={24}
+            color={isChatOpen ? colors.primary : colors.text}
+          />
+          {unreadCount > 0 && (
+            <View style={[styles.unreadBadge, { backgroundColor: colors.error }]}>
+              <Text style={styles.unreadBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {isChatOpen && (
@@ -425,13 +500,13 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
                   <View
                     style={[
                       styles.chatBubble,
-                      isOwn ? styles.chatBubbleOwn : styles.chatBubbleOther,
+                      { backgroundColor: isOwn ? colors.primary : colors.backgroundTertiary },
                     ]}
                   >
                     <Text
                       style={[
                         styles.chatMessageText,
-                        { color: isOwn ? 'white' : colors.text },
+                        { color: isOwn ? '#fff' : colors.text },
                       ]}
                     >
                       {msg.content}
@@ -441,27 +516,36 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
               );
             })}
           </ScrollView>
-          <View style={[styles.chatInput, { borderTopColor: colors.border }]}> 
+          <View style={[styles.chatInput, { borderTopColor: colors.border }]}>
             <TextInput
               style={[styles.chatInputField, { color: colors.text, backgroundColor: colors.background }]}
               placeholder="Type a message..."
               placeholderTextColor={colors.textSecondary}
-              onSubmitEditing={(e) => {
-                if (e.nativeEvent.text.trim()) {
-                  handleSendChatMessage(e.nativeEvent.text.trim());
-                }
-              }}
+              value={chatDraft}
+              onChangeText={setChatDraft}
+              onSubmitEditing={submitChatMessage}
+              returnKeyType="send"
+              blurOnSubmit={false}
             />
+            <TouchableOpacity
+              style={[
+                styles.chatSendButton,
+                { backgroundColor: chatDraft.trim() ? colors.primary : colors.backgroundTertiary },
+              ]}
+              onPress={submitChatMessage}
+              disabled={!chatDraft.trim()}
+              accessibilityLabel="Send message"
+            >
+              <Ionicons
+                name="send"
+                size={18}
+                color={chatDraft.trim() ? '#fff' : colors.textSecondary}
+              />
+            </TouchableOpacity>
           </View>
         </View>
       )}
 
-      <TouchableOpacity
-        style={[styles.chatToggle, { backgroundColor: colors.primary }]}
-        onPress={() => setIsChatOpen(!isChatOpen)}
-      >
-        <Ionicons name="chatbubbles" size={24} color="#fff" />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -543,11 +627,16 @@ const styles = StyleSheet.create({
     borderColor: '#374151',
     zIndex: 10,
   },
-  expandButton: {
-    marginLeft: spacing.xs,
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+  stageToggle: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 11,
   },
   video: {
     width: '100%',
@@ -664,20 +753,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: 16,
   },
-  chatBubbleOwn: {
-    backgroundColor: '#2563eb',
-  },
-  chatBubbleOther: {
-    backgroundColor: '#e5e7eb',
-  },
   chatMessageText: {
     fontSize: typography.fontSize.sm,
     lineHeight: typography.fontSize.sm * 1.3,
   },
   chatInput: {
     flexDirection: 'row',
+    alignItems: 'center',
     padding: spacing.sm,
     borderTopWidth: 1,
+    gap: spacing.sm,
   },
   chatInputField: {
     flex: 1,
@@ -686,15 +771,28 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     fontSize: typography.fontSize.sm,
   },
-  chatToggle: {
-    position: 'absolute',
-    right: spacing.md,
-    bottom: 100,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  chatSendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  unreadBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
 

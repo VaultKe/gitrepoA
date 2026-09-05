@@ -7,6 +7,30 @@ import { getWebRTCClient, createWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSA
 import { getAuthToken as getMainAuthToken } from '../services/api/auth';
 import { getMeetingApiUrl } from '../services/meetingConfig';
 
+// A sent message reaches its own sender twice: once as the REST response to
+// sendChatMessage, and again as the WebSocket broadcast echoed back to the
+// whole room. Only the REST path used to check for that, so whichever arrived
+// second was appended blindly -- which is why the sender saw two bubbles for
+// every message they sent. Both paths go through here now.
+const appendChatMessage = (prev, incoming) => {
+  const incomingSender = incoming.senderId || incoming.userId;
+  const incomingTime = new Date(incoming.createdAt || incoming.timestamp || 0).getTime();
+
+  const isDuplicate = prev.some((existing) => {
+    if (incoming.id && existing.id) return existing.id === incoming.id;
+    // Nothing to match on by id (the socket payload doesn't always carry
+    // one), so fall back to identity: same sender, same text, near enough in
+    // time to be the same message coming back rather than a repeat someone
+    // genuinely typed twice.
+    if (existing.content !== incoming.content) return false;
+    if ((existing.senderId || existing.userId) !== incomingSender) return false;
+    const existingTime = new Date(existing.createdAt || existing.timestamp || 0).getTime();
+    return Math.abs(incomingTime - existingTime) < 10000;
+  });
+
+  return isDuplicate ? prev : [...prev, incoming];
+};
+
 const useOnlineMeetingScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const {
@@ -64,6 +88,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const screenShareWatchdogRef = useRef(null);
   // Mirrors screenShareViewerConnIds for the watchdog timer's closure.
   const screenShareViewerConnIdsRef = useRef(new Set());
+  // What the OS actually granted, so we only ask getUserMedia for devices
+  // we're allowed to open -- requesting a denied one fails the whole call,
+  // taking the permitted device down with it.
+  const mediaPermissionsRef = useRef({ camera: true, microphone: true });
   const participantIdRef = useRef(null);
   // Becomes true once the initial participant roster has loaded, so we only
   // toast for genuinely *new* arrivals and not the burst of existing members
@@ -109,12 +137,13 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setIsConnecting(true);
       setConnectionError(null);
 
-      // Request permissions, but do not block joining if the user denies them
+      // Ask up front, but never block joining on the answer -- a denied
+      // camera or mic just means joining without that device.
       try {
-        await requestPermissions();
+        mediaPermissionsRef.current = await requestPermissions();
       } catch (permError) {
         console.warn('Media permissions not granted, joining without camera/mic:', permError);
-        // Continue without local media; the user can enable later if permissions change
+        mediaPermissionsRef.current = { camera: false, microphone: false };
       }
 
       // Set auth token BEFORE making any meeting API calls
@@ -195,60 +224,97 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         text2: isPreview ? 'You are previewing the meeting room' : 'You have successfully joined the meeting',
       });
     } catch (error) {
+      // Only genuine connection failures reach here now: a denied camera or
+      // mic degrades to joining without that device instead of throwing, so
+      // it can never block entry to the meeting.
       console.error('Failed to initialize meeting:', error);
       setConnectionError(error.message);
       setIsConnecting(false);
 
-      // Check if this is a permission error and offer to open settings
-      const isPermissionError = /permissions? are required|Camera and microphone access is required|NotAllowedError|Permission denied|not allowed by the user agent/i.test(error.message || '');
-
-      if (isPermissionError && Platform.OS === 'android') {
-        Alert.alert(
-          'Permissions Required',
-          'Camera and microphone access is required to join the meeting. Please enable them in Settings > Apps > VaultKe > Permissions.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Open Settings',
-              onPress: () => Linking.openSettings()
-            },
-          ]
-        );
-      } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Connection failed',
-          text2: error.message,
-        });
-      }
+      Toast.show({
+        type: 'error',
+        text1: 'Connection failed',
+        text2: error.message,
+      });
     }
   };
 
+  // Asks for camera/mic the same way the app asks for any other runtime
+  // permission, and reports what was actually granted instead of throwing.
+  // A denial must not keep you out of the meeting -- you just join without
+  // that device, and can turn it on later from the controls (which
+  // re-requests via getUserMedia).
   const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
-      const permissions = [
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        PermissionsAndroid.PERMISSIONS.MODIFY_AUDIO_SETTINGS,
-      ];
-
-      const granted = await PermissionsAndroid.requestMultiple(permissions);
-      const denied = Object.values(granted).filter(p => p !== PermissionsAndroid.RESULTS.GRANTED);
-
-      if (denied.length > 0) {
-        // Check if user selected "Don't ask again"
-        const neverAskAgain = Object.entries(granted).some(
-          ([key, value]) => value === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
-        );
-        
-        if (neverAskAgain) {
-          throw new Error('Camera and microphone permissions are required. Please enable them in Settings > Apps > VaultKe > Permissions.');
-        }
-        throw new Error('Camera and microphone permissions are required for video calls');
-      }
+    if (Platform.OS !== 'android') {
+      // iOS prompts automatically on first getUserMedia, using the
+      // NSCameraUsageDescription / NSMicrophoneUsageDescription strings.
+      // On web the browser prompts the same way.
+      return { camera: true, microphone: true };
     }
-    // iOS permissions are requested automatically by the system when accessing camera/microphone
-    // The NSCameraUsageDescription and NSMicrophoneUsageDescription in Info.plist provide the prompt text
+
+    // ONLY runtime ("dangerous") permissions may go to requestMultiple().
+    // MODIFY_AUDIO_SETTINGS used to be listed here, but it is a normal
+    // install-time permission, so React Native does not expose a constant for
+    // it -- PermissionsAndroid.PERMISSIONS.MODIFY_AUDIO_SETTINGS is undefined.
+    // That undefined was passed straight through to the native module, where
+    // checkSelfPermission(null) throws IllegalArgumentException on the UI
+    // thread and takes the whole process down. That is a Java crash, so the
+    // try/catch around this call could never catch it: opening the meeting
+    // screen just closed the installed app instantly. It is already granted
+    // at install time via the manifest, so it never needed requesting.
+    const permissions = [
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+    ].filter(Boolean);
+
+    try {
+      const granted = await PermissionsAndroid.requestMultiple(permissions);
+      const isGranted = (permission) =>
+        granted[permission] === PermissionsAndroid.RESULTS.GRANTED;
+
+      return {
+        camera: isGranted(PermissionsAndroid.PERMISSIONS.CAMERA),
+        microphone: isGranted(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO),
+      };
+    } catch (error) {
+      console.warn('[Meeting] Permission request failed:', error?.message || error);
+      return { camera: false, microphone: false };
+    }
+  };
+
+  // Re-asks Android for a single device permission before we try to open it.
+  // react-native-webrtc's getUserMedia does NOT raise the Android prompt on
+  // its own -- it just fails when the permission is missing -- so without
+  // this, anyone who declined at join time could never turn their camera or
+  // mic on again for the rest of the meeting.
+  const ensureDevicePermission = async (kind) => {
+    if (Platform.OS !== 'android') return true;
+
+    const permission = kind === 'video'
+      ? PermissionsAndroid.PERMISSIONS.CAMERA
+      : PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
+    if (!permission) return true;
+
+    try {
+      if (await PermissionsAndroid.check(permission)) return true;
+      const result = await PermissionsAndroid.request(permission);
+      const isGranted = result === PermissionsAndroid.RESULTS.GRANTED;
+
+      if (!isGranted && result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        Alert.alert(
+          kind === 'video' ? 'Camera blocked' : 'Microphone blocked',
+          `Permission is turned off for VaultKe. Enable ${kind === 'video' ? 'Camera' : 'Microphone'} in Settings to use it in meetings.`,
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+      return isGranted;
+    } catch (error) {
+      console.warn('[Meeting] Permission request failed:', error?.message || error);
+      return false;
+    }
   };
 
   const getAuthToken = async () => {
@@ -596,10 +662,10 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     });
 
     client.on('chatMessage', (message) => {
-      setChatMessages(prev => [...prev, {
+      setChatMessages(prev => appendChatMessage(prev, {
         ...message,
         isOwn: message.senderId === user?.id,
-      }]);
+      }));
     });
 
     client.on('roomEnded', () => {
@@ -627,15 +693,39 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       updateParticipantsList();
     });
 
+    // Ask only for the devices the OS actually let us have. getUserMedia is
+    // all-or-nothing, so including a denied device would fail the whole call
+    // and lose the one that was granted too.
+    const { camera: mayUseCamera, microphone: mayUseMic } = mediaPermissionsRef.current;
+    const constraints = {};
+    if (mayUseCamera) constraints.video = MEDIA_CONSTRAINTS.video;
+    if (mayUseMic) constraints.audio = MEDIA_CONSTRAINTS.audio;
+
     let stream = null;
-    try {
-      stream = await client.initLocalMedia();
-      // Meetings join muted by default -- the mic track exists (so unmuting
-      // later never needs to re-request permission) but doesn't transmit
-      // until the user explicitly turns it on.
-      client.toggleAudio(false);
-    } catch (mediaError) {
-      console.warn('Could not initialize local media, continuing without it:', mediaError);
+    if (constraints.video || constraints.audio) {
+      try {
+        stream = await client.initLocalMedia(constraints);
+        // Meetings join muted by default -- the mic track exists (so unmuting
+        // later never needs to re-request permission) but doesn't transmit
+        // until the user explicitly turns it on.
+        client.toggleAudio(false);
+      } catch (mediaError) {
+        console.warn('Could not initialize local media, continuing without it:', mediaError);
+        Toast.show({
+          type: 'info',
+          text1: 'Joining without camera and mic',
+          text2: mediaError?.message || 'You can turn them on from the meeting controls.',
+          position: 'top',
+        });
+      }
+    } else {
+      console.warn('[Meeting] Camera and microphone both denied -- joining view-only');
+      Toast.show({
+        type: 'info',
+        text1: 'Joining without camera and mic',
+        text2: 'Permission was denied. You can still see and hear other participants.',
+        position: 'top',
+      });
     }
     setLocalStream(stream);
     // Reflect what was actually acquired, not what we hoped for: camera on
@@ -721,6 +811,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     const hasVideoTrack = (webrtcClientRef.current?.localStream?.getVideoTracks?.() || []).length > 0;
     if (newState && !hasVideoTrack && webrtcClientRef.current) {
       try {
+        if (!(await ensureDevicePermission('video'))) {
+          setIsCameraEnabled(false);
+          return;
+        }
+        mediaPermissionsRef.current = { ...mediaPermissionsRef.current, camera: true };
         await webrtcClientRef.current.initLocalMedia({ video: MEDIA_CONSTRAINTS.video });
         // Existing peer connections were negotiated without a camera m-line
         // if we joined without one; wire the newly acquired track into them
@@ -776,6 +871,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     const hasAudioTrack = (webrtcClientRef.current?.localStream?.getAudioTracks?.() || []).length > 0;
     if (newState && !hasAudioTrack && webrtcClientRef.current) {
       try {
+        if (!(await ensureDevicePermission('audio'))) {
+          setIsMicrophoneEnabled(false);
+          return;
+        }
+        mediaPermissionsRef.current = { ...mediaPermissionsRef.current, microphone: true };
         await webrtcClientRef.current.initLocalMedia({ audio: MEDIA_CONSTRAINTS.audio });
         await webrtcClientRef.current.attachLocalTrack('audio');
         setLocalStream(webrtcClientRef.current.localStream);
@@ -963,14 +1063,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   const handleSendChatMessage = async (content) => {
     try {
       const response = await meetingApi.sendChatMessage(meetingId, content);
-      // Mark as own message; avoid duplicates since WebSocket broadcast will also deliver it
-      setChatMessages(prev => {
-        // Check if the WebSocket already delivered this message (same id)
-        if (prev.some(m => m.id === response.id)) {
-          return prev;
-        }
-        return [...prev, { ...response, isOwn: true }];
-      });
+      setChatMessages(prev => appendChatMessage(prev, { ...response, isOwn: true }));
     } catch (error) {
       Toast.show({
         type: 'error',

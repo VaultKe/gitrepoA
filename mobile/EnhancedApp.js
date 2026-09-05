@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LogBox, ErrorUtils } from 'react-native';
 import Toast from 'react-native-toast-message';
 import customToastConfig from './src/components/common/CustomToast';
+import AppErrorBoundary from './src/components/common/AppErrorBoundary';
 
 // Development helpers
 import DevHelper from './src/utils/DevHelper';
@@ -94,8 +95,10 @@ export default function App() {
   }
 
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <AppErrorBoundary>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </AppErrorBoundary>
   );
 }
