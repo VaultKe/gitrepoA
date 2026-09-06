@@ -644,19 +644,14 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		status = req.Status
 	}
 
-	query := `
-		INSERT INTO loan_types (
-			id, chama_id, name, description, 	max_amount,
+	baseCols := `id, chama_id, name, description, 	max_amount,
 			interest_rate, term_months, eligibility_criteria, approval_required,
 			grace_period_days, penalty_rate, max_loans_per_member, requires_collateral,
 			requires_guarantors, collateral_description, net_disbursement, current_loans,
 			default_threshold_days, installment_penalty_type,
 			installment_penalty_amount, loan_penalty_amount,
-			status, created_by, created_at, updated_at,
-			requires_referees, min_guarantors, min_referees
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
-	`
-	_, err := s.db.Exec(query,
+			status, created_by, created_at, updated_at`
+	baseArgs := []interface{}{
 		id, chamaID, req.Name, req.Description, req.MaxAmount,
 		req.InterestRate, req.TermMonths, req.EligibilityCriteria, approvalRequired,
 		req.GracePeriodDays, req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral,
@@ -664,9 +659,16 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		req.DefaultThresholdDays, req.InstallmentPenaltyType,
 		req.InstallmentPenaltyAmount, req.LoanPenaltyAmount,
 		status, createdBy, now, now,
-		requiresReferees, minGuarantors, minReferees,
-	)
-	if err != nil {
+	}
+	cols := baseCols
+	placeholders := "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25"
+	args := baseArgs
+	if s.loanTypeColumnExists("requires_referees") {
+		cols += ", requires_referees, min_guarantors, min_referees"
+		placeholders += ", $26, $27, $28"
+		args = append(args, requiresReferees, minGuarantors, minReferees)
+	}
+	if _, err := s.db.Exec("INSERT INTO loan_types ("+cols+") VALUES ("+placeholders+")", args...); err != nil {
 		return nil, fmt.Errorf("failed to create loan type: %w", err)
 	}
 
@@ -702,8 +704,23 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 	}, nil
 }
 
+// loanTypeColumnExists reports whether a column is present on loan_types. Used to
+// stay compatible with databases that have not yet run the referee migration.
+func (s *LoanService) loanTypeColumnExists(column string) bool {
+	var exists bool
+	err := s.db.QueryRow(
+		"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'loan_types' AND column_name = $1)",
+		column,
+	).Scan(&exists)
+	return err == nil && exists
+}
+
 // GetChamaLoanTypes retrieves loan types for a chama, optionally filtered by status
 func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models.LoanProduct, error) {
+	refSelect := "false, 0, 0"
+	if s.loanTypeColumnExists("requires_referees") {
+		refSelect = "COALESCE(requires_referees, false), COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)"
+	}
 	query := `
 		SELECT id, chama_id, name, description, 	max_amount,
 		       interest_rate, term_months, eligibility_criteria, approval_required,
@@ -712,7 +729,7 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 		       default_threshold_days, installment_penalty_type,
 		       installment_penalty_amount, loan_penalty_amount,
 		       status, created_by, created_at, updated_at,
-		       COALESCE(requires_referees, false), COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)
+		       ` + refSelect + `
 		FROM loan_types
 		WHERE chama_id = $1
 	`
@@ -752,6 +769,10 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 
 // GetLoanTypeByID fetches a single loan type
 func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, error) {
+	refSelect := "false, 0, 0"
+	if s.loanTypeColumnExists("requires_referees") {
+		refSelect = "COALESCE(requires_referees, false), COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)"
+	}
 	query := `
 		SELECT id, chama_id, name, description, 	max_amount,
 		       interest_rate, term_months, eligibility_criteria, approval_required,
@@ -760,7 +781,7 @@ func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, e
 		       default_threshold_days, installment_penalty_type,
 		       installment_penalty_amount, loan_penalty_amount,
 		       status, created_by, created_at, updated_at,
-		       COALESCE(requires_referees, false), COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)
+		       ` + refSelect + `
 		FROM loan_types WHERE id = $1
 	`
 	var lt models.LoanProduct
@@ -826,8 +847,7 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	}
 	now := time.Now()
 
-	query := `
-		UPDATE loan_types SET
+	setClause := `
 			name = $1, description = $2, 	max_amount = $3,
 			interest_rate = $4, term_months = $5, eligibility_criteria = $6,
 			approval_required = $7, grace_period_days = $8, penalty_rate = $9,
@@ -835,11 +855,8 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 			collateral_description = $13, net_disbursement = $14, current_loans = $15,
 			default_threshold_days = $16, installment_penalty_type = $17,
 			installment_penalty_amount = $18, loan_penalty_amount = $19,
-			status = $20, updated_at = $21,
-			requires_referees = $23, min_guarantors = $24, min_referees = $25
-		WHERE id = $22
-	`
-	_, err = s.db.Exec(query,
+			status = $20, updated_at = $21`
+	args := []interface{}{
 		req.Name, req.Description, req.MaxAmount, req.InterestRate,
 		req.TermMonths, req.EligibilityCriteria, approvalRequired, req.GracePeriodDays,
 		req.PenaltyRate, req.MaxLoansPerMember, requiresCollateral, requiresGuarantors,
@@ -847,9 +864,12 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 		req.DefaultThresholdDays, req.InstallmentPenaltyType,
 		req.InstallmentPenaltyAmount, req.LoanPenaltyAmount,
 		status, now, loanTypeID,
-		requiresReferees, minGuarantors, minReferees,
-	)
-	if err != nil {
+	}
+	if s.loanTypeColumnExists("requires_referees") {
+		setClause += ", requires_referees = $23, min_guarantors = $24, min_referees = $25"
+		args = append(args, requiresReferees, minGuarantors, minReferees)
+	}
+	if _, err = s.db.Exec("UPDATE loan_types SET "+setClause+" WHERE id = $22", args...); err != nil {
 		return nil, fmt.Errorf("failed to update loan type: %w", err)
 	}
 	existing.Name = req.Name

@@ -100,6 +100,17 @@ func getNotificationSMSEnabled(notificationType string) int {
 	}
 }
 
+// parseFlexBool interprets the assorted truthy encodings a boolean-ish column
+// may hold ("true"/"t"/"1"/"yes") across TEXT and BOOLEAN column types.
+func parseFlexBool(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "true", "t", "1", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 // columnExists reports whether a column is present on a table (Postgres).
 func columnExists(db *sql.DB, table, column string) bool {
 	var exists bool
@@ -320,23 +331,38 @@ func CreateLoanApplication(c *gin.Context) {
 	sqlDB := db.(*sql.DB)
 
 	// Resolve the loan type's backing requirements (guarantors and/or referees).
+	// Read each column independently and cast to text: on older databases
+	// `requires_guarantors` may be a TEXT column ('0'/'1'), and the referee
+	// columns may not exist at all yet.
 	requiresGuarantors := false
 	requiresReferees := false
 	minGuarantors := 0
 	minReferees := 0
 	if req.LoanTypeID != "" {
-		err := sqlDB.QueryRow(`
-			SELECT COALESCE(requires_guarantors, false), COALESCE(requires_referees, false),
-			       COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)
-			FROM loan_types WHERE id = $1
-		`, req.LoanTypeID).Scan(&requiresGuarantors, &requiresReferees, &minGuarantors, &minReferees)
-		if err != nil && err != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to validate loan type",
-			})
-			return
+		readBool := func(col string) bool {
+			if !columnExists(sqlDB, "loan_types", col) {
+				return false
+			}
+			var raw sql.NullString
+			if err := sqlDB.QueryRow(fmt.Sprintf("SELECT %s::text FROM loan_types WHERE id = $1", col), req.LoanTypeID).Scan(&raw); err != nil {
+				return false
+			}
+			return parseFlexBool(raw.String)
 		}
+		readInt := func(col string) int {
+			if !columnExists(sqlDB, "loan_types", col) {
+				return 0
+			}
+			var n sql.NullInt64
+			if err := sqlDB.QueryRow(fmt.Sprintf("SELECT %s FROM loan_types WHERE id = $1", col), req.LoanTypeID).Scan(&n); err != nil {
+				return 0
+			}
+			return int(n.Int64)
+		}
+		requiresGuarantors = readBool("requires_guarantors")
+		requiresReferees = readBool("requires_referees")
+		minGuarantors = readInt("min_guarantors")
+		minReferees = readInt("min_referees")
 	}
 
 	// Dedupe and drop the borrower from either list.

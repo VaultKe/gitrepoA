@@ -225,6 +225,8 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 		return
 	}
 
+	// Referees are optional and the table may be absent on an un-migrated DB —
+	// treat any failure here as "no referees" rather than blocking the loan.
 	var rTotal, rAccepted, rDeclined int
 	if err := db.QueryRow(`
 		SELECT COUNT(*),
@@ -232,12 +234,12 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 			COALESCE(SUM(CASE WHEN status IN ('declined','rejected') THEN 1 ELSE 0 END), 0)
 		FROM loan_referees WHERE loan_id = $1
 	`, loanID).Scan(&rTotal, &rAccepted, &rDeclined); err != nil {
-		fmt.Printf("Error checking referee status for loan %s: %v\n", loanID, err)
-		return
+		rTotal, rAccepted, rDeclined = 0, 0, 0
 	}
 
 	// Keep the running acceptance counts on the loan fresh for the UI.
-	_, _ = db.Exec("UPDATE loans SET approved_guarantors = $1, approved_referees = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3", gAccepted, rAccepted, loanID)
+	_, _ = db.Exec("UPDATE loans SET approved_guarantors = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", gAccepted, loanID)
+	_, _ = db.Exec("UPDATE loans SET approved_referees = $1 WHERE id = $2", rAccepted, loanID)
 
 	var newStatus string
 	switch {
@@ -329,8 +331,8 @@ func InitiateLoanApproval(c *gin.Context) {
 
 	// Determine role from the loan's next approval stage
 	var approvalStage string
-	var requiredGuarantors, requiredReferees int
-	err := db.(*sql.DB).QueryRow("SELECT COALESCE(approval_stage,''), COALESCE(required_guarantors,0), COALESCE(required_referees,0) FROM loans WHERE id = $1", loanID).Scan(&approvalStage, &requiredGuarantors, &requiredReferees)
+	var requiredGuarantors int
+	err := db.(*sql.DB).QueryRow("SELECT COALESCE(approval_stage,''), COALESCE(required_guarantors,0) FROM loans WHERE id = $1", loanID).Scan(&approvalStage, &requiredGuarantors)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -338,6 +340,8 @@ func InitiateLoanApproval(c *gin.Context) {
 		})
 		return
 	}
+	requiredReferees := 0
+	_ = db.(*sql.DB).QueryRow("SELECT COALESCE(required_referees,0) FROM loans WHERE id = $1", loanID).Scan(&requiredReferees)
 
 	// The officer approval chain may only begin once every required guarantor
 	// AND every required referee has accepted. Guard the entry point (secretary).

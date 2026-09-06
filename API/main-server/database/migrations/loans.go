@@ -47,6 +47,24 @@ func MigrateLoans(db *sql.DB) error {
 // addLoanBackingColumns introduces referees (character backers, no money tied to
 // them) alongside guarantors, and configurable minimum counts on loan types.
 func addLoanBackingColumns(db *sql.DB) error {
+	// An earlier migration added loan_types.requires_guarantors as TEXT ('0'/'1')
+	// on databases that predated it in the base schema. Normalise it to BOOLEAN so
+	// COALESCE(requires_guarantors, false) and bool scans behave.
+	var rgType string
+	if err := db.QueryRow("SELECT data_type FROM information_schema.columns WHERE table_name = 'loan_types' AND column_name = 'requires_guarantors'").Scan(&rgType); err == nil && rgType != "" && rgType != "boolean" {
+		stmts := []string{
+			"ALTER TABLE loan_types ALTER COLUMN requires_guarantors DROP DEFAULT",
+			"ALTER TABLE loan_types ALTER COLUMN requires_guarantors TYPE BOOLEAN USING (lower(coalesce(requires_guarantors::text,'')) IN ('1','t','true','yes','y','on'))",
+			"ALTER TABLE loan_types ALTER COLUMN requires_guarantors SET DEFAULT FALSE",
+		}
+		for _, st := range stmts {
+			if _, err := db.Exec(st); err != nil {
+				return fmt.Errorf("failed to normalise loan_types.requires_guarantors (%s): %w", st, err)
+			}
+		}
+		log.Println("Normalised loan_types.requires_guarantors to BOOLEAN")
+	}
+
 	loanTypeCols := []string{
 		"requires_referees BOOLEAN DEFAULT FALSE",
 		"min_guarantors INTEGER DEFAULT 0",

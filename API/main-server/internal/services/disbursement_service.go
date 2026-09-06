@@ -220,12 +220,14 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 	// Full officer approval chain must be complete.
 	var approvalStage string
 	var disbursedAt sql.NullTime
-	var requiredGuarantors, requiredReferees int
+	var requiredGuarantors int
 	if err := s.db.QueryRow(
-		"SELECT COALESCE(approval_stage,''), disbursed_at, COALESCE(required_guarantors,0), COALESCE(required_referees,0) FROM loans WHERE id = $1", loanID,
-	).Scan(&approvalStage, &disbursedAt, &requiredGuarantors, &requiredReferees); err != nil {
+		"SELECT COALESCE(approval_stage,''), disbursed_at, COALESCE(required_guarantors,0) FROM loans WHERE id = $1", loanID,
+	).Scan(&approvalStage, &disbursedAt, &requiredGuarantors); err != nil {
 		return fmt.Errorf("failed to read loan approval state: %w", err)
 	}
+	requiredReferees := 0
+	_ = s.db.QueryRow("SELECT COALESCE(required_referees,0) FROM loans WHERE id = $1", loanID).Scan(&requiredReferees)
 	if approvalStage != "fully_approved" {
 		return fmt.Errorf("loan approval chain is not complete (stage: %s)", approvalStage)
 	}
