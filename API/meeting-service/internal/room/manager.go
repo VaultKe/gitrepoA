@@ -343,6 +343,14 @@ func (rm *RoomManager) EndRoom(roomID string) error {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
+	return rm.endRoomLocked(roomID)
+}
+
+// endRoomLocked does the actual teardown; the caller must already hold
+// rm.mu. Split out of EndRoom so LeaveRoom -- which needs to end a room the
+// instant its last participant leaves, while still holding the same lock --
+// can do so without a self-deadlock on a second Lock() call.
+func (rm *RoomManager) endRoomLocked(roomID string) error {
 	room, exists := rm.rooms[roomID]
 	if !exists {
 		return ErrRoomNotFound
@@ -590,18 +598,26 @@ func (rm *RoomManager) GetAttendance(roomID string) ([]*Attendee, error) {
 	return attendees, nil
 }
 
-// LeaveRoom removes a participant from a room.
-func (rm *RoomManager) LeaveRoom(roomID, userID string) error {
+// LeaveRoom removes a participant from a room. The returned bool reports
+// whether this leave was the room's last participant, in which case the
+// room was ended right here rather than left sitting active with nobody in
+// it -- previously nothing noticed an empty room until its scheduled
+// duration expired (up to 90 minutes later) or someone happened to hit "end
+// meeting", so a room that had genuinely finished kept its slot, its
+// ScheduledEndAt kept counting down regardless of anyone being in it, and
+// anyone who rejoined before that clock ran out landed back in the same
+// stale room instead of a fresh one.
+func (rm *RoomManager) LeaveRoom(roomID, userID string) (bool, error) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
 	if rm.participants[roomID] == nil {
-		return ErrUserNotInRoom
+		return false, ErrUserNotInRoom
 	}
 
 	participant, exists := rm.participants[roomID][userID]
 	if !exists {
-		return ErrUserNotInRoom
+		return false, ErrUserNotInRoom
 	}
 
 	now := time.Now()
@@ -609,7 +625,7 @@ func (rm *RoomManager) LeaveRoom(roomID, userID string) error {
 
 	_, err := rm.db.Exec(`UPDATE participants SET left_at = $1 WHERE id = $2`, now, participant.ID)
 	if err != nil {
-		return fmt.Errorf("failed to update participant: %w", err)
+		return false, fmt.Errorf("failed to update participant: %w", err)
 	}
 
 	delete(rm.participants[roomID], userID)
@@ -625,7 +641,17 @@ func (rm *RoomManager) LeaveRoom(roomID, userID string) error {
 	rm.stats.TotalParticipants--
 	rm.stats.mu.Unlock()
 
-	return nil
+	roomEnded := false
+	if _, roomExists := rm.rooms[roomID]; roomExists && len(rm.participants[roomID]) == 0 {
+		if err := rm.endRoomLocked(roomID); err == nil {
+			roomEnded = true
+		}
+		// A failure here just means the room stays active a little longer
+		// (caught by the next expiry sweep or an explicit end) -- not a
+		// reason to fail the leave itself, which already succeeded.
+	}
+
+	return roomEnded, nil
 }
 
 // GetParticipants returns all active participants in a room.

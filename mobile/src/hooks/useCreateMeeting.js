@@ -19,7 +19,6 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
     scheduledAt: '',
     duration: '60',
     location: '',
-    meetingUrl: '',
     meetingType: 'physical',
     attendeeEmails: '',
     addToCalendar: true,
@@ -31,19 +30,35 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
 
   const scrollViewRef = useRef(null);
 
+  // Hybrid used to sit here too, but it only ever meant "show both the
+  // location field and the meeting-link field" -- and the meeting-link
+  // field is gone now (see below), so it no longer described anything a
+  // plain virtual meeting doesn't already cover.
   const meetingTypes = useMemo(() => [
     { id: 'physical', name: 'Physical Meeting', icon: 'location', description: 'In-person meeting at a location' },
     { id: 'virtual', name: 'Virtual Meeting', icon: 'videocam', description: 'Online meeting via video call' },
-    { id: 'hybrid', name: 'Hybrid Meeting', icon: 'people', description: 'Both physical and virtual attendance' },
   ], []);
 
-  const durations = useMemo(() => [
+  // A virtual meeting is a live online-meeting room (see OnlineMeetingScreen),
+  // not a scheduled call on someone else's platform, so its resource use is
+  // this app's to carry -- the room itself is hard-capped server-side at 90
+  // minutes (see clampRoomDuration in meeting-service) regardless of what's
+  // picked here. Physical meetings carry no such cost and can still run the
+  // full 3 hours.
+  const allDurations = useMemo(() => [
     { value: '30', label: '30 minutes' },
     { value: '60', label: '1 hour' },
     { value: '90', label: '1.5 hours' },
     { value: '120', label: '2 hours' },
     { value: '180', label: '3 hours' },
   ], []);
+
+  const durations = useMemo(
+    () => (formData.meetingType === 'virtual'
+      ? allDurations.filter((d) => Number(d.value) <= 90)
+      : allDurations),
+    [allDurations, formData.meetingType]
+  );
 
   const calculateEndTime = (date, time, durationMinutes) => {
     if (!date || !time || !durationMinutes) return '';
@@ -89,6 +104,15 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
         } else {
           newData.scheduledAt = '';
         }
+      }
+
+      // Switching to virtual with a longer duration already picked (from
+      // when physical allowed up to 3 hours) would otherwise leave that too-
+      // long value selected but no longer shown as an option -- clamp it
+      // down to the virtual cap instead of submitting a stale, invisible
+      // choice.
+      if (field === 'meetingType' && sanitizedValue === 'virtual' && parseInt(prev.duration, 10) > 90) {
+        newData.duration = '90';
       }
 
       return newData;
@@ -153,14 +177,9 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
       newErrors.location = 'Please enter a location for physical meeting';
     }
 
-    if ((formData.meetingType === 'virtual' || formData.meetingType === 'hybrid') && !formData.meetingUrl.trim()) {
-      newErrors.meetingUrl = 'Please enter a meeting URL for virtual meeting';
-    } else if ((formData.meetingType === 'virtual' || formData.meetingType === 'hybrid') && formData.meetingUrl.trim()) {
-      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
-      if (!urlPattern.test(formData.meetingUrl.trim())) {
-        newErrors.meetingUrl = 'Please enter a valid URL (e.g., https://zoom.us/j/123456789)';
-      }
-    }
+    // Virtual meetings don't need a URL: they get their own in-app online-
+    // meeting room (see OnlineMeetingScreen), not a link to some other
+    // platform.
 
     if (formData.attendeeEmails.trim()) {
       const emails = formData.attendeeEmails.split(',').map(email => email.trim());
@@ -217,16 +236,24 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
         ? formData.attendeeEmails.split(',').map(email => email.trim()).filter(email => email)
         : [];
 
+      // Belt-and-braces alongside the durations list already being filtered
+      // for virtual meetings (see useCreateMeeting's `durations`) and the
+      // meeting-service's own hard cap on the room itself -- this is just
+      // the last place a stale value could still slip through.
+      let duration = parseInt(formData.duration, 10);
+      if (formData.meetingType === 'virtual' && duration > 90) {
+        duration = 90;
+      }
+
       const meetingData = {
         chamaId,
         title: formData.title.trim(),
         description: formData.description.trim(),
         scheduledAt: scheduledAtRFC3339,
-        duration: parseInt(formData.duration),
+        duration,
         location: formData.location.trim(),
-        meetingUrl: formData.meetingUrl.trim(),
         meetingType: formData.meetingType,
-        recordingEnabled: formData.meetingType === 'virtual' || formData.meetingType === 'hybrid',
+        recordingEnabled: formData.meetingType === 'virtual',
         attendeeEmails: attendeeEmails,
         calendarId: formData.addToCalendar ? formData.calendarId : null,
       };
@@ -235,7 +262,7 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
 
       if (formData.addToCalendar && attendeeEmails.length > 0) {
         endpoint = '/meetings/calendar';
-      } else if (formData.meetingType === 'virtual' || formData.meetingType === 'hybrid') {
+      } else if (formData.meetingType === 'virtual') {
         endpoint = '/meetings/';
       }
 

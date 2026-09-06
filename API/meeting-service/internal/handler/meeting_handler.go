@@ -83,9 +83,12 @@ func NewMeetingHandler(cfg *config.Config, rm *room.RoomManager, sfu *webrtc.SFU
 			}
 		}
 		if !stillConnected {
-			if err := h.roomManager.LeaveRoom(info.RoomID, info.UserID); err != nil {
+			roomEnded, err := h.roomManager.LeaveRoom(info.RoomID, info.UserID)
+			if err != nil {
 				fmt.Printf("[Signal] LeaveRoom on disconnect failed | roomID=%s userID=%s err=%v\n",
 					info.RoomID, info.UserID, err)
+			} else if roomEnded {
+				h.handleRoomEmptiedByLeave(info.RoomID)
 			}
 		}
 
@@ -221,6 +224,18 @@ func (h *MeetingHandler) endRoomAndNotify(roomID, message string) error {
 	return nil
 }
 
+// handleRoomEmptiedByLeave does the handler-level cleanup for a room that
+// RoomManager.LeaveRoom already ended because that leave was its last
+// participant. RoomManager can't do this part itself: activeScreenSharers
+// lives here, not in RoomManager, and a stale entry in it (the room's last
+// screen-sharer, never cleared) would otherwise wrongly block or misreport
+// screen sharing the next time this same room id is used. No broadcast is
+// needed -- by definition nobody is left connected to tell.
+func (h *MeetingHandler) handleRoomEmptiedByLeave(roomID string) {
+	h.clearScreenSharerForRoom(roomID)
+	fmt.Printf("[Meeting] roomID=%s | ended (last participant left)\n", roomID)
+}
+
 // ExpireOverdueRooms ends every room whose scheduled duration has elapsed.
 // Called on a ticker from main.go rather than a per-request check, since a
 // room with nobody actively hitting an endpoint right now would otherwise
@@ -342,7 +357,8 @@ func (h *MeetingHandler) LeaveRoom(c *gin.Context) {
 	roomID := c.Param("roomID")
 	userID := getUserID(c)
 
-	if err := h.roomManager.LeaveRoom(roomID, userID); err != nil {
+	roomEnded, err := h.roomManager.LeaveRoom(roomID, userID)
+	if err != nil {
 		if errors.Is(err, room.ErrRoomNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
 		} else if errors.Is(err, room.ErrUserNotInRoom) {
@@ -351,6 +367,9 @@ func (h *MeetingHandler) LeaveRoom(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
 		return
+	}
+	if roomEnded {
+		h.handleRoomEmptiedByLeave(roomID)
 	}
 
 	h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
@@ -597,8 +616,11 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			h.clearScreenSharer(roomID, connID)
 
 			// Sync with RoomManager to ensure consistent participant tracking
-			if err := h.roomManager.LeaveRoom(roomID, msg.UserID); err != nil {
+			roomEnded, err := h.roomManager.LeaveRoom(roomID, msg.UserID)
+			if err != nil {
 				fmt.Printf("[Signal] leave | roomID=%s userID=%s | RoomManager leave failed: %v\n", roomID, msg.UserID, err)
+			} else if roomEnded {
+				h.handleRoomEmptiedByLeave(roomID)
 			}
 
 			h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{

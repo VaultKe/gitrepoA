@@ -19,6 +19,12 @@ const CreateMeetingForm = ({
   durations,
   colors,
 }) => {
+  // Was hardcoded to "2025-12-01", which just reads as a wrong date once the
+  // year has actually moved on -- a placeholder is meant as a plausible
+  // example, not a fixed one, so pin it to today's real year/month instead.
+  const now = new Date();
+  const datePlaceholder = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01 (YYYY-MM-DD)`;
+
   return (
     <View>
       {showErrors && Object.keys(errors).length > 0 && (
@@ -71,7 +77,7 @@ const CreateMeetingForm = ({
             label="Meeting Date *"
             value={formData.meetingDate}
             onChangeText={(text) => handleInputChange('meetingDate', text)}
-            placeholder="2025-12-01 (YYYY-MM-DD)"
+            placeholder={datePlaceholder}
             icon={<Ionicons name="calendar" size={20} color={colors.textSecondary} />}
             style={errors.meetingDate && showErrors ? [styles.inputError, { borderColor: colors.error }] : null}
           />
@@ -136,7 +142,7 @@ const CreateMeetingForm = ({
         </View>
       </Card>
 
-      {(formData.meetingType === 'physical' || formData.meetingType === 'hybrid') && (
+      {formData.meetingType === 'physical' && (
         <Card style={styles.formCard}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Location Details
@@ -156,25 +162,9 @@ const CreateMeetingForm = ({
         </Card>
       )}
 
-      {(formData.meetingType === 'virtual' || formData.meetingType === 'hybrid') && (
-        <Card style={styles.formCard}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Virtual Meeting Details
-          </Text>
-
-          <View>
-            <Input
-              label="Meeting URL *"
-              value={formData.meetingUrl}
-              onChangeText={(text) => handleInputChange('meetingUrl', text)}
-              placeholder="Zoom, Teams, or other meeting link"
-              icon={<Ionicons name="link" size={20} color={colors.textSecondary} />}
-              style={errors.meetingUrl && showErrors ? [styles.inputError, { borderColor: colors.error }] : null}
-            />
-            <FormErrorMessage error={errors.meetingUrl} showErrors={showErrors} colors={colors} />
-          </View>
-        </Card>
-      )}
+      {/* Virtual meetings don't need a link -- picking "Virtual Meeting"
+          gets you an in-app online-meeting room (see OnlineMeetingScreen),
+          not a field to paste someone else's Zoom/Teams URL into. */}
 
       <Card style={styles.formCard}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>

@@ -6,7 +6,6 @@ import api from '../services/api';
 import { meetingApi, setMeetingAuthToken, clearMeetingAuthToken } from '../services/meetingApi';
 import { getWebRTCClient, createWebRTCClient, MEDIA_CONSTRAINTS, SIGNALING_MESSAGE_TYPES, isWebRTCAvailable } from '../services/webrtcClient';
 import { getAuthToken as getMainAuthToken } from '../services/api/auth';
-import { getMeetingApiUrl } from '../services/meetingConfig';
 
 // A sent message reaches its own sender twice: once as the REST response to
 // sendChatMessage, and again as the WebSocket broadcast echoed back to the
@@ -141,6 +140,14 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
 
   const webrtcClientRef = useRef(null);
   const hasJoinedRef = useRef(false);
+  // Set the instant leaveMeeting() starts running, before any awaited call.
+  // handleBackPress/handleEndCall read this to tell a genuine "I want to
+  // leave now" press apart from a second back-gesture/button press that
+  // lands on this same still-mounted screen after the first leave already
+  // tore everything down -- without it, that second press re-asked "Leave
+  // Meeting?" for a meeting the user was no longer in, and re-ran the whole
+  // leave sequence a second time.
+  const hasLeftMeetingRef = useRef(false);
   const reconnectTimeoutRef = useRef(null);
   const screenShareRejectedRef = useRef(false);
   // Mirrors isScreenSharing for the connectionStateChange listener, which is
@@ -223,6 +230,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     setConnectionError(meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.');
 
     hasJoinedRef.current = false;
+    hasLeftMeetingRef.current = false;
     isScreenSharingRef.current = false;
     screenShareRejectedRef.current = false;
     screenShareViewerConnIdsRef.current = new Set();
@@ -268,14 +276,18 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       setIsConnecting(true);
       setConnectionError(null);
 
-      // Ask up front, but never block joining on the answer -- a denied
-      // camera or mic just means joining without that device.
-      try {
-        mediaPermissionsRef.current = await requestPermissions();
-      } catch (permError) {
+      // Ask for camera/mic and join the room over the network at the same
+      // time -- neither depends on the other's result (the join call only
+      // needs an auth token, not a granted device), so there is no reason to
+      // sit through however long the user takes to answer the OS permission
+      // dialog before even starting the network request. Only initializeWebRTC
+      // below actually needs both to have finished, so that's the only place
+      // permissionsPromise is awaited. A denied camera or mic still never
+      // blocks joining -- it just means joining without that device.
+      const permissionsPromise = requestPermissions().catch((permError) => {
         console.warn('Media permissions not granted, joining without camera/mic:', permError);
-        mediaPermissionsRef.current = { camera: false, microphone: false };
-      }
+        return { camera: false, microphone: false };
+      });
 
       // Set auth token BEFORE making any meeting API calls
       const token = await getAuthToken();
@@ -294,36 +306,32 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
           isPreview: true,
         };
       } else {
-        // Use debug endpoint if auth fails (temporary for debugging)
-        const debugUrl = `${getMeetingApiUrl()}/debug/rooms/${meetingId}/join`;
-        const debugResponse = await fetch(debugUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
-            role: userRole,
-            userId: user?.id, // Pass userId so backend can create participant with correct user_id
-            chamaId, // lets the service enforce one live online meeting per chama
-          }),
+        // Always the properly authenticated join -- this used to try an
+        // unauthenticated "/debug/rooms/:id/join" endpoint first (explicitly
+        // marked "REMOVE AFTER DEBUGGING" server-side) and only fall back to
+        // this authenticated call if that failed. That meant every real join
+        // paid for a whole extra network round trip before the one that
+        // actually mattered, and depended on a route that would let anyone
+        // who knew a meeting id join as any userId/role with no auth at all.
+        const response = await meetingApi.joinRoom(meetingId, {
+          displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
+          role: userRole,
+          userId: user?.id,
+          chamaId, // lets the service enforce one live online meeting per chama
+          // The scheduled duration, so the room can close itself on time
+          // instead of running until someone remembers to end it -- the
+          // service clamps this to its own hard cap regardless of what's
+          // sent, so a longer value here can never buy more room lifetime
+          // than that.
+          durationMinutes: Number(routeMeetingData?.duration) > 0 ? Number(routeMeetingData.duration) : 60,
         });
-
-        if (!debugResponse.ok) {
-          const response = await meetingApi.joinRoom(meetingId, {
-            displayName: `${user?.firstName || 'User'} ${user?.lastName || ''}`.trim(),
-            role: userRole,
-            userId: user?.id, // Pass userId for unauthenticated joins
-            chamaId,
-          });
-          if (!response) {
-            throw new Error('Failed to join meeting');
-          }
-          connectionData = response;
-        } else {
-          connectionData = await debugResponse.json();
+        if (!response) {
+          throw new Error('Failed to join meeting');
         }
+        connectionData = response;
       }
+
+      mediaPermissionsRef.current = await permissionsPromise;
 
       setMeetingData(connectionData);
 
@@ -341,14 +349,17 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       // what filled the chat panel with join notices -- joins already surface
       // as toasts and in the participant list.
 
-       // Load participants
-       await updateParticipantsList();
-       // Roster is now synced — further joins are real arrivals worth a toast.
-       initialLoadDoneRef.current = true;
-       // Load existing chat history so newcomers see the backlog
-       await loadChatHistory();
+      // Participants and chat history are independent REST calls -- fetch
+      // them together instead of one after the other. Roster-synced still
+      // flips as soon as the participants call itself resolves (not once
+      // chat has also finished), same as before, so a join that arrives
+      // while chat history is still loading is still toasted.
+      const participantsLoaded = updateParticipantsList().then(() => {
+        initialLoadDoneRef.current = true;
+      });
+      await Promise.all([participantsLoaded, loadChatHistory()]);
 
-       setIsConnected(true);
+      setIsConnected(true);
       setIsConnecting(false);
       hasJoinedRef.current = true;
 
@@ -897,7 +908,13 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
         text1: 'Meeting Ended',
         text2: 'The meeting has been ended by the host',
       });
-      navigation.goBack();
+      // Same full teardown as pressing the leave button: release the camera
+      // and mic and close every connection, not just navigate away. This
+      // used to skip straight to navigation.goBack() with no cleanup at
+      // all, which on the host's end was fine (their own leave flow does
+      // the teardown) but left a listener's local media running and their
+      // signaling socket open until whatever unmounted the screen next.
+      leaveMeeting();
     });
 
     client.on('error', (error) => {
@@ -1480,6 +1497,17 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // never shows anything and never calls a button handler), so on web the
   // button silently did nothing; window.confirm is the web-safe equivalent.
   const handleEndCall = () => {
+    // Already left (leaveMeeting ran once already): this is a second back
+    // gesture/press landing on the same screen instance before its
+    // navigation away has actually unmounted it. There is nothing left to
+    // confirm leaving -- re-asking "Leave Meeting?" for a room this device
+    // already tore down is the exact loop reported. Just retry getting off
+    // this screen, silently.
+    if (hasLeftMeetingRef.current) {
+      leaveMeeting();
+      return;
+    }
+
     if (Platform.OS === 'web') {
       if (window.confirm('Are you sure you want to leave the meeting?')) {
         leaveMeeting();
@@ -1507,6 +1535,13 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   const leaveMeeting = async () => {
+    // Teardown already ran once (see handleEndCall) -- the only thing left
+    // to do is retry actually navigating off this screen.
+    if (hasLeftMeetingRef.current) {
+      exitMeetingScreen();
+      return;
+    }
+    hasLeftMeetingRef.current = true;
     hasJoinedRef.current = false;
 
     // Tell the room first, over the socket that is still open, so everyone
@@ -1548,7 +1583,27 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       // connection stayed open, so someone who had "left" was still being
       // heard and could still hear the room.
       cleanup();
+      exitMeetingScreen();
+    }
+  };
+
+  // Navigates off this screen the same way SmartBackButton/useSmartNavigation
+  // do elsewhere in the app: goBack() when there's history, otherwise
+  // delegate to the parent navigator. Without the parent fallback,
+  // navigation.goBack() on a meeting opened as the root of its own stack
+  // (e.g. from a push notification or deep link, with nothing to pop back
+  // to) was a silent no-op -- the screen stayed mounted, so its hardware
+  // back-gesture listener stayed live too, and the next back press re-ran
+  // this whole flow, which is what looked like "Leave Meeting?" popping up
+  // again after the user had already left.
+  const exitMeetingScreen = () => {
+    if (navigation?.canGoBack?.()) {
       navigation.goBack();
+      return;
+    }
+    const parent = navigation?.getParent?.();
+    if (parent && typeof parent.canGoBack === 'function' && parent.canGoBack()) {
+      parent.goBack();
     }
   };
 
