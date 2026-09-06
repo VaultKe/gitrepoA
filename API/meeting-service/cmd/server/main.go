@@ -162,8 +162,14 @@ func main() {
 		})
 	})
 
-	// Debug endpoint to test join without auth (REMOVE AFTER DEBUGGING)
-	r.POST("/api/v1/debug/rooms/:roomID/join", h.JoinRoom)
+	// The unauthenticated "/api/v1/debug/rooms/:roomID/join" route that used
+	// to sit here let anyone who knew a meeting id join as any userId/role
+	// with no auth at all -- it was the client's *first* attempt on every
+	// join too (see useOnlineMeetingScreen.js), so it was on the critical
+	// path of every real join as well as being a standing security hole.
+	// Nothing else in the codebase called it (grep for "debug/rooms"); the
+	// authenticated "POST /api/v1/rooms/:roomID/join" below is the only join
+	// route now.
 
 	// API routes
 	api := r.Group("/api/v1")
