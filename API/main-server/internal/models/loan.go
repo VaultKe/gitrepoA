@@ -35,6 +35,15 @@ const (
 	GuarantorStatusRejected GuarantorStatus = "rejected"
 )
 
+// RefereeStatus represents a loan referee's consent status.
+type RefereeStatus string
+
+const (
+	RefereeStatusPending  RefereeStatus = "pending"
+	RefereeStatusAccepted RefereeStatus = "accepted"
+	RefereeStatusDeclined RefereeStatus = "declined"
+)
+
 // Loan represents a loan in the system
 type Loan struct {
 	ID                 string     `json:"id" db:"id"`
@@ -55,6 +64,8 @@ type Loan struct {
 	RemainingAmount    float64    `json:"remainingAmount" db:"remaining_amount"`
 	RequiredGuarantors int        `json:"requiredGuarantors" db:"required_guarantors"`
 	ApprovedGuarantors int        `json:"approvedGuarantors" db:"approved_guarantors"`
+	RequiredReferees   int        `json:"requiredReferees" db:"required_referees"`
+	ApprovedReferees   int        `json:"approvedReferees" db:"approved_referees"`
 	CreatedAt          time.Time  `json:"createdAt" db:"created_at"`
 	UpdatedAt          time.Time  `json:"updatedAt" db:"updated_at"`
 
@@ -77,7 +88,23 @@ type Loan struct {
 	Borrower   *User         `json:"borrower,omitempty"`
 	Chama      *Chama        `json:"chama,omitempty"`
 	Guarantors []Guarantor   `json:"guarantors,omitempty"`
+	Referees   []Referee     `json:"referees,omitempty"`
 	Payments   []LoanPayment `json:"payments,omitempty"`
+}
+
+// Referee represents a character referee on a loan. Referees consent to back the
+// borrower but, unlike guarantors, have NO amount / financial liability.
+type Referee struct {
+	ID          string        `json:"id" db:"id"`
+	LoanID      string        `json:"loanId" db:"loan_id"`
+	UserID      string        `json:"userId" db:"user_id"`
+	Status      RefereeStatus `json:"status" db:"status"`
+	Message     *string       `json:"message,omitempty" db:"message"`
+	RespondedAt *time.Time    `json:"respondedAt,omitempty" db:"responded_at"`
+	CreatedAt   time.Time     `json:"createdAt" db:"created_at"`
+
+	// Joined data
+	User *User `json:"user,omitempty"`
 }
 
 // Guarantor represents a loan guarantor
@@ -144,55 +171,61 @@ type GuarantorResponse struct {
 
 // LoanProduct represents a configurable loan type template for a chama
 type LoanProduct struct {
-	ID                  string     `json:"id" db:"id"`
-	ChamaID             string     `json:"chamaId" db:"chama_id"`
-	Name                string     `json:"name" db:"name"`
-	Description         *string    `json:"description,omitempty" db:"description"`
-	MaxAmount         float64    `json:"exactAmount" db:"max_amount"`
-	InterestRate        float64    `json:"interestRate" db:"interest_rate"`
-	TermMonths          int        `json:"termMonths" db:"term_months"`
-	EligibilityCriteria string     `json:"eligibilityCriteria" db:"eligibility_criteria"`
-	ApprovalRequired    bool       `json:"approvalRequired" db:"approval_required"`
-	GracePeriodDays     int        `json:"gracePeriodDays" db:"grace_period_days"`
-	PenaltyRate         float64    `json:"penaltyRate" db:"penalty_rate"`
-	MaxLoansPerMember   int        `json:"maxLoansPerMember" db:"max_loans_per_member"`
-	RequiresCollateral     bool       `json:"requiresCollateral" db:"requires_collateral"`
-	RequiresGuarantors     bool       `json:"requiresGuarantors" db:"requires_guarantors"`
-	CollateralDesc         *string    `json:"collateralDescription,omitempty" db:"collateral_description"`
-	NetDisbursement     float64    `json:"netDisbursement" db:"net_disbursement"`
-	CurrentLoans        int        `json:"currentLoans" db:"current_loans"`
-	DefaultThresholdDays int       `json:"defaultThresholdDays" db:"default_threshold_days"`
-	InstallmentPenaltyType string  `json:"installmentPenaltyType" db:"installment_penalty_type"`
-	InstallmentPenaltyAmount float64 `json:"installmentPenaltyAmount" db:"installment_penalty_amount"`
-	LoanPenaltyAmount   float64    `json:"loanPenaltyAmount" db:"loan_penalty_amount"`
-	Status              string     `json:"status" db:"status"`
-	CreatedBy           string     `json:"createdBy" db:"created_by"`
-	CreatedAt           time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt           time.Time  `json:"updatedAt" db:"updated_at"`
+	ID                       string    `json:"id" db:"id"`
+	ChamaID                  string    `json:"chamaId" db:"chama_id"`
+	Name                     string    `json:"name" db:"name"`
+	Description              *string   `json:"description,omitempty" db:"description"`
+	MaxAmount                float64   `json:"exactAmount" db:"max_amount"`
+	InterestRate             float64   `json:"interestRate" db:"interest_rate"`
+	TermMonths               int       `json:"termMonths" db:"term_months"`
+	EligibilityCriteria      string    `json:"eligibilityCriteria" db:"eligibility_criteria"`
+	ApprovalRequired         bool      `json:"approvalRequired" db:"approval_required"`
+	GracePeriodDays          int       `json:"gracePeriodDays" db:"grace_period_days"`
+	PenaltyRate              float64   `json:"penaltyRate" db:"penalty_rate"`
+	MaxLoansPerMember        int       `json:"maxLoansPerMember" db:"max_loans_per_member"`
+	RequiresCollateral       bool      `json:"requiresCollateral" db:"requires_collateral"`
+	RequiresGuarantors       bool      `json:"requiresGuarantors" db:"requires_guarantors"`
+	RequiresReferees         bool      `json:"requiresReferees" db:"requires_referees"`
+	MinGuarantors            int       `json:"minGuarantors" db:"min_guarantors"`
+	MinReferees              int       `json:"minReferees" db:"min_referees"`
+	CollateralDesc           *string   `json:"collateralDescription,omitempty" db:"collateral_description"`
+	NetDisbursement          float64   `json:"netDisbursement" db:"net_disbursement"`
+	CurrentLoans             int       `json:"currentLoans" db:"current_loans"`
+	DefaultThresholdDays     int       `json:"defaultThresholdDays" db:"default_threshold_days"`
+	InstallmentPenaltyType   string    `json:"installmentPenaltyType" db:"installment_penalty_type"`
+	InstallmentPenaltyAmount float64   `json:"installmentPenaltyAmount" db:"installment_penalty_amount"`
+	LoanPenaltyAmount        float64   `json:"loanPenaltyAmount" db:"loan_penalty_amount"`
+	Status                   string    `json:"status" db:"status"`
+	CreatedBy                string    `json:"createdBy" db:"created_by"`
+	CreatedAt                time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt                time.Time `json:"updatedAt" db:"updated_at"`
 }
 
 // LoanProductRequest represents the request to create/update a loan product
 type LoanProductRequest struct {
-	Name                   string   `json:"name" validate:"required,min=1,max=100"`
-	Description            *string  `json:"description,omitempty"`
-	MaxAmount            float64  `json:"exactAmount" validate:"required,gt=0"`
-	InterestRate           float64  `json:"interestRate" validate:"required,min=0"`
-	TermMonths             int      `json:"termMonths" validate:"required,gt=0"`
-	EligibilityCriteria    string   `json:"eligibilityCriteria" validate:"omitempty"`
-	ApprovalRequired       *bool    `json:"approvalRequired,omitempty"`
-	GracePeriodDays        int      `json:"gracePeriodDays" validate:"gte=0"`
-	PenaltyRate            float64  `json:"penaltyRate" validate:"gte=0"`
-	MaxLoansPerMember      int      `json:"maxLoansPerMember" validate:"gte=1"`
-	RequiresCollateral     *bool    `json:"requiresCollateral,omitempty"`
-	RequiresGuarantors     *bool    `json:"requiresGuarantors,omitempty"`
-	CollateralDesc         *string  `json:"collateralDescription,omitempty"`
-	NetDisbursement        float64  `json:"netDisbursement" validate:"gte=0"`
-	CurrentLoans           int      `json:"currentLoans" validate:"gte=0"`
-	DefaultThresholdDays   int      `json:"defaultThresholdDays" validate:"gte=0"`
-	InstallmentPenaltyType string   `json:"installmentPenaltyType" validate:"omitempty"`
+	Name                     string  `json:"name" validate:"required,min=1,max=100"`
+	Description              *string `json:"description,omitempty"`
+	MaxAmount                float64 `json:"exactAmount" validate:"required,gt=0"`
+	InterestRate             float64 `json:"interestRate" validate:"required,min=0"`
+	TermMonths               int     `json:"termMonths" validate:"required,gt=0"`
+	EligibilityCriteria      string  `json:"eligibilityCriteria" validate:"omitempty"`
+	ApprovalRequired         *bool   `json:"approvalRequired,omitempty"`
+	GracePeriodDays          int     `json:"gracePeriodDays" validate:"gte=0"`
+	PenaltyRate              float64 `json:"penaltyRate" validate:"gte=0"`
+	MaxLoansPerMember        int     `json:"maxLoansPerMember" validate:"gte=1"`
+	RequiresCollateral       *bool   `json:"requiresCollateral,omitempty"`
+	RequiresGuarantors       *bool   `json:"requiresGuarantors,omitempty"`
+	RequiresReferees         *bool   `json:"requiresReferees,omitempty"`
+	MinGuarantors            int     `json:"minGuarantors" validate:"gte=0"`
+	MinReferees              int     `json:"minReferees" validate:"gte=0"`
+	CollateralDesc           *string `json:"collateralDescription,omitempty"`
+	NetDisbursement          float64 `json:"netDisbursement" validate:"gte=0"`
+	CurrentLoans             int     `json:"currentLoans" validate:"gte=0"`
+	DefaultThresholdDays     int     `json:"defaultThresholdDays" validate:"gte=0"`
+	InstallmentPenaltyType   string  `json:"installmentPenaltyType" validate:"omitempty"`
 	InstallmentPenaltyAmount float64 `json:"installmentPenaltyAmount" validate:"gte=0"`
-	LoanPenaltyAmount      float64  `json:"loanPenaltyAmount" validate:"gte=0"`
-	Status                 string   `json:"status" validate:"omitempty,oneof=active inactive"`
+	LoanPenaltyAmount        float64 `json:"loanPenaltyAmount" validate:"gte=0"`
+	Status                   string  `json:"status" validate:"omitempty,oneof=active inactive"`
 }
 
 // LoanProductResponse represents a standard API response wrapper for loan products
@@ -259,9 +292,19 @@ func (l *Loan) HasSufficientGuarantors() bool {
 	return l.ApprovedGuarantors >= l.RequiredGuarantors
 }
 
+// HasSufficientReferees checks if loan has enough consenting referees
+func (l *Loan) HasSufficientReferees() bool {
+	return l.ApprovedReferees >= l.RequiredReferees
+}
+
+// HasAllBackers is true when both guarantor and referee requirements are met.
+func (l *Loan) HasAllBackers() bool {
+	return l.HasSufficientGuarantors() && l.HasSufficientReferees()
+}
+
 // CanBeApproved checks if loan can be approved
 func (l *Loan) CanBeApproved() bool {
-	return l.IsPending() && l.HasSufficientGuarantors()
+	return l.IsPending() && l.HasAllBackers()
 }
 
 // GetRemainingDays returns remaining days until due date
@@ -293,6 +336,15 @@ func (g *Guarantor) IsPending() bool {
 func (g *Guarantor) HasResponded() bool {
 	return g.Status != GuarantorStatusPending
 }
+
+// IsAccepted checks if the referee has consented
+func (r *Referee) IsAccepted() bool { return r.Status == RefereeStatusAccepted }
+
+// IsDeclined checks if the referee has declined
+func (r *Referee) IsDeclined() bool { return r.Status == RefereeStatusDeclined }
+
+// HasResponded checks if the referee has responded
+func (r *Referee) HasResponded() bool { return r.Status != RefereeStatusPending }
 
 // GetTotalAmount returns total payment amount
 func (lp *LoanPayment) GetTotalAmount() float64 {

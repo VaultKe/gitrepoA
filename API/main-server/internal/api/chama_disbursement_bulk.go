@@ -57,6 +57,19 @@ func CreateBulkDisbursement(c *gin.Context) {
 		return
 	}
 
+	if _, err := requireActiveChamaOfficer(database, chamaID, userID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	if exists, err := transactionExists(database, req.TransactionID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to check transaction: " + err.Error()})
+		return
+	} else if exists {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "error": "This bulk disbursement has already been submitted"})
+		return
+	}
+
 	var timestamp time.Time
 	if req.Timestamp != "" {
 		if parsedTime, err := time.Parse(time.RFC3339, req.Timestamp); err != nil {
@@ -139,7 +152,16 @@ func CreateBulkDisbursement(c *gin.Context) {
 			return
 		}
 
-		for _, member := range req.EligibleMembers {
+		// Running balance so the batch as a whole cannot overdraw the subwallet.
+		sourceBalance, balErr := walletBalance(database, sourceWalletID)
+		if balErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": balErr.Error()})
+			return
+		}
+		var committedTotal float64
+		seenMembers := make(map[string]bool)
+
+		for idx, member := range req.EligibleMembers {
 			memberID, ok := member["id"].(string)
 			if !ok {
 				failedDisbursements++
@@ -150,6 +172,24 @@ func CreateBulkDisbursement(c *gin.Context) {
 			if amt, ok := member["amount"].(float64); ok {
 				memberAmount = amt
 			} else {
+				failedDisbursements++
+				continue
+			}
+
+			// Guard: no non-positive amounts, no duplicate member in one batch,
+			// and the batch total may not exceed the subwallet balance.
+			if memberAmount <= 0 {
+				log.Printf("Skipping member %s - non-positive amount %.2f", memberID, memberAmount)
+				failedDisbursements++
+				continue
+			}
+			if seenMembers[memberID] {
+				log.Printf("Skipping member %s - duplicated in bulk payload", memberID)
+				failedDisbursements++
+				continue
+			}
+			if committedTotal+memberAmount > sourceBalance+0.0001 {
+				log.Printf("Skipping member %s - batch would overdraw %s wallet (balance %.2f)", memberID, req.Category, sourceBalance)
 				failedDisbursements++
 				continue
 			}
@@ -168,7 +208,11 @@ func CreateBulkDisbursement(c *gin.Context) {
 				continue
 			}
 
-			transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
+			// Unique per member: reusing one timestamp for every row (the old bug)
+			// made all INSERTs collide on the primary key so only the first
+			// member was ever disbursed.
+			rowTime := time.Now()
+			transactionID := fmt.Sprintf("TXN_%d_%d_%s", now.UnixNano(), idx, memberID)
 			description := "Bulk " + req.Category + " disbursement"
 
 			if _, err = tx.Exec(`
@@ -176,13 +220,13 @@ func CreateBulkDisbursement(c *gin.Context) {
 					id, from_wallet_id, chama_id, recipient_id, member_id, type, status, amount,
 					currency, description, reference, payment_method, initiated_by, created_at, updated_at
 				) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, 'KES', $8, $9, 'mobile_money', $10, $11, $12)
-			`, transactionID, sourceWalletID, chamaID, memberID, memberID, req.Type, memberAmount, description, fmt.Sprintf("PENDING-%s-%s", batchID, memberID), userID, now, now); err != nil {
+			`, transactionID, sourceWalletID, chamaID, memberID, memberID, req.Type, memberAmount, description, fmt.Sprintf("PENDING-%s-%s", batchID, memberID), userID, rowTime, rowTime); err != nil {
 				log.Printf("Failed to create transaction for member %s: %v", memberID, err)
 				failedDisbursements++
 				continue
 			}
 
-			disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
+			disburseID := fmt.Sprintf("DISB_%d_%d_%s", now.UnixNano(), idx, memberID)
 			if _, err = tx.Exec(`
 				INSERT INTO disbursements (
 					id, batch_id, chama_id, type, category, recipient_id,
@@ -195,10 +239,12 @@ func CreateBulkDisbursement(c *gin.Context) {
 			`, disburseID, batchID, chamaID, req.Type, req.Category, memberID,
 				memberID, memberName, memberAmount, req.Description, "",
 				sourceWalletID, fmt.Sprintf("mpesa-%s", phoneNumber), req.InitiatedBy, req.InitiatedByID,
-				timestamp, transactionID, req.SecurityHash, now, now); err != nil {
+				timestamp, transactionID, req.SecurityHash, rowTime, rowTime); err != nil {
 				log.Printf("Failed to create disbursement record for member %s: %v", memberID, err)
 			}
 
+			committedTotal += memberAmount
+			seenMembers[memberID] = true
 			successfulDisbursements++
 		}
 	} else {
@@ -210,27 +256,48 @@ func CreateBulkDisbursement(c *gin.Context) {
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		`
 
+		if req.DividendPerShare <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "dividendPerShare must be greater than zero"})
+			return
+		}
+
+		seenDivMembers := make(map[string]bool)
 		for _, member := range req.EligibleMembers {
 			memberID, ok := member["id"].(string)
-			if !ok {
+			if !ok || seenDivMembers[memberID] {
 				continue
 			}
+			seenDivMembers[memberID] = true
 			memberName, _ := member["name"].(string)
-			sharesOwned, _ := member["sharesOwned"].(float64)
 
-			// Calculate amount from shares if not provided
-			var memberAmount float64
-			if amt, ok := member["amount"].(float64); ok {
-				memberAmount = amt
-			} else {
-				memberAmount = sharesOwned * req.DividendPerShare
+			// Entitlement is derived from the member's real, active shareholding —
+			// never from a client-supplied amount. "One only gets what they have."
+			actualShares, sErr := memberActiveShares(database, chamaID, memberID)
+			if sErr != nil {
+				log.Printf("Skipping dividend for member %s: %v", memberID, sErr)
+				continue
+			}
+			if actualShares <= 0 {
+				continue
+			}
+			memberAmount := float64(actualShares) * req.DividendPerShare
+
+			// No double dividend: skip if this member still has an undisbursed
+			// dividend record in this chama.
+			var pendingCount int
+			_ = tx.QueryRow(`
+				SELECT COUNT(*) FROM dividends
+				WHERE chama_id = $1 AND member_id = $2 AND status IN ('pending','processing')
+			`, chamaID, memberID).Scan(&pendingCount)
+			if pendingCount > 0 {
+				log.Printf("Skipping dividend for member %s: an undisbursed dividend already exists", memberID)
+				continue
 			}
 
 			dividendID := fmt.Sprintf("DIV_%d_%s", now.UnixNano(), memberID)
-
 			if _, err = tx.Exec(
 				dividendQuery,
-				dividendID, bulkID, chamaID, memberID, memberName, int(sharesOwned),
+				dividendID, bulkID, chamaID, memberID, memberName, actualShares,
 				req.DividendPerShare, memberAmount, "pending", now, now,
 			); err != nil {
 				log.Printf("Failed to create dividend record for member %s: %v", memberID, err)
@@ -305,6 +372,11 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 		return
 	}
 
+	if _, err := requireActiveChamaOfficer(database, chamaID, userID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
 	now := time.Now()
 	var successfulDisbursements int
 	var failedDisbursements int
@@ -321,6 +393,14 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 		return
 	}
 
+	sourceBalance, balErr := walletBalance(database, sourceWalletID)
+	if balErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": balErr.Error()})
+		return
+	}
+	var committedTotal float64
+	seenRecipients := make(map[string]bool)
+
 	if _, err = database.Exec(`
 		INSERT INTO disbursement_batches (
 			id, chama_id, batch_type, title, description, total_amount,
@@ -335,7 +415,29 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 	}
 
 	var totalAmount float64
-	for _, disb := range req.Disbursements {
+	for idx, disb := range req.Disbursements {
+		if disb.Amount <= 0 || seenRecipients[disb.RecipientId] {
+			failedDisbursements++
+			continue
+		}
+		if committedTotal+disb.Amount > sourceBalance+0.0001 {
+			log.Printf("Skipping MGR disbursement for %s - batch would overdraw wallet (balance %.2f)", disb.RecipientId, sourceBalance)
+			failedDisbursements++
+			continue
+		}
+
+		// Deterministic id keyed on (round, cycle, recipient) — the transactions
+		// PK then blocks a second payout for the same person in the same cycle.
+		transactionID := fmt.Sprintf("MGRDISB_%s_%d_%s", disb.CycleId, disb.CycleNumber, disb.RecipientId)
+		if exists, cErr := transactionExists(database, transactionID); cErr != nil {
+			failedDisbursements++
+			continue
+		} else if exists {
+			log.Printf("Skipping MGR disbursement for %s - already disbursed for this cycle", disb.RecipientId)
+			failedDisbursements++
+			continue
+		}
+
 		var recipientPhone string
 		if err := database.QueryRow("SELECT phone FROM users WHERE id = $1", disb.RecipientId).Scan(&recipientPhone); err != nil {
 			log.Printf("Skipping MGR disbursement for member %s - phone not found: %v", disb.RecipientId, err)
@@ -350,19 +452,19 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 			continue
 		}
 
-		transactionID := fmt.Sprintf("TXN_%d", now.UnixNano())
+		rowTime := time.Now()
 		if _, err = database.Exec(`
 			INSERT INTO transactions (
 				id, from_wallet_id, chama_id, recipient_id, member_id, type, status, amount,
 				currency, description, reference, payment_method, initiated_by, created_at, updated_at
 			) VALUES ($1, $2, $3, $4, $5, 'mgr_disbursement', 'pending', $6, 'KES', $7, $8, 'mobile_money', $9, $10, $11)
-		`, transactionID, sourceWalletID, chamaID, disb.RecipientId, disb.RecipientId, disb.Amount, req.Description, fmt.Sprintf("PENDING-%s-%s", batchID, disb.RecipientId), req.DisbursedBy, now, now); err != nil {
+		`, transactionID, sourceWalletID, chamaID, disb.RecipientId, disb.RecipientId, disb.Amount, req.Description, fmt.Sprintf("PENDING-%s-%s", batchID, disb.RecipientId), req.DisbursedBy, rowTime, rowTime); err != nil {
 			log.Printf("Failed to create transaction for MGR disbursement: %v", err)
 			failedDisbursements++
 			continue
 		}
 
-		disburseID := fmt.Sprintf("DISB_%d", now.UnixNano())
+		disburseID := fmt.Sprintf("DISB_%s_%d_%s", batchID, idx, disb.RecipientId)
 		if _, err = database.Exec(`
 			INSERT INTO disbursements (
 				id, batch_id, chama_id, type, category, member_id, member_name, amount, purpose,
@@ -372,10 +474,12 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 				$8, $9, $10, $11, $12, 'pending', $13, $14, $15, $16)
 		`, disburseID, batchID, chamaID, disb.RecipientId, disb.RecipientName, disb.Amount, req.Description,
 			sourceWalletID, fmt.Sprintf("mpesa-%s", phoneNumber), req.DisbursedBy, req.DisbursedById,
-			now, transactionID, "", now, now); err != nil {
+			rowTime, transactionID, "", rowTime, rowTime); err != nil {
 			log.Printf("Failed to create disbursement record: %v", err)
 		}
 
+		committedTotal += disb.Amount
+		seenRecipients[disb.RecipientId] = true
 		totalAmount += disb.Amount
 		successfulDisbursements++
 	}
@@ -397,5 +501,5 @@ func DisburseMerryGoRoundCyclesBulk(c *gin.Context) {
 			"totalAmount":             totalAmount,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }

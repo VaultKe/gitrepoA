@@ -3,6 +3,7 @@ export const getNotificationIcon = (type, priority) => {
     case 'chama_invitation':
       return 'mail';
     case 'guarantor_request':
+    case 'referee_request':
       return 'shield-checkmark';
     case 'chama':
     case 'member_joined':
@@ -54,6 +55,8 @@ export const getNotificationColor = (type, priority, colors) => {
       return colors.primary;
     case 'guarantor_request':
       return colors.warning;
+    case 'referee_request':
+      return colors.success;
     case 'meeting_scheduled':
     case 'meeting_started':
     case 'meeting_created':

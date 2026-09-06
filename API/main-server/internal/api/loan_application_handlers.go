@@ -53,7 +53,7 @@ func createNotification(db *sql.DB, _ string, userID, notificationType, title, m
 // Helper functions to determine notification properties based on type
 func getNotificationPriority(notificationType string) string {
 	switch notificationType {
-	case "guarantor_request", "loan_status_update":
+	case "guarantor_request", "referee_request", "loan_status_update":
 		return "high"
 	default:
 		return "normal"
@@ -62,7 +62,7 @@ func getNotificationPriority(notificationType string) string {
 
 func getNotificationCategory(notificationType string) string {
 	switch notificationType {
-	case "guarantor_request", "loan_status_update", "guarantor_response":
+	case "guarantor_request", "referee_request", "loan_status_update", "guarantor_response", "referee_response":
 		return "financial"
 	case "meeting_created", "meeting_updated":
 		return "meetings"
@@ -151,7 +151,9 @@ func GetLoanApplications(c *gin.Context) {
 			l.id, l.borrower_id, l.chama_id, l.amount, l.interest_rate,
 			l.duration, l.purpose, l.status, l.total_amount, l.remaining_amount,
 			l.required_guarantors, l.approved_guarantors, l.due_date, l.created_at,
-			u.first_name, u.last_name, u.email
+			u.first_name, u.last_name, u.email,
+			COALESCE(l.required_referees, 0), COALESCE(l.approved_referees, 0),
+			COALESCE(l.approval_stage, '')
 		FROM loans l
 		JOIN users u ON l.borrower_id = u.id
 		WHERE l.chama_id = $1
@@ -186,6 +188,9 @@ func GetLoanApplications(c *gin.Context) {
 			BorrowerFirstName  string    `json:"borrowerFirstName"`
 			BorrowerLastName   string    `json:"borrowerLastName"`
 			BorrowerEmail      string    `json:"borrowerEmail"`
+			RequiredReferees   int       `json:"requiredReferees"`
+			ApprovedReferees   int       `json:"approvedReferees"`
+			ApprovalStage      string    `json:"approvalStage"`
 		}
 
 		err := rows.Scan(
@@ -193,6 +198,7 @@ func GetLoanApplications(c *gin.Context) {
 			&loan.Duration, &loan.Purpose, &loan.Status, &loan.TotalAmount, &loan.RemainingAmount,
 			&loan.RequiredGuarantors, &loan.ApprovedGuarantors, &loan.DueDate, &loan.CreatedAt,
 			&loan.BorrowerFirstName, &loan.BorrowerLastName, &loan.BorrowerEmail,
+			&loan.RequiredReferees, &loan.ApprovedReferees, &loan.ApprovalStage,
 		)
 		if err != nil {
 			continue // Skip invalid rows
@@ -211,6 +217,9 @@ func GetLoanApplications(c *gin.Context) {
 			"remainingAmount":    loan.RemainingAmount,
 			"requiredGuarantors": loan.RequiredGuarantors,
 			"approvedGuarantors": loan.ApprovedGuarantors,
+			"requiredReferees":   loan.RequiredReferees,
+			"approvedReferees":   loan.ApprovedReferees,
+			"approvalStage":      loan.ApprovalStage,
 			"dueDate":            loan.DueDate.Format(time.RFC3339),
 			"createdAt":          loan.CreatedAt.Format(time.RFC3339),
 			"borrower": map[string]interface{}{
@@ -237,7 +246,7 @@ func GetLoanApplications(c *gin.Context) {
 			"chamaId": chamaID,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func CreateLoanApplication(c *gin.Context) {
@@ -259,7 +268,8 @@ func CreateLoanApplication(c *gin.Context) {
 		Purpose         string                 `json:"purpose" binding:"required"`
 		RepaymentPeriod int                    `json:"repaymentPeriod" binding:"required"`
 		InterestRate    float64                `json:"interestRate" binding:"required"`
-		Guarantors      []string               `json:"guarantors" binding:"required"`
+		Guarantors      []string               `json:"guarantors"`
+		Referees        []string               `json:"referees"`
 		Security        map[string]interface{} `json:"security"`
 		BusinessPlan    string                 `json:"businessPlan"`
 		MonthlyIncome   float64                `json:"monthlyIncome" binding:"required"`
@@ -294,10 +304,17 @@ func CreateLoanApplication(c *gin.Context) {
 	}
 	sqlDB := db.(*sql.DB)
 
-	// Check if loan type requires guarantors
+	// Resolve the loan type's backing requirements (guarantors and/or referees).
 	requiresGuarantors := false
+	requiresReferees := false
+	minGuarantors := 0
+	minReferees := 0
 	if req.LoanTypeID != "" {
-		err := sqlDB.QueryRow("SELECT requires_guarantors FROM loan_types WHERE id = $1", req.LoanTypeID).Scan(&requiresGuarantors)
+		err := sqlDB.QueryRow(`
+			SELECT COALESCE(requires_guarantors, false), COALESCE(requires_referees, false),
+			       COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)
+			FROM loan_types WHERE id = $1
+		`, req.LoanTypeID).Scan(&requiresGuarantors, &requiresReferees, &minGuarantors, &minReferees)
 		if err != nil && err != sql.ErrNoRows {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
@@ -307,11 +324,41 @@ func CreateLoanApplication(c *gin.Context) {
 		}
 	}
 
-	// Validate guarantors only if loan type requires them
-	if requiresGuarantors && len(req.Guarantors) < 2 {
+	// Dedupe and drop the borrower from either list.
+	req.Guarantors = uniqueStringsExcluding(req.Guarantors, userID.(string))
+	req.Referees = uniqueStringsExcluding(req.Referees, userID.(string))
+
+	if requiresGuarantors {
+		need := minGuarantors
+		if need < 1 {
+			need = 2
+		}
+		if len(req.Guarantors) < need {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("This loan type requires at least %d guarantor(s)", need),
+			})
+			return
+		}
+	}
+	if requiresReferees {
+		need := minReferees
+		if need < 1 {
+			need = 1
+		}
+		if len(req.Referees) < need {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("This loan type requires at least %d referee(s)", need),
+			})
+			return
+		}
+	}
+	// A guarantor cannot also be a referee on the same loan.
+	if s := intersectStrings(req.Guarantors, req.Referees); s != "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "At least 2 guarantors are required for this loan type",
+			"error":   "A person cannot be both a guarantor and a referee on the same loan",
 		})
 		return
 	}
@@ -333,15 +380,55 @@ func CreateLoanApplication(c *gin.Context) {
 	// Calculate total amount with interest
 	totalAmount := req.Amount * (1 + req.InterestRate/100)
 
+	// Resolve a chama-member id ("cm-...") or raw user id to a real user id.
+	resolveBacker := func(id string) (string, error) {
+		if strings.HasPrefix(id, "cm-") {
+			var realID string
+			if err := tx.QueryRow(`SELECT user_id FROM chama_members WHERE id = $1 AND chama_id = $2`, id, req.ChamaID).Scan(&realID); err != nil {
+				return "", err
+			}
+			return realID, nil
+		}
+		return id, nil
+	}
+
+	type backerInfo struct {
+		userID   string
+		recordID string
+	}
+	resolvedGuarantorIDs := make([]string, 0, len(req.Guarantors))
+	guarantorRecords := make([]backerInfo, 0, len(req.Guarantors))
+	for _, gID := range req.Guarantors {
+		realID, rerr := resolveBacker(gID)
+		if rerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("Invalid guarantor %s: %v", gID, rerr)})
+			return
+		}
+		resolvedGuarantorIDs = append(resolvedGuarantorIDs, realID)
+		guarantorRecords = append(guarantorRecords, backerInfo{userID: realID, recordID: fmt.Sprintf("guarantor-%d-%s", time.Now().UnixNano(), realID)})
+	}
+
+	resolvedRefereeIDs := make([]string, 0, len(req.Referees))
+	refereeRecords := make([]backerInfo, 0, len(req.Referees))
+	for _, rID := range req.Referees {
+		realID, rerr := resolveBacker(rID)
+		if rerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("Invalid referee %s: %v", rID, rerr)})
+			return
+		}
+		resolvedRefereeIDs = append(resolvedRefereeIDs, realID)
+		refereeRecords = append(refereeRecords, backerInfo{userID: realID, recordID: fmt.Sprintf("referee-%d-%s", time.Now().UnixNano(), realID)})
+	}
+
 	// Insert loan application
 	_, err = tx.Exec(`
 		INSERT INTO loans (
 			id, borrower_id, chama_id, loan_type_id, type, amount, interest_rate,
 			duration, purpose, status, total_amount, remaining_amount,
-			required_guarantors, approved_guarantors,
+			required_guarantors, approved_guarantors, required_referees, approved_referees,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'regular'), $6, $7, $8, $9, 'pending', $10, $10, $11, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, loanID, userID, req.ChamaID, req.LoanTypeID, req.LoanTypeName, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, len(req.Guarantors))
+		) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'regular'), $6, $7, $8, $9, 'pending', $10, $10, $11, 0, $12, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, loanID, userID, req.ChamaID, req.LoanTypeID, req.LoanTypeName, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, len(guarantorRecords), len(refereeRecords))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -350,44 +437,28 @@ func CreateLoanApplication(c *gin.Context) {
 		return
 	}
 
-	// Resolve guarantors
-	type guarantorInfo struct {
-		userID   string
-		recordID string
-	}
-	resolvedGuarantorIDs := make([]string, 0, len(req.Guarantors))
-	guarantorRecords := make([]guarantorInfo, 0, len(req.Guarantors))
-	for _, guarantorID := range req.Guarantors {
-		realUserID := guarantorID
-		if strings.HasPrefix(guarantorID, "cm-") {
-			row := tx.QueryRow(`SELECT user_id FROM chama_members WHERE id = $1 AND chama_id = $2`, guarantorID, req.ChamaID)
-			if err := row.Scan(&realUserID); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   fmt.Sprintf("Invalid guarantor %s: %v", guarantorID, err),
-				})
+	// Guarantors carry a liability figure; it starts as an equal split of the
+	// outstanding amount and is kept live by RecalculateGuarantorExposure.
+	if len(guarantorRecords) > 0 {
+		startingExposure := totalAmount / float64(len(guarantorRecords))
+		for _, info := range guarantorRecords {
+			if _, err = tx.Exec(`
+				INSERT INTO guarantors (id, loan_id, user_id, amount, status, created_at)
+				VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP)
+			`, info.recordID, loanID, info.userID, startingExposure); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to add guarantor: " + err.Error()})
 				return
 			}
 		}
-		resolvedGuarantorIDs = append(resolvedGuarantorIDs, realUserID)
-		guarantorRecords = append(guarantorRecords, guarantorInfo{
-			userID:   realUserID,
-			recordID: fmt.Sprintf("guarantor-%d-%s", time.Now().UnixNano(), realUserID),
-		})
 	}
 
-	guarantorAmount := req.Amount / float64(len(guarantorRecords))
-	for _, info := range guarantorRecords {
-		_, err = tx.Exec(`
-			INSERT INTO guarantors (
-				id, loan_id, user_id, amount, status, created_at
-			) VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP)
-		`, info.recordID, loanID, info.userID, guarantorAmount)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to add guarantor: " + err.Error(),
-			})
+	// Referees vouch for character only — no amount is ever stored against them.
+	for _, info := range refereeRecords {
+		if _, err = tx.Exec(`
+			INSERT INTO loan_referees (id, loan_id, user_id, status, created_at)
+			VALUES ($1, $2, $3, 'pending', CURRENT_TIMESTAMP)
+		`, info.recordID, loanID, info.userID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to add referee: " + err.Error()})
 			return
 		}
 	}
@@ -404,20 +475,39 @@ func CreateLoanApplication(c *gin.Context) {
 	// Create notifications after successful commit (outside transaction)
 	for _, info := range guarantorRecords {
 		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
-		err = createNotification(sqlDB, notificationID, info.userID, "chama",
+		if nerr := createNotification(sqlDB, notificationID, info.userID, "guarantor_request",
 			"Guarantor Request",
 			fmt.Sprintf("You have been requested to guarantee a loan of KES %.2f", req.Amount),
-			fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f", "purpose": "%s", "requester_id": "%s", "guarantor_id": "%s"}`,
+			fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f, "purpose": "%s", "requester_id": "%s", "guarantor_id": "%s", "role": "guarantor"}`,
 				loanID, req.Amount, req.Purpose, userID.(string), info.recordID),
-			"loan", nil)
-		if err != nil {
-			fmt.Printf("Failed to create notification for guarantor %s: %v\n", info.userID, err)
+			"loan", nil); nerr != nil {
+			fmt.Printf("Failed to create notification for guarantor %s: %v\n", info.userID, nerr)
 		}
+	}
+	for _, info := range refereeRecords {
+		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+		if nerr := createNotification(sqlDB, notificationID, info.userID, "referee_request",
+			"Referee Request",
+			fmt.Sprintf("You have been listed as a referee for a loan of KES %.2f. Being a referee carries no financial liability.", req.Amount),
+			fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f, "purpose": "%s", "requester_id": "%s", "referee_id": "%s", "role": "referee"}`,
+				loanID, req.Amount, req.Purpose, userID.(string), info.recordID),
+			"loan", nil); nerr != nil {
+			fmt.Printf("Failed to create notification for referee %s: %v\n", info.userID, nerr)
+		}
+	}
+
+	backerMsg := "Loan application submitted successfully."
+	if len(guarantorRecords) > 0 && len(refereeRecords) > 0 {
+		backerMsg += " Guarantors and referees will be notified."
+	} else if len(guarantorRecords) > 0 {
+		backerMsg += " Guarantors will be notified."
+	} else if len(refereeRecords) > 0 {
+		backerMsg += " Referees will be notified."
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"message": "Loan application submitted successfully. Guarantors will be notified.",
+		"message": backerMsg,
 		"data": map[string]interface{}{
 			"id":                 loanID,
 			"chamaId":            req.ChamaID,
@@ -427,14 +517,47 @@ func CreateLoanApplication(c *gin.Context) {
 			"repaymentPeriod":    req.RepaymentPeriod,
 			"interestRate":       req.InterestRate,
 			"guarantors":         resolvedGuarantorIDs,
+			"referees":           resolvedRefereeIDs,
 			"totalAmount":        totalAmount,
 			"remainingAmount":    totalAmount,
 			"status":             "pending",
-			"requiredGuarantors": len(req.Guarantors),
+			"requiredGuarantors": len(guarantorRecords),
 			"approvedGuarantors": 0,
+			"requiredReferees":   len(refereeRecords),
+			"approvedReferees":   0,
 			"createdAt":          time.Now().Format(time.RFC3339),
 		},
 	})
+}
+
+// uniqueStringsExcluding returns the distinct non-empty entries of in, dropping
+// any that equal exclude, preserving order.
+func uniqueStringsExcluding(in []string, exclude string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		if v == "" || v == exclude || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+// intersectStrings returns the first element present in both slices, or "".
+func intersectStrings(a, b []string) string {
+	set := make(map[string]bool, len(a))
+	for _, v := range a {
+		set[v] = true
+	}
+	for _, v := range b {
+		if set[v] {
+			return v
+		}
+	}
+	return ""
 }
 
 func GetLoanApplication(c *gin.Context) {
@@ -479,39 +602,39 @@ func GetLoanApplication(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": map[string]interface{}{
-			"id":                      loan.ID,
-			"borrowerId":              loan.BorrowerID,
-			"chamaId":                 loan.ChamaID,
-			"type":                    loan.Type,
-			"amount":                  loan.Amount,
-			"interestRate":            loan.InterestRate,
-			"duration":                loan.Duration,
-			"purpose":                 loan.Purpose,
-			"status":                  loan.Status,
-			"approvedBy":              loan.ApprovedBy,
-			"approvedAt":              loan.ApprovedAt,
-			"disbursedAt":             loan.DisbursedAt,
-			"dueDate":                 loan.DueDate,
-			"totalAmount":             loan.TotalAmount,
-			"paidAmount":              loan.PaidAmount,
-			"remainingAmount":         loan.RemainingAmount,
-			"requiredGuarantors":      loan.RequiredGuarantors,
-			"approvedGuarantors":      loan.ApprovedGuarantors,
-			"approvalStage":           loan.ApprovalStage,
-			"secretaryApprovedBy":     loan.SecretaryApprovedBy,
-			"secretaryApprovedAt":     loan.SecretaryApprovedAt,
-			"secretaryComment":        loan.SecretaryComment,
-			"treasurerApprovedBy":     loan.TreasurerApprovedBy,
-			"treasurerApprovedAt":     loan.TreasurerApprovedAt,
-			"treasurerComment":        loan.TreasurerComment,
-			"chairpersonApprovedBy":   loan.ChairpersonApprovedBy,
-			"chairpersonApprovedAt":   loan.ChairpersonApprovedAt,
-			"chairpersonComment":      loan.ChairpersonComment,
-			"rejectedBy":              loan.RejectedBy,
-			"rejectedReason":          loan.RejectedReason,
-			"rejectedAt":              loan.RejectedAt,
-			"createdAt":               loan.CreatedAt,
-			"updatedAt":               loan.UpdatedAt,
+			"id":                    loan.ID,
+			"borrowerId":            loan.BorrowerID,
+			"chamaId":               loan.ChamaID,
+			"type":                  loan.Type,
+			"amount":                loan.Amount,
+			"interestRate":          loan.InterestRate,
+			"duration":              loan.Duration,
+			"purpose":               loan.Purpose,
+			"status":                loan.Status,
+			"approvedBy":            loan.ApprovedBy,
+			"approvedAt":            loan.ApprovedAt,
+			"disbursedAt":           loan.DisbursedAt,
+			"dueDate":               loan.DueDate,
+			"totalAmount":           loan.TotalAmount,
+			"paidAmount":            loan.PaidAmount,
+			"remainingAmount":       loan.RemainingAmount,
+			"requiredGuarantors":    loan.RequiredGuarantors,
+			"approvedGuarantors":    loan.ApprovedGuarantors,
+			"approvalStage":         loan.ApprovalStage,
+			"secretaryApprovedBy":   loan.SecretaryApprovedBy,
+			"secretaryApprovedAt":   loan.SecretaryApprovedAt,
+			"secretaryComment":      loan.SecretaryComment,
+			"treasurerApprovedBy":   loan.TreasurerApprovedBy,
+			"treasurerApprovedAt":   loan.TreasurerApprovedAt,
+			"treasurerComment":      loan.TreasurerComment,
+			"chairpersonApprovedBy": loan.ChairpersonApprovedBy,
+			"chairpersonApprovedAt": loan.ChairpersonApprovedAt,
+			"chairpersonComment":    loan.ChairpersonComment,
+			"rejectedBy":            loan.RejectedBy,
+			"rejectedReason":        loan.RejectedReason,
+			"rejectedAt":            loan.RejectedAt,
+			"createdAt":             loan.CreatedAt,
+			"updatedAt":             loan.UpdatedAt,
 			"borrower": map[string]interface{}{
 				"id":        loan.BorrowerID,
 				"firstName": borrowerFirstName,
@@ -521,7 +644,7 @@ func GetLoanApplication(c *gin.Context) {
 			},
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // GetLoanRepaymentHistory returns disbursement info, installment schedule,
@@ -646,36 +769,36 @@ func GetLoanRepaymentHistory(c *gin.Context) {
 		"success": true,
 		"data": map[string]interface{}{
 			"loan": map[string]interface{}{
-				"id":                      loan.ID,
-				"status":                  loan.Status,
-				"amount":                  loan.Amount,
-				"totalAmount":             loan.TotalAmount,
-				"paidAmount":              loan.PaidAmount,
-				"remainingAmount":         loan.RemainingAmount,
-				"duration":                loan.Duration,
-				"interestRate":            loan.InterestRate,
-				"disbursedAt":             loan.DisbursedAt,
-				"dueDate":                 loan.DueDate,
-				"approvalStage":           loan.ApprovalStage,
-				"secretaryApprovedBy":     loan.SecretaryApprovedBy,
-				"secretaryApprovedAt":     loan.SecretaryApprovedAt,
-				"secretaryComment":        loan.SecretaryComment,
-				"treasurerApprovedBy":     loan.TreasurerApprovedBy,
-				"treasurerApprovedAt":     loan.TreasurerApprovedAt,
-				"treasurerComment":        loan.TreasurerComment,
-				"chairpersonApprovedBy":   loan.ChairpersonApprovedBy,
-				"chairpersonApprovedAt":   loan.ChairpersonApprovedAt,
-				"chairpersonComment":      loan.ChairpersonComment,
-				"rejectedBy":              loan.RejectedBy,
-				"rejectedReason":          loan.RejectedReason,
-				"rejectedAt":              loan.RejectedAt,
+				"id":                    loan.ID,
+				"status":                loan.Status,
+				"amount":                loan.Amount,
+				"totalAmount":           loan.TotalAmount,
+				"paidAmount":            loan.PaidAmount,
+				"remainingAmount":       loan.RemainingAmount,
+				"duration":              loan.Duration,
+				"interestRate":          loan.InterestRate,
+				"disbursedAt":           loan.DisbursedAt,
+				"dueDate":               loan.DueDate,
+				"approvalStage":         loan.ApprovalStage,
+				"secretaryApprovedBy":   loan.SecretaryApprovedBy,
+				"secretaryApprovedAt":   loan.SecretaryApprovedAt,
+				"secretaryComment":      loan.SecretaryComment,
+				"treasurerApprovedBy":   loan.TreasurerApprovedBy,
+				"treasurerApprovedAt":   loan.TreasurerApprovedAt,
+				"treasurerComment":      loan.TreasurerComment,
+				"chairpersonApprovedBy": loan.ChairpersonApprovedBy,
+				"chairpersonApprovedAt": loan.ChairpersonApprovedAt,
+				"chairpersonComment":    loan.ChairpersonComment,
+				"rejectedBy":            loan.RejectedBy,
+				"rejectedReason":        loan.RejectedReason,
+				"rejectedAt":            loan.RejectedAt,
 			},
-		"disbursement": disbursementTx,
-		"schedule":     schedule,
-		"payments":     payments,
-	},
+			"disbursement": disbursementTx,
+			"schedule":     schedule,
+			"payments":     payments,
+		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // RecordLoanPayment records a manual repayment for an active loan.
@@ -768,7 +891,7 @@ func GetLoanGuarantors(c *gin.Context) {
 		"success": true,
 		"data":    guarantors,
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // GetLoanFines returns fines for a loan
@@ -804,7 +927,7 @@ func GetLoanFines(c *gin.Context) {
 		"success": true,
 		"data":    fines,
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func UpdateLoanApplication(c *gin.Context) {
@@ -812,7 +935,7 @@ func UpdateLoanApplication(c *gin.Context) {
 		"success": true,
 		"message": "Update loan application endpoint - coming soon",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func DeleteLoanApplication(c *gin.Context) {
@@ -820,5 +943,5 @@ func DeleteLoanApplication(c *gin.Context) {
 		"success": true,
 		"message": "Delete loan application endpoint - coming soon",
 	})
-		c.Abort()
+	c.Abort()
 }

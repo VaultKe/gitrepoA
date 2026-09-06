@@ -36,8 +36,80 @@ func MigrateLoans(db *sql.DB) error {
 	if err := addLoanTypeProductColumns(db); err != nil {
 		return err
 	}
+	if err := addLoanBackingColumns(db); err != nil {
+		return err
+	}
 
 	log.Println("Loans migrations completed successfully")
+	return nil
+}
+
+// addLoanBackingColumns introduces referees (character backers, no money tied to
+// them) alongside guarantors, and configurable minimum counts on loan types.
+func addLoanBackingColumns(db *sql.DB) error {
+	loanTypeCols := []string{
+		"requires_referees BOOLEAN DEFAULT FALSE",
+		"min_guarantors INTEGER DEFAULT 0",
+		"min_referees INTEGER DEFAULT 0",
+	}
+	for _, col := range loanTypeCols {
+		colName := col[:strings.Index(col, " ")]
+		var exists bool
+		q := fmt.Sprintf("SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'loan_types' AND column_name = '%s'", colName)
+		if err := db.QueryRow(q).Scan(&exists); err != nil {
+			return fmt.Errorf("failed to check loan_types.%s: %w", colName, err)
+		}
+		if !exists {
+			if _, err := db.Exec("ALTER TABLE loan_types ADD COLUMN " + col); err != nil {
+				return fmt.Errorf("failed to add loan_types.%s: %w", colName, err)
+			}
+			log.Printf("Added %s column to loan_types table", colName)
+		}
+	}
+
+	loanCols := []string{
+		"required_referees INTEGER DEFAULT 0",
+		"approved_referees INTEGER DEFAULT 0",
+	}
+	for _, col := range loanCols {
+		colName := col[:strings.Index(col, " ")]
+		var exists bool
+		q := fmt.Sprintf("SELECT COUNT(*) > 0 FROM information_schema.columns WHERE table_name = 'loans' AND column_name = '%s'", colName)
+		if err := db.QueryRow(q).Scan(&exists); err != nil {
+			return fmt.Errorf("failed to check loans.%s: %w", colName, err)
+		}
+		if !exists {
+			if _, err := db.Exec("ALTER TABLE loans ADD COLUMN " + col); err != nil {
+				return fmt.Errorf("failed to add loans.%s: %w", colName, err)
+			}
+			log.Printf("Added %s column to loans table", colName)
+		}
+	}
+
+	// Referees vouch for the borrower's character. They consent like guarantors
+	// but carry NO amount / financial liability.
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS loan_referees (
+			id TEXT PRIMARY KEY,
+			loan_id TEXT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL REFERENCES users(id),
+			status TEXT NOT NULL DEFAULT 'pending',
+			message TEXT,
+			responded_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(loan_id, user_id)
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create loan_referees table: %w", err)
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_loan_referees_loan ON loan_referees(loan_id)"); err != nil {
+		return fmt.Errorf("failed to index loan_referees: %w", err)
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_loan_referees_user ON loan_referees(user_id)"); err != nil {
+		return fmt.Errorf("failed to index loan_referees: %w", err)
+	}
+
+	log.Println("Loan backing (guarantors/referees) schema ready")
 	return nil
 }
 

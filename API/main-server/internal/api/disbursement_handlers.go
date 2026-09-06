@@ -135,7 +135,7 @@ func (h *DisbursementHandlers) GetDisbursementBatches(c *gin.Context) {
 		"data":    batches,
 		"count":   len(batches),
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // GetTransparencyLog retrieves financial transparency log for a chama
@@ -244,7 +244,7 @@ func (h *DisbursementHandlers) GetTransparencyLog(c *gin.Context) {
 		"data":    logs,
 		"count":   len(logs),
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // ProcessDisbursementBatch processes a disbursement batch
@@ -261,23 +261,18 @@ func (h *DisbursementHandlers) ProcessDisbursementBatch(c *gin.Context) {
 		return
 	}
 
-	err := h.disbursementService.ProcessDisbursementBatch(batchID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to process disbursement batch: " + err.Error(),
-		})
+	// Only a chama officer may release batch funds.
+	if _, err := requireActiveChamaOfficer(h.db, chamaID, userID); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	_, err = h.db.Exec(
-		"UPDATE disbursement_batches SET status = 'completed', processed_date = CURRENT_TIMESTAMP WHERE id = $1 AND chama_id = $2",
-		batchID, chamaID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	// The service claims the batch atomically and manages its status
+	// (processing -> completed) so re-processing cannot double-pay.
+	if err := h.disbursementService.ProcessDisbursementBatch(batchID); err != nil {
+		c.JSON(http.StatusConflict, gin.H{
 			"success": false,
-			"error":   "Failed to update batch status",
+			"error":   "Failed to process disbursement batch: " + err.Error(),
 		})
 		return
 	}
@@ -286,7 +281,7 @@ func (h *DisbursementHandlers) ProcessDisbursementBatch(c *gin.Context) {
 		"success": true,
 		"message": "Disbursement batch processed successfully",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // ApproveDisbursementBatch approves a disbursement batch
@@ -303,9 +298,32 @@ func (h *DisbursementHandlers) ApproveDisbursementBatch(c *gin.Context) {
 		return
 	}
 
-	// Update batch status to approved
-	query := `UPDATE disbursement_batches SET status = 'approved', approved_by = $1 WHERE id = $2 AND chama_id = $3`
-	_, err := h.db.Exec(query, userID, batchID, chamaID)
+	role, err := requireActiveChamaOfficer(h.db, chamaID, userID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// The approver must not be the person who initiated the batch (four-eyes),
+	// and only a pending batch can be approved.
+	var initiatedBy, status string
+	if err := h.db.QueryRow("SELECT initiated_by, status FROM disbursement_batches WHERE id = $1 AND chama_id = $2", batchID, chamaID).Scan(&initiatedBy, &status); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Disbursement batch not found"})
+		return
+	}
+	if status != "pending" {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "error": "Batch is not pending approval"})
+		return
+	}
+	if initiatedBy == userID && role != "chairperson" {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "You cannot approve a disbursement you initiated"})
+		return
+	}
+
+	res, err := h.db.Exec(
+		"UPDATE disbursement_batches SET status = 'approved', approved_by = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND chama_id = $3 AND status = 'pending'",
+		userID, batchID, chamaID,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -313,10 +331,14 @@ func (h *DisbursementHandlers) ApproveDisbursementBatch(c *gin.Context) {
 		})
 		return
 	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "error": "Batch could not be approved"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Disbursement batch approved successfully",
 	})
-		c.Abort()
+	c.Abort()
 }

@@ -391,6 +391,12 @@ func (s *LoanService) MakeLoanPayment(loanID, payerID string, amount float64, pa
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	// Repayment changed the outstanding balance — refresh guarantor exposure so
+	// their liability figure is never stale.
+	if err := s.RecalculateGuarantorExposure(loanID); err != nil {
+		fmt.Printf("guarantor exposure recalc after payment failed for loan %s: %v\n", loanID, err)
+	}
+
 	return payment, nil
 }
 
@@ -621,6 +627,18 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 	if req.RequiresGuarantors != nil {
 		requiresGuarantors = *req.RequiresGuarantors
 	}
+	requiresReferees := false
+	if req.RequiresReferees != nil {
+		requiresReferees = *req.RequiresReferees
+	}
+	minGuarantors := req.MinGuarantors
+	if requiresGuarantors && minGuarantors < 1 {
+		minGuarantors = 1
+	}
+	minReferees := req.MinReferees
+	if requiresReferees && minReferees < 1 {
+		minReferees = 1
+	}
 	status := "active"
 	if req.Status != "" {
 		status = req.Status
@@ -634,8 +652,9 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 			requires_guarantors, collateral_description, net_disbursement, current_loans,
 			default_threshold_days, installment_penalty_type,
 			installment_penalty_amount, loan_penalty_amount,
-			status, created_by, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+			status, created_by, created_at, updated_at,
+			requires_referees, min_guarantors, min_referees
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
 	`
 	_, err := s.db.Exec(query,
 		id, chamaID, req.Name, req.Description, req.MaxAmount,
@@ -645,6 +664,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		req.DefaultThresholdDays, req.InstallmentPenaltyType,
 		req.InstallmentPenaltyAmount, req.LoanPenaltyAmount,
 		status, createdBy, now, now,
+		requiresReferees, minGuarantors, minReferees,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create loan type: %w", err)
@@ -655,7 +675,7 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		ChamaID:                  chamaID,
 		Name:                     req.Name,
 		Description:              req.Description,
-		MaxAmount:               req.MaxAmount,
+		MaxAmount:                req.MaxAmount,
 		InterestRate:             req.InterestRate,
 		TermMonths:               req.TermMonths,
 		EligibilityCriteria:      req.EligibilityCriteria,
@@ -665,6 +685,9 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 		MaxLoansPerMember:        req.MaxLoansPerMember,
 		RequiresCollateral:       requiresCollateral,
 		RequiresGuarantors:       requiresGuarantors,
+		RequiresReferees:         requiresReferees,
+		MinGuarantors:            minGuarantors,
+		MinReferees:              minReferees,
 		CollateralDesc:           req.CollateralDesc,
 		NetDisbursement:          req.NetDisbursement,
 		CurrentLoans:             req.CurrentLoans,
@@ -688,7 +711,8 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 		       requires_guarantors, collateral_description, net_disbursement, current_loans,
 		       default_threshold_days, installment_penalty_type,
 		       installment_penalty_amount, loan_penalty_amount,
-		       status, created_by, created_at, updated_at
+		       status, created_by, created_at, updated_at,
+		       COALESCE(requires_referees, false), COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)
 		FROM loan_types
 		WHERE chama_id = $1
 	`
@@ -716,6 +740,7 @@ func (s *LoanService) GetChamaLoanTypes(chamaID string, status string) ([]models
 			&lt.DefaultThresholdDays, &lt.InstallmentPenaltyType,
 			&lt.InstallmentPenaltyAmount, &lt.LoanPenaltyAmount,
 			&lt.Status, &lt.CreatedBy, &lt.CreatedAt, &lt.UpdatedAt,
+			&lt.RequiresReferees, &lt.MinGuarantors, &lt.MinReferees,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan loan type: %w", err)
@@ -734,7 +759,8 @@ func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, e
 		       requires_guarantors, collateral_description, net_disbursement, current_loans,
 		       default_threshold_days, installment_penalty_type,
 		       installment_penalty_amount, loan_penalty_amount,
-		       status, created_by, created_at, updated_at
+		       status, created_by, created_at, updated_at,
+		       COALESCE(requires_referees, false), COALESCE(min_guarantors, 0), COALESCE(min_referees, 0)
 		FROM loan_types WHERE id = $1
 	`
 	var lt models.LoanProduct
@@ -775,6 +801,24 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	if req.RequiresGuarantors != nil {
 		requiresGuarantors = *req.RequiresGuarantors
 	}
+	requiresReferees := existing.RequiresReferees
+	if req.RequiresReferees != nil {
+		requiresReferees = *req.RequiresReferees
+	}
+	minGuarantors := req.MinGuarantors
+	if minGuarantors == 0 {
+		minGuarantors = existing.MinGuarantors
+	}
+	if requiresGuarantors && minGuarantors < 1 {
+		minGuarantors = 1
+	}
+	minReferees := req.MinReferees
+	if minReferees == 0 {
+		minReferees = existing.MinReferees
+	}
+	if requiresReferees && minReferees < 1 {
+		minReferees = 1
+	}
 	status := existing.Status
 	if req.Status != "" {
 		status = req.Status
@@ -790,7 +834,8 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 			collateral_description = $13, net_disbursement = $14, current_loans = $15,
 			default_threshold_days = $16, installment_penalty_type = $17,
 			installment_penalty_amount = $18, loan_penalty_amount = $19,
-			status = $20, updated_at = $21
+			status = $20, updated_at = $21,
+			requires_referees = $23, min_guarantors = $24, min_referees = $25
 		WHERE id = $22
 	`
 	_, err = s.db.Exec(query,
@@ -801,6 +846,7 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 		req.DefaultThresholdDays, req.InstallmentPenaltyType,
 		req.InstallmentPenaltyAmount, req.LoanPenaltyAmount,
 		status, now, loanTypeID,
+		requiresReferees, minGuarantors, minReferees,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update loan type: %w", err)
@@ -817,6 +863,9 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	existing.MaxLoansPerMember = req.MaxLoansPerMember
 	existing.RequiresCollateral = requiresCollateral
 	existing.RequiresGuarantors = requiresGuarantors
+	existing.RequiresReferees = requiresReferees
+	existing.MinGuarantors = minGuarantors
+	existing.MinReferees = minReferees
 	existing.CollateralDesc = req.CollateralDesc
 	existing.NetDisbursement = req.NetDisbursement
 	existing.CurrentLoans = req.CurrentLoans
@@ -863,6 +912,14 @@ func (s *LoanService) GetLoanPayments(loanID string) ([]*models.LoanPayment, err
 
 // GetLoanGuarantors retrieves guarantors for a loan
 func (s *LoanService) GetLoanGuarantors(loanID string) ([]*models.Guarantor, error) {
+	// Keep the stored exposure in sync before reading, so any reader (this call,
+	// notifications, reports) sees the current liability rather than the figure
+	// frozen at application time.
+	if err := s.RecalculateGuarantorExposure(loanID); err != nil {
+		// non-fatal: fall through and return best-effort data
+		fmt.Printf("guarantor exposure recalc failed for loan %s: %v\n", loanID, err)
+	}
+
 	query := `
 		SELECT g.id, g.loan_id, g.user_id, g.amount, g.status, g.message,
 			   g.responded_at, g.created_at,
@@ -897,6 +954,89 @@ func (s *LoanService) GetLoanGuarantors(loanID string) ([]*models.Guarantor, err
 	}
 
 	return guarantors, nil
+}
+
+// RecalculateGuarantorExposure recomputes each guarantor's liability for a loan
+// as an equal split of the loan's current outstanding balance plus any unpaid
+// fines, divided across the guarantors who have accepted. It is idempotent and
+// safe to call on every repayment, fine, and read.
+//
+//   - accepted guarantor exposure = (remaining_amount + unpaid_fines) / acceptedCount
+//   - a fully repaid loan drives every exposure to 0
+//   - pending / rejected guarantors are set to 0 (no live liability)
+func (s *LoanService) RecalculateGuarantorExposure(loanID string) error {
+	var remaining float64
+	var status string
+	if err := s.db.QueryRow("SELECT COALESCE(remaining_amount, 0), status FROM loans WHERE id = $1", loanID).Scan(&remaining, &status); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("failed to load loan for exposure calc: %w", err)
+	}
+
+	var unpaidFines float64
+	_ = s.db.QueryRow(`
+		SELECT COALESCE(SUM(amount), 0) FROM loan_fines
+		WHERE loan_id = $1 AND COALESCE(status, 'pending') NOT IN ('paid', 'waived', 'cancelled')
+	`, loanID).Scan(&unpaidFines)
+
+	outstanding := remaining + unpaidFines
+	if outstanding < 0 || status == "completed" || status == "rejected" {
+		outstanding = 0
+	}
+
+	var acceptedCount int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM guarantors WHERE loan_id = $1 AND status = 'accepted'", loanID).Scan(&acceptedCount); err != nil {
+		return fmt.Errorf("failed to count accepted guarantors: %w", err)
+	}
+
+	var perGuarantor float64
+	if acceptedCount > 0 {
+		perGuarantor = outstanding / float64(acceptedCount)
+	}
+
+	if _, err := s.db.Exec(`
+		UPDATE guarantors
+		SET amount = CASE WHEN status = 'accepted' THEN $2 ELSE 0 END
+		WHERE loan_id = $1
+	`, loanID, perGuarantor); err != nil {
+		return fmt.Errorf("failed to update guarantor exposure: %w", err)
+	}
+	return nil
+}
+
+// GetLoanReferees returns the referees attached to a loan (character backers,
+// no amount / liability).
+func (s *LoanService) GetLoanReferees(loanID string) ([]*models.Referee, error) {
+	query := `
+		SELECT r.id, r.loan_id, r.user_id, r.status, r.message, r.responded_at, r.created_at,
+			   u.first_name, u.last_name, u.email, u.phone
+		FROM loan_referees r
+		LEFT JOIN users u ON r.user_id = u.id
+		WHERE r.loan_id = $1
+		ORDER BY r.created_at ASC
+	`
+	rows, err := s.db.Query(query, loanID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query loan referees: %w", err)
+	}
+	defer rows.Close()
+
+	var referees []*models.Referee
+	for rows.Next() {
+		var r models.Referee
+		var user models.User
+		if err := rows.Scan(
+			&r.ID, &r.LoanID, &r.UserID, &r.Status, &r.Message, &r.RespondedAt, &r.CreatedAt,
+			&user.FirstName, &user.LastName, &user.Email, &user.Phone,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan referee: %w", err)
+		}
+		user.ID = r.UserID
+		r.User = &user
+		referees = append(referees, &r)
+	}
+	return referees, nil
 }
 
 // GetLoanFines retrieves fines for a loan

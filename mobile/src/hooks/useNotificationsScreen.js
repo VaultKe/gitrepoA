@@ -62,7 +62,7 @@ const useNotificationsScreen = ({ navigation }) => {
     const all = displayNotifications.length;
     const unread = displayNotifications.filter(n => !n.isRead).length;
     const chama = displayNotifications.filter(n => n.type === 'chama' || n.type === 'chama_invitation' || n.type === 'member_joined').length;
-    const financial = displayNotifications.filter(n => n.type === 'financial' || n.type.includes('contribution') || n.type.includes('loan') || n.type.includes('welfare') || n.type === 'guarantor_request').length;
+    const financial = displayNotifications.filter(n => n.type === 'financial' || n.type.includes('contribution') || n.type.includes('loan') || n.type.includes('welfare') || n.type === 'guarantor_request' || n.type === 'referee_request').length;
     const support = displayNotifications.filter(n => n.type === 'support_update' || n.type === 'new_support_request').length;
     const system = displayNotifications.filter(n => n.type === 'system').length;
     return { all, unread, chama, financial, support, system };
@@ -192,7 +192,7 @@ const useNotificationsScreen = ({ navigation }) => {
         filtered = displayNotifications.filter(n => n.type === 'chama' || n.type === 'chama_invitation' || n.type === 'member_joined');
         break;
       case 'financial':
-        filtered = displayNotifications.filter(n => n.type === 'financial' || n.type.includes('contribution') || n.type.includes('loan') || n.type.includes('welfare') || n.type === 'guarantor_request');
+        filtered = displayNotifications.filter(n => n.type === 'financial' || n.type.includes('contribution') || n.type.includes('loan') || n.type.includes('welfare') || n.type === 'guarantor_request' || n.type === 'referee_request');
         break;
       case 'system':
         filtered = displayNotifications.filter(n => n.type === 'system');

@@ -217,6 +217,70 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 		return fmt.Errorf("loan is not approved for disbursement")
 	}
 
+	// Full officer approval chain must be complete.
+	var approvalStage string
+	var disbursedAt sql.NullTime
+	var requiredGuarantors, requiredReferees int
+	if err := s.db.QueryRow(
+		"SELECT COALESCE(approval_stage,''), disbursed_at, COALESCE(required_guarantors,0), COALESCE(required_referees,0) FROM loans WHERE id = $1", loanID,
+	).Scan(&approvalStage, &disbursedAt, &requiredGuarantors, &requiredReferees); err != nil {
+		return fmt.Errorf("failed to read loan approval state: %w", err)
+	}
+	if approvalStage != "fully_approved" {
+		return fmt.Errorf("loan approval chain is not complete (stage: %s)", approvalStage)
+	}
+	// Idempotency: never disburse a loan that has already been disbursed.
+	if disbursedAt.Valid {
+		return fmt.Errorf("loan has already been disbursed")
+	}
+
+	// Every required guarantor must have accepted.
+	if requiredGuarantors > 0 {
+		var total, accepted int
+		if err := s.db.QueryRow(`
+			SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0)
+			FROM guarantors WHERE loan_id = $1
+		`, loanID).Scan(&total, &accepted); err != nil {
+			return fmt.Errorf("failed to check guarantor consent: %w", err)
+		}
+		if accepted < requiredGuarantors || accepted < total {
+			return fmt.Errorf("not all guarantors have consented to this loan")
+		}
+	}
+
+	// Every required referee must have accepted.
+	if requiredReferees > 0 {
+		var total, accepted int
+		if err := s.db.QueryRow(`
+			SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0)
+			FROM loan_referees WHERE loan_id = $1
+		`, loanID).Scan(&total, &accepted); err != nil {
+			return fmt.Errorf("failed to check referee consent: %w", err)
+		}
+		if accepted < requiredReferees || accepted < total {
+			return fmt.Errorf("not all referees have consented to this loan")
+		}
+	}
+
+	// Atomic status guard: only flip approved -> disbursing once. If another
+	// request already did, RowsAffected is 0 and we stop before sending money
+	// twice.
+	guard, err := s.db.Exec("UPDATE loans SET status = 'disbursing' WHERE id = $1 AND status = 'approved' AND disbursed_at IS NULL", loanID)
+	if err != nil {
+		return fmt.Errorf("failed to lock loan for disbursement: %w", err)
+	}
+	if n, _ := guard.RowsAffected(); n != 1 {
+		return fmt.Errorf("loan is already being disbursed")
+	}
+
+	// Unless the disbursement reaches B2C, release the lock so it can be retried.
+	disbursed := false
+	defer func() {
+		if !disbursed {
+			_, _ = s.db.Exec("UPDATE loans SET status = 'approved', disbursed_at = NULL, due_date = NULL WHERE id = $1 AND status = 'disbursing'", loanID)
+		}
+	}()
+
 	var borrowerPhone string
 	err = s.db.QueryRow("SELECT phone FROM users WHERE id = $1", loan.BorrowerID).Scan(&borrowerPhone)
 	if err != nil {
@@ -252,10 +316,9 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 
 	b2cResp, err := s.mpesaService.InitiateB2C(borrowerPhone, loan.TotalAmount, fmt.Sprintf("Loan disbursement from chama"))
 	if err != nil {
+		// Payout never left: roll back the loan so it can be retried (the deferred
+		// guard handles the status; here we just record the failed attempt).
 		_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
-		if err := tx.Commit(); err != nil {
-			log.Printf("Failed to commit failed loan disbursement %s: %v", transactionID, err)
-		}
 		return fmt.Errorf("failed to initiate B2C payment: %w", err)
 	}
 
@@ -268,14 +331,12 @@ func (s *DisbursementService) DisburseLoan(loanID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to update transaction: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("failed to update transaction: %w", err)
-	}
 
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit loan disbursement transaction: %w", err)
 	}
 
+	disbursed = true
 	log.Printf("Loan disbursement initiated for loan %s to borrower %s - awaiting callback", loanID, loan.BorrowerID)
 
 	return nil
@@ -328,15 +389,15 @@ func (s *DisbursementService) DisburseDividends(chamaID, dividendDeclarationID s
 			continue
 		}
 
-	// Wallet will be debited by B2C callback/timeout confirmation.
-	_, err = tx.Exec(
-		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
-		fmt.Sprintf(`{"conversation_id": "%s"}`, b2cResp.ConversationID),
-		now, transactionID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update transaction: %w", err)
-	}
+		// Wallet will be debited by B2C callback/timeout confirmation.
+		_, err = tx.Exec(
+			"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+			fmt.Sprintf(`{"conversation_id": "%s"}`, b2cResp.ConversationID),
+			now, transactionID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update transaction: %w", err)
+		}
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -482,13 +543,17 @@ func (s *DisbursementService) DisburseWelfare(welfareFundID, beneficiaryUserID s
 }
 
 func (s *DisbursementService) ProcessDisbursementBatch(batchID string) error {
-	batch, err := s.getDisbursementBatch(batchID)
+	// Atomically claim the batch: only a pending or approved batch can be
+	// processed, and only once. A second/concurrent call gets RowsAffected 0.
+	claim, err := s.db.Exec(
+		"UPDATE disbursement_batches SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status IN ('pending','approved')",
+		batchID,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to get disbursement batch: %w", err)
+		return fmt.Errorf("failed to claim disbursement batch: %w", err)
 	}
-
-	if batch.Status != "pending" {
-		return fmt.Errorf("batch is not pending")
+	if n, _ := claim.RowsAffected(); n != 1 {
+		return fmt.Errorf("batch is not awaiting processing (already processing, completed or failed)")
 	}
 
 	disbursements, err := s.getPendingDisbursements(batchID)
@@ -496,65 +561,89 @@ func (s *DisbursementService) ProcessDisbursementBatch(batchID string) error {
 		return fmt.Errorf("failed to get disbursements: %w", err)
 	}
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback()
-
 	for _, d := range disbursements {
+		// Claim this disbursement row so it cannot be paid twice.
+		rowClaim, cerr := s.db.Exec(
+			"UPDATE disbursements SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status = 'pending'",
+			d.ID,
+		)
+		if cerr != nil {
+			log.Printf("Failed to claim disbursement %s: %v", d.ID, cerr)
+			continue
+		}
+		if n, _ := rowClaim.RowsAffected(); n != 1 {
+			continue // already claimed/paid by someone else
+		}
+
 		var recipientPhone string
-		err = tx.QueryRow("SELECT phone FROM users WHERE id = $1", d.RecipientID).Scan(&recipientPhone)
-		if err != nil {
-			log.Printf("Skipping disbursement for recipient %s: %v", d.RecipientID, err)
+		if perr := s.db.QueryRow("SELECT phone FROM users WHERE id = $1", d.RecipientID).Scan(&recipientPhone); perr != nil {
+			log.Printf("Skipping disbursement %s for recipient %s: %v", d.ID, d.RecipientID, perr)
+			_, _ = s.db.Exec("UPDATE disbursements SET status = 'failed', failure_reason = 'recipient phone unavailable', updated_at = CURRENT_TIMESTAMP WHERE id = $1", d.ID)
 			continue
 		}
 
-		transactionID := "TXN_" + uuid.New().String()
 		now := time.Now()
-		reference := fmt.Sprintf("BATCH-%s-%s", batchID, d.ID)
 
-		_, err = tx.Exec(`
-			INSERT INTO transactions (
-				id, type, status, amount, currency, description, reference, payment_method,
-				initiated_by, created_at, updated_at
-			) VALUES ($1, 'withdrawal', 'pending', $2, 'KES', $3, $4, 'mobile_money', $5, $6, $7)
-		`, transactionID, d.Amount, d.Purpose, reference, d.RecipientID, now, now)
-		if err != nil {
-			log.Printf("Failed to create batch disbursement transaction %s: %v", transactionID, err)
+		// Prefer the transaction row created when the batch was submitted so the
+		// source wallet (from_wallet_id) is carried through to the B2C callback,
+		// which is what actually debits the chama sub-wallet.
+		var txnID string
+		var fromWalletID sql.NullString
+		findErr := s.db.QueryRow(
+			"SELECT id, from_wallet_id FROM transactions WHERE id = $1 OR reference = $2 ORDER BY created_at LIMIT 1",
+			d.TransactionID, fmt.Sprintf("PENDING-%s-%s", batchID, d.RecipientID),
+		).Scan(&txnID, &fromWalletID)
+		if findErr == sql.ErrNoRows {
+			txnID = "TXN_" + uuid.New().String()
+			if d.FromAccount != "" {
+				fromWalletID = sql.NullString{String: d.FromAccount, Valid: true}
+			}
+			if _, ierr := s.db.Exec(`
+				INSERT INTO transactions (
+					id, from_wallet_id, chama_id, recipient_id, member_id, type, status, amount, currency,
+					description, reference, payment_method, initiated_by, created_at, updated_at
+				) VALUES ($1, $2, $3, $4, $4, 'withdrawal', 'processing', $5, 'KES', $6, $7, 'mpesa', $4, $8, $8)
+			`, txnID, fromWalletID, d.ChamaID, d.RecipientID, d.Amount, d.Purpose, fmt.Sprintf("BATCH-%s-%s", batchID, d.ID), now); ierr != nil {
+				log.Printf("Failed to create batch disbursement transaction for %s: %v", d.ID, ierr)
+				_, _ = s.db.Exec("UPDATE disbursements SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = $1", d.ID)
+				continue
+			}
+		} else if findErr != nil {
+			log.Printf("Failed to locate transaction for disbursement %s: %v", d.ID, findErr)
+			_, _ = s.db.Exec("UPDATE disbursements SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = $1", d.ID)
 			continue
 		}
 
-		b2cResp, err := s.mpesaService.InitiateB2C(recipientPhone, d.Amount, d.Purpose)
-		if err != nil {
-			_, _ = tx.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, transactionID)
-			log.Printf("Failed B2C for batch disbursement %s: %v", transactionID, err)
+		b2cResp, berr := s.mpesaService.InitiateB2C(recipientPhone, d.Amount, d.Purpose)
+		if berr != nil {
+			_, _ = s.db.Exec("UPDATE transactions SET status = 'failed', updated_at = $1 WHERE id = $2", now, txnID)
+			_, _ = s.db.Exec("UPDATE disbursements SET status = 'failed', failure_reason = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", berr.Error(), d.ID)
+			log.Printf("Failed B2C for batch disbursement %s: %v", d.ID, berr)
 			continue
 		}
 
-		// Store B2C conversation IDs and mark as processing so callbacks can match.
-		_, err = tx.Exec(
-			"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
-			fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s", "b2c_phone_number": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID, recipientPhone),
-			now, transactionID,
-		)
-		if err != nil {
-			log.Printf("Failed to update batch disbursement transaction %s: %v", transactionID, err)
-			continue
-		}
-
-		_, err = tx.Exec(
-			"UPDATE disbursements SET status = 'processing', updated_at = $1 WHERE id = $2",
-			now, d.ID,
-		)
-		if err != nil {
-			log.Printf("Failed to update disbursement %s: %v", d.ID, err)
+		// payment_method must be 'mpesa' and from_wallet_id set so HandleB2CCallback
+		// matches this row by conversation id and debits the source wallet.
+		if _, uerr := s.db.Exec(`
+			UPDATE transactions
+			SET status = 'processing', payment_method = 'mpesa', from_wallet_id = COALESCE(from_wallet_id, $1),
+			    metadata = $2, updated_at = $3
+			WHERE id = $4
+		`, fromWalletID, fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s", "b2c_phone_number": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID, recipientPhone), now, txnID); uerr != nil {
+			log.Printf("Failed to update batch disbursement transaction %s: %v", txnID, uerr)
 			continue
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit batch disbursement transaction: %w", err)
+	// Mark the batch complete once every row has left 'pending'/'processing'.
+	var remaining int
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM disbursements WHERE batch_id = $1 AND status IN ('pending','processing')", batchID).Scan(&remaining)
+	newStatus := "completed"
+	if remaining > 0 {
+		newStatus = "processing"
+	}
+	if _, err = s.db.Exec("UPDATE disbursement_batches SET status = $1, processed_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2", newStatus, batchID); err != nil {
+		return fmt.Errorf("failed to finalise batch: %w", err)
 	}
 
 	return nil
@@ -596,10 +685,13 @@ type disbursementBatch struct {
 }
 
 type disbursementItem struct {
-	ID          string
-	RecipientID string
-	Amount      float64
-	Purpose     string
+	ID            string
+	RecipientID   string
+	Amount        float64
+	Purpose       string
+	TransactionID string
+	FromAccount   string
+	ChamaID       string
 }
 
 func (s *DisbursementService) getLoanByID(loanID string) (*loan, error) {
@@ -673,10 +765,11 @@ func (s *DisbursementService) getDisbursementBatch(batchID string) (*disbursemen
 }
 
 func (s *DisbursementService) getPendingDisbursements(batchID string) ([]disbursementItem, error) {
-	rows, err := s.db.Query(
-		"SELECT id, recipient_id, amount, purpose FROM disbursements WHERE batch_id = $1 AND status = 'pending'",
-		batchID,
-	)
+	rows, err := s.db.Query(`
+		SELECT id, COALESCE(recipient_id, member_id), amount, COALESCE(NULLIF(purpose,''), 'Disbursement'),
+		       COALESCE(transaction_id, ''), COALESCE(from_account, ''), COALESCE(chama_id, '')
+		FROM disbursements WHERE batch_id = $1 AND status = 'pending'
+	`, batchID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get disbursements: %w", err)
 	}
@@ -685,8 +778,7 @@ func (s *DisbursementService) getPendingDisbursements(batchID string) ([]disburs
 	var items []disbursementItem
 	for rows.Next() {
 		var d disbursementItem
-		err := rows.Scan(&d.ID, &d.RecipientID, &d.Amount, &d.Purpose)
-		if err != nil {
+		if err := rows.Scan(&d.ID, &d.RecipientID, &d.Amount, &d.Purpose, &d.TransactionID, &d.FromAccount, &d.ChamaID); err != nil {
 			return nil, fmt.Errorf("failed to scan disbursement: %w", err)
 		}
 		items = append(items, d)

@@ -300,19 +300,61 @@ const LoanManagementScreen = ({ route, navigation }) => {
                           <TextInput style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text, padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1.5 }]} value={screen.createForm.interestRate} onChangeText={(text) => screen.setCreateForm((prev) => ({ ...prev, interestRate: text }))} placeholder="e.g. 12.5" placeholderTextColor={colors.textSecondary} keyboardType="numeric" />
                         </View>
                       </View>
-                      <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
+                      <View style={{ marginTop: spacing.xs, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, gap: spacing.md }}>
+                        <Text style={[styles.formLabel, { color: colors.text, marginBottom: 0, fontWeight: '700' }]}>Backing Requirements</Text>
+
                         <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }} onPress={() => screen.setCreateForm((prev) => ({ ...prev, requiresCollateral: !prev.requiresCollateral }))}>
                           <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: screen.createForm.requiresCollateral ? colors.primary : colors.background, alignItems: 'center', justifyContent: 'center' }}>
                             {screen.createForm.requiresCollateral && <Ionicons name="checkmark" size={14} color={colors.white} />}
                           </View>
                           <Text style={{ color: colors.text }}>Requires collateral</Text>
                         </TouchableOpacity>
+
                         <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }} onPress={() => screen.setCreateForm((prev) => ({ ...prev, requiresGuarantors: !prev.requiresGuarantors }))}>
                           <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: screen.createForm.requiresGuarantors ? colors.primary : colors.background, alignItems: 'center', justifyContent: 'center' }}>
                             {screen.createForm.requiresGuarantors && <Ionicons name="checkmark" size={14} color={colors.white} />}
                           </View>
-                          <Text style={{ color: colors.text }}>Requires guarantors</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: colors.text }}>Requires guarantors</Text>
+                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Guarantors carry a share of the loan liability.</Text>
+                          </View>
                         </TouchableOpacity>
+                        {screen.createForm.requiresGuarantors && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: 28 }}>
+                            <Text style={{ color: colors.textSecondary }}>Minimum guarantors</Text>
+                            <TextInput
+                              style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1, width: 64, textAlign: 'center' }]}
+                              value={String(screen.createForm.minGuarantors)}
+                              onChangeText={(t) => screen.setCreateForm((prev) => ({ ...prev, minGuarantors: t.replace(/[^0-9]/g, '') }))}
+                              keyboardType="numeric"
+                              placeholder="2"
+                              placeholderTextColor={colors.textSecondary}
+                            />
+                          </View>
+                        )}
+
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }} onPress={() => screen.setCreateForm((prev) => ({ ...prev, requiresReferees: !prev.requiresReferees }))}>
+                          <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: screen.createForm.requiresReferees ? colors.primary : colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                            {screen.createForm.requiresReferees && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: colors.text }}>Requires referees</Text>
+                            <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Referees vouch for character only — no money is tied to them.</Text>
+                          </View>
+                        </TouchableOpacity>
+                        {screen.createForm.requiresReferees && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: 28 }}>
+                            <Text style={{ color: colors.textSecondary }}>Minimum referees</Text>
+                            <TextInput
+                              style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1, width: 64, textAlign: 'center' }]}
+                              value={String(screen.createForm.minReferees)}
+                              onChangeText={(t) => screen.setCreateForm((prev) => ({ ...prev, minReferees: t.replace(/[^0-9]/g, '') }))}
+                              keyboardType="numeric"
+                              placeholder="1"
+                              placeholderTextColor={colors.textSecondary}
+                            />
+                          </View>
+                        )}
                       </View>
                       <Button title={screen.createSubmitting ? (screen.editingLoanType ? 'Updating...' : 'Creating...') : (screen.editingLoanType ? 'Update Loan Type' : 'Create Loan Type')} onPress={screen.handleCreateLoanType} disabled={screen.createSubmitting} style={{ backgroundColor: colors.primary, marginTop: spacing.md }} icon={!screen.createSubmitting && <Ionicons name={screen.editingLoanType ? 'save' : 'add'} size={16} color={colors.white} />} />
                     </View>

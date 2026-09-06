@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet, View, Text } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useChamaContext } from '../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
 import ApiService from '../services/api';
-import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanFines } from '../services/api/loanEndpoints';
+import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanReferees, getLoanFines } from '../services/api/loanEndpoints';
 
 const useLoanDetails = ({ route, navigation }) => {
   const { theme } = useApp();
   const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
+  const styles = createStyles(colors);
 
   const { loanId, chamaId } = route?.params || {};
   const [loan, setLoan] = useState(null);
@@ -21,6 +22,7 @@ const useLoanDetails = ({ route, navigation }) => {
   const [disbursement, setDisbursement] = useState(null);
   const [schedule, setSchedule] = useState([]);
   const [guarantors, setGuarantors] = useState([]);
+  const [referees, setReferees] = useState([]);
   const [fines, setFines] = useState([]);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -92,6 +94,18 @@ const useLoanDetails = ({ route, navigation }) => {
       } catch (guarantorError) {
         console.error('Failed to load guarantors:', guarantorError);
         setGuarantors([]);
+      }
+
+      try {
+        const refereesResponse = await getLoanReferees(loanId);
+        if (refereesResponse?.success) {
+          setReferees(Array.isArray(refereesResponse.data) ? refereesResponse.data : []);
+        } else {
+          setReferees([]);
+        }
+      } catch (refereeError) {
+        console.error('Failed to load referees:', refereeError);
+        setReferees([]);
       }
 
       try {
@@ -334,6 +348,7 @@ const useLoanDetails = ({ route, navigation }) => {
     disbursement,
     schedule,
     guarantors,
+    referees,
     fines,
     paymentModalVisible,
     paymentAmount,
@@ -363,6 +378,7 @@ const useLoanDetails = ({ route, navigation }) => {
     setDisbursement,
     setSchedule,
     setGuarantors,
+    setReferees,
     setFines,
     setSubmittingPayment,
     setApprovalStep,
@@ -383,7 +399,7 @@ const useLoanDetails = ({ route, navigation }) => {
     // Navigation
     navigation,
     colors,
-    styles: createStyles(colors),
+    styles,
   };
 };
 

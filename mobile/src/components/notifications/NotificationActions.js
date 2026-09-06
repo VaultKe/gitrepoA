@@ -6,7 +6,12 @@ import ApiService from '../../services/api';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 
 const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMarkAsRead, onDelete }) => {
-  if (item.type === 'guarantor_request') {
+  const isGuarantor = item.type === 'guarantor_request';
+  const isReferee = item.type === 'referee_request';
+
+  if (isGuarantor || isReferee) {
+    const roleLabel = isReferee ? 'referee' : 'guarantee';
+
     if (isRead) {
       return (
         <View style={[styles.actionButtonsRow, styles.guarantorActions]}>
@@ -18,24 +23,34 @@ const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMar
       );
     }
 
+    const respond = async (action) => {
+      try {
+        const loanData = JSON.parse(item.data || '{}');
+        const response = isReferee
+          ? await ApiService.respondToRefereeRequest(loanData.referee_id, action)
+          : await ApiService.respondToGuarantorRequest(loanData.loan_id, { guarantorId: loanData.guarantor_id, action });
+        if (response.success) {
+          await onMarkAsRead(item.id);
+          Toast.show({
+            type: action === 'accept' ? 'success' : 'info',
+            text1: action === 'accept' ? 'Request Accepted' : 'Request Declined',
+            text2: `You have ${action}ed the loan ${roleLabel} request`,
+            position: 'bottom',
+            visibilityTime: 2000,
+          });
+        } else {
+          throw new Error(response.error || `Failed to ${action} ${roleLabel}`);
+        }
+      } catch (error) {
+        Toast.show({ type: 'error', text1: 'Action Failed', text2: error?.message || `Could not ${action}. Please try again.`, position: 'bottom', visibilityTime: 3000 });
+      }
+    };
+
     return (
       <View style={[styles.actionButtonsRow, styles.guarantorActions]}>
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: colors.success + '26', borderColor: colors.success, borderWidth: 1 }]}
-          onPress={async () => {
-            try {
-              const loanData = JSON.parse(item.data || '{}');
-              const response = await ApiService.respondToGuaranteeRequest(loanData.loan_id, { guarantorId: loanData.guarantor_id, action: 'accept' });
-              if (response.success) {
-                await onMarkAsRead(item.id);
-                Toast.show({ type: 'success', text1: 'Guarantee Accepted', text2: 'You have accepted the loan guarantee request', position: 'bottom', visibilityTime: 2000 });
-              } else {
-                throw new Error(response.error || 'Failed to accept guarantee');
-              }
-            } catch (error) {
-              Toast.show({ type: 'error', text1: 'Action Failed', text2: 'Could not accept guarantee. Please try again.', position: 'bottom', visibilityTime: 3000 });
-            }
-          }}
+          onPress={() => respond('accept')}
         >
           <Ionicons name="checkmark-circle" size={16} color={colors.success} />
           <Text style={[styles.actionButtonText, { color: colors.success }]}>Accept</Text>
@@ -43,20 +58,7 @@ const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMar
 
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: colors.error + '26', borderColor: colors.error, borderWidth: 1 }]}
-          onPress={async () => {
-            try {
-              const loanData = JSON.parse(item.data || '{}');
-              const response = await ApiService.respondToGuaranteeRequest(loanData.loan_id, { guarantorId: loanData.guarantor_id, action: 'decline' });
-              if (response.success) {
-                await onMarkAsRead(item.id);
-                Toast.show({ type: 'info', text1: 'Guarantee Declined', text2: 'You have declined the loan guarantee request', position: 'bottom', visibilityTime: 2000 });
-              } else {
-                throw new Error(response.error || 'Failed to decline guarantee');
-              }
-            } catch (error) {
-              Toast.show({ type: 'error', text1: 'Action Failed', text2: 'Could not decline guarantee. Please try again.', position: 'bottom', visibilityTime: 3000 });
-            }
-          }}
+          onPress={() => respond('decline')}
         >
           <Ionicons name="close-circle" size={16} color={colors.error} />
           <Text style={[styles.actionButtonText, { color: colors.error }]}>Decline</Text>

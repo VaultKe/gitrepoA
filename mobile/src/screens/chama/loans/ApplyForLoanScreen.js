@@ -14,6 +14,11 @@ const ApplyForLoanScreen = () => {
 
   const [localGuarantorSearch, setLocalGuarantorSearch] = useState('');
   const [showGuarantorList, setShowGuarantorList] = useState(false);
+  const [localRefereeSearch, setLocalRefereeSearch] = useState('');
+  const [showRefereeList, setShowRefereeList] = useState(false);
+
+  const minG = screen.newLoan.minGuarantors || 2;
+  const minR = screen.newLoan.minReferees || 1;
 
   useEffect(() => {
     if (screen.submitSuccess) {
@@ -104,9 +109,9 @@ const ApplyForLoanScreen = () => {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Guarantors</Text>
                 <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
-                  {screen.newLoan.guarantors.length < 2
-                    ? `At least 2 guarantors required (${screen.newLoan.guarantors.length}/2 selected)`
-                    : `${screen.newLoan.guarantors.length} guarantor${screen.newLoan.guarantors.length !== 1 ? 's' : ''} selected`}
+                  {screen.newLoan.guarantors.length < minG
+                    ? `At least ${minG} required (${screen.newLoan.guarantors.length}/${minG} selected) · they share the loan liability`
+                    : `${screen.newLoan.guarantors.length} guarantor${screen.newLoan.guarantors.length !== 1 ? 's' : ''} selected · they share the loan liability`}
                 </Text>
               </View>
             </View>
@@ -205,6 +210,97 @@ const ApplyForLoanScreen = () => {
                       <Text style={{ color: colors.textSecondary }}>
                         {localGuarantorSearch ? 'No members match your search' : 'No available guarantors'}
                       </Text>
+                    </View>
+                  }
+                />
+              </View>
+            )}
+          </Card>
+        )}
+
+        {screen.newLoan.requiresReferees && (
+          <Card variant="outlined" style={{ marginBottom: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.success + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
+                <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Referees</Text>
+                <Text style={{ fontSize: typography.fontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                  {screen.newLoan.referees.length < minR
+                    ? `At least ${minR} required (${screen.newLoan.referees.length}/${minR} selected) · character reference only, no money tied to them`
+                    : `${screen.newLoan.referees.length} referee${screen.newLoan.referees.length !== 1 ? 's' : ''} selected · character reference only, no money tied to them`}
+                </Text>
+              </View>
+            </View>
+
+            {screen.newLoan.referees.length > 0 && (
+              <View style={{ marginBottom: spacing.md }}>
+                {screen.newLoan.referees.map((referee, index) => (
+                  <View key={referee.id || index} style={[styles.selectedGuarantorItem, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.selectedGuarantorName, { color: colors.text }]}>{referee.firstName} {referee.lastName}</Text>
+                      <Text style={[styles.selectedGuarantorEmail, { color: colors.textSecondary }]}>{referee.email || `@${referee.firstName || 'user'}`}</Text>
+                    </View>
+                    <TouchableOpacity style={[styles.removeGuarantorBtn, { backgroundColor: colors.error + '15' }]} onPress={() => screen.removeReferee(referee.id)}>
+                      <Ionicons name="close" size={16} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <TouchableOpacity style={[styles.addGuarantorBtn, { borderColor: colors.border, backgroundColor: colors.background }]} onPress={() => setShowRefereeList((prev) => !prev)}>
+              <Ionicons name={showRefereeList ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} />
+              <Text style={[styles.addGuarantorText, { color: colors.primary }]}>{showRefereeList ? 'Hide Available Members' : 'Add Referee'}</Text>
+            </TouchableOpacity>
+
+            {showRefereeList && (
+              <View style={styles.guarantorListContainer}>
+                <View style={[styles.searchInputContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name="search" size={18} color={colors.textSecondary} />
+                  <TextInput style={[styles.searchInput, { color: colors.text }]} placeholder="Search members..." placeholderTextColor={colors.textSecondary} value={localRefereeSearch} onChangeText={setLocalRefereeSearch} />
+                  {localRefereeSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setLocalRefereeSearch('')}>
+                      <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <FlatList
+                  data={screen.availableMembers.filter((m) => {
+                    const fullName = `${m.firstName || ''} ${m.lastName || ''}`.toLowerCase();
+                    const s = localRefereeSearch.toLowerCase();
+                    const alreadyGuarantor = screen.newLoan.guarantors.some((g) => g.id === m.id);
+                    return !alreadyGuarantor && (fullName.includes(s) || (m.email || '').toLowerCase().includes(s));
+                  })}
+                  keyExtractor={(item, index) => (item.id ? String(item.id) : index.toString())}
+                  style={{ maxHeight: 300 }}
+                  nestedScrollEnabled
+                  renderItem={({ item }) => {
+                    const isSelected = screen.newLoan.referees.some((r) => r.id === item.id);
+                    return (
+                      <TouchableOpacity
+                        style={[styles.guarantorCard, { backgroundColor: isSelected ? colors.success + '20' : colors.background, borderColor: isSelected ? colors.success : colors.border }]}
+                        onPress={() => { if (!isSelected) screen.addReferee(item); }}
+                        disabled={isSelected}
+                      >
+                        <View style={styles.guarantorCardContent}>
+                          <View style={[styles.avatar, { backgroundColor: colors.white }]}>
+                            <Ionicons name="person" size={20} color={colors.success} />
+                          </View>
+                          <View style={styles.guarantorDetails}>
+                            <Text style={[styles.guarantorName, { color: isSelected ? colors.success : colors.text, fontWeight: typography.fontWeight.semibold }]}>{item.firstName} {item.lastName}</Text>
+                            <Text style={[styles.guarantorEmail, { color: isSelected ? colors.success : colors.textSecondary }]}>{item.email || 'No email'}</Text>
+                          </View>
+                          {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.success} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }}
+                  ListEmptyComponent={
+                    <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
+                      <Text style={{ color: colors.textSecondary }}>{localRefereeSearch ? 'No members match your search' : 'No available members'}</Text>
                     </View>
                   }
                 />

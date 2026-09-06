@@ -462,6 +462,63 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                 </View>
               </View>
 
+              <View style={{ marginTop: spacing.sm, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background }}>
+                <Text style={[styles.formLabel, { color: colors.text, fontWeight: '700', marginBottom: spacing.sm }]}>Backing Requirements</Text>
+
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }} onPress={() => setCreateForm(prev => ({ ...prev, requiresCollateral: !prev.requiresCollateral }))}>
+                  <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: createForm.requiresCollateral ? colors.primary : colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                    {createForm.requiresCollateral && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                  </View>
+                  <Text style={{ color: colors.text }}>Requires collateral</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm }} onPress={() => setCreateForm(prev => ({ ...prev, requiresGuarantors: !prev.requiresGuarantors }))}>
+                  <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: createForm.requiresGuarantors ? colors.primary : colors.background, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                    {createForm.requiresGuarantors && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text }}>Requires guarantors</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Guarantors carry a share of the loan liability.</Text>
+                  </View>
+                </TouchableOpacity>
+                {createForm.requiresGuarantors && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: 28, marginBottom: spacing.sm }}>
+                    <Text style={{ color: colors.textSecondary }}>Minimum guarantors</Text>
+                    <TextInput
+                      style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, width: 64, textAlign: 'center', paddingVertical: 4 }]}
+                      value={String(createForm.minGuarantors)}
+                      onChangeText={(t) => setCreateForm(prev => ({ ...prev, minGuarantors: t.replace(/[^0-9]/g, '') }))}
+                      keyboardType="numeric"
+                      placeholder="2"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  </View>
+                )}
+
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }} onPress={() => setCreateForm(prev => ({ ...prev, requiresReferees: !prev.requiresReferees }))}>
+                  <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, backgroundColor: createForm.requiresReferees ? colors.primary : colors.background, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                    {createForm.requiresReferees && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text }}>Requires referees</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Referees vouch for character only — no money is tied to them.</Text>
+                  </View>
+                </TouchableOpacity>
+                {createForm.requiresReferees && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: 28, marginTop: spacing.sm }}>
+                    <Text style={{ color: colors.textSecondary }}>Minimum referees</Text>
+                    <TextInput
+                      style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, width: 64, textAlign: 'center', paddingVertical: 4 }]}
+                      value={String(createForm.minReferees)}
+                      onChangeText={(t) => setCreateForm(prev => ({ ...prev, minReferees: t.replace(/[^0-9]/g, '') }))}
+                      keyboardType="numeric"
+                      placeholder="1"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  </View>
+                )}
+              </View>
+
               <View style={styles.modalActions}>
                 <Button
                   title="Cancel"

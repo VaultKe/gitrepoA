@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
 import Card from '../components/common/Card';

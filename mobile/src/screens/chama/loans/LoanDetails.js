@@ -55,7 +55,9 @@ const LoanDetails = ({ route, navigation }) => {
     { id: 'remaining', cells: ['Remaining', screen.formatCurrency(screen.loan?.remainingAmount)] },
     { id: 'due', cells: ['Due Date', screen.formatDate(screen.loan?.dueDate)] },
     { id: 'reqGuarantors', cells: ['Required Guarantors', screen.loan?.requiredGuarantors?.toString() || '0'] },
-    { id: 'appGuarantors', cells: ['Approved Guarantors', screen.loan?.approvedGuarantors?.toString() || '0'] },
+    { id: 'appGuarantors', cells: ['Accepted Guarantors', `${screen.loan?.approvedGuarantors ?? 0}/${screen.loan?.requiredGuarantors ?? 0}`] },
+    { id: 'reqReferees', cells: ['Required Referees', screen.loan?.requiredReferees?.toString() || '0'] },
+    { id: 'appReferees', cells: ['Accepted Referees', `${screen.loan?.approvedReferees ?? 0}/${screen.loan?.requiredReferees ?? 0}`] },
     { id: 'approvalStage', cells: ['Approval Stage', screen.loan?.approvalStage?.toUpperCase().replace('_', ' ') || 'N/A'] },
     { id: 'secretary', cells: ['Secretary Approval', screen.loan?.secretaryApprovedBy ? screen.formatDate(screen.loan?.secretaryApprovedAt) : 'Pending'] },
     { id: 'treasurer', cells: ['Treasurer Approval', screen.loan?.treasurerApprovedBy ? screen.formatDate(screen.loan?.treasurerApprovedAt) : 'Pending'] },
@@ -82,10 +84,19 @@ const LoanDetails = ({ route, navigation }) => {
     return { id: payment.id, cells: [screen.formatDate(paymentDate), screen.formatCurrency(payment.amount), screen.renderStatusBadge(paymentStatus)] };
   });
 
-  const guarantorHeaders = ['Guarantor', 'Amount', 'Status'];
+  const guarantorHeaders = ['Guarantor', 'Current Exposure', 'Status'];
   const guarantorData = screen.guarantors.map((g) => {
     const fullName = g.user ? `${g.user.firstName || ''} ${g.user.lastName || ''}`.trim() : 'Unknown';
-    return { id: g.id, cells: [fullName, screen.formatCurrency(g.amount), screen.renderStatusBadge(g.status)] };
+    // Exposure is only meaningful once the guarantor has accepted; it tracks the
+    // live outstanding balance + unpaid fines, split across accepted guarantors.
+    const exposure = g.status === 'accepted' ? screen.formatCurrency(g.amount) : '—';
+    return { id: g.id, cells: [fullName, exposure, screen.renderStatusBadge(g.status)] };
+  });
+
+  const refereeHeaders = ['Referee', 'Status'];
+  const refereeData = (screen.referees || []).map((r) => {
+    const fullName = r.user ? `${r.user.firstName || ''} ${r.user.lastName || ''}`.trim() : 'Unknown';
+    return { id: r.id, cells: [fullName, screen.renderStatusBadge(r.status)] };
   });
 
   const fineHeaders = ['Date', 'Reason', 'Amount', 'Status'];
@@ -236,6 +247,7 @@ const LoanDetails = ({ route, navigation }) => {
         {renderLoanTable({ title: 'Repayment Schedule', headers: scheduleHeaders, data: scheduleData, emptyMessage: 'No schedule available yet' })}
         {renderLoanTable({ title: 'Repayment History', headers: paymentHeaders, data: paymentData, emptyMessage: 'No repayment history yet' })}
         {renderLoanTable({ title: 'Guarantors', headers: guarantorHeaders, data: guarantorData, emptyMessage: 'No guarantors for this loan' })}
+        {renderLoanTable({ title: 'Referees', headers: refereeHeaders, data: refereeData, emptyMessage: 'No referees for this loan' })}
         {renderLoanTable({ title: 'Fines / Penalties', headers: fineHeaders, data: fineData, emptyMessage: 'No fines for this loan' })}
 
         {screen.totalItems > screen.pageSize && (

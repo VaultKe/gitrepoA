@@ -14,12 +14,13 @@ const useApplyForLoanScreen = () => {
   const routeChamaId = route.params?.chamaId || route.params?.id || selectedChama?.id || null;
   const chamaId = typeof routeChamaId === 'string' ? routeChamaId : null;
 
-  const [newLoan, setNewLoan] = useState({
+  const emptyLoan = {
     amount: '',
     purpose: '',
     repaymentPeriod: '12',
     interestRate: '5',
     guarantors: [],
+    referees: [],
     businessPlan: '',
     monthlyIncome: '',
     otherLoans: '',
@@ -27,10 +28,16 @@ const useApplyForLoanScreen = () => {
     loanTypeName: '',
     termMonths: '12',
     requiresGuarantors: false,
-  });
+    requiresReferees: false,
+    minGuarantors: 2,
+    minReferees: 1,
+  };
+
+  const [newLoan, setNewLoan] = useState(emptyLoan);
 
   const [availableGuarantors, setAvailableGuarantors] = useState([]);
   const [guarantorSearch, setGuarantorSearch] = useState('');
+  const [refereeSearch, setRefereeSearch] = useState('');
   const [showGuarantorSearch, setShowGuarantorSearch] = useState(false);
   const [loanTypes, setLoanTypes] = useState([]);
   const [showLoanTypePicker, setShowLoanTypePicker] = useState(false);
@@ -38,6 +45,7 @@ const useApplyForLoanScreen = () => {
   const [pageReady, setPageReady] = useState(false);
   const [expandedLoanTypes, setExpandedLoanTypes] = useState(false);
   const [expandedGuarantors, setExpandedGuarantors] = useState(false);
+  const [expandedReferees, setExpandedReferees] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const loadLoanTypesForForm = useCallback(async () => {
@@ -112,6 +120,27 @@ const useApplyForLoanScreen = () => {
     }));
   };
 
+  const addReferee = (member) => {
+    const userId = member.id || member.user_id || member.user?.id || member.userId;
+    const firstName = member.firstName || member.first_name || member.user?.first_name || '';
+    const lastName = member.lastName || member.last_name || member.user?.last_name || '';
+    const email = member.email || '';
+    setNewLoan((prev) => ({
+      ...prev,
+      // A person can't be both a referee and a guarantor.
+      referees: prev.referees.some((r) => r.id === userId) || prev.guarantors.some((g) => g.id === userId)
+        ? prev.referees
+        : [...prev.referees, { id: userId, firstName, lastName, email }],
+    }));
+  };
+
+  const removeReferee = (refereeId) => {
+    setNewLoan((prev) => ({
+      ...prev,
+      referees: prev.referees.filter((r) => r.id !== refereeId),
+    }));
+  };
+
   const handleSelectLoanType = (loanType) => {
     setNewLoan((prev) => ({
       ...prev,
@@ -121,6 +150,9 @@ const useApplyForLoanScreen = () => {
       repaymentPeriod: String(loanType.termMonths || prev.repaymentPeriod || prev.termMonths || '12'),
       interestRate: String(loanType.interestRate || prev.interestRate || '5'),
       requiresGuarantors: !!loanType.requiresGuarantors,
+      requiresReferees: !!loanType.requiresReferees,
+      minGuarantors: Number(loanType.minGuarantors) > 0 ? Number(loanType.minGuarantors) : 2,
+      minReferees: Number(loanType.minReferees) > 0 ? Number(loanType.minReferees) : 1,
     }));
     setShowLoanTypePicker(false);
   };
@@ -147,8 +179,19 @@ const useApplyForLoanScreen = () => {
       Alert.alert('Validation Error', 'Please select a loan type.');
       return;
     }
-    if (newLoan.requiresGuarantors && newLoan.guarantors.length < 2) {
-      Alert.alert('Validation Error', 'Please select at least 2 guarantors.');
+    const minG = newLoan.minGuarantors || 2;
+    if (newLoan.requiresGuarantors && newLoan.guarantors.length < minG) {
+      Alert.alert('Validation Error', `Please select at least ${minG} guarantor${minG === 1 ? '' : 's'}.`);
+      return;
+    }
+    const minR = newLoan.minReferees || 1;
+    if (newLoan.requiresReferees && newLoan.referees.length < minR) {
+      Alert.alert('Validation Error', `Please select at least ${minR} referee${minR === 1 ? '' : 's'}.`);
+      return;
+    }
+    const overlap = newLoan.guarantors.find((g) => newLoan.referees.some((r) => r.id === g.id));
+    if (overlap) {
+      Alert.alert('Validation Error', 'A person cannot be both a guarantor and a referee on the same loan.');
       return;
     }
     try {
@@ -163,25 +206,13 @@ const useApplyForLoanScreen = () => {
         repaymentPeriod: parseInt(newLoan.repaymentPeriod, 10),
         monthlyIncome: parseFloat(newLoan.monthlyIncome || '0'),
         guarantors: newLoan.guarantors.map((g) => g.id),
+        referees: newLoan.referees.map((r) => r.id),
         businessPlan: newLoan.businessPlan,
         otherLoans: newLoan.otherLoans,
       };
       const response = await ApiService.applyForLoan(payload);
       if (response?.success || response?.data) {
-        setNewLoan({
-          amount: '',
-          purpose: '',
-          repaymentPeriod: '12',
-          interestRate: '5',
-          guarantors: [],
-          businessPlan: '',
-          monthlyIncome: '',
-          otherLoans: '',
-          loanTypeId: '',
-          loanTypeName: '',
-          termMonths: '12',
-          requiresGuarantors: false,
-        });
+        setNewLoan(emptyLoan);
         setSubmitSuccess(true);
       } else {
         Alert.alert('Error', response?.error || response?.message || 'Failed to submit loan application');
@@ -198,7 +229,9 @@ const useApplyForLoanScreen = () => {
     chamaId,
     newLoan,
     availableGuarantors,
+    availableMembers: availableGuarantors,
     guarantorSearch,
+    refereeSearch,
     showGuarantorSearch,
     loanTypes,
     showLoanTypePicker,
@@ -206,18 +239,23 @@ const useApplyForLoanScreen = () => {
     pageReady,
     expandedLoanTypes,
     expandedGuarantors,
+    expandedReferees,
     submitSuccess,
     setSubmitSuccess,
     colors,
     setNewLoan,
     setGuarantorSearch,
+    setRefereeSearch,
     setShowGuarantorSearch,
     setShowLoanTypePicker,
     setExpandedLoanTypes,
     setExpandedGuarantors,
+    setExpandedReferees,
     loadLoanTypesForForm,
     loadAvailableGuarantors,
     addGuarantor,
+    addReferee,
+    removeReferee,
     removeGuarantor,
     handleInputChange,
     handleSelectLoanType,

@@ -156,6 +156,9 @@ func RespondToGuarantorRequest(c *gin.Context) {
 		return
 	}
 
+	// The set of accepting guarantors just changed — resplit the liability.
+	_ = services.NewLoanService(db.(*sql.DB)).RecalculateGuarantorExposure(loanID)
+
 	// Create notification for loan requester
 	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
 	message := fmt.Sprintf("Your guarantor request has been %s", newStatus)
@@ -204,48 +207,54 @@ func RespondToGuarantorRequest(c *gin.Context) {
 			"action":       req.Action,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
-// checkAndUpdateLoanStatus checks if all guarantors have responded and updates loan status
+// checkAndUpdateLoanStatus advances a loan once every guarantor AND every
+// referee has responded. Any single decline rejects the loan; otherwise, when
+// all backers have accepted, the loan moves to the officer-approval stage.
 func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
-	// Get guarantor response counts
-	var totalGuarantors, acceptedGuarantors, declinedGuarantors int
-	err := db.QueryRow(`
-		SELECT
-			COUNT(*) as total,
-			SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted,
-			SUM(CASE WHEN status = 'declined' THEN 1 ELSE 0 END) as declined
-		FROM guarantors
-		WHERE loan_id = $1
-	`, loanID).Scan(&totalGuarantors, &acceptedGuarantors, &declinedGuarantors)
-	if err != nil {
+	var gTotal, gAccepted, gDeclined int
+	if err := db.QueryRow(`
+		SELECT COUNT(*),
+			COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status IN ('declined','rejected') THEN 1 ELSE 0 END), 0)
+		FROM guarantors WHERE loan_id = $1
+	`, loanID).Scan(&gTotal, &gAccepted, &gDeclined); err != nil {
 		fmt.Printf("Error checking guarantor status for loan %s: %v\n", loanID, err)
 		return
 	}
 
-	// Check if all guarantors have responded
-	respondedGuarantors := acceptedGuarantors + declinedGuarantors
-	if respondedGuarantors < totalGuarantors {
-		// Not all guarantors have responded yet
+	var rTotal, rAccepted, rDeclined int
+	if err := db.QueryRow(`
+		SELECT COUNT(*),
+			COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status IN ('declined','rejected') THEN 1 ELSE 0 END), 0)
+		FROM loan_referees WHERE loan_id = $1
+	`, loanID).Scan(&rTotal, &rAccepted, &rDeclined); err != nil {
+		fmt.Printf("Error checking referee status for loan %s: %v\n", loanID, err)
 		return
 	}
 
-	// Determine new loan status
+	// Keep the running acceptance counts on the loan fresh for the UI.
+	_, _ = db.Exec("UPDATE loans SET approved_guarantors = $1, approved_referees = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3", gAccepted, rAccepted, loanID)
+
 	var newStatus string
-	if acceptedGuarantors == totalGuarantors {
-		// All guarantors accepted - move to pending approval
-		newStatus = "guarantors_approved"
-	} else if declinedGuarantors > 0 {
-		// At least one guarantor declined - reject loan
+	switch {
+	case gDeclined > 0 || rDeclined > 0:
 		newStatus = "guarantors_declined"
+	case (gAccepted+gDeclined) >= gTotal && (rAccepted+rDeclined) >= rTotal && (gTotal > 0 || rTotal > 0):
+		newStatus = "guarantors_approved"
+	default:
+		// still waiting on someone
+		return
 	}
 
 	// Update loan status
-	_, err = db.Exec(`
+	_, err := db.Exec(`
 		UPDATE loans
 		SET status = $1, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $2
+		WHERE id = $2 AND status IN ('pending', 'guarantors_approved')
 	`, newStatus, loanID)
 	if err != nil {
 		fmt.Printf("Error updating loan status for loan %s: %v\n", loanID, err)
@@ -264,9 +273,9 @@ func checkAndUpdateLoanStatus(db *sql.DB, loanID string) {
 	notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
 	var message string
 	if newStatus == "guarantors_approved" {
-		message = "All guarantors have accepted your loan request. Your application is now pending approval from chama officials."
+		message = "All your guarantors and referees have accepted. Your application is now pending approval from chama officials."
 	} else {
-		message = "Some guarantors have declined your loan request. Your application has been rejected."
+		message = "A guarantor or referee declined your loan request. Your application has been rejected."
 	}
 
 	err = createNotification(db, notificationID, requesterID, "chama",
@@ -320,13 +329,47 @@ func InitiateLoanApproval(c *gin.Context) {
 
 	// Determine role from the loan's next approval stage
 	var approvalStage string
-	err := db.(*sql.DB).QueryRow("SELECT approval_stage FROM loans WHERE id = $1", loanID).Scan(&approvalStage)
+	var requiredGuarantors, requiredReferees int
+	err := db.(*sql.DB).QueryRow("SELECT COALESCE(approval_stage,''), COALESCE(required_guarantors,0), COALESCE(required_referees,0) FROM loans WHERE id = $1", loanID).Scan(&approvalStage, &requiredGuarantors, &requiredReferees)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"error":   "Loan not found",
 		})
 		return
+	}
+
+	// The officer approval chain may only begin once every required guarantor
+	// AND every required referee has accepted. Guard the entry point (secretary).
+	if approvalStage == "pending" {
+		if requiredGuarantors > 0 {
+			var total, accepted int
+			if gerr := db.(*sql.DB).QueryRow(`
+				SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0)
+				FROM guarantors WHERE loan_id = $1
+			`, loanID).Scan(&total, &accepted); gerr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to check guarantor consent"})
+				return
+			}
+			if accepted < requiredGuarantors || accepted < total {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "All guarantors must accept this loan before approval can begin"})
+				return
+			}
+		}
+		if requiredReferees > 0 {
+			var total, accepted int
+			if rerr := db.(*sql.DB).QueryRow(`
+				SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0)
+				FROM loan_referees WHERE loan_id = $1
+			`, loanID).Scan(&total, &accepted); rerr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to check referee consent"})
+				return
+			}
+			if accepted < requiredReferees || accepted < total {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "All referees must accept this loan before approval can begin"})
+				return
+			}
+		}
 	}
 
 	var role string
@@ -362,7 +405,7 @@ func InitiateLoanApproval(c *gin.Context) {
 			"role":  role,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func ConfirmLoanApproval(c *gin.Context) {
@@ -454,7 +497,7 @@ func ConfirmLoanApproval(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-		c.Abort()
+	c.Abort()
 }
 
 func RejectLoan(c *gin.Context) {
@@ -598,7 +641,7 @@ func RejectLoan(c *gin.Context) {
 			"reason":  req.Reason,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func DisburseLoan(c *gin.Context) {
@@ -618,6 +661,21 @@ func DisburseLoan(c *gin.Context) {
 			"error":   "Loan ID is required",
 		})
 		return
+	}
+
+	// Only a chama officer may release loan funds.
+	if dbVal, ok := c.Get("db"); ok {
+		if database, ok := dbVal.(*sql.DB); ok {
+			var loanChamaID string
+			if err := database.QueryRow("SELECT chama_id FROM loans WHERE id = $1", loanID).Scan(&loanChamaID); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Loan not found"})
+				return
+			}
+			if _, err := requireActiveChamaOfficer(database, loanChamaID, userID); err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"success": false, "error": err.Error()})
+				return
+			}
+		}
 	}
 
 	disbursementServiceVal, exists := c.Get("disbursementService")
@@ -651,5 +709,5 @@ func DisburseLoan(c *gin.Context) {
 		"success": true,
 		"message": "Loan disbursed successfully",
 	})
-		c.Abort()
+	c.Abort()
 }

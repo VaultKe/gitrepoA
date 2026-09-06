@@ -59,6 +59,21 @@ const getLoanGuarantors = async (loanId) => {
   return await makeRequest(`/loans/${loanId}/guarantors`);
 };
 
+const getLoanReferees = async (loanId) => {
+  return await makeRequest(`/loans/${loanId}/referees`);
+};
+
+const respondToRefereeRequest = async (refereeId, action, reason = '') => {
+  return await makeRequest(`/loans/referees/${refereeId}/respond`, {
+    method: 'POST',
+    body: { refereeId, action, reason },
+  });
+};
+
+const getRefereeRequests = async (userId) => {
+  return await makeRequest(`/loans/referee-requests?userId=${userId}`);
+};
+
 const getLoanFines = async (loanId) => {
   return await makeRequest(`/loans/${loanId}/fines`);
 };
@@ -135,6 +150,9 @@ export {
   makeLoanPayment,
   getGuarantorRequests,
   getLoanGuarantors,
+  getLoanReferees,
+  respondToRefereeRequest,
+  getRefereeRequests,
   getLoanFines,
   rejectLoan,
   disburseLoan,
