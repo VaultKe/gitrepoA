@@ -38,7 +38,60 @@ func (m *MigrationManager) RunMigrations() error {
 		return fmt.Errorf("failed to insert vibrate sound: %w", err)
 	}
 
+	// Unguarded (runs every boot): the notifications table is (re)created with a
+	// narrow CHECK on `type` that rejects legitimate values like
+	// 'guarantor_request' / 'referee_request', silently dropping those
+	// notifications. Strip every CHECK constraint off the table.
+	if err := m.relaxNotificationsConstraints(); err != nil {
+		log.Printf("Warning: relaxNotificationsConstraints failed: %v", err)
+	}
+
 	log.Println("All migrations completed successfully!")
+	return nil
+}
+
+// relaxNotificationsConstraints drops all CHECK constraints on the notifications
+// table and widens the columns they guarded.
+func (m *MigrationManager) relaxNotificationsConstraints() error {
+	var exists bool
+	if err := m.db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'notifications')`,
+	).Scan(&exists); err != nil || !exists {
+		return err
+	}
+
+	rows, err := m.db.Query(`
+		SELECT con.conname
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		WHERE rel.relname = 'notifications' AND con.contype = 'c'
+	`)
+	if err != nil {
+		return err
+	}
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err == nil {
+			names = append(names, n)
+		}
+	}
+	rows.Close()
+
+	for _, n := range names {
+		if _, err := m.db.Exec(`ALTER TABLE notifications DROP CONSTRAINT IF EXISTS "` + n + `"`); err != nil {
+			log.Printf("Warning: could not drop notifications constraint %s: %v", n, err)
+		}
+	}
+	for _, stmt := range []string{
+		"ALTER TABLE notifications ALTER COLUMN type TYPE VARCHAR(64)",
+		"ALTER TABLE notifications ALTER COLUMN status TYPE VARCHAR(32)",
+		"ALTER TABLE notifications ALTER COLUMN priority TYPE VARCHAR(16)",
+	} {
+		if _, err := m.db.Exec(stmt); err != nil {
+			log.Printf("Warning: %q failed: %v", stmt, err)
+		}
+	}
 	return nil
 }
 

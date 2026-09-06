@@ -15,6 +15,10 @@ func MigrateNotifications(db *sql.DB) error {
 	if err := migrateExistingNotificationsTable(db); err != nil {
 		return err
 	}
+	if err := relaxNotificationsConstraints(db); err != nil {
+		return err
+	}
+	backfillBackerNotifications(db)
 	if err := createNotificationDeliveryLog(db); err != nil {
 		return err
 	}
@@ -29,6 +33,130 @@ func MigrateNotifications(db *sql.DB) error {
 	}
 	log.Println("Notifications migrations completed successfully")
 	return nil
+}
+
+// relaxNotificationsConstraints removes the narrow CHECK constraints the
+// notifications table shipped with. The original schema only allowed
+// type IN ('chama','transaction','reminder','system','alert') and
+// status IN ('pending','sent','delivered','read','failed'). Application code
+// legitimately writes richer types — most importantly 'guarantor_request' and
+// 'referee_request' — and those INSERTs were being silently rejected by the
+// CHECK, so guarantors and referees never received their loan-backing requests.
+// We drop every CHECK constraint on the table and widen the affected columns.
+func relaxNotificationsConstraints(db *sql.DB) error {
+	var tableExists bool
+	if err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'notifications')`,
+	).Scan(&tableExists); err != nil {
+		return err
+	}
+	if !tableExists {
+		return nil
+	}
+
+	rows, err := db.Query(`
+		SELECT con.conname
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		WHERE rel.relname = 'notifications' AND con.contype = 'c'
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to list notifications constraints: %w", err)
+	}
+	var constraintNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		constraintNames = append(constraintNames, name)
+	}
+	rows.Close()
+
+	for _, name := range constraintNames {
+		if _, err := db.Exec(`ALTER TABLE notifications DROP CONSTRAINT IF EXISTS "` + name + `"`); err != nil {
+			log.Printf("Warning: could not drop notifications constraint %s: %v", name, err)
+		}
+	}
+
+	widen := []string{
+		"ALTER TABLE notifications ALTER COLUMN type TYPE VARCHAR(64)",
+		"ALTER TABLE notifications ALTER COLUMN status TYPE VARCHAR(32)",
+		"ALTER TABLE notifications ALTER COLUMN priority TYPE VARCHAR(16)",
+	}
+	for _, stmt := range widen {
+		if _, err := db.Exec(stmt); err != nil {
+			log.Printf("Warning: %q failed: %v", stmt, err)
+		}
+	}
+
+	if len(constraintNames) > 0 {
+		log.Printf("Relaxed notifications constraints (dropped %d CHECK constraints)", len(constraintNames))
+	}
+	return nil
+}
+
+// backfillBackerNotifications re-creates the guarantor/referee request
+// notifications that were silently dropped while the notifications.type CHECK
+// constraint was still in place, so people already asked to back a pending loan
+// finally see the request. Best-effort — never blocks startup.
+func backfillBackerNotifications(db *sql.DB) {
+	guarantorSQL := `
+		INSERT INTO notifications
+			(user_id, title, message, type, priority, category, status, is_read, data, scheduled_for, created_at, updated_at)
+		SELECT g.user_id,
+		       'Guarantor Request',
+		       'You have been requested to guarantee a loan of KES ' || l.amount::numeric(14,2)::text,
+		       'guarantor_request', 'high', 'financial', 'pending', false,
+		       '{"loan_id": "' || l.id || '", "amount": ' || l.amount::numeric(14,2)::text ||
+		       ', "purpose": "' || replace(coalesce(l.purpose, ''), '"', '') ||
+		       '", "requester_id": "' || l.borrower_id || '", "guarantor_id": "' || g.id || '", "role": "guarantor"}',
+		       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+		FROM guarantors g
+		JOIN loans l ON l.id = g.loan_id
+		WHERE lower(g.status) = 'pending'
+		  AND lower(l.status) IN ('pending', 'guarantors_approved', 'guarantors_declined')
+		  AND NOT EXISTS (
+		      SELECT 1 FROM notifications n
+		      WHERE n.user_id = g.user_id AND n.type = 'guarantor_request'
+		        AND n.data LIKE '%' || g.id || '%'
+		  )`
+	if _, err := db.Exec(guarantorSQL); err != nil {
+		log.Printf("Warning: guarantor notification backfill skipped: %v", err)
+	}
+
+	// loan_referees is created by MigrateLoans (runs earlier); guard anyway.
+	var hasReferees bool
+	if err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'loan_referees')`,
+	).Scan(&hasReferees); err != nil || !hasReferees {
+		return
+	}
+	refereeSQL := `
+		INSERT INTO notifications
+			(user_id, title, message, type, priority, category, status, is_read, data, scheduled_for, created_at, updated_at)
+		SELECT r.user_id,
+		       'Referee Request',
+		       'You have been listed as a referee for a loan of KES ' || l.amount::numeric(14,2)::text ||
+		       '. Being a referee carries no financial liability.',
+		       'referee_request', 'high', 'financial', 'pending', false,
+		       '{"loan_id": "' || l.id || '", "amount": ' || l.amount::numeric(14,2)::text ||
+		       ', "purpose": "' || replace(coalesce(l.purpose, ''), '"', '') ||
+		       '", "requester_id": "' || l.borrower_id || '", "referee_id": "' || r.id || '", "role": "referee"}',
+		       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+		FROM loan_referees r
+		JOIN loans l ON l.id = r.loan_id
+		WHERE lower(r.status) = 'pending'
+		  AND lower(l.status) IN ('pending', 'guarantors_approved', 'guarantors_declined')
+		  AND NOT EXISTS (
+		      SELECT 1 FROM notifications n
+		      WHERE n.user_id = r.user_id AND n.type = 'referee_request'
+		        AND n.data LIKE '%' || r.id || '%'
+		  )`
+	if _, err := db.Exec(refereeSQL); err != nil {
+		log.Printf("Warning: referee notification backfill skipped: %v", err)
+	}
 }
 
 func createNotificationDeliveryLog(db *sql.DB) error {

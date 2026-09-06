@@ -31,6 +31,117 @@ func ensureDeletedNotificationsTable(db *sql.DB) {
 	})
 }
 
+var ensureReadNotificationsTableOnce sync.Once
+
+func ensureReadNotificationsTable(db *sql.DB) {
+	ensureReadNotificationsTableOnce.Do(func() {
+		_, _ = db.Exec(`
+			CREATE TABLE IF NOT EXISTS read_virtual_notifications (
+				id SERIAL PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				notification_id TEXT NOT NULL,
+				notification_type TEXT NOT NULL DEFAULT '',
+				read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(user_id, notification_id)
+			)
+		`)
+	})
+}
+
+// storeVirtualNotificationRead records that a virtual (aggregated, non-row)
+// notification has been read by a user, so it stays read across reloads.
+// Virtual notifications are regenerated on every GetNotifications call with
+// isRead=false hardcoded; without this record they flip back to unread.
+func storeVirtualNotificationRead(db *sql.DB, userID, notificationID, notificationType string) bool {
+	ensureReadNotificationsTable(db)
+	_, err := db.Exec(`
+		INSERT INTO read_virtual_notifications (user_id, notification_id, notification_type)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, notification_id) DO UPDATE
+		SET notification_type = EXCLUDED.notification_type, read_at = CURRENT_TIMESTAMP
+	`, userID, notificationID, notificationType)
+	if err != nil {
+		fmt.Printf("storeVirtualNotificationRead failed for %s/%s: %v\n", userID, notificationID, err)
+	}
+	// Return success regardless — a failed bookkeeping write must not surface
+	// as a failed "mark as read" to the client.
+	return true
+}
+
+// getReadVirtualNotificationIDs returns the set of virtual notification IDs a
+// user has marked as read.
+func getReadVirtualNotificationIDs(db *sql.DB, userID string) map[string]bool {
+	readIDs := make(map[string]bool)
+	ensureReadNotificationsTable(db)
+
+	rows, err := db.Query(`SELECT notification_id FROM read_virtual_notifications WHERE user_id = $1`, userID)
+	if err != nil {
+		return readIDs
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			readIDs[id] = true
+		}
+	}
+	return readIDs
+}
+
+// applyReadVirtualNotifications overlays persisted read state onto the freshly
+// aggregated notification list.
+func applyReadVirtualNotifications(notifications []map[string]interface{}, readIDs map[string]bool) {
+	if len(readIDs) == 0 {
+		return
+	}
+	for _, n := range notifications {
+		id, ok := n["id"].(string)
+		if !ok || id == "" {
+			continue
+		}
+		if readIDs[id] {
+			n["isRead"] = true
+			n["is_read"] = true
+		}
+	}
+}
+
+// markAllVirtualNotificationsRead persists a read marker for every virtual
+// (non-DB-row) notification currently visible to the user. Real rows in the
+// notifications table are handled by a direct UPDATE elsewhere.
+func markAllVirtualNotificationsRead(db *sql.DB, userID string) {
+	var (
+		wg  sync.WaitGroup
+		mu  sync.Mutex
+		all []map[string]interface{}
+	)
+	collect := func(list []map[string]interface{}) {
+		mu.Lock()
+		all = append(all, list...)
+		mu.Unlock()
+	}
+
+	wg.Add(5)
+	go func() { defer wg.Done(); l, _ := getChamaInvitationNotifications(db, userID); collect(l) }()
+	go func() { defer wg.Done(); l, _ := getMeetingNotifications(db, userID); collect(l) }()
+	go func() { defer wg.Done(); l, _ := getFinancialNotifications(db, userID); collect(l) }()
+	go func() { defer wg.Done(); l, _ := getChamaActivityNotifications(db, userID); collect(l) }()
+	go func() { defer wg.Done(); l, _ := getSupportRequestNotifications(db, userID); collect(l) }()
+	wg.Wait()
+
+	for _, n := range all {
+		id, ok := n["id"].(string)
+		if !ok || id == "" {
+			continue
+		}
+		if src, _ := n["source"].(string); src == "system" {
+			continue // real notifications table row — handled by UPDATE
+		}
+		storeVirtualNotificationRead(db, userID, id, "")
+	}
+}
+
 // sortNotificationsByDate sorts notifications by created_at in descending order (most recent first)
 func sortNotificationsByDate(notifications []map[string]interface{}) {
 	sort.Slice(notifications, func(i, j int) bool {
@@ -52,39 +163,16 @@ func sortNotificationsByDate(notifications []map[string]interface{}) {
 func handleSpecialNotificationRead(db *sql.DB, notificationID, userID string) bool {
 	// Handle prefixed notification IDs from aggregated notifications
 
-	// Check for chama activity notifications
-	if strings.HasPrefix(notificationID, "chama_activity_") {
-		// These are virtual notifications based on chama member activities
-		// We don't need to store read status for these, just return success
-		return true
+	// Virtual notifications are regenerated on every fetch, so their read state
+	// must be persisted separately or they revert to unread on the next reload.
+	virtualPrefixes := []string{
+		"chama_activity_", "meeting_", "loan_", "welfare_", "transaction_",
+		"support_update_", "support_new_",
 	}
-
-	// Check for meeting notifications
-	if strings.HasPrefix(notificationID, "meeting_") {
-		// These are virtual notifications based on meetings
-		// We don't need to store read status for these, just return success
-		return true
-	}
-
-	// Check for loan notifications
-	if strings.HasPrefix(notificationID, "loan_") {
-		// These are virtual notifications based on loans
-		// We don't need to store read status for these, just return success
-		return true
-	}
-
-	// Check for welfare notifications
-	if strings.HasPrefix(notificationID, "welfare_") {
-		// These are virtual notifications based on welfare requests
-		// We don't need to store read status for these, just return success
-		return true
-	}
-
-	// Check for transaction notifications
-	if strings.HasPrefix(notificationID, "transaction_") {
-		// These are virtual notifications based on transactions
-		// We don't need to store read status for these, just return success
-		return true
+	for _, prefix := range virtualPrefixes {
+		if strings.HasPrefix(notificationID, prefix) {
+			return storeVirtualNotificationRead(db, userID, notificationID, prefix)
+		}
 	}
 
 	// Check if this is a chama invitation notification

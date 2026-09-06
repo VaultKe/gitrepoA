@@ -115,6 +115,10 @@ func GetNotifications(c *gin.Context) {
 		allNotifications = append(allNotifications, supportNotifs...)
 	}
 
+	// Overlay persisted read state for virtual (regenerated) notifications so a
+	// notification the user already read does not flip back to unread.
+	applyReadVirtualNotifications(allNotifications, getReadVirtualNotificationIDs(db.(*sql.DB), userID))
+
 	// Sort all notifications by created_at (most recent first)
 	sortNotificationsByDate(allNotifications)
 
@@ -291,8 +295,11 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 
 	rowsAffected, _ := result.RowsAffected()
 
-	// For virtual notifications (chama activities, meetings, etc.), we'll just return success
-	// since they don't need persistent read status tracking for now
+	// Persist read state for every virtual notification currently visible to the
+	// user (chama activities, meetings, loan/welfare/transaction items, support
+	// updates) so "mark all as read" survives a reload.
+	markAllVirtualNotificationsRead(db.(*sql.DB), userID)
+
 	totalMarked := rowsAffected
 
 	c.JSON(http.StatusOK, gin.H{
