@@ -241,54 +241,21 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
     }
   };
 
-  // Picks a chama when nothing is selected yet, and otherwise leaves
-  // selectedChama alone.
-  //
-  // This used to also clear the selection whenever it "wasn't found" in
-  // whatever the roster's latest fetch happened to return -- run every time
-  // `chamas` changed, including the mount-time refetch that fires right
-  // after landing here from MyChamasScreen's "view dashboard" action. A
-  // chama you had *just* explicitly picked could still come back missing
-  // from that particular response for reasons that have nothing to do with
-  // having left it, and that was enough to null the selection out --
-  // QuickActionsCard fades to 40% opacity and disables itself whenever
-  // nothing is selected, so the visible effect was Quick Actions going
-  // blurry right after choosing a chama, or right after landing on one.
-  // Once a chama is picked, it now stays picked. switchToChama already
-  // refuses to select a chama the user has actually left (with an explicit
-  // alert), which is the only place that check belongs -- a passive effect
-  // reacting to an unrelated refetch is not a safe place to decide someone
-  // has left their own chama.
-  useEffect(() => {
-    if (chamas.length === 0) return undefined;
-
-    const currentSelected = selectedChamaRef.current;
-
-    if (currentSelected) {
-      const currentChamaId = currentSelected?.id || currentSelected?.chamaId || currentSelected;
-      loadMemberRole(currentChamaId);
-      loadChamaFeatures();
-      return undefined;
-    }
-
-    // A specific chama was asked for -- e.g. just-accepted-invitation
-    // navigation passes chamaId -- so honour that over "pick the first one"
-    // once it actually shows up in the roster.
-    const requestedChamaId = route?.params?.chamaId;
-    const requested = requestedChamaId && chamas.find(c => c.id === requestedChamaId);
-    const toSelect = requested || chamas[0];
-
-    setSelectedChama(toSelect);
-    loadMemberRole(toSelect.id);
-    loadChamaFeatures();
-
-    // Preload data for the rest in the background for faster switching.
-    const timeoutId = setTimeout(() => {
-      preloadChamaData(chamas);
-    }, 2000);
-    return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chamas]);
+  // There used to be a useEffect here reacting to `chamas` changing --
+  // reselecting a default chama, and (before the previous fix) clearing the
+  // selection outright when it didn't show up in whatever the roster's
+  // latest fetch happened to return. Any effect keyed off that list firing
+  // again on every refetch (mount, pull-to-refresh) kept catching a chama
+  // the user had just explicitly picked and re-deciding things for it --
+  // which is what was fading Quick Actions to 40% opacity and disabling it
+  // right after choosing a chama, or right after landing on one. Removed
+  // outright rather than narrowed further: selectedChama is now only ever
+  // changed by an explicit action -- switchToChama (tapping a chama in
+  // ChamaSelectorCard, which also refuses one the user has actually left)
+  // -- never by a passive effect second-guessing a choice already made.
+  // Landing here with nothing selected yet (no chama tapped in
+  // MyChamasScreen first) means picking one from the selector card, same as
+  // switching to a different one later.
 
   const loadChamaFeatures = async () => {
     try {
