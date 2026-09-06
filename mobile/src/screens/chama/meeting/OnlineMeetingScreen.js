@@ -32,41 +32,44 @@ import MeetingMinutesCard from '../../../components/chama-meeting/MeetingMinutes
 
 const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
 const CARD_CONTROL_TIMEOUT_MS = 4000;
-// Used only to prefer one column count over another when several would
-// divide the tiles into a reasonable number of rows -- tiles are never
-// locked to this ratio. Width is handled by flex (see renderGalleryRows):
+// Floor on a tile's height so a row never shrinks a card past readable --
+// width is handled separately by flex (see galleryTileSizeStyle/renderGalleryRows):
 // each row's tiles get flex:1 and split whatever width the row has evenly,
 // so there is no per-tile width arithmetic left to get wrong. Only the
 // height needs deciding, and only once per row, which is what column count
 // determines (fewer columns -> more rows -> shorter rows).
-const IDEAL_TILE_ASPECT_RATIO = 16 / 9;
 const MIN_TILE_HEIGHT = 60;
 
-// Picks how many tiles go in each row. One person is always 1 (fills the
-// screen); everything else searches column counts from 1 up to `count` and
-// keeps whichever produces rows closest to IDEAL_TILE_ASPECT_RATIO once
-// availH is divided evenly among them, stopping once rows would be shorter
-// than MIN_TILE_HEIGHT.
-const computeGridColumns = (count, availW, availH) => {
-  if (count <= 1 || availW <= 0) return 1;
+// Explicit puzzle-fit targets, tuned by hand rather than derived from a
+// generic aspect-ratio search -- specific counts were called out by name:
+// 3 must be a single column of 3 full-width cards stacked top to bottom, 4
+// must land as 2x2, 6 as 3x2, 8 as 4x2 on regular screens. `small` is the
+// same idea one size down for narrow/short screens (isSmallDevice), which
+// drop a column so tiles stay tall enough to read instead of going wide and
+// flat. Odd counts don't otherwise factor evenly, so each gets a deliberate
+// column count rather than falling through to a mechanical formula: 5 at 3
+// (three up, two below, evenly split), 7 at 4 on regular screens (four up,
+// three below) and 2 on small ones (three short rows of two, plus a
+// trailing single). maxVisibleTiles caps the gallery at 6 tiles on small
+// devices and 8 on regular ones (anything past that folds into "+N more"),
+// so counts above 8 never reach this table in practice; the fallback below
+// is just a safety net.
+const GRID_COLUMNS_BY_COUNT = {
+  regular: { 1: 1, 2: 2, 3: 1, 4: 2, 5: 3, 6: 3, 7: 4, 8: 4 },
+  small: { 1: 1, 2: 1, 3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2 },
+};
 
-  let bestColumns = 1;
-  let bestPenalty = Infinity;
+// Picks how many tiles go in each row for a given participant count and
+// device size. One person is always 1 column (fills the whole screen).
+const computeGridColumns = (count, isSmallDevice) => {
+  if (count <= 1) return 1;
 
-  for (let columns = 1; columns <= count; columns++) {
-    const rows = Math.ceil(count / columns);
-    const tileWidth = availW / columns;
-    const tileHeight = availH > 0 ? availH / rows : tileWidth / IDEAL_TILE_ASPECT_RATIO;
-    if (availH > 0 && tileHeight < MIN_TILE_HEIGHT && rows > 1) continue;
+  const table = isSmallDevice ? GRID_COLUMNS_BY_COUNT.small : GRID_COLUMNS_BY_COUNT.regular;
+  if (table[count]) return table[count];
 
-    const penalty = Math.abs(Math.log((tileWidth / tileHeight) / IDEAL_TILE_ASPECT_RATIO));
-    if (penalty < bestPenalty) {
-      bestPenalty = penalty;
-      bestColumns = columns;
-    }
-  }
-
-  return bestColumns;
+  // Shouldn't be reached (maxVisibleTiles keeps count <= 8) -- square-ish
+  // fallback rather than a crash if that cap ever changes.
+  return Math.max(1, Math.round(Math.sqrt(count)));
 };
 
 // Splits a flat tile list into rows of `columns` each, for renderGalleryRows.
@@ -339,11 +342,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   // would keep shrinking them as the list grows, when the actual intent of
   // expanding is to scroll to the rest at a normal, readable size.
   const layoutTileCount = Math.min(packedTileCount, maxVisibleTiles);
-  const gridColumns = computeGridColumns(
-    layoutTileCount,
-    galleryAreaSize.width || windowWidth,
-    galleryAreaSize.height || windowHeight
-  );
+  const gridColumns = computeGridColumns(layoutTileCount, isSmallDevice);
   const gridRows = Math.max(1, Math.ceil(layoutTileCount / gridColumns));
 
   const rosterParticipants = participants
