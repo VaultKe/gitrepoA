@@ -43,6 +43,20 @@ const deleteNotification = async (notificationId) => {
   return res;
 };
 
+const registerPushToken = async ({ token, platform, deviceName } = {}) => {
+  return await makeRequest('/notifications/push-token', {
+    method: 'POST',
+    body: { token, platform, deviceName },
+  });
+};
+
+const unregisterPushToken = async ({ token } = {}) => {
+  return await makeRequest('/notifications/push-token/remove', {
+    method: 'POST',
+    body: { token },
+  });
+};
+
 const getNotificationPreferences = async () => {
   return await makeRequest('/notifications/preferences', { method: 'GET' });
 };
@@ -82,6 +96,8 @@ export {
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
+  registerPushToken,
+  unregisterPushToken,
   getNotificationPreferences,
   updateNotificationPreferences,
   getAvailableNotificationSounds,

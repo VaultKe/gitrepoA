@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
 // Navigation Stacks
@@ -9,8 +9,18 @@ import AdminDashboardStack from './AdminDashboardStack';
 import ChamaDashboardStack from './ChamaDashboardStack';
 
 import { useApp } from '../context/AppContext';
+import notificationService from '../services/notificationService';
 
 const Stack = createStackNavigator();
+
+export const navigationRef = createNavigationContainerRef();
+
+// Let a tapped OS notification deep-link into the app.
+notificationService.setNavigator((routeName, params) => {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate(routeName, params);
+  }
+});
 
 export default function RootNavigator() {
   const { 
@@ -30,7 +40,7 @@ export default function RootNavigator() {
   // Show auth stack if not authenticated
   if (!isAuthenticated) {
     return (
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Auth" component={AuthStack} />
         </Stack.Navigator>
@@ -41,7 +51,7 @@ export default function RootNavigator() {
   // Show appropriate dashboard based on currentDashboard state
   
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {currentDashboard === 'user' && (
           <Stack.Screen 

@@ -18,6 +18,12 @@ func MigrateNotifications(db *sql.DB) error {
 	if err := relaxNotificationsConstraints(db); err != nil {
 		return err
 	}
+	if err := ensureNotificationPreferencesSchema(db); err != nil {
+		return err
+	}
+	if err := createPushTokensTable(db); err != nil {
+		return err
+	}
 	backfillBackerNotifications(db)
 	if err := createNotificationDeliveryLog(db); err != nil {
 		return err
@@ -95,6 +101,155 @@ func relaxNotificationsConstraints(db *sql.DB) error {
 		log.Printf("Relaxed notifications constraints (dropped %d CHECK constraints)", len(constraintNames))
 	}
 	return nil
+}
+
+// ensureNotificationPreferencesSchema reconciles the user_notification_preferences
+// and notification_sounds tables with what the application code expects. The
+// tables are only ever created with CREATE TABLE IF NOT EXISTS, so a database
+// that first saw an older schema is missing columns the notifications-preferences
+// handler selects/updates — which surfaces as a 500 on PUT /notifications/preferences.
+func ensureNotificationPreferencesSchema(db *sql.DB) error {
+	var prefsExists bool
+	if err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_notification_preferences')`,
+	).Scan(&prefsExists); err != nil {
+		return err
+	}
+	if !prefsExists {
+		return nil // createNotificationsTables will have built it with the full schema
+	}
+
+	// Every column the preferences service reads or writes, with a safe default.
+	addColumns := []string{
+		"notification_sound_id INTEGER",
+		"sound_enabled BOOLEAN DEFAULT true",
+		"vibration_enabled BOOLEAN DEFAULT true",
+		"volume_level INTEGER DEFAULT 80",
+		"chama_notifications BOOLEAN DEFAULT true",
+		"transaction_notifications BOOLEAN DEFAULT true",
+		"reminder_notifications BOOLEAN DEFAULT true",
+		"system_notifications BOOLEAN DEFAULT true",
+		"quiet_hours_enabled BOOLEAN DEFAULT false",
+		"quiet_hours_start TIME DEFAULT '22:00:00'",
+		"quiet_hours_end TIME DEFAULT '07:00:00'",
+		"timezone VARCHAR(50) DEFAULT 'Africa/Nairobi'",
+		"notification_frequency VARCHAR(20) DEFAULT 'immediate'",
+		"priority_only_during_quiet BOOLEAN DEFAULT true",
+		"push_enabled BOOLEAN DEFAULT true",
+		"created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+		"updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+	}
+	for _, col := range addColumns {
+		if _, err := db.Exec("ALTER TABLE user_notification_preferences ADD COLUMN IF NOT EXISTS " + col); err != nil {
+			log.Printf("Warning: could not add user_notification_preferences column %q: %v", col, err)
+		}
+	}
+
+	// Drop CHECK constraints (e.g. notification_frequency / volume_level) — a
+	// value the client legitimately sends must never 500 the request.
+	dropChecksOn(db, "user_notification_preferences")
+
+	// The FK to notification_sounds turns a stale sound id into a 500 on update.
+	// The id is only a pointer and the code already tolerates a missing sound,
+	// so drop the constraint.
+	rows, err := db.Query(`
+		SELECT con.conname
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		WHERE rel.relname = 'user_notification_preferences' AND con.contype = 'f'
+	`)
+	if err == nil {
+		var names []string
+		for rows.Next() {
+			var n string
+			if rows.Scan(&n) == nil {
+				names = append(names, n)
+			}
+		}
+		rows.Close()
+		for _, n := range names {
+			if _, err := db.Exec(`ALTER TABLE user_notification_preferences DROP CONSTRAINT IF EXISTS "` + n + `"`); err != nil {
+				log.Printf("Warning: could not drop FK %s: %v", n, err)
+			}
+		}
+	}
+
+	// Make sure there is at least one usable, default sound so the picker and
+	// the default-preference path always resolve to a real row.
+	var soundCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM notification_sounds WHERE is_active = true").Scan(&soundCount); err == nil && soundCount == 0 {
+		seed := []struct {
+			name, path string
+			def        bool
+		}{
+			{"Default Ring", "/notification_sound/ring.mp3", true},
+			{"Gentle Bell", "/notification_sound/bell.mp3", false},
+			{"Alert Tone", "/notification_sound/alert.mp3", false},
+			{"Chime", "/notification_sound/chime.mp3", false},
+			{"Vibrate", "/notification_sound/vibrate.mp3", false},
+			{"Silent", "", false},
+		}
+		for _, s := range seed {
+			if _, err := db.Exec(`
+				INSERT INTO notification_sounds (name, file_path, is_default, is_active, created_at, updated_at)
+				VALUES ($1, $2, $3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			`, s.name, s.path, s.def); err != nil {
+				log.Printf("Warning: could not seed sound %q: %v", s.name, err)
+			}
+		}
+	}
+
+	log.Println("user_notification_preferences schema reconciled")
+	return nil
+}
+
+// createPushTokensTable stores the Expo / device push tokens used to deliver
+// notifications to the OS notification tray (and lock screen) when the app is
+// backgrounded or closed. One user can have several (multiple devices).
+func createPushTokensTable(db *sql.DB) error {
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS push_tokens (
+			id SERIAL PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token TEXT NOT NULL UNIQUE,
+			platform TEXT DEFAULT '',
+			device_name TEXT DEFAULT '',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create push_tokens table: %w", err)
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id)"); err != nil {
+		return fmt.Errorf("failed to index push_tokens: %w", err)
+	}
+	return nil
+}
+
+// dropChecksOn removes every CHECK constraint from a table.
+func dropChecksOn(db *sql.DB, table string) {
+	rows, err := db.Query(`
+		SELECT con.conname
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		WHERE rel.relname = $1 AND con.contype = 'c'
+	`, table)
+	if err != nil {
+		return
+	}
+	var names []string
+	for rows.Next() {
+		var n string
+		if rows.Scan(&n) == nil {
+			names = append(names, n)
+		}
+	}
+	rows.Close()
+	for _, n := range names {
+		if _, err := db.Exec(`ALTER TABLE "` + table + `" DROP CONSTRAINT IF EXISTS "` + n + `"`); err != nil {
+			log.Printf("Warning: could not drop constraint %s on %s: %v", n, table, err)
+		}
+	}
 }
 
 // backfillBackerNotifications re-creates the guarantor/referee request

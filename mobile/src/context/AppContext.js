@@ -205,6 +205,12 @@ const AppContext = createContext();
         // otherwise a slow preload looks like a burst of "new" notifications.
         notifSettleUntilRef.current = Date.now() + 8000;
         unreadBaselineRef.current = 0;
+        // Register this device for OS push notifications (tray + lock screen).
+        notificationService.initialize()
+          .then(() => notificationService.registerForPushNotificationsAsync())
+          .catch(() => {});
+      } else {
+        notificationService.unregisterPushToken().catch(() => {});
       }
     }, [state.isAuthenticated]);
 

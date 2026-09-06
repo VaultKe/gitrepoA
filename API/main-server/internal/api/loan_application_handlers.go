@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -47,7 +48,23 @@ func createNotification(db *sql.DB, _ string, userID, notificationType, title, m
 		referenceType,
 		referenceID,
 		data)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Deliver to the OS notification tray / lock screen too (best-effort).
+	payload := map[string]interface{}{"type": notificationType}
+	if data != "" {
+		var parsed map[string]interface{}
+		if json.Unmarshal([]byte(data), &parsed) == nil {
+			for k, v := range parsed {
+				payload[k] = v
+			}
+		}
+	}
+	go services.PushToUser(db, userID, title, message, payload)
+
+	return nil
 }
 
 // Helper functions to determine notification properties based on type

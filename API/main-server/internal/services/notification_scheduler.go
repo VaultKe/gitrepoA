@@ -141,12 +141,16 @@ func (ns *NotificationScheduler) sendNotification(reminder *models.Reminder) {
 
 // processNotification processes the actual notification sending
 func (ns *NotificationScheduler) processNotification(notification *models.ReminderNotification) {
-	// This is where you would integrate with your notification service
-	// For now, we'll just log the notification
 	log.Printf("📱 NOTIFICATION: %s - %s (User: %s)",
 		notification.Title,
 		notification.Description,
 		notification.UserID)
+
+	// Deliver to the OS notification tray / lock screen.
+	PushToUser(ns.db, notification.UserID, notification.Title, notification.Description, map[string]interface{}{
+		"type":       "reminder",
+		"reminderId": notification.ReminderID,
+	})
 
 	// TODO: Integrate with actual notification services:
 	// - Push notifications (FCM, APNs)

@@ -384,6 +384,8 @@ func SetupRoutes(
 				notifications.PUT("/:id/read", api.MarkNotificationAsRead)
 				notifications.POST("/read-all", api.MarkAllNotificationsAsRead)
 				notifications.DELETE("/:id", api.DeleteNotification)
+				notifications.POST("/push-token", api.RegisterPushToken)
+				notifications.POST("/push-token/remove", api.UnregisterPushToken)
 				notifications.POST("/system", api.SendSystemNotification)
 				notifications.GET("/preferences", api.GetNotificationPreferences)
 				notifications.PUT("/preferences", api.UpdateNotificationPreferences)

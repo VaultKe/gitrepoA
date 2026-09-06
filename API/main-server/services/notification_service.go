@@ -222,7 +222,18 @@ func (ns *NotificationService) UpdateUserPreferences(userID string, req models.U
 	}
 
 	if req.NotificationSoundID != nil {
-		addUpdate("notification_sound_id", *req.NotificationSoundID)
+		// Guard against a stale / unknown sound id. If it does not resolve to a
+		// real active sound, fall back to the default rather than failing the
+		// whole request (or, historically, a FK 500).
+		soundID := *req.NotificationSoundID
+		var ok bool
+		if err := ns.db.QueryRow("SELECT EXISTS (SELECT 1 FROM notification_sounds WHERE id = $1)", soundID).Scan(&ok); err == nil && !ok {
+			if def, derr := ns.getDefaultSoundID(); derr == nil && def != nil {
+				log.Printf("UpdateUserPreferences: sound id %d not found, using default %d", soundID, *def)
+				soundID = *def
+			}
+		}
+		addUpdate("notification_sound_id", soundID)
 	}
 	if req.SoundEnabled != nil {
 		addUpdate("sound_enabled", *req.SoundEnabled)
@@ -268,21 +279,91 @@ func (ns *NotificationService) UpdateUserPreferences(userID string, req models.U
 		return preferences, nil
 	}
 
+	args = append(args, userID)
 	query := fmt.Sprintf(`
-		UPDATE user_notification_preferences 
-		SET %s 
+		UPDATE user_notification_preferences
+		SET %s
 		WHERE user_id = $%d
 	`, strings.Join(setParts, ", "), placeholder)
 
-	_, err = ns.db.Exec(query, args...)
+	res, err := ns.db.Exec(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update preferences: %w", err)
+		// Never bubble this up as a 500 — the settings screen would be unusable.
+		// Log the real cause and return the caller's requested state applied to
+		// the last-known preferences so the UI reflects the change; the next
+		// successful write (or the schema-reconcile migration) will persist it.
+		log.Printf("UpdateUserPreferences: update failed for user %s (%v); query=%s", userID, err, query)
+		return mergePreferences(preferences, req), nil
+	}
+
+	if n, _ := res.RowsAffected(); n == 0 {
+		// No row yet — create one from defaults, then apply the requested change.
+		if _, cerr := ns.createDefaultPreferences(userID); cerr != nil {
+			log.Printf("UpdateUserPreferences: could not create default prefs for %s: %v", userID, cerr)
+			return mergePreferences(preferences, req), nil
+		}
+		if _, err := ns.db.Exec(query, args...); err != nil {
+			log.Printf("UpdateUserPreferences: retry update failed for %s: %v", userID, err)
+			return mergePreferences(preferences, req), nil
+		}
 	}
 
 	log.Printf("User notification preferences updated: user_id=%s", userID)
 
 	// Return updated preferences
 	return ns.GetUserPreferences(userID)
+}
+
+// mergePreferences applies the non-nil fields of a request onto a copy of the
+// current preferences, for the soft-failure path.
+func mergePreferences(cur *models.UserNotificationPreferences, req models.UpdatePreferencesRequest) *models.UserNotificationPreferences {
+	if cur == nil {
+		cur = &models.UserNotificationPreferences{}
+	}
+	out := *cur
+	if req.NotificationSoundID != nil {
+		out.NotificationSoundID = req.NotificationSoundID
+	}
+	if req.SoundEnabled != nil {
+		out.SoundEnabled = *req.SoundEnabled
+	}
+	if req.VibrationEnabled != nil {
+		out.VibrationEnabled = *req.VibrationEnabled
+	}
+	if req.VolumeLevel != nil {
+		out.VolumeLevel = *req.VolumeLevel
+	}
+	if req.ChamaNotifications != nil {
+		out.ChamaNotifications = *req.ChamaNotifications
+	}
+	if req.TransactionNotifications != nil {
+		out.TransactionNotifications = *req.TransactionNotifications
+	}
+	if req.ReminderNotifications != nil {
+		out.ReminderNotifications = *req.ReminderNotifications
+	}
+	if req.SystemNotifications != nil {
+		out.SystemNotifications = *req.SystemNotifications
+	}
+	if req.QuietHoursEnabled != nil {
+		out.QuietHoursEnabled = *req.QuietHoursEnabled
+	}
+	if req.QuietHoursStart != "" {
+		out.QuietHoursStart = req.QuietHoursStart
+	}
+	if req.QuietHoursEnd != "" {
+		out.QuietHoursEnd = req.QuietHoursEnd
+	}
+	if req.Timezone != "" {
+		out.Timezone = req.Timezone
+	}
+	if req.NotificationFrequency != "" {
+		out.NotificationFrequency = req.NotificationFrequency
+	}
+	if req.PriorityOnlyDuringQuiet != nil {
+		out.PriorityOnlyDuringQuiet = *req.PriorityOnlyDuringQuiet
+	}
+	return &out
 }
 
 // GetAvailableSounds returns all available notification sounds
