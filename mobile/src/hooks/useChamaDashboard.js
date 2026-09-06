@@ -56,7 +56,6 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
   const currentChamaIdRef = useRef(null);
 
   // Track in-flight statistics requests per chama to avoid duplicate network calls
-  const statsRequestIdRef = useRef(0);
   const inFlightStatsRef = useRef(new Set());
 
   // Cache for chama data to enable fast switching
@@ -257,18 +256,87 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
   // MyChamasScreen first) means picking one from the selector card, same as
   // switching to a different one later.
 
-  const loadChamaFeatures = async () => {
+  // Two exceptions to "only switchToChama changes selectedChama", both safe
+  // for the same reason: each only ever *sets* a selection, and only when
+  // there isn't one already (`if (selectedChama) return` up front) -- so
+  // neither can clear or override a choice already made, which is what made
+  // the removed effect unsafe.
+  //
+  // 1. Arriving with a specific chama named in navigation params (e.g. right
+  //    after accepting an invitation, which navigates here with
+  //    { chamaId, chamaName }) is itself an explicit choice, just made one
+  //    screen earlier instead of by tapping a card here.
+  // 2. Landing with nothing selected and no such params -- e.g. reopening
+  //    the app, or a plain web reload, while already on this dashboard --
+  //    used to leave the screen with no stats card and Quick Actions
+  //    permanently faded out and disabled until something was tapped, since
+  //    nothing set a default any more. Falling back to the first chama in
+  //    the roster keeps that from ever being a dead end, without touching
+  //    a selection that already exists.
+  useEffect(() => {
+    if (selectedChama) return;
+    if (chamas.length === 0) return;
+
+    // Picks a chama and immediately loads its data, rather than only
+    // setting selectedChama and leaving QuickStatsCard showing zeroes and
+    // QuickActionsCard filtered by the all-off feature defaults until the
+    // 30s auto-refresh happens to catch up -- loadChamaFeatures/
+    // loadChamaStatistics take an explicit id for exactly this: called right
+    // after setSelectedChama, reading `selectedChama` itself would still be
+    // whatever it was on this render (state updates aren't visible until
+    // the next one), so passing the id directly is what makes this take
+    // effect immediately instead of silently doing nothing.
+    const pick = (chama) => {
+      setSelectedChama(chama);
+      loadMemberRole(chama.id);
+      loadChamaFeatures(chama.id);
+      loadChamaStatistics(chama.id);
+    };
+
+    const params = route?.params || {};
+
+    if (params.chama) {
+      pick(params.chama);
+      return;
+    }
+
+    if (params.chamaId) {
+      const found = chamas.find(c => c.id === params.chamaId);
+      if (found) {
+        pick(found);
+      }
+      // Otherwise the named chama isn't in the roster yet -- wait for
+      // `chamas` to update rather than falling back to the first one out
+      // from under it.
+      return;
+    }
+
+    pick(chamas[0]);
+  }, [route?.params, chamas, selectedChama, setSelectedChama]);
+
+  // Accepts an explicit chama id so a caller that *just* called
+  // setSelectedChama(x) can request that chama's features immediately,
+  // rather than reading `selectedChama` from this closure -- which, being a
+  // state value, is still whatever it was on the render this function was
+  // created in until React re-renders. Without this, a freshly auto-selected
+  // chama (see the effect above) would call this, hit the stale
+  // `!selectedChama` guard, and silently do nothing -- leaving Quick Actions
+  // filtered by the all-features-off defaults, and the wallet balance/member
+  // count on QuickStatsCard stuck at 0 until the 30s auto-refresh happened
+  // to catch up.
+  const loadChamaFeatures = async (targetChamaId = null) => {
     try {
-      if (!selectedChama) {
+      const source = targetChamaId ? { id: targetChamaId } : selectedChama;
+      if (!source) {
         return;
       }
 
       // Extract chamaId properly
       let chamaId;
-      if (typeof selectedChama === 'string') {
-        chamaId = selectedChama;
-      } else if (selectedChama && selectedChama.id) {
-        chamaId = selectedChama.id;
+      if (typeof source === 'string') {
+        chamaId = source;
+      } else if (source && source.id) {
+        chamaId = source.id;
       } else {
         return;
       }
@@ -287,8 +355,17 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
           allowWelfare: permissions.allowWelfare ?? false,
           activeWalletTypes,
         });
-        // Refresh selected chama with latest data from this single source of truth
-        setSelectedChama(chama);
+        // Refresh selected chama with the latest data from this single
+        // source of truth -- but this endpoint returns chama details, not
+        // membership status, so keep whatever membership_is_active the
+        // selection already carried (from the roster, which does track it)
+        // rather than silently dropping it. setSelectedChama is a plain
+        // dispatcher (from AppContext), not a useState setter, so it takes
+        // the value directly -- no functional-updater form here.
+        setSelectedChama({
+          ...chama,
+          membership_is_active: chama.membership_is_active ?? selectedChamaRef.current?.membership_is_active,
+        });
       }
     } catch (error) {
       // Keep default features on error
@@ -319,6 +396,17 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
     if (inFlightStatsRef.current.has(chamaId)) {
       return;
     }
+
+    // Recorded *before* the request goes out, and compared again once it
+    // resolves below, so a reply for a chama the user has since switched
+    // away from gets dropped instead of overwriting the newer selection's
+    // stats. This was previously only ever read, never written -- it stayed
+    // null for the component's entire lifetime, so that comparison was
+    // always true and every call to this function returned empty-handed
+    // before ever setting chamaStats/realTimeData, no matter which chama was
+    // selected. That's why the stats card showed every figure as zero even
+    // for a chama picked correctly.
+    currentChamaIdRef.current = chamaId;
 
     inFlightStatsRef.current.add(chamaId);
     try {
