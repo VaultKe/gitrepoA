@@ -631,11 +631,11 @@ func (s *LoanService) CreateLoanType(chamaID, createdBy string, req *models.Loan
 	if req.RequiresReferees != nil {
 		requiresReferees = *req.RequiresReferees
 	}
-	minGuarantors := req.MinGuarantors
+	minGuarantors := req.MinGuarantors.Int()
 	if requiresGuarantors && minGuarantors < 1 {
 		minGuarantors = 1
 	}
-	minReferees := req.MinReferees
+	minReferees := req.MinReferees.Int()
 	if requiresReferees && minReferees < 1 {
 		minReferees = 1
 	}
@@ -805,14 +805,14 @@ func (s *LoanService) UpdateLoanType(loanTypeID string, req *models.LoanProductR
 	if req.RequiresReferees != nil {
 		requiresReferees = *req.RequiresReferees
 	}
-	minGuarantors := req.MinGuarantors
+	minGuarantors := req.MinGuarantors.Int()
 	if minGuarantors == 0 {
 		minGuarantors = existing.MinGuarantors
 	}
 	if requiresGuarantors && minGuarantors < 1 {
 		minGuarantors = 1
 	}
-	minReferees := req.MinReferees
+	minReferees := req.MinReferees.Int()
 	if minReferees == 0 {
 		minReferees = existing.MinReferees
 	}

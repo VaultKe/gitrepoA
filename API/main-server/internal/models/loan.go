@@ -1,8 +1,48 @@
 package models
 
 import (
+	"bytes"
+	"encoding/json"
+	"strconv"
 	"time"
 )
+
+// FlexInt is an int that also unmarshals from a JSON string ("2"), an empty
+// string, null, or a float — tolerating the various shapes mobile clients send
+// for numeric form fields.
+type FlexInt int
+
+func (f *FlexInt) UnmarshalJSON(b []byte) error {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 || string(b) == "null" {
+		*f = 0
+		return nil
+	}
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		if s == "" {
+			*f = 0
+			return nil
+		}
+		b = []byte(s)
+	}
+	if n, err := strconv.Atoi(string(b)); err == nil {
+		*f = FlexInt(n)
+		return nil
+	}
+	fl, err := strconv.ParseFloat(string(b), 64)
+	if err != nil {
+		return err
+	}
+	*f = FlexInt(fl)
+	return nil
+}
+
+// Int returns the plain int value.
+func (f FlexInt) Int() int { return int(f) }
 
 // LoanStatus represents loan status
 type LoanStatus string
@@ -216,8 +256,8 @@ type LoanProductRequest struct {
 	RequiresCollateral       *bool   `json:"requiresCollateral,omitempty"`
 	RequiresGuarantors       *bool   `json:"requiresGuarantors,omitempty"`
 	RequiresReferees         *bool   `json:"requiresReferees,omitempty"`
-	MinGuarantors            int     `json:"minGuarantors" validate:"gte=0"`
-	MinReferees              int     `json:"minReferees" validate:"gte=0"`
+	MinGuarantors            FlexInt `json:"minGuarantors"`
+	MinReferees              FlexInt `json:"minReferees"`
 	CollateralDesc           *string `json:"collateralDescription,omitempty"`
 	NetDisbursement          float64 `json:"netDisbursement" validate:"gte=0"`
 	CurrentLoans             int     `json:"currentLoans" validate:"gte=0"`
