@@ -20,6 +20,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // SetupRoutes registers all route groups and middleware on the given Gin router.
 func SetupRoutes(
 	router *gin.Engine,
@@ -69,12 +78,19 @@ func SetupRoutes(
 	// Cache middleware: cache GET responses for idempotent read endpoints
 	router.Use(middleware.CacheMiddleware(cache))
 
-	// Health check endpoints and static pages
+	// Health check endpoints and static pages.
+	// `commit` reflects the exact source this binary was built from — use it to
+	// confirm a deploy actually shipped the latest code (Render sets
+	// RENDER_GIT_COMMIT automatically).
+	buildCommit := firstNonEmpty(os.Getenv("RENDER_GIT_COMMIT"), os.Getenv("GIT_COMMIT"), os.Getenv("SOURCE_COMMIT"), "unknown")
+	startedAt := time.Now().UTC().Format(time.RFC3339)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"message": "VaultKe API is running",
-			"version": "1.0.0",
+			"status":    "ok",
+			"message":   "VaultKe API is running",
+			"version":   "1.0.0",
+			"commit":    buildCommit,
+			"startedAt": startedAt,
 		})
 	})
 

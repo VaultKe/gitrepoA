@@ -6,6 +6,7 @@ import apiService from '../services/api';
 import { getTransactions } from '../services/api/walletEndpoints';
 import { getUserChamas, payMemberServiceFee } from '../services/api/chamaEndpoints';
 import * as ImagePicker from 'expo-image-picker';
+import ensurePermission from '../utils/permissions';
 import KENYA_COUNTIES from '../utils/kenyaCounties';
 import {
   resolveAvatarUrl,
@@ -192,15 +193,8 @@ const useProfileScreen = ({ navigation }) => {
 
   const pickImage = useCallback(async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Toast.show({
-          type: 'error',
-          text1: 'Permission Required',
-          text2: 'Please grant camera roll permissions to change your profile picture.',
-        });
-        return;
-      }
+      const ok = await ensurePermission('photos');
+      if (!ok) return;
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],

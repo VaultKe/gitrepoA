@@ -194,11 +194,8 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const handleImagePicker = useCallback(async () => {
     try {
       const ImagePicker = await import('expo-image-picker');
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission required', 'Please allow access to your photo library');
-        return;
-      }
+      const { default: ensurePermission } = await import('../../utils/permissions');
+      if (!(await ensurePermission('photos'))) return [];
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaType.Images,
         allowsMultipleSelection: true,

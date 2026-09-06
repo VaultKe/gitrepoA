@@ -322,14 +322,27 @@ class NotificationService {
     }
   }
 
-  async requestPermissionsFromUser() {
+  async requestPermissionsFromUser({ promptSettings = false } = {}) {
     try {
-      const { status } = await Notifications.requestPermissionsAsync({
-        sound: true,
-        badge: true,
-        vibrate: true,
-      });
-      return status === 'granted';
+      const current = await Notifications.getPermissionsAsync();
+      if (current.granted) return true;
+
+      if (current.canAskAgain) {
+        const { status } = await Notifications.requestPermissionsAsync({
+          ios: { allowAlert: true, allowBadge: true, allowSound: true },
+        });
+        if (status === 'granted') return true;
+      }
+
+      // Hard-denied. Only nag with a Settings prompt when the user explicitly
+      // triggered a notification-related action (not on silent app startup).
+      if (promptSettings) {
+        try {
+          const { default: ensurePermission } = await import('../utils/permissions');
+          return await ensurePermission('notifications');
+        } catch {}
+      }
+      return false;
     } catch (error) {
       console.error('Failed to request permissions:', error);
       return false;
