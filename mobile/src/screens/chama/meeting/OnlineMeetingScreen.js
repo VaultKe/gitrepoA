@@ -585,19 +585,18 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
   };
 
   // Width is deliberately not computed here at all: each tile gets flex: 1
-  // inside its row (see renderGalleryRows) and flexbox splits that row's
-  // width evenly among however many tiles are actually in it -- which also
-  // means a short last row (say, 1 tile left over in a 3-column grid) gives
-  // that tile the row's full width automatically, instead of leaving empty
-  // space beside it the way a fixed per-column width would.
+  // inside its row (see the gallery render below) and flexbox splits that
+  // row's width evenly among however many tiles are actually in it -- which
+  // also means a short last row (say, 1 tile left over in a 3-column grid)
+  // gives that tile the row's full width automatically, instead of leaving
+  // empty space beside it the way a fixed per-column width would.
   //
-  // Height still has to be computed: it's an explicit, equal share of the
-  // gallery's measured height per row, set *and* paired with
-  // aspectRatio: undefined so nothing falls back to the tile's default 16:9
-  // (Yoga only applies aspectRatio when a dimension is missing -- the same
-  // pattern already used on oneToOneRemote/oneToOneSelf). A fixed aspect
-  // ratio here is exactly what used to cap a lone caller's tile at a short
-  // 16:9 strip and leave the rest of the screen empty.
+  // Height still has to be computed: an explicit, equal share of the
+  // gallery's measured height per row. gridVideoWrapper carries no default
+  // width/aspectRatio of its own to fight with here (see its definition) --
+  // this used to also set width: undefined / aspectRatio: undefined to try
+  // to override fixed values on that base style, which isn't reliable
+  // through react-native-web's style flattening.
   const galleryTileSizeStyle = () => {
     const gutter = spacing.xs * 2;
     const outerPadding = spacing.sm * 2;
@@ -605,13 +604,7 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     const availableHeight = Math.max(0, containerHeight - outerPadding);
     return {
       flex: 1,
-      // Overrides the base gridVideoWrapper's fixed width: '48%' the same
-      // way aspectRatio: undefined overrides its fixed aspect ratio below --
-      // flex governs width here, not a percentage meant for the old
-      // fixed-column layout.
-      width: undefined,
       height: Math.max(MIN_TILE_HEIGHT, availableHeight / gridRows - gutter),
-      aspectRatio: undefined,
     };
   };
 
@@ -1279,10 +1272,19 @@ const styles = StyleSheet.create({
   stageSharing: {
     borderWidth: 2,
   },
+  // No default width/aspectRatio/minHeight here on purpose. This used to
+  // carry width: '48%' and aspectRatio: 16/9 for the old flexWrap grid, and
+  // every current caller (grid tiles, one-to-one, the strip, the mini stage
+  // card) now provides its own explicit sizing on top of this base style --
+  // which relied on a later `width: undefined` / `aspectRatio: undefined` in
+  // that override actually clearing the earlier value. That works reliably
+  // on native, but not dependably through react-native-web's style
+  // flattening, so on web the old 48%/16:9 values could keep winning even
+  // though the override style was applied after them -- e.g. three people
+  // meant to stack as three full-width rows instead rendered as narrow,
+  // fixed-ratio tiles fighting the intended layout. Leaving no default at
+  // all removes the conflict outright: nothing is ever left to override.
   gridVideoWrapper: {
-    width: '48%',
-    aspectRatio: 16 / 9,
-    minHeight: 100,
     margin: spacing.xs,
     borderRadius: 8,
     overflow: 'hidden',

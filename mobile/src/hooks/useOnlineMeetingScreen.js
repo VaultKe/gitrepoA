@@ -36,9 +36,13 @@ const appendChatMessage = (prev, incoming) => {
 // noise. WebRTC reports the level as 0..1.
 const SPEAKING_LEVEL_THRESHOLD = 0.02;
 // Once someone is marked as speaking they stay marked for this long after
-// they go quiet. Speech has natural gaps between words, and without the hold
-// the indicator would strobe on every pause.
-const SPEAKING_HOLD_MS = 1200;
+// they go quiet. Ordinary speech has pauses between words and sentences
+// noticeably longer than a second, and 1200ms was short enough that the
+// indicator kept blinking off mid-conversation instead of staying on the
+// way it does in Google Meet -- the whole point of the hold. 2.5s comfortably
+// covers a normal breath or thinking pause without making the indicator feel
+// slow to turn off once someone has actually stopped.
+const SPEAKING_HOLD_MS = 2500;
 
 // How long a socket-reported departure keeps overriding the REST roster,
 // which takes a moment to catch up.

@@ -6,9 +6,28 @@ import ApiService from '../services/api';
 const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes
 
 const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
-  const { theme, user, selectedChama, setSelectedChama, chamas } = useApp();
+  const {
+    theme,
+    user,
+    selectedChama,
+    setSelectedChama,
+    chamas,
+    loadUserChamas: refreshChamasFromContext,
+  } = useApp();
 
-  const [userChamas, setUserChamas] = useState([]);
+  // `chamas` from context is the single source of truth for "chamas I'm an
+  // active member of": AppContext already fetches it (page size 50) and its
+  // SET_CHAMAS reducer already filters out chamas whose membership_is_active
+  // is false. This hook used to run its own separate fetch here with a
+  // *different* page size (20) into its own local state -- two independent
+  // copies of conceptually the same list, fetched differently, that could
+  // disagree. When they did, the reconciliation effect below concluded a
+  // legitimately active chama (just outside the smaller page) "wasn't found
+  // any more" and cleared the selection -- which is what was fading Quick
+  // Actions to 40% opacity and disabling it right after landing or switching.
+  // Reading the one list context already maintains removes that disagreement
+  // entirely, and the duplicate network call with it.
+  const userChamas = chamas;
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [chamaFeatures, setChamaFeatures] = useState({
@@ -209,51 +228,67 @@ const useChamaDashboard = ({ route, navigation, onRouteChange }) => {
     }
   };
 
+  // Pulls the roster from context (see the userChamas comment above) rather
+  // than fetching it itself.
   const loadUserChamas = async () => {
     try {
       setLoading(true);
-      const response = await ApiService.getUserChamas(20, 0);
-      if (response.success) {
-        const userChamasData = (response.data || []).filter(chama => {
-          return chama.membership_is_active !== false;
-        });
-        setUserChamas(userChamasData);
-
-        // If the currently selected chama is no longer in the active list, clear it
-        const currentSelected = selectedChamaRef.current;
-        if (currentSelected) {
-          const currentChamaId = currentSelected?.id || currentSelected?.chamaId || currentSelected;
-          const stillActive = userChamasData.find(c => c.id === currentChamaId);
-          if (!stillActive) {
-            setSelectedChama(null);
-          } else {
-            await loadMemberRole(currentChamaId);
-            await loadChamaFeatures();
-          }
-        }
-
-        // If no chama is currently selected and we have chamas, select the first one
-        if (userChamasData.length > 0 && !currentSelected) {
-          const first = userChamasData[0];
-          setSelectedChama(first);
-          await Promise.all([
-            loadMemberRole(first.id),
-            loadChamaFeatures(),
-          ]);
-        }
-
-        // Preload data for other chamas in the background for faster switching
-        setTimeout(() => {
-          preloadChamaData(userChamasData);
-        }, 2000); // Wait 2 seconds after initial load
-      }
+      await refreshChamasFromContext();
     } catch (error) {
-      // Set empty array on error to show empty state
-      setUserChamas([]);
+      // Context already logs the failure; nothing further to do here.
     } finally {
       setLoading(false);
     }
   };
+
+  // Picks a chama when nothing is selected yet, and otherwise leaves
+  // selectedChama alone.
+  //
+  // This used to also clear the selection whenever it "wasn't found" in
+  // whatever the roster's latest fetch happened to return -- run every time
+  // `chamas` changed, including the mount-time refetch that fires right
+  // after landing here from MyChamasScreen's "view dashboard" action. A
+  // chama you had *just* explicitly picked could still come back missing
+  // from that particular response for reasons that have nothing to do with
+  // having left it, and that was enough to null the selection out --
+  // QuickActionsCard fades to 40% opacity and disables itself whenever
+  // nothing is selected, so the visible effect was Quick Actions going
+  // blurry right after choosing a chama, or right after landing on one.
+  // Once a chama is picked, it now stays picked. switchToChama already
+  // refuses to select a chama the user has actually left (with an explicit
+  // alert), which is the only place that check belongs -- a passive effect
+  // reacting to an unrelated refetch is not a safe place to decide someone
+  // has left their own chama.
+  useEffect(() => {
+    if (chamas.length === 0) return undefined;
+
+    const currentSelected = selectedChamaRef.current;
+
+    if (currentSelected) {
+      const currentChamaId = currentSelected?.id || currentSelected?.chamaId || currentSelected;
+      loadMemberRole(currentChamaId);
+      loadChamaFeatures();
+      return undefined;
+    }
+
+    // A specific chama was asked for -- e.g. just-accepted-invitation
+    // navigation passes chamaId -- so honour that over "pick the first one"
+    // once it actually shows up in the roster.
+    const requestedChamaId = route?.params?.chamaId;
+    const requested = requestedChamaId && chamas.find(c => c.id === requestedChamaId);
+    const toSelect = requested || chamas[0];
+
+    setSelectedChama(toSelect);
+    loadMemberRole(toSelect.id);
+    loadChamaFeatures();
+
+    // Preload data for the rest in the background for faster switching.
+    const timeoutId = setTimeout(() => {
+      preloadChamaData(chamas);
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chamas]);
 
   const loadChamaFeatures = async () => {
     try {
