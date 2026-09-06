@@ -23,6 +23,34 @@ var (
 	ErrUserNotInRoom = errors.New("user not in room")
 )
 
+// Every room this service manages is, by definition, a live online meeting
+// (a physical-only meeting never opens one), so its lifetime is capped here
+// regardless of whatever duration a client asks for -- an unbounded call
+// keeps a WebRTC/SFU session, its peer connections and its recording (if
+// any) consuming resources indefinitely. minRoomDurationMinutes just guards
+// against a bogus zero/negative value expiring a room the instant it opens.
+const (
+	minRoomDurationMinutes = 5
+	maxRoomDurationMinutes = 90
+)
+
+// clampRoomDuration enforces [minRoomDurationMinutes, maxRoomDurationMinutes],
+// defaulting an unset (<=0) request to the maximum rather than the minimum --
+// a caller that simply didn't say how long it needs the room for is closer in
+// intent to "however long is allowed" than to "as short as possible".
+func clampRoomDuration(requestedMinutes int) int {
+	if requestedMinutes <= 0 {
+		return maxRoomDurationMinutes
+	}
+	if requestedMinutes < minRoomDurationMinutes {
+		return minRoomDurationMinutes
+	}
+	if requestedMinutes > maxRoomDurationMinutes {
+		return maxRoomDurationMinutes
+	}
+	return requestedMinutes
+}
+
 // RoomManager manages meeting rooms and participants with PostgreSQL persistence
 // and Redis-backed presence for horizontal scaling.
 type RoomManager struct {
@@ -354,7 +382,12 @@ func (rm *RoomManager) EndRoom(roomID string) error {
 // JoinRoom adds a participant to a room. chamaID is optional: when the caller
 // knows which chama the meeting belongs to it is recorded on the room, which
 // is what lets the service tell one chama's meetings apart from another's.
-func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role, chamaID string) (*models.Participant, error) {
+// requestedDurationMinutes is the scheduled meeting's duration as the client
+// understands it; it only takes effect the first time a room becomes live
+// (whoever joins first sets it for everyone) and is always clamped -- see
+// clampRoomDuration -- so a client can shorten a room's life by asking for
+// less time but never lengthen it past maxRoomDurationMinutes.
+func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role, chamaID string, requestedDurationMinutes int) (*models.Participant, error) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
@@ -371,6 +404,7 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role, chamaID strin
 		`, roomID).Scan(&dbRoom.ID, &dbRoom.MaxParticipants)
 		if err != nil {
 			// Auto-create room if it doesn't exist
+			now := time.Now()
 			room = &models.Room{
 				ID:             roomID,
 				ChamaID:        roomChamaID,
@@ -379,8 +413,10 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role, chamaID strin
 				Status:         models.RoomStatusWaiting,
 				MaxParticipants: 150,
 				CreatedBy:      userID,
-				CreatedAt:      time.Now(),
+				CreatedAt:      now,
 			}
+			room.DurationMinutes = clampRoomDuration(requestedDurationMinutes)
+			room.ScheduledEndAt = now.Add(time.Duration(room.DurationMinutes) * time.Minute)
 			metadataJSON, _ := json.Marshal(room.Metadata)
 			_, insertErr := rm.db.Exec(`
 				INSERT INTO rooms (id, chama_id, name, type, status, max_participants, created_by, created_at, recording_enabled, metadata)
@@ -397,6 +433,13 @@ func (rm *RoomManager) JoinRoom(roomID, userID, displayName, role, chamaID strin
 			rm.stats.mu.Unlock()
 		} else {
 			room = &dbRoom
+			// This room existed in the DB but was not yet live in this
+			// process's memory (e.g. a restart) -- becoming live again
+			// starts its clock now, the same as a fresh auto-create.
+			now := time.Now()
+			room.CreatedAt = now
+			room.DurationMinutes = clampRoomDuration(requestedDurationMinutes)
+			room.ScheduledEndAt = now.Add(time.Duration(room.DurationMinutes) * time.Minute)
 			rm.rooms[roomID] = room
 		}
 	}
@@ -773,6 +816,35 @@ func (rm *RoomManager) GetStats() map[string]interface{} {
 		"totalSessions":     rm.stats.TotalParticipants,
 		"totalParticipants": rm.stats.TotalParticipants,
 	}
+}
+
+// GetExpiredActiveRoomIDs returns every active room whose ScheduledEndAt has
+// passed, for the caller (MeetingHandler's expiry loop) to end and notify.
+// Read-only: ending a room and broadcasting that it ended needs the
+// signaling hub, which this package doesn't have a reference to, so that
+// part stays in the handler -- this just answers "which rooms are overdue".
+// A room with a zero ScheduledEndAt (never got a duration, which shouldn't
+// happen now that JoinRoom always sets one, but could for a room created
+// through some other path) is left alone rather than treated as instantly
+// expired.
+func (rm *RoomManager) GetExpiredActiveRoomIDs() []string {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	now := time.Now()
+	var expired []string
+	for roomID, room := range rm.rooms {
+		if room.Status != models.RoomStatusActive {
+			continue
+		}
+		if room.ScheduledEndAt.IsZero() {
+			continue
+		}
+		if now.After(room.ScheduledEndAt) {
+			expired = append(expired, roomID)
+		}
+	}
+	return expired
 }
 
 // cleanupLoop periodically removes stale rooms.

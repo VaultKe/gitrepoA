@@ -193,21 +193,49 @@ func (h *MeetingHandler) GetRoom(c *gin.Context) {
 func (h *MeetingHandler) EndRoom(c *gin.Context) {
 	roomID := c.Param("roomID")
 
-	if err := h.roomManager.EndRoom(roomID); err != nil {
+	if err := h.endRoomAndNotify(roomID, "The room has been ended by the host"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Notify all participants in the room
+	c.JSON(http.StatusOK, gin.H{"status": "room ended"})
+}
+
+// endRoomAndNotify tears a room down and tells everyone still in it why, in
+// one place -- shared by the explicit "end meeting" endpoint, the "another
+// meeting started for this chama" takeover in JoinRoom, and ExpireOverdueRooms
+// below, which used to each carry their own copy of this pair of calls.
+func (h *MeetingHandler) endRoomAndNotify(roomID, message string) error {
+	if err := h.roomManager.EndRoom(roomID); err != nil {
+		return err
+	}
+
 	h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
 		Type:   "room-ended",
 		RoomID: roomID,
 		Payload: map[string]interface{}{
-			"message": "The room has been ended by the host",
+			"message": message,
 		},
 	})
 
-	c.JSON(http.StatusOK, gin.H{"status": "room ended"})
+	return nil
+}
+
+// ExpireOverdueRooms ends every room whose scheduled duration has elapsed.
+// Called on a ticker from main.go rather than a per-request check, since a
+// room with nobody actively hitting an endpoint right now would otherwise
+// never get checked at all -- resource usage (SFU sessions, peer
+// connections, any recording) needs to stop on a timer of its own, not on
+// the next participant action.
+func (h *MeetingHandler) ExpireOverdueRooms() {
+	for _, roomID := range h.roomManager.GetExpiredActiveRoomIDs() {
+		h.clearScreenSharerForRoom(roomID)
+		if err := h.endRoomAndNotify(roomID, "This meeting reached its scheduled time limit and has ended."); err != nil {
+			fmt.Printf("[Expiry] failed to end overdue room %s: %v\n", roomID, err)
+		} else {
+			fmt.Printf("[Expiry] roomID=%s | ended (scheduled duration elapsed)\n", roomID)
+		}
+	}
 }
 
 // JoinRoom adds a participant to a room.
@@ -217,10 +245,16 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 	userRole := getUserRole(c)
 
 	var req struct {
-		DisplayName string `json:"displayName"`
-		Role        string `json:"role"`
-		UserID      string `json:"userId"` // Allow passing userId for debug/unauthenticated joins
-		ChamaID     string `json:"chamaId"`
+		DisplayName     string `json:"displayName"`
+		Role            string `json:"role"`
+		UserID          string `json:"userId"` // Allow passing userId for debug/unauthenticated joins
+		ChamaID         string `json:"chamaId"`
+		// The scheduled meeting's duration in minutes, as the client
+		// understands it. Only takes effect the first time this room becomes
+		// live and is always clamped server-side (see clampRoomDuration) --
+		// a client cannot make a room outlive maxRoomDurationMinutes just by
+		// sending a bigger number.
+		DurationMinutes int `json:"durationMinutes"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -264,20 +298,13 @@ func (h *MeetingHandler) JoinRoom(c *gin.Context) {
 	if blockingRoomID, busy := h.roomManager.ActiveOnlineMeetingForChama(req.ChamaID, roomID); busy {
 		fmt.Printf("[JoinRoom] chamaID=%s roomID=%s | ending previous live meeting %s\n", req.ChamaID, roomID, blockingRoomID)
 
-		if err := h.roomManager.EndRoom(blockingRoomID); err != nil {
+		h.clearScreenSharerForRoom(blockingRoomID)
+		if err := h.endRoomAndNotify(blockingRoomID, "This meeting was ended because another online meeting started for this chama."); err != nil {
 			fmt.Printf("[JoinRoom] failed to end previous meeting %s: %v\n", blockingRoomID, err)
 		}
-		h.clearScreenSharerForRoom(blockingRoomID)
-		h.signalingHub.BroadcastToRoom(blockingRoomID, &signaling.SignalingMessage{
-			Type:   "room-ended",
-			RoomID: blockingRoomID,
-			Payload: map[string]interface{}{
-				"message": "This meeting was ended because another online meeting started for this chama.",
-			},
-		})
 	}
 
-	participant, err := h.roomManager.JoinRoom(roomID, userID, req.DisplayName, userRole, req.ChamaID)
+	participant, err := h.roomManager.JoinRoom(roomID, userID, req.DisplayName, userRole, req.ChamaID, req.DurationMinutes)
 	if err != nil {
 		if errors.Is(err, room.ErrRoomFull) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "room is full"})
@@ -505,7 +532,11 @@ func (h *MeetingHandler) WebRTCSignal(c *gin.Context) {
 			participantID := ""
 			// The websocket join carries no chamaId; the REST join that
 			// precedes it already recorded one, so pass empty to leave it be.
-			participant, err := h.roomManager.JoinRoom(roomID, msg.UserID, msg.DisplayName, userRole, "")
+			// Duration is 0 here (unknown at this layer) -- harmless, since by
+			// this point the REST join above has already created the room and
+			// set its schedule; JoinRoom only ever uses the duration argument
+			// the first time a room becomes live.
+			participant, err := h.roomManager.JoinRoom(roomID, msg.UserID, msg.DisplayName, userRole, "", 0)
 			if err != nil {
 				fmt.Printf("[Signal] join | roomID=%s userID=%s | RoomManager join failed: %v\n", roomID, msg.UserID, err)
 			} else {

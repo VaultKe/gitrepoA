@@ -119,6 +119,13 @@ func main() {
 
 	h := handler.NewMeetingHandler(cfg, roomManager, sfuManager, signalingHub)
 
+	// Every room is a live online meeting for as long as it stays open, so
+	// check on a short ticker for any that have run past their scheduled
+	// duration (see RoomManager.JoinRoom / clampRoomDuration) and end them --
+	// without this, nothing ever stopped a meeting from just running
+	// indefinitely once started, regardless of what duration was scheduled.
+	go expireOverdueRoomsLoop(h, 20*time.Second)
+
 	// Health check (no auth required)
 	r.GET("/health", h.Health)
 
@@ -244,6 +251,17 @@ func cleanupLoop(rm *room.RoomManager, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		rm.CleanupStaleRooms()
+	}
+}
+
+// expireOverdueRoomsLoop periodically ends any room that has run past its
+// scheduled duration. 20s keeps an overrun small (worst case, roughly one
+// interval's worth of extra resource use) without scanning the in-memory
+// room map often enough to matter.
+func expireOverdueRoomsLoop(h *handler.MeetingHandler, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	for range ticker.C {
+		h.ExpireOverdueRooms()
 	}
 }
 

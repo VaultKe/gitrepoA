@@ -37,6 +37,16 @@ type Room struct {
 	RecordingEnabled bool          `json:"recordingEnabled" bun:"recording_enabled"`
 	RecordingPath    *string       `json:"recordingPath,omitempty" bun:"recording_path"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty" bun:"metadata,type:jsonb"`
+
+	// DurationMinutes and ScheduledEndAt cap how long this room may stay
+	// live, set once from the first joiner's requested duration (clamped --
+	// see room.ClampDurationMinutes) and checked by RoomManager's expiry
+	// scan. Deliberately in-memory only, no DB column: a live room's
+	// WebRTC/signaling state already lives entirely in the process and does
+	// not survive a restart either, so persisting this would recover
+	// nothing that isn't already gone.
+	DurationMinutes int       `json:"durationMinutes,omitempty"`
+	ScheduledEndAt  time.Time `json:"scheduledEndAt,omitempty"`
 }
 
 type Participant struct {
