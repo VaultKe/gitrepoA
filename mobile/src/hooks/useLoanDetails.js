@@ -248,7 +248,7 @@ const useLoanDetails = ({ route, navigation }) => {
         Alert.alert('Error', response?.error || 'Failed to initiate approval');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to initiate approval');
+      Alert.alert('Cannot Approve Yet', error?.message || 'Failed to initiate approval');
     } finally {
       setApproving(false);
     }
@@ -276,7 +276,7 @@ const useLoanDetails = ({ route, navigation }) => {
         Alert.alert('Error', response?.error || 'Failed to confirm approval');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to confirm approval');
+      Alert.alert('Error', error?.message || 'Failed to confirm approval');
     } finally {
       setApproving(false);
     }
@@ -304,7 +304,7 @@ const useLoanDetails = ({ route, navigation }) => {
               Alert.alert('Error', response?.error || 'Failed to reject loan');
             }
           } catch (error) {
-            Alert.alert('Error', 'Failed to reject loan');
+            Alert.alert('Error', error?.message || 'Failed to reject loan');
           } finally {
             setApproving(false);
           }

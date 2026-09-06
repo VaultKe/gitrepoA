@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, FlatList, TextInput } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { useChamaContext } from '../../../context/ChamaContext';
@@ -99,6 +99,15 @@ const LoanDetails = ({ route, navigation }) => {
     return { id: r.id, cells: [fullName, screen.renderStatusBadge(r.status)] };
   });
 
+  // Officer approval can only begin once every guarantor AND referee has accepted.
+  const guarantorsList = screen.guarantors || [];
+  const refereesList = screen.referees || [];
+  const backers = [...guarantorsList, ...refereesList];
+  const acceptedBackers = backers.filter((b) => String(b.status).toLowerCase() === 'accepted').length;
+  const anyBackerDeclined = backers.some((b) => ['declined', 'rejected'].includes(String(b.status).toLowerCase()));
+  const backersReady = backers.length === 0 || acceptedBackers === backers.length;
+  const isFirstApprovalStage = screen.loan?.approvalStage === 'pending';
+
   const fineHeaders = ['Date', 'Reason', 'Amount', 'Status'];
   const fineData = screen.fines.map((f) => ({
     id: f.id,
@@ -125,42 +134,36 @@ const LoanDetails = ({ route, navigation }) => {
 
   const renderLoanTable = ({ title, headers, data, emptyMessage }) => (
     <View style={styles.tableContainer}>
-      <Card variant="outlined" padding="none" style={styles.tableCard}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tableScrollContent}>
-          <View style={styles.tableContent}>
-            <View style={styles.tableHeader}>
-              {headers.map((header, index) => {
-                const isFirst = index === 0;
-                const isLast = index === headers.length - 1;
-                const flex = isFirst ? 1.5 : isLast ? 1 : 1.5;
-                return (
-                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex }]}>
-                    <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft]}>{header}</Text>
-                  </View>
-                );
-              })}
-            </View>
-            <FlatList
-              data={data}
-              renderItem={({ item, index }) => (
-                <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
+      <Card variant="outlined" padding="none" margin="none" style={styles.tableCard}>
+        {title ? <Text style={styles.tableTitle}>{title}</Text> : null}
+        <View style={styles.tableContent}>
+          <View style={styles.tableHeader}>
+            {headers.map((header, index) => {
+              const isFirst = index === 0;
+              const isLast = index === headers.length - 1;
+              const flex = isFirst ? 1.5 : isLast ? 1 : 1.5;
+              return (
+                <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, isLast && styles.actionsCell, { flex }]}>
+                  <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft]}>{header}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {data.length === 0
+            ? renderEmpty(emptyMessage)
+            : data.map((item, index) => (
+                <View key={item.id} style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
                   {item.cells.map((cell, cellIndex) => renderCell(cell, cellIndex, item.cells.length))}
                 </View>
-              )}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.loansList}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={renderEmpty(emptyMessage)}
-            />
-          </View>
-        </ScrollView>
+              ))}
+        </View>
       </Card>
     </View>
   );
 
   const renderDetailsCell = (cell, index, totalCells) => {
     const isFirst = index === 0;
-    const flex = isFirst ? 0.8 : 2;
+    const flex = isFirst ? 1 : 1.5;
     return (
       <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, { flex, alignItems: 'flex-start' }]}>
         <Text style={[styles.tableCellText, isFirst && styles.nameText, { textAlign: 'left' }]}>{cell}</Text>
@@ -170,41 +173,40 @@ const LoanDetails = ({ route, navigation }) => {
 
   const renderDetailsTable = ({ title, headers, data, emptyMessage }) => (
     <View style={styles.tableContainer}>
-      <Card variant="outlined" padding="none" style={styles.tableCard}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tableScrollContent}>
-          <View style={styles.tableContent}>
-            <View style={styles.tableHeader}>
-              {headers.map((header, index) => {
-                const isFirst = index === 0;
-                const flex = isFirst ? 0.8 : 2;
-                return (
-                  <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, { flex, alignItems: 'flex-start' }]}>
-                    <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft, { textAlign: 'left' }]}>{header}</Text>
-                  </View>
-                );
-              })}
-            </View>
-            <FlatList
-              data={data}
-              renderItem={({ item, index }) => (
-                <View style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
+      <Card variant="outlined" padding="none" margin="none" style={styles.tableCard}>
+        {title ? <Text style={styles.tableTitle}>{title}</Text> : null}
+        <View style={styles.tableContent}>
+          <View style={styles.tableHeader}>
+            {headers.map((header, index) => {
+              const isFirst = index === 0;
+              const flex = isFirst ? 1 : 1.5;
+              return (
+                <View key={index} style={[styles.tableCell, isFirst && styles.nameCell, { flex, alignItems: 'flex-start' }]}>
+                  <Text style={[styles.tableHeaderText, isFirst && styles.tableHeaderTextLeft, { textAlign: 'left' }]}>{header}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {data.length === 0
+            ? renderEmpty(emptyMessage)
+            : data.map((item, index) => (
+                <View key={item.id} style={index % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
                   {item.cells.map((cell, cellIndex) => renderDetailsCell(cell, cellIndex, item.cells.length))}
                 </View>
-              )}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.loansList}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={renderEmpty(emptyMessage)}
-            />
-          </View>
-        </ScrollView>
+              ))}
+        </View>
       </Card>
     </View>
   );
 
   return (
     <SafeAreaView style={[styles.container, styles.containerBackground]}>
-      <ScrollView ref={screen.scrollViewRef} style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={screen.scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={[styles.header, { backgroundColor: colors.surface }]}>
           <View style={styles.headerContent}>
             <View style={styles.loanIcon}>
@@ -222,7 +224,7 @@ const LoanDetails = ({ route, navigation }) => {
         {renderDetailsTable({ title: 'Loan Details', headers: detailsHeaders, data: detailsData, emptyMessage: 'No loan details available' })}
 
         {screen.disbursement && (
-          <Card variant="outlined" style={styles.amountCard}>
+          <Card variant="outlined" margin="none" style={styles.amountCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
               <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.success + '15', alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm }}>
                 <Ionicons name="cash-outline" size={20} color={colors.success} />
@@ -271,7 +273,7 @@ const LoanDetails = ({ route, navigation }) => {
         )}
 
         <View style={styles.actions}>
-          {(screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && (
+          {(screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && !(isFirstApprovalStage && !backersReady) && (
             <View style={{ marginBottom: spacing.md }}>
               <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Approval Comment (Required)</Text>
               <TextInput
@@ -284,12 +286,27 @@ const LoanDetails = ({ route, navigation }) => {
             </View>
           )}
 
-          {screen.approvalStep === 'idle' && (screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && (
-            <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
-              <Button title="Approve" onPress={screen.handleInitiateApproval} loading={screen.approving} style={{ backgroundColor: colors.success, flex: 1 }} icon={<Ionicons name="checkmark" size={16} color={colors.white} />} />
-              <Button title="Reject" onPress={screen.handleRejectLoan} loading={screen.approving} style={{ backgroundColor: colors.error, flex: 1 }} icon={<Ionicons name="close" size={16} color={colors.white} />} />
+          {screen.approvalStep === 'idle' && isFirstApprovalStage && !backersReady && (
+            <View style={{ marginBottom: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: (anyBackerDeclined ? colors.error : colors.warning) + '15', borderWidth: 1, borderColor: (anyBackerDeclined ? colors.error : colors.warning) }}>
+              <Text style={{ color: anyBackerDeclined ? colors.error : colors.warning, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
+                {anyBackerDeclined
+                  ? 'A guarantor or referee declined — this loan cannot be approved.'
+                  : `Waiting for all guarantors and referees to accept (${acceptedBackers}/${backers.length}).`}
+              </Text>
             </View>
           )}
+
+          {screen.approvalStep === 'idle' && (screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && (() => {
+            const canApprove = !isFirstApprovalStage || (backersReady && !anyBackerDeclined);
+            return (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md }}>
+                {canApprove && (
+                  <Button title="Approve" size="medium" onPress={screen.handleInitiateApproval} loading={screen.approving} style={{ backgroundColor: colors.success, flex: 1 }} icon={<Ionicons name="checkmark" size={16} color={colors.white} />} />
+                )}
+                <Button title="Reject" size="medium" onPress={screen.handleRejectLoan} loading={screen.approving} style={canApprove ? { backgroundColor: colors.error, flex: 1 } : { backgroundColor: colors.error, alignSelf: 'flex-start' }} icon={<Ionicons name="close" size={16} color={colors.white} />} />
+              </View>
+            );
+          })()}
 
           {screen.approvalStep === 'confirm' && (
             <View style={{ marginBottom: spacing.md }}>
@@ -311,10 +328,19 @@ const LoanDetails = ({ route, navigation }) => {
           )}
 
           {['active', 'delinquent', 'partial', 'recovery_active'].includes(screen.loan?.status?.toLowerCase()) && (
-            <Button title="Record Payment" onPress={() => screen.setPaymentModalVisible(true)} style={{ backgroundColor: colors.success, marginBottom: spacing.md }} icon={<Ionicons name="cash" size={16} color={colors.white} />} />
+            <Button title="Record Payment" size="medium" onPress={() => screen.setPaymentModalVisible(true)} style={{ backgroundColor: colors.success, marginBottom: spacing.md }} icon={<Ionicons name="cash" size={16} color={colors.white} />} />
           )}
-          <Button title="View Schedule" onPress={() => {}} style={{ backgroundColor: colors.info, marginBottom: spacing.md }} icon={<Ionicons name="calendar" size={16} color={colors.white} />} />
-          <Button title="Loan Report" onPress={() => Alert.alert('Coming Soon', 'Loan reports will be available in the next update.')} style={{ backgroundColor: colors.secondary, marginBottom: spacing.md }} icon={<Ionicons name="document-text" size={16} color={colors.white} />} />
+
+          <View style={styles.secondaryActions}>
+            <Button
+              title="Loan Report"
+              size="small"
+              variant="outline"
+              onPress={() => Alert.alert('Coming Soon', 'Loan reports will be available in the next update.')}
+              style={{ alignSelf: 'flex-start' }}
+              icon={<Ionicons name="document-text" size={14} color={colors.primary} />}
+            />
+          </View>
         </View>
       </ScrollView>
 
@@ -337,6 +363,15 @@ const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   containerBackground: { backgroundColor: colors.background },
   scrollView: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
+  secondaryActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { fontSize: typography.fontSize.base },
   errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
@@ -348,21 +383,22 @@ const createStyles = (colors) => StyleSheet.create({
   loanInfo: { flex: 1 },
   loanTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.xs },
   loanMember: { fontSize: typography.fontSize.sm },
-  tableContainer: { marginHorizontal: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.sm, alignSelf: 'stretch' },
-  tableCard: { minHeight: 360, borderRadius: 8, width: '100%', alignSelf: 'stretch', padding: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  tableContainer: { marginTop: spacing.xs, marginBottom: spacing.sm, alignSelf: 'stretch' },
+  tableCard: { borderRadius: 8, width: '100%', alignSelf: 'stretch', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   tableScrollContent: { flexGrow: 1, width: '100%' },
-  tableContent: { minWidth: 680, width: '100%' },
-  tableHeader: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primary + '10', borderBottomWidth: 2, borderBottomColor: colors.primary },
+  tableContent: { width: '100%' },
+  tableTitle: { fontSize: 11, fontWeight: typography.fontWeight.bold, color: colors.textSecondary, paddingHorizontal: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.4 },
+  tableHeader: { flexDirection: 'row', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, backgroundColor: colors.primary + '10', borderBottomWidth: 1, borderBottomColor: colors.primary },
   tableCell: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
   nameCell: { flex: 1.6, alignItems: 'flex-start' },
   amountCell: { flex: 1.3 },
   statusCell: { flex: 1 },
   dateCell: { flex: 1.2 },
   actionsCell: { flex: 1 },
-  tableHeaderText: { fontWeight: typography.fontWeight.bold, color: colors.primary, fontSize: 12, textAlign: 'center' },
+  tableHeaderText: { fontWeight: typography.fontWeight.bold, color: colors.primary, fontSize: 11, textAlign: 'center' },
   tableHeaderTextLeft: { textAlign: 'left' },
-  tableRowEven: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center', backgroundColor: colors.background },
-  tableRowOdd: { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center', backgroundColor: colors.surface },
+  tableRowEven: { flexDirection: 'row', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center', backgroundColor: colors.background },
+  tableRowOdd: { flexDirection: 'row', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center', backgroundColor: colors.surface },
   tableCellText: { fontSize: 12, color: colors.text, textAlign: 'center' },
   nameText: { fontWeight: typography.fontWeight.medium, textAlign: 'left' },
   statusBadge: { paddingHorizontal: spacing.xs, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.sm },
@@ -375,9 +411,9 @@ const createStyles = (colors) => StyleSheet.create({
   statusTextWarning: { color: colors.warning },
   statusTextError: { color: colors.error },
   statusTextMuted: { color: colors.textSecondary },
-  loansList: { padding: spacing.md },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
-  emptyText: { color: colors.textSecondary, fontSize: typography.fontSize.sm, marginTop: spacing.sm, textAlign: 'center' },
+  loansList: { flexGrow: 1 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md },
+  emptyText: { color: colors.textSecondary, fontSize: typography.fontSize.xs, marginTop: spacing.xs, textAlign: 'center' },
   amountCard: { padding: spacing.lg, alignItems: 'center', marginBottom: spacing.md, ...shadows.sm },
   amountLabel: { fontSize: typography.fontSize.sm, marginBottom: spacing.xs },
   amountValue: { fontSize: typography.fontSize.xxxl, fontWeight: typography.fontWeight.bold, marginBottom: spacing.sm },

@@ -68,6 +68,7 @@ const ChamaDetailsScreen = ({ route, navigation }) => {
         <ScrollView
           key={details.chamaId}
           style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
           refreshControl={
             <RefreshControl
               refreshing={details.refreshing}

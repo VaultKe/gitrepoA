@@ -62,16 +62,17 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   chatButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: 40,
   },
   chatButtonText: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
   },
 });

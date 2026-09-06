@@ -88,15 +88,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   uploadButton: {
+    alignSelf: 'flex-start',
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 40,
-    flex: 1,
-    minWidth: 140,
   },
   uploadButtonText: {
     fontSize: typography.fontSize.sm,

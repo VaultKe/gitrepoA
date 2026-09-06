@@ -8,6 +8,15 @@ const getResponsiveStyles = (screenType, screenWidth, colors) => StyleSheet.crea
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    // Breathing room from the screen edges (stacks with each card's own
+    // marginHorizontal) and keeps content readable / centred on wide screens.
+    paddingHorizontal: screenType === 'mobile' ? spacing.sm : spacing.md,
+    paddingBottom: spacing.xxxl,
+    width: '100%',
+    maxWidth: screenType === 'mobile' ? 680 : 1200,
+    alignSelf: 'center',
+  },
   section: {
     marginHorizontal: spacing.sm,
     marginVertical: spacing.xs,

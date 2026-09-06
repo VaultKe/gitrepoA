@@ -15,34 +15,26 @@ const ChamaMembershipActions = ({ userMembership, chama, colors, handleJoinChama
   }
 
   return (
-    <View>
-      <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
-        <View style={styles.membershipInfo}>
-          <Text style={[styles.membershipTitle, { color: colors.text }]}>
-            Your Membership
-          </Text>
-          <Text style={[styles.membershipRole, { color: colors.primary }]}>
-            {userMembership.role?.toUpperCase()}
-          </Text>
-          <Text style={[styles.membershipDate, { color: colors.textSecondary }]}>
-            Joined {new Date(userMembership.joined_at).toLocaleDateString()}
-          </Text>
-        </View>
-      </Card>
+    <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
+      <View style={styles.membershipInfo}>
+        <Text style={[styles.membershipTitle, { color: colors.text }]}>Your Membership</Text>
+        <Text style={[styles.membershipRole, { color: colors.primary }]}>
+          {userMembership.role?.toUpperCase()}
+        </Text>
+        <Text style={[styles.membershipDate, { color: colors.textSecondary }]}>
+          Joined {new Date(userMembership.joined_at).toLocaleDateString()}
+        </Text>
+      </View>
 
-      <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
+      <View style={styles.actionRow}>
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}
           onPress={switchToChamaDashboard}
           activeOpacity={0.7}
         >
-          <Text style={[styles.actionButtonText, { color: colors.primary }]}>
-            Switch to Dashboard
-          </Text>
+          <Text style={[styles.actionButtonText, { color: colors.primary }]}>Switch to Dashboard</Text>
         </TouchableOpacity>
-      </Card>
 
-      <Card style={{ marginHorizontal: spacing.sm, marginVertical: spacing.xs }} variant="outlined">
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: colors.error + '15', borderColor: colors.error }]}
           onPress={() => {
@@ -57,12 +49,10 @@ const ChamaMembershipActions = ({ userMembership, chama, colors, handleJoinChama
           }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.actionButtonText, { color: colors.error }]}>
-            Leave Chama
-          </Text>
+          <Text style={[styles.actionButtonText, { color: colors.error }]}>Leave Chama</Text>
         </TouchableOpacity>
-      </Card>
-    </View>
+      </View>
+    </Card>
   );
 };
 
@@ -74,33 +64,42 @@ const styles = StyleSheet.create({
   },
   membershipInfo: {
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(128,128,128,0.25)',
   },
   membershipTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  membershipRole: {
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.bold,
+    fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.xs,
   },
-  membershipDate: {
+  membershipRole: {
     fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: 2,
+  },
+  membershipDate: {
+    fontSize: typography.fontSize.xs,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   actionButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: spacing.xs,
   },
   actionButtonText: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+    textAlign: 'center',
   },
 });
 
