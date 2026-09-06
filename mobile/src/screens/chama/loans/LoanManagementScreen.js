@@ -324,8 +324,8 @@ const LoanManagementScreen = ({ route, navigation }) => {
                             <Text style={{ color: colors.textSecondary }}>Minimum guarantors</Text>
                             <TextInput
                               style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1, width: 64, textAlign: 'center' }]}
-                              value={String(screen.createForm.minGuarantors)}
-                              onChangeText={(t) => screen.setCreateForm((prev) => ({ ...prev, minGuarantors: t.replace(/[^0-9]/g, '') }))}
+                              value={screen.createForm.minGuarantors == null || screen.createForm.minGuarantors === '' ? '' : String(screen.createForm.minGuarantors)}
+                              onChangeText={(t) => { const d = t.replace(/[^0-9]/g, ''); screen.setCreateForm((prev) => ({ ...prev, minGuarantors: d === '' ? '' : parseInt(d, 10) })); }}
                               keyboardType="numeric"
                               placeholder="2"
                               placeholderTextColor={colors.textSecondary}
@@ -347,8 +347,8 @@ const LoanManagementScreen = ({ route, navigation }) => {
                             <Text style={{ color: colors.textSecondary }}>Minimum referees</Text>
                             <TextInput
                               style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1, width: 64, textAlign: 'center' }]}
-                              value={String(screen.createForm.minReferees)}
-                              onChangeText={(t) => screen.setCreateForm((prev) => ({ ...prev, minReferees: t.replace(/[^0-9]/g, '') }))}
+                              value={screen.createForm.minReferees == null || screen.createForm.minReferees === '' ? '' : String(screen.createForm.minReferees)}
+                              onChangeText={(t) => { const d = t.replace(/[^0-9]/g, ''); screen.setCreateForm((prev) => ({ ...prev, minReferees: d === '' ? '' : parseInt(d, 10) })); }}
                               keyboardType="numeric"
                               placeholder="1"
                               placeholderTextColor={colors.textSecondary}

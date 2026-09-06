@@ -772,6 +772,7 @@ func (s *LoanService) GetLoanTypeByID(loanTypeID string) (*models.LoanProduct, e
 		&lt.DefaultThresholdDays, &lt.InstallmentPenaltyType,
 		&lt.InstallmentPenaltyAmount, &lt.LoanPenaltyAmount,
 		&lt.Status, &lt.CreatedBy, &lt.CreatedAt, &lt.UpdatedAt,
+		&lt.RequiresReferees, &lt.MinGuarantors, &lt.MinReferees,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("loan type not found: %w", err)

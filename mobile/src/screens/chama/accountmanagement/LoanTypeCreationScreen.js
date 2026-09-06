@@ -486,8 +486,8 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                     <Text style={{ color: colors.textSecondary }}>Minimum guarantors</Text>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, width: 64, textAlign: 'center', paddingVertical: 4 }]}
-                      value={String(createForm.minGuarantors)}
-                      onChangeText={(t) => setCreateForm(prev => ({ ...prev, minGuarantors: t.replace(/[^0-9]/g, '') }))}
+                      value={createForm.minGuarantors == null || createForm.minGuarantors === '' ? '' : String(createForm.minGuarantors)}
+                      onChangeText={(t) => { const d = t.replace(/[^0-9]/g, ''); setCreateForm(prev => ({ ...prev, minGuarantors: d === '' ? '' : parseInt(d, 10) })); }}
                       keyboardType="numeric"
                       placeholder="2"
                       placeholderTextColor={colors.textSecondary}
@@ -509,8 +509,8 @@ const LoanTypeCreationScreen = ({ route, navigation }) => {
                     <Text style={{ color: colors.textSecondary }}>Minimum referees</Text>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text, width: 64, textAlign: 'center', paddingVertical: 4 }]}
-                      value={String(createForm.minReferees)}
-                      onChangeText={(t) => setCreateForm(prev => ({ ...prev, minReferees: t.replace(/[^0-9]/g, '') }))}
+                      value={createForm.minReferees == null || createForm.minReferees === '' ? '' : String(createForm.minReferees)}
+                      onChangeText={(t) => { const d = t.replace(/[^0-9]/g, ''); setCreateForm(prev => ({ ...prev, minReferees: d === '' ? '' : parseInt(d, 10) })); }}
                       keyboardType="numeric"
                       placeholder="1"
                       placeholderTextColor={colors.textSecondary}
