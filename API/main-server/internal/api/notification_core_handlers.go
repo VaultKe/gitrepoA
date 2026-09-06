@@ -39,6 +39,12 @@ func GetNotifications(c *gin.Context) {
 		return
 	}
 
+	// Self-heal: make sure this user has a notification row for every loan they
+	// are a pending guarantor / referee on. This does not depend on the loan
+	// application flow, migrations, or the notifications.type CHECK having been
+	// dropped — if a request is outstanding, the user sees it here.
+	ensureBackerNotifications(db.(*sql.DB), userID)
+
 	// Get all notifications from different sources in parallel.
 	allNotifications := []map[string]interface{}{}
 
@@ -51,13 +57,17 @@ func GetNotifications(c *gin.Context) {
 		systemNotifs, invitationNotifs, meetingNotifs []map[string]interface{}
 		financialNotifs, chamaNotifs, supportNotifs   []map[string]interface{}
 
+		systemErr                                                     error
 		invitationErr, meetingErr, financialErr, chamaErr, supportErr error
 	)
 
 	wg.Add(6)
 	go func() {
 		defer wg.Done()
-		systemNotifs, _ = getSystemNotifications(db.(*sql.DB), userID)
+		systemNotifs, systemErr = getSystemNotifications(db.(*sql.DB), userID)
+		if systemErr != nil {
+			fmt.Printf("GetNotifications: getSystemNotifications failed for %s: %v\n", userID, systemErr)
+		}
 	}()
 	go func() {
 		defer wg.Done()
@@ -144,7 +154,7 @@ func GetNotifications(c *gin.Context) {
 			"offset": offset,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // GetUnreadNotificationCount returns the count of unread notifications for the authenticated user
@@ -188,7 +198,7 @@ func GetUnreadNotificationCount(c *gin.Context) {
 			"count": count,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // MarkNotificationAsRead marks a notification as read
@@ -252,7 +262,7 @@ func MarkNotificationAsRead(c *gin.Context) {
 		"success": true,
 		"message": "Notification marked as read",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // MarkAllNotificationsAsRead marks all notifications as read for a user
@@ -306,7 +316,7 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 		"success": true,
 		"message": fmt.Sprintf("All notifications marked as read (updated %d system notifications)", totalMarked),
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // DeleteNotification deletes a notification
@@ -378,7 +388,7 @@ func DeleteNotification(c *gin.Context) {
 		"message": "Notification deleted successfully",
 		"data":    nil, // Include data field for consistency with frontend expectations
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // SendSystemNotification creates a system notification
@@ -481,5 +491,5 @@ func SendSystemNotification(c *gin.Context) {
 			"notificationId": fmt.Sprintf("%d", notificationID),
 		},
 	})
-		c.Abort()
+	c.Abort()
 }

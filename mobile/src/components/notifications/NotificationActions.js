@@ -6,8 +6,13 @@ import ApiService from '../../services/api';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 
 const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMarkAsRead, onDelete }) => {
-  const isGuarantor = item.type === 'guarantor_request';
-  const isReferee = item.type === 'referee_request';
+  // Fall back to the data payload's role so the Accept/Decline UI still renders
+  // if the notification type was stored under a different label.
+  let parsedData = {};
+  try { parsedData = typeof item.data === 'string' ? JSON.parse(item.data || '{}') : (item.data || {}); } catch {}
+  const role = parsedData.role;
+  const isGuarantor = item.type === 'guarantor_request' || role === 'guarantor' || (!!parsedData.guarantor_id && role !== 'referee');
+  const isReferee = item.type === 'referee_request' || role === 'referee' || (!!parsedData.referee_id && !parsedData.guarantor_id);
 
   if (isGuarantor || isReferee) {
     const roleLabel = isReferee ? 'referee' : 'guarantee';
@@ -25,7 +30,7 @@ const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMar
 
     const respond = async (action) => {
       try {
-        const loanData = JSON.parse(item.data || '{}');
+        const loanData = parsedData;
         const response = isReferee
           ? await ApiService.respondToRefereeRequest(loanData.referee_id, action)
           : await ApiService.respondToGuarantorRequest(loanData.loan_id, { guarantorId: loanData.guarantor_id, action });

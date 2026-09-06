@@ -6,12 +6,44 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"vaultke-backend/internal/services"
 )
+
+var relaxNotifTypeOnce sync.Once
+
+// relaxNotificationTypeConstraint strips the narrow CHECK on notifications.type
+// (which only allowed 'chama','transaction','reminder','system','alert') so that
+// types like 'guarantor_request' / 'referee_request' can be stored. This is a
+// safety net for a database where the startup migration has not yet run — the
+// notifications table is rebuilt with the CHECK on every boot.
+func relaxNotificationTypeConstraint(db *sql.DB) {
+	rows, err := db.Query(`
+		SELECT con.conname
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		WHERE rel.relname = 'notifications' AND con.contype = 'c'
+	`)
+	if err != nil {
+		return
+	}
+	var names []string
+	for rows.Next() {
+		var n string
+		if rows.Scan(&n) == nil {
+			names = append(names, n)
+		}
+	}
+	rows.Close()
+	for _, n := range names {
+		_, _ = db.Exec(`ALTER TABLE notifications DROP CONSTRAINT IF EXISTS "` + n + `"`)
+	}
+	_, _ = db.Exec("ALTER TABLE notifications ALTER COLUMN type TYPE VARCHAR(64)")
+}
 
 // createNotificationTx inserts a notification with all required fields using a transaction
 func createNotificationTx(tx *sql.Tx, _ string, userID, notificationType, title, message, data string, referenceType string, referenceID interface{}) error {
@@ -32,22 +64,47 @@ func createNotificationTx(tx *sql.Tx, _ string, userID, notificationType, title,
 	return err
 }
 
-// createNotification inserts a notification with all required fields using a database connection
+// createNotification inserts a notification row for the user. It is defensive
+// about schema drift: the full insert is tried first, then a constraint-relax +
+// retry, then a minimal insert using only columns guaranteed to exist. Whatever
+// path succeeds, the notification lands in the notifications table so the
+// notifications screen (getSystemNotifications) shows it.
 func createNotification(db *sql.DB, _ string, userID, notificationType, title, message, data string, referenceType string, referenceID interface{}) error {
-	_, err := db.Exec(`
-		INSERT INTO notifications (
-			user_id, title, message, type, priority, category,
-			reference_type, reference_id, status, is_read, data,
-			scheduled_for, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6,
-			$7, $8, 'pending', false, $9,
-			CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, userID, title, message, notificationType,
-		getNotificationPriority(notificationType),
-		getNotificationCategory(notificationType),
-		referenceType,
-		referenceID,
-		data)
+	fullInsert := func() error {
+		_, err := db.Exec(`
+			INSERT INTO notifications (
+				user_id, title, message, type, priority, category,
+				reference_type, reference_id, status, is_read, data,
+				scheduled_for, created_at, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6,
+				$7, $8, 'pending', false, $9,
+				CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, userID, title, message, notificationType,
+			getNotificationPriority(notificationType),
+			getNotificationCategory(notificationType),
+			referenceType, referenceID, data)
+		return err
+	}
+
+	err := fullInsert()
+	if err != nil {
+		// Most likely the narrow CHECK on notifications.type. Relax it once and retry.
+		relaxNotifTypeOnce.Do(func() { relaxNotificationTypeConstraint(db) })
+		if err2 := fullInsert(); err2 == nil {
+			err = nil
+		} else {
+			// Last resort: minimal column set (present since the very first schema).
+			if _, err3 := db.Exec(`
+				INSERT INTO notifications (user_id, title, message, type, is_read, data, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, false, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			`, userID, title, message, notificationType, data); err3 == nil {
+				err = nil
+			} else {
+				fmt.Printf("createNotification: all inserts failed for user %s type %s: %v / %v / %v\n", userID, notificationType, err, err2, err3)
+				err = err3
+			}
+		}
+	}
 	if err != nil {
 		return err
 	}

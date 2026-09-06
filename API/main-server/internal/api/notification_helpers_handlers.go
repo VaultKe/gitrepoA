@@ -13,6 +13,96 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ensureBackerNotifications creates the guarantor_request / referee_request
+// notification rows for any loan this user is a still-pending backer on but has
+// no notification for. Idempotent and cheap — safe to run on every notifications
+// fetch. It is the reliable path: it does not care whether the loan-application
+// notification insert succeeded, whether migrations ran, or whether the
+// notifications.type CHECK is still in place (it relaxes that inline on failure).
+func ensureBackerNotifications(db *sql.DB, userID string) {
+	if db == nil || userID == "" {
+		return
+	}
+
+	type pending struct {
+		loanID   string
+		recordID string
+		amount   float64
+		purpose  string
+		borrower string
+		role     string // "guarantor" | "referee"
+	}
+	var items []pending
+
+	gRows, err := db.Query(`
+		SELECT g.id, g.loan_id, l.amount, COALESCE(l.purpose, ''), l.borrower_id
+		FROM guarantors g
+		JOIN loans l ON l.id = g.loan_id
+		WHERE g.user_id = $1
+		  AND lower(g.status) = 'pending'
+		  AND lower(l.status) IN ('pending', 'guarantors_approved', 'guarantors_declined')
+		  AND NOT EXISTS (
+		      SELECT 1 FROM notifications n
+		      WHERE n.user_id = g.user_id AND n.type = 'guarantor_request' AND n.data LIKE '%' || g.id || '%'
+		  )
+	`, userID)
+	if err == nil {
+		for gRows.Next() {
+			var p pending
+			if gRows.Scan(&p.recordID, &p.loanID, &p.amount, &p.purpose, &p.borrower) == nil {
+				p.role = "guarantor"
+				items = append(items, p)
+			}
+		}
+		gRows.Close()
+	}
+
+	// loan_referees may not exist on a very old schema — ignore the error.
+	rRows, err := db.Query(`
+		SELECT r.id, r.loan_id, l.amount, COALESCE(l.purpose, ''), l.borrower_id
+		FROM loan_referees r
+		JOIN loans l ON l.id = r.loan_id
+		WHERE r.user_id = $1
+		  AND lower(r.status) = 'pending'
+		  AND lower(l.status) IN ('pending', 'guarantors_approved', 'guarantors_declined')
+		  AND NOT EXISTS (
+		      SELECT 1 FROM notifications n
+		      WHERE n.user_id = r.user_id AND n.type = 'referee_request' AND n.data LIKE '%' || r.id || '%'
+		  )
+	`, userID)
+	if err == nil {
+		for rRows.Next() {
+			var p pending
+			if rRows.Scan(&p.recordID, &p.loanID, &p.amount, &p.purpose, &p.borrower) == nil {
+				p.role = "referee"
+				items = append(items, p)
+			}
+		}
+		rRows.Close()
+	}
+
+	for _, p := range items {
+		var notifType, title, message string
+		if p.role == "guarantor" {
+			notifType = "guarantor_request"
+			title = "Guarantor Request"
+			message = fmt.Sprintf("You have been requested to guarantee a loan of KES %.2f", p.amount)
+		} else {
+			notifType = "referee_request"
+			title = "Referee Request"
+			message = fmt.Sprintf("You have been listed as a referee for a loan of KES %.2f. Being a referee carries no financial liability.", p.amount)
+		}
+		idKey := "guarantor_id"
+		if p.role == "referee" {
+			idKey = "referee_id"
+		}
+		data := fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f, "purpose": "%s", "requester_id": "%s", "%s": "%s", "role": "%s"}`,
+			p.loanID, p.amount, strings.ReplaceAll(p.purpose, `"`, ""), p.borrower, idKey, p.recordID, p.role)
+
+		_ = createNotification(db, "", userID, notifType, title, message, data, "loan", nil)
+	}
+}
+
 var ensureDeletedNotificationsTableOnce sync.Once
 
 func ensureDeletedNotificationsTable(db *sql.DB) {
@@ -492,7 +582,7 @@ func AcceptChamaInvitation(c *gin.Context) {
 		"success": true,
 		"message": "Invitation accepted successfully",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // RejectChamaInvitation handles rejecting a chama invitation
@@ -563,5 +653,5 @@ func RejectChamaInvitation(c *gin.Context) {
 		"success": true,
 		"message": "Invitation rejected successfully",
 	})
-		c.Abort()
+	c.Abort()
 }
