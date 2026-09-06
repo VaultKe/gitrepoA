@@ -158,7 +158,15 @@ class WebRTCClient {
     this.extraIceServers = [];
     // Interval handle for the active-speaker poll.
     this.audioLevelTimer = null;
-    
+    // Previous poll's cumulative energy/duration, for the energy-delta
+    // fallback in startAudioLevelMonitoring -- see the comment there for why
+    // a snapshot audioLevel field alone isn't trustworthy on native.
+    this._lastAudioEnergy = null;
+    this._lastAudioEnergyDuration = null;
+    // Set once so the "no usable audio stats at all" warning below only
+    // logs a single time per client instance instead of every 500ms.
+    this._warnedNoAudioStats = false;
+
     this.hasLeft = false;
   }
 
@@ -1215,12 +1223,21 @@ class WebRTCClient {
   // SPEAKING_STATE comment for why remote speaking is announced over
   // signaling instead of read off received-audio stats here: react-native-
   // webrtc's getStats() does populate `audioLevel` for the local capture
-  // (media-source/outbound-rtp), which is what this relies on, but not
-  // reliably for inbound-rtp on received audio, so polling a peer
-  // connection for how loud a remote participant is never actually reports
-  // a level on native.
+  // (media-source/outbound-rtp) on most builds, but this field has been
+  // reported missing/empty on some react-native-webrtc versions and devices
+  // (e.g. github.com/react-native-webrtc/react-native-webrtc issues #1513,
+  // #396), which would otherwise mean the speaking indicator silently never
+  // lights up for anyone with no error at all. So this also derives a level
+  // from `totalAudioEnergy`/`totalSamplesDuration` -- cumulative counters
+  // that are part of the same stats object and, being simpler for a native
+  // stats collector to fill in, are more likely to actually be present:
+  // averaging the energy added since the last poll over the time that
+  // passed gives an equivalent "how loud right now" reading even when the
+  // instantaneous audioLevel snapshot itself is blank.
   startAudioLevelMonitoring(intervalMs = 500) {
     this.stopAudioLevelMonitoring();
+    this._lastAudioEnergy = null;
+    this._lastAudioEnergyDuration = null;
 
     this.audioLevelTimer = setInterval(async () => {
       const micEnabled = !!this.localStream?.getAudioTracks?.()[0]?.enabled;
@@ -1230,6 +1247,7 @@ class WebRTCClient {
       }
 
       let localLevel = 0;
+      let sawAnyAudioStatsEntry = false;
 
       // The local capture is the same across every connection, so the first
       // one that reports a level is enough -- no need to poll them all.
@@ -1237,16 +1255,49 @@ class WebRTCClient {
         try {
           const report = await pc.getStats();
           report.forEach((entry) => {
-            if (typeof entry?.audioLevel !== 'number') return;
-            const isAudio = entry.kind === 'audio' || entry.mediaType === 'audio';
-            if ((entry.type === 'media-source' || entry.type === 'outbound-rtp') && isAudio) {
+            const isAudio = entry?.kind === 'audio' || entry?.mediaType === 'audio';
+            const isLocalAudioSource = isAudio && (entry.type === 'media-source' || entry.type === 'outbound-rtp');
+            if (!isLocalAudioSource) return;
+            sawAnyAudioStatsEntry = true;
+
+            if (typeof entry.audioLevel === 'number') {
               localLevel = Math.max(localLevel, entry.audioLevel);
+              return;
+            }
+
+            if (typeof entry.totalAudioEnergy === 'number' && typeof entry.totalSamplesDuration === 'number') {
+              const prevEnergy = this._lastAudioEnergy;
+              const prevDuration = this._lastAudioEnergyDuration;
+              this._lastAudioEnergy = entry.totalAudioEnergy;
+              this._lastAudioEnergyDuration = entry.totalSamplesDuration;
+
+              if (prevEnergy !== null && prevDuration !== null) {
+                const energyDelta = entry.totalAudioEnergy - prevEnergy;
+                const durationDelta = entry.totalSamplesDuration - prevDuration;
+                // totalAudioEnergy accumulates sample^2, so its average over
+                // the elapsed duration is mean-square energy -- take the
+                // square root to get back to the same 0..1 amplitude scale
+                // audioLevel itself uses, so SPEAKING_LEVEL_THRESHOLD applies
+                // to either source unchanged.
+                if (durationDelta > 0 && energyDelta > 0) {
+                  localLevel = Math.max(localLevel, Math.sqrt(energyDelta / durationDelta));
+                }
+              }
             }
           });
           if (localLevel > 0) break;
         } catch (e) {
           // A connection can close mid-poll; try the next one.
         }
+      }
+
+      if (!sawAnyAudioStatsEntry && !this._warnedNoAudioStats) {
+        this._warnedNoAudioStats = true;
+        console.warn(
+          '[Meeting] No local audio-source stats entry found at all (mic is on, connections exist) -- ' +
+          'the speaking indicator has nothing to measure. This points at getStats() itself, not the ' +
+          'audioLevel field: check react-native-webrtc version compatibility.'
+        );
       }
 
       this.emit('audioLevels', { local: localLevel });
