@@ -182,6 +182,12 @@ func main() {
 	cfgForReconciler := cfg
 	services.StartSTKReconciler(primaryDB, cfgForReconciler, 10*time.Minute, 15*time.Minute)
 
+	// Keep every meeting's status column true to its schedule -- scheduled ->
+	// ongoing the moment it starts, ongoing -> completed the moment its
+	// duration is up -- instead of leaving it to whichever read handler
+	// happened to derive (or not derive) a status for its own response.
+	services.StartMeetingStatusTicker(primaryDB, 30*time.Second)
+
 	// Initialize MinIO storage client
 	var storageService *services.StorageService
 	if cfg.MinioEndpoint != "" {

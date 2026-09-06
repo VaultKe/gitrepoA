@@ -122,6 +122,11 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
   // Set when the host ends the room while we're still in it, so chat locks
   // immediately rather than waiting on navigation.
   const [hasRoomEnded, setHasRoomEnded] = useState(false);
+  // Set once the server warns this room is ~2 minutes from its scheduled
+  // end (see MEETING_ENDING_SOON in webrtcClient). Purely informational --
+  // dismissing it just hides the card; the room still ends at the server-
+  // enforced time regardless, so there is nothing else for "OK" to do.
+  const [endingSoonWarning, setEndingSoonWarning] = useState(false);
   const [connectionError, setConnectionError] = useState(
     meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.'
   );
@@ -226,6 +231,7 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     setScreenShareViewerConnIds(new Set());
     setMeetingData(null);
     setHasRoomEnded(false);
+    setEndingSoonWarning(false);
     setIsChatOpen(false);
     setConnectionError(meetingId ? null : 'Missing meeting ID. Please reopen this meeting from the meeting details.');
 
@@ -915,6 +921,12 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
       // the teardown) but left a listener's local media running and their
       // signaling socket open until whatever unmounted the screen next.
       leaveMeeting();
+    });
+
+    // Purely a heads-up -- the room's actual end is enforced server-side on
+    // its own schedule regardless of whether anyone sees or dismisses this.
+    client.on('meetingEndingSoon', () => {
+      setEndingSoonWarning(true);
     });
 
     client.on('error', (error) => {
@@ -1885,6 +1897,9 @@ const useOnlineMeetingScreen = ({ route, navigation }) => {
     attendanceRecord,
     setIsChatOpen,
     leaveMeeting,
+    // "This meeting ends in ~2 minutes" -- server-driven, informational only.
+    endingSoonWarning,
+    dismissEndingSoonWarning: () => setEndingSoonWarning(false),
   };
 };
 

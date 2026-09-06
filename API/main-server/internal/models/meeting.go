@@ -11,7 +11,6 @@ type Meeting struct {
 	Description *string    `json:"description,omitempty" db:"description"`
 	Type        string     `json:"meetingType" db:"meeting_type"`
 	Location    *string    `json:"location,omitempty" db:"location"`
-	MeetingLink *string    `json:"meetingLink,omitempty" db:"meeting_link"`
 	ScheduledAt time.Time  `json:"scheduledAt" db:"scheduled_at"`
 	Duration    int        `json:"duration" db:"duration"`
 	Status      string     `json:"status" db:"status"`

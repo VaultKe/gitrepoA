@@ -559,6 +559,34 @@ func CheckAndAdvanceRound(c *gin.Context) {
 	}
 }
 
+// remainingMerryGoRoundRounds and merryGoRoundRecurrenceRule together turn a
+// merry-go-round's rotation into a single recurring calendar series instead
+// of just its next payout date, so "add to calendar" surfaces every
+// remaining date -- one per participant's turn -- not only the next one.
+func remainingMerryGoRoundRounds(currentRound, totalParticipants int) int {
+	remaining := totalParticipants - currentRound + 1
+	if remaining < 1 {
+		return 1
+	}
+	return remaining
+}
+
+// merryGoRoundRecurrenceRule returns an RFC5545 RRULE line for the remaining
+// rounds, matching exactly how checkAndAdvanceMerryGoRound computes each
+// next_payout_date (start_date + round*7 days for weekly, +round months for
+// monthly) so the series lines up with the real schedule. A single
+// remaining round needs no recurrence at all -- nil means "just one event".
+func merryGoRoundRecurrenceRule(frequency string, remainingRounds int) []string {
+	if remainingRounds <= 1 {
+		return nil
+	}
+	freq := "MONTHLY"
+	if frequency == "weekly" {
+		freq = "WEEKLY"
+	}
+	return []string{fmt.Sprintf("RRULE:FREQ=%s;COUNT=%d", freq, remainingRounds)}
+}
+
 // GetMerryGoRoundCalendarAddEventURL returns a pre-filled Google Calendar event URL for a merry-go-round payout
 func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 	merryGoRoundID := c.Param("id")
@@ -582,20 +610,26 @@ func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 
 	// Get merry-go-round details
 	var mgr struct {
-		ID             string    `json:"id"`
-		Name           string    `json:"name"`
-		Description    string    `json:"description"`
-		AmountPerRound float64   `json:"amountPerRound"`
-		Frequency      string    `json:"frequency"`
-		NextPayoutDate time.Time `json:"nextPayoutDate"`
-		ChamaID        string    `json:"chamaId"`
+		ID                string    `json:"id"`
+		Name              string    `json:"name"`
+		Description       string    `json:"description"`
+		AmountPerRound    float64   `json:"amountPerRound"`
+		Frequency         string    `json:"frequency"`
+		NextPayoutDate    time.Time `json:"nextPayoutDate"`
+		ChamaID           string    `json:"chamaId"`
+		CurrentRound      int       `json:"currentRound"`
+		TotalParticipants int       `json:"totalParticipants"`
 	}
 
 	err := db.(*sql.DB).QueryRow(`
-		SELECT id, name, description, amount_per_round, frequency, next_payout_date, chama_id
+		SELECT id, name, description, amount_per_round, frequency, next_payout_date, chama_id,
+			   current_round, total_participants
 		FROM merry_go_rounds
 		WHERE id = $1
-	`, merryGoRoundID).Scan(&mgr.ID, &mgr.Name, &mgr.Description, &mgr.AmountPerRound, &mgr.Frequency, &mgr.NextPayoutDate, &mgr.ChamaID)
+	`, merryGoRoundID).Scan(
+		&mgr.ID, &mgr.Name, &mgr.Description, &mgr.AmountPerRound, &mgr.Frequency, &mgr.NextPayoutDate, &mgr.ChamaID,
+		&mgr.CurrentRound, &mgr.TotalParticipants,
+	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -619,9 +653,17 @@ func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 		chamaName = "Chama"
 	}
 
+	remainingRounds := remainingMerryGoRoundRounds(mgr.CurrentRound, mgr.TotalParticipants)
+	recurrence := merryGoRoundRecurrenceRule(mgr.Frequency, remainingRounds)
+
 	// Build event summary and description
 	summary := fmt.Sprintf("%s — %s", mgr.Name, chamaName)
-	description := fmt.Sprintf("Merry-Go-Round payout reminder.\n\nAmount: %.2f KES\nFrequency: %s\n\nNext payout date for the merry-go-round cycle.", mgr.AmountPerRound, mgr.Frequency)
+	description := fmt.Sprintf("Merry-Go-Round payout reminder.\n\nAmount: %.2f KES\nFrequency: %s\n\n", mgr.AmountPerRound, mgr.Frequency)
+	if len(recurrence) > 0 {
+		description += fmt.Sprintf("Repeats every %s for the remaining %d payout rounds of this cycle.", mgr.Frequency, remainingRounds)
+	} else {
+		description += "Next payout date for the merry-go-round cycle."
+	}
 
 	// Use next payout date as the event date
 	// Set time to 9:00 AM EAT for the reminder
@@ -642,6 +684,13 @@ func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 	toLocal := func(t time.Time) string { return t.Format("20060102T150405") }
 	params.Set("dates", fmt.Sprintf("%s/%s", toLocal(startTime), toLocal(endTime)))
 	params.Set("ctz", "Africa/Nairobi")
+	// Undocumented but long-standing quick-add param: repeats the event for
+	// the remaining rounds instead of adding only the next one. If Google
+	// ever drops support for it, this just degrades to a single event --
+	// exactly today's behaviour -- so there is no failure mode here.
+	if len(recurrence) > 0 {
+		params.Set("recur", recurrence[0])
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -675,20 +724,26 @@ func CreateMerryGoRoundCalendarEvent(c *gin.Context) {
 	}
 
 	var mgr struct {
-		ID             string    `json:"id"`
-		Name           string    `json:"name"`
-		Description    string    `json:"description"`
-		AmountPerRound float64   `json:"amountPerRound"`
-		Frequency      string    `json:"frequency"`
-		NextPayoutDate time.Time `json:"nextPayoutDate"`
-		ChamaID        string    `json:"chamaId"`
+		ID                string    `json:"id"`
+		Name              string    `json:"name"`
+		Description       string    `json:"description"`
+		AmountPerRound    float64   `json:"amountPerRound"`
+		Frequency         string    `json:"frequency"`
+		NextPayoutDate    time.Time `json:"nextPayoutDate"`
+		ChamaID           string    `json:"chamaId"`
+		CurrentRound      int       `json:"currentRound"`
+		TotalParticipants int       `json:"totalParticipants"`
 	}
 
 	err := db.(*sql.DB).QueryRow(`
-		SELECT id, name, description, amount_per_round, frequency, next_payout_date, chama_id
+		SELECT id, name, description, amount_per_round, frequency, next_payout_date, chama_id,
+			   current_round, total_participants
 		FROM merry_go_rounds
 		WHERE id = $1
-	`, merryGoRoundID).Scan(&mgr.ID, &mgr.Name, &mgr.Description, &mgr.AmountPerRound, &mgr.Frequency, &mgr.NextPayoutDate, &mgr.ChamaID)
+	`, merryGoRoundID).Scan(
+		&mgr.ID, &mgr.Name, &mgr.Description, &mgr.AmountPerRound, &mgr.Frequency, &mgr.NextPayoutDate, &mgr.ChamaID,
+		&mgr.CurrentRound, &mgr.TotalParticipants,
+	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -738,9 +793,17 @@ func CreateMerryGoRoundCalendarEvent(c *gin.Context) {
 		return
 	}
 
+	remainingRounds := remainingMerryGoRoundRounds(mgr.CurrentRound, mgr.TotalParticipants)
+	recurrence := merryGoRoundRecurrenceRule(mgr.Frequency, remainingRounds)
+
 	// Build event with accurate start/end and EAT timezone
 	title := fmt.Sprintf("%s — %s", mgr.Name, chamaName)
-	desc := fmt.Sprintf("%s\n\nAmount: %.2f KES\nFrequency: %s\n\nNext payout date for the merry-go-round cycle.", mgr.Description, mgr.AmountPerRound, mgr.Frequency)
+	desc := fmt.Sprintf("%s\n\nAmount: %.2f KES\nFrequency: %s\n\n", mgr.Description, mgr.AmountPerRound, mgr.Frequency)
+	if len(recurrence) > 0 {
+		desc += fmt.Sprintf("Repeats every %s for the remaining %d payout rounds of this cycle.", mgr.Frequency, remainingRounds)
+	} else {
+		desc += "Next payout date for the merry-go-round cycle."
+	}
 
 	// Set time to 9:00 AM EAT for the reminder
 	eat, _ := time.LoadLocation("Africa/Nairobi")
@@ -754,6 +817,12 @@ func CreateMerryGoRoundCalendarEvent(c *gin.Context) {
 		StartTime:   startTime,
 		EndTime:     endTime,
 		Location:    chamaName,
+		// One event, repeating for every remaining round -- see
+		// merryGoRoundRecurrenceRule -- rather than only the next payout, so
+		// this reminds the user (and, per the reminder overrides below,
+		// keeps reminding them) for the whole rest of the rotation, not just
+		// its first upcoming date.
+		Recurrence: recurrence,
 	}
 
 	// Use primary calendar and reminders 30,10,0 minutes

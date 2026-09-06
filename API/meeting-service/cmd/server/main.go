@@ -254,13 +254,15 @@ func cleanupLoop(rm *room.RoomManager, interval time.Duration) {
 	}
 }
 
-// expireOverdueRoomsLoop periodically ends any room that has run past its
-// scheduled duration. 20s keeps an overrun small (worst case, roughly one
-// interval's worth of extra resource use) without scanning the in-memory
-// room map often enough to matter.
+// expireOverdueRoomsLoop periodically warns rooms nearing their scheduled end
+// and ends any room that has run past it. Warn is checked first each tick so
+// a room can't be ended and warned in the same pass. 20s keeps both close to
+// on-time (worst case, roughly one interval's worth of drift) without
+// scanning the in-memory room map often enough to matter.
 func expireOverdueRoomsLoop(h *handler.MeetingHandler, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
+		h.WarnRoomsNearingEnd()
 		h.ExpireOverdueRooms()
 	}
 }

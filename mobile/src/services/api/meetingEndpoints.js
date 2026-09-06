@@ -103,18 +103,6 @@ const endMeeting = async (meetingId) => {
   });
 };
 
-const getMeetingCalendarAddUrl = async (meetingId) => {
-  return await makeRequest(`/meetings/${meetingId}/calendar/add-url`, {
-    method: 'GET',
-  });
-};
-
-const createMeetingCalendarEvent = async (meetingId) => {
-  return await makeRequest(`/meetings/${meetingId}/calendar/create`, {
-    method: 'POST',
-  });
-};
-
 const getMerryGoRoundCalendarEventURL = async (merryGoRoundId) => {
   return await makeRequest(`/merry-go-rounds/${merryGoRoundId}/calendar/add-url`, {
     method: 'GET',
@@ -224,8 +212,6 @@ export {
   joinJitsiMeeting,
   startMeeting,
   endMeeting,
-  getMeetingCalendarAddUrl,
-  createMeetingCalendarEvent,
   getMerryGoRoundCalendarEventURL,
   markMeetingAttendance,
   getMeetingAttendance,

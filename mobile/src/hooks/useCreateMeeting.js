@@ -20,9 +20,6 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
     duration: '60',
     location: '',
     meetingType: 'physical',
-    attendeeEmails: '',
-    addToCalendar: true,
-    calendarId: 'primary',
   });
 
   const [errors, setErrors] = useState({});
@@ -181,22 +178,6 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
     // meeting room (see OnlineMeetingScreen), not a link to some other
     // platform.
 
-    if (formData.attendeeEmails.trim()) {
-      const emails = formData.attendeeEmails.split(',').map(email => email.trim());
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const invalidEmails = [];
-
-      for (const email of emails) {
-        if (email && !emailRegex.test(email)) {
-          invalidEmails.push(email);
-        }
-      }
-
-      if (invalidEmails.length > 0) {
-        newErrors.attendeeEmails = `Invalid email format: ${invalidEmails.join(', ')}`;
-      }
-    }
-
     setErrors(newErrors);
     setShowErrors(true);
 
@@ -232,10 +213,6 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
 
       const displayTime = formatDate(testDate, 'time');
 
-      const attendeeEmails = formData.attendeeEmails.trim()
-        ? formData.attendeeEmails.split(',').map(email => email.trim()).filter(email => email)
-        : [];
-
       // Belt-and-braces alongside the durations list already being filtered
       // for virtual meetings (see useCreateMeeting's `durations`) and the
       // meeting-service's own hard cap on the room itself -- this is just
@@ -254,35 +231,26 @@ const useCreateMeeting = ({ route, navigation, onRouteChange }) => {
         location: formData.location.trim(),
         meetingType: formData.meetingType,
         recordingEnabled: formData.meetingType === 'virtual',
-        attendeeEmails: attendeeEmails,
-        calendarId: formData.addToCalendar ? formData.calendarId : null,
       };
 
-      let endpoint = '/meetings/';
-
-      if (formData.addToCalendar && attendeeEmails.length > 0) {
-        endpoint = '/meetings/calendar';
-      } else if (formData.meetingType === 'virtual') {
-        endpoint = '/meetings/';
-      }
-
-      const response = await ApiService.makeRequest(endpoint, {
+      const response = await ApiService.makeRequest('/meetings/', {
         method: 'POST',
         body: meetingData,
       });
 
-      if (response.success) {
-        if (onRouteChange) {
-          onRouteChange('meetings', 'ChamaMeetingsScreen');
-        } else {
-          navigation.navigate('ChamaMeetingsScreen', {
-            chamaId,
-            newMeeting: response.data,
-            refresh: true
-          });
-        }
-      } else {
+      if (!response.success) {
         Alert.alert('Error', response.error || 'Failed to schedule meeting');
+        return;
+      }
+
+      if (onRouteChange) {
+        onRouteChange('meetings', 'ChamaMeetingsScreen');
+      } else {
+        navigation.navigate('ChamaMeetingsScreen', {
+          chamaId,
+          newMeeting: response.data,
+          refresh: true
+        });
       }
     } catch (error) {
       console.error('Error creating meeting:', error);

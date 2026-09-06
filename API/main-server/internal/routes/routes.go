@@ -513,8 +513,6 @@ func SetupRoutes(
 				meetings.POST("/:id/minutes", api.SaveMeetingMinutes)
 				meetings.PUT("/:id/minutes", api.UpdateMeetingMinutes)
 				meetings.GET("/:id/minutes", api.GetMeetingMinutes)
-				meetings.GET("/:id/calendar/add-url", api.GetGoogleCalendarAddEventURL)
-				meetings.POST("/:id/calendar/create", api.CreateGoogleCalendarEvent)
 			}
 
 			onlineMeetings := protected.Group("/online-meetings")
@@ -530,6 +528,14 @@ func SetupRoutes(
 				merryGoRounds.GET("/:id/payments", api.GetMerryGoRoundPayments)
 				merryGoRounds.POST("/", api.CreateMerryGoRound)
 				merryGoRounds.GET("/contribution-status/:chamaId", api.CheckUserContributionStatus)
+				// add-url needs no Google account connected at all -- it just
+				// hands back a pre-filled calendar.google.com link the user
+				// taps to confirm adding it themselves, so it's the route to
+				// reach for by default. create is the lower-friction *result*
+				// (one tap, no leaving the app) for a user who already has a
+				// Google account connected, but depends on that connection.
+				merryGoRounds.GET("/:id/calendar/add-url", api.GetMerryGoRoundCalendarAddEventURL)
+				merryGoRounds.POST("/:id/calendar/create", api.CreateMerryGoRoundCalendarEvent)
 			}
 
 			welfare := protected.Group("/welfare")

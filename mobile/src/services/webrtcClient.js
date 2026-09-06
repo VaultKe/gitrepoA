@@ -46,6 +46,9 @@ export const SIGNALING_MESSAGE_TYPES = {
   PARTICIPANT_LEFT: 'participant-left',
   PARTICIPANT_UPDATED: 'participant-updated',
   ROOM_ENDED: 'room-ended',
+  // Sent once, ~2 minutes before the room's scheduled end -- see
+  // WarnRoomsNearingEnd in meeting-service.
+  MEETING_ENDING_SOON: 'meeting-ending-soon',
   CHAT_MESSAGE: 'chat-message',
   SCREEN_SHARE_STARTED: 'screen-share-started',
   SCREEN_SHARE_STOPPED: 'screen-share-stopped',
@@ -570,6 +573,10 @@ class WebRTCClient {
       case SIGNALING_MESSAGE_TYPES.ROOM_ENDED:
         this.emit('roomEnded', message);
         this.disconnect();
+        break;
+
+      case SIGNALING_MESSAGE_TYPES.MEETING_ENDING_SOON:
+        this.emit('meetingEndingSoon', message.payload || {});
         break;
 
       case SIGNALING_MESSAGE_TYPES.CHAT_MESSAGE:

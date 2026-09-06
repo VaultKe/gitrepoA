@@ -20,8 +20,14 @@ func NewMeetingService(db *sql.DB, _ *CalendarService) *MeetingService {
 
 // GetMeeting retrieves a meeting by ID
 func (s *MeetingService) GetMeeting(meetingID string) (*models.Meeting, error) {
+	// Was "meeting_link", a column that has never existed in the meetings
+	// table (only "meeting_url" does -- see migrations/meetings.go) -- every
+	// call to this query failed outright, taking both Google Calendar
+	// handlers below down with it. Not selecting a URL column at all now
+	// rather than fixing the name: meetings are joined in-app, so there is
+	// nothing external left to link to (see CreateMeetingForm.js).
 	query := `
-		SELECT id, chama_id, title, description, meeting_type, location, meeting_link,
+		SELECT id, chama_id, title, description, meeting_type, location,
 			   scheduled_at, duration, status, created_by, created_at, updated_at
 		FROM meetings
 		WHERE id = $1
@@ -32,7 +38,7 @@ func (s *MeetingService) GetMeeting(meetingID string) (*models.Meeting, error) {
 
 	err := row.Scan(
 		&meeting.ID, &meeting.ChamaID, &meeting.Title, &meeting.Description,
-		&meeting.Type, &meeting.Location, &meeting.MeetingLink,
+		&meeting.Type, &meeting.Location,
 		&meeting.ScheduledAt, &meeting.Duration, &meeting.Status,
 		&meeting.CreatedBy, &meeting.CreatedAt, &meeting.UpdatedAt,
 	)

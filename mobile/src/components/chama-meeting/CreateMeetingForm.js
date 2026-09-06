@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../common/Card';
 import Input from '../common/Input';
@@ -166,61 +166,12 @@ const CreateMeetingForm = ({
           gets you an in-app online-meeting room (see OnlineMeetingScreen),
           not a field to paste someone else's Zoom/Teams URL into. */}
 
-      <Card style={styles.formCard}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Attendees & Calendar Integration
-        </Text>
-
-        <View>
-          <Input
-            label="Attendee Emails (optional)"
-            value={formData.attendeeEmails}
-            onChangeText={(text) => handleInputChange('attendeeEmails', text)}
-            placeholder="email1@example.com, email2@example.com"
-            multiline
-            numberOfLines={2}
-            icon={<Ionicons name="mail" size={20} color={colors.textSecondary} />}
-            style={errors.attendeeEmails && showErrors ? [styles.inputError, { borderColor: colors.error }] : null}
-          />
-          <FormErrorMessage error={errors.attendeeEmails} showErrors={showErrors} colors={colors} />
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.calendarOption,
-            {
-              backgroundColor: formData.addToCalendar ? colors.primary + '20' : colors.background,
-              borderColor: formData.addToCalendar ? colors.primary : colors.border,
-            }
-          ]}
-          onPress={() => handleInputChange('addToCalendar', !formData.addToCalendar)}
-        >
-          <View style={styles.calendarHeader}>
-            <Ionicons
-              name="calendar"
-              size={24}
-              color={formData.addToCalendar ? colors.primary : colors.textSecondary}
-            />
-            <Text style={[
-              styles.calendarText,
-              { color: formData.addToCalendar ? colors.primary : colors.text }
-            ]}>
-              Add to Google Calendar
-            </Text>
-            <Ionicons
-              name={formData.addToCalendar ? "checkmark-circle" : "ellipse-outline"}
-              size={20}
-              color={formData.addToCalendar ? colors.primary : colors.textSecondary}
-            />
-          </View>
-          <Text style={[
-            styles.calendarDescription,
-            { color: formData.addToCalendar ? colors.primary : colors.textSecondary }
-          ]}>
-            Automatically create calendar event and send invites to attendees
-          </Text>
-        </TouchableOpacity>
-      </Card>
+      {/* Google Calendar integration (and the attendee-emails field that
+          existed to feed it) was removed -- connecting a Google account was
+          too much friction for what it bought, an optional reminder, and
+          the feature never actually worked to begin with (it depended on a
+          DB column that was never there). Chama members already see a
+          scheduled meeting in-app via ChamaMeetingsScreen. */}
 
       <View style={styles.submitButton}>
         <Button
@@ -252,27 +203,6 @@ const styles = {
   },
   submitButton: {
     marginBottom: 32,
-  },
-  calendarOption: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginTop: 12,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 4,
-  },
-  calendarText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  calendarDescription: {
-    fontSize: 14,
-    marginLeft: 36,
   },
   inputError: {
     borderWidth: 1,

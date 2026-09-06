@@ -23,7 +23,7 @@ if (Platform.OS !== 'web') {
   }
 }
 import { useApp } from '../../../context/AppContext';
-import { getThemeColors, spacing, typography } from '../../../utils/theme';
+import { getThemeColors, spacing, typography, getShadowStyle } from '../../../utils/theme';
 import useOnlineMeetingScreen from '../../../hooks/useOnlineMeetingScreen';
 import OnlineMeetingLoading from '../../../components/chama-meeting/OnlineMeetingLoading';
 import OnlineMeetingErrorView from '../../../components/chama-meeting/OnlineMeetingErrorView';
@@ -197,6 +197,8 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
     isEndedMeeting,
     attendanceRecord,
     setIsChatOpen,
+    endingSoonWarning,
+    dismissEndingSoonWarning,
   } = screen;
 
   const nameForParticipant = (participant) => {
@@ -743,6 +745,26 @@ const OnlineMeetingScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Server-driven, informational only (see WarnRoomsNearingEnd in
+          meeting-service) -- dismissing this does not push the meeting's
+          end time back, it just hides the card. Only ever shown to people
+          actually connected to this room's signaling channel, so there is
+          nothing to scope here on the client side. */}
+      {endingSoonWarning && (
+        <View style={[styles.endingSoonBanner, { backgroundColor: colors.warning || '#f59e0b' }]}>
+          <Ionicons name="time-outline" size={20} color="#fff" />
+          <Text style={styles.endingSoonText} numberOfLines={2}>
+            This meeting will end in about 2 minutes.
+          </Text>
+          <TouchableOpacity
+            style={styles.endingSoonButton}
+            onPress={dismissEndingSoonWarning}
+            accessibilityLabel="Dismiss meeting ending soon notice"
+          >
+            <Text style={styles.endingSoonButtonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <View style={styles.videoArea}>
         {showExpandedView && expandedData && (
           <View
@@ -1216,6 +1238,37 @@ const styles = StyleSheet.create({
   },
   galleryRow: {
     flexDirection: 'row',
+  },
+  endingSoonBanner: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    right: spacing.sm,
+    zIndex: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    ...getShadowStyle('lg'),
+  },
+  endingSoonText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: typography.fontSize.sm,
+    fontWeight: '600',
+  },
+  endingSoonButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  endingSoonButtonText: {
+    color: '#fff',
+    fontSize: typography.fontSize.sm,
+    fontWeight: '700',
   },
   galleryCollapse: {
     position: 'absolute',

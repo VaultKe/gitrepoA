@@ -873,6 +873,41 @@ func (rm *RoomManager) GetExpiredActiveRoomIDs() []string {
 	return expired
 }
 
+// EndingSoonWarnWindow is how far ahead of a room's ScheduledEndAt
+// TakeRoomsNearingEnd fires the "meeting ends soon" notice.
+const EndingSoonWarnWindow = 2 * time.Minute
+
+// TakeRoomsNearingEnd returns every active room within EndingSoonWarnWindow
+// of its scheduled end that hasn't been warned yet, and marks each one
+// warned in the same locked pass -- "take", not "get", because handing a
+// room back here is also what claims it, so two overlapping ticks (or a
+// slow caller) can't both broadcast the same room's warning twice.
+func (rm *RoomManager) TakeRoomsNearingEnd() []string {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	now := time.Now()
+	var nearingEnd []string
+	for roomID, room := range rm.rooms {
+		if room.Status != models.RoomStatusActive {
+			continue
+		}
+		if room.ScheduledEndAt.IsZero() || room.EndingSoonWarned {
+			continue
+		}
+		// now is already past ScheduledEndAt: GetExpiredActiveRoomIDs will
+		// end this room on its own pass: don't also warn about ending "soon".
+		if now.After(room.ScheduledEndAt) {
+			continue
+		}
+		if room.ScheduledEndAt.Sub(now) <= EndingSoonWarnWindow {
+			room.EndingSoonWarned = true
+			nearingEnd = append(nearingEnd, roomID)
+		}
+	}
+	return nearingEnd
+}
+
 // cleanupLoop periodically removes stale rooms.
 func (rm *RoomManager) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)

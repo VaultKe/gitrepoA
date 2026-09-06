@@ -29,6 +29,12 @@ type CalendarEvent struct {
 	Location    string    `json:"location"`
 	MeetingURL  string    `json:"meetingUrl"`
 	Attendees   []string  `json:"attendees"`
+	// Recurrence, when set, is one or more RFC5545 RRULE/EXDATE/RDATE lines
+	// (e.g. "RRULE:FREQ=WEEKLY;COUNT=5") describing every future occurrence
+	// of this event as a single series -- one event insert covers every
+	// remaining date instead of one insert per date, and Google applies the
+	// same reminders to each occurrence automatically.
+	Recurrence []string `json:"recurrence,omitempty"`
 }
 
 // NewCalendarService creates a new calendar service instance
@@ -140,6 +146,7 @@ func (cs *CalendarService) CreateEventWithReminders(calendarID string, event *Ca
 		Start:       &calendar.EventDateTime{DateTime: event.StartTime.In(eat).Format(time.RFC3339), TimeZone: "Africa/Nairobi"},
 		End:         &calendar.EventDateTime{DateTime: event.EndTime.In(eat).Format(time.RFC3339), TimeZone: "Africa/Nairobi"},
 		Attendees:   attendees,
+		Recurrence:  event.Recurrence,
 		Reminders: &calendar.EventReminders{
 			UseDefault: false,
 			Overrides:  overrides,

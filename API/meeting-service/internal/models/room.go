@@ -47,6 +47,10 @@ type Room struct {
 	// nothing that isn't already gone.
 	DurationMinutes int       `json:"durationMinutes,omitempty"`
 	ScheduledEndAt  time.Time `json:"scheduledEndAt,omitempty"`
+	// EndingSoonWarned marks that the "meeting ends in 2 minutes" notice has
+	// already gone out for this room, so the warning ticker fires it exactly
+	// once per room rather than every tick until the room actually ends.
+	EndingSoonWarned bool `json:"-"`
 }
 
 type Participant struct {

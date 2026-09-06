@@ -236,6 +236,27 @@ func (h *MeetingHandler) handleRoomEmptiedByLeave(roomID string) {
 	fmt.Printf("[Meeting] roomID=%s | ended (last participant left)\n", roomID)
 }
 
+// WarnRoomsNearingEnd tells everyone currently in a room that it's about to
+// end. BroadcastToRoom only reaches clients actually connected to that
+// room's signaling channel -- i.e. exactly the people in that online
+// meeting right now -- so this never needs its own audience filtering.
+// Purely informational: it doesn't touch the room's schedule, so the room
+// still ends at the exact time ExpireOverdueRooms was already going to end
+// it regardless of whether anyone saw or dismissed the notice.
+func (h *MeetingHandler) WarnRoomsNearingEnd() {
+	for _, roomID := range h.roomManager.TakeRoomsNearingEnd() {
+		h.signalingHub.BroadcastToRoom(roomID, &signaling.SignalingMessage{
+			Type:   "meeting-ending-soon",
+			RoomID: roomID,
+			Payload: map[string]interface{}{
+				"message":          "This meeting will end in about 2 minutes.",
+				"secondsRemaining": int(room.EndingSoonWarnWindow.Seconds()),
+			},
+		})
+		fmt.Printf("[Expiry] roomID=%s | warned (ending soon)\n", roomID)
+	}
+}
+
 // ExpireOverdueRooms ends every room whose scheduled duration has elapsed.
 // Called on a ticker from main.go rather than a per-request check, since a
 // room with nobody actively hitting an endpoint right now would otherwise

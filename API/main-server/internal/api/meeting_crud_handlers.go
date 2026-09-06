@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"vaultke-backend/internal/services"
 )
 
 // Meeting CRUD handlers
@@ -115,15 +117,12 @@ func GetMeetings(c *gin.Context) {
 			continue // Skip invalid rows
 		}
 
-		// Determine meeting status based on scheduled time and duration
-		now := time.Now()
-		status := meeting.Status
-		meetingEndTime := meeting.ScheduledAt.Add(time.Duration(meeting.Duration) * time.Minute)
-
-		// Only mark as completed if the meeting has actually ended (not just started)
-		if meetingEndTime.Before(now) && status == "scheduled" {
-			status = "completed"
-		}
+		// The database is kept accurate by services.StartMeetingStatusTicker;
+		// this only covers the (up to ~30s) window between ticks so a client
+		// never sees a "scheduled" meeting that has obviously already started
+		// or ended. See DeriveMeetingStatus for what it does and doesn't
+		// override.
+		status := services.DeriveMeetingStatus(meeting.ScheduledAt, meeting.Duration, meeting.Status)
 
 		meetingMap := map[string]interface{}{
 			"id":          meeting.ID,
@@ -270,6 +269,17 @@ func GetUserMeetings(c *gin.Context) {
 		// Track unique chamas
 		chamaCount[meeting.ChamaID] = true
 
+		durationMinutes := 0
+		if meeting.Duration.Valid {
+			durationMinutes = int(meeting.Duration.Int64)
+		}
+		// This endpoint used to hand back meeting.Status raw, with no
+		// time-based derivation at all -- unlike GetMeetings, which already
+		// had its own (now shared, see DeriveMeetingStatus) logic. The same
+		// meeting could disagree with itself depending on which endpoint a
+		// client called.
+		status := services.DeriveMeetingStatus(meeting.ScheduledAt, durationMinutes, meeting.Status)
+
 		meetingData := map[string]interface{}{
 			"id":          meeting.ID,
 			"chamaId":     meeting.ChamaID,
@@ -277,11 +287,11 @@ func GetUserMeetings(c *gin.Context) {
 			"title":       meeting.Title,
 			"description": "",
 			"scheduledAt": meeting.ScheduledAt.Format(time.RFC3339),
-			"duration":    0,
+			"duration":    durationMinutes,
 			"location":    "",
 			"meetingUrl":  "",
 			"meetingType": "physical",
-			"status":      meeting.Status,
+			"status":      status,
 			"createdBy":   meeting.CreatedBy,
 			"createdAt":   meeting.CreatedAt.Format(time.RFC3339),
 			"creator": map[string]interface{}{
@@ -294,9 +304,6 @@ func GetUserMeetings(c *gin.Context) {
 		// Handle nullable fields
 		if meeting.Description.Valid {
 			meetingData["description"] = meeting.Description.String
-		}
-		if meeting.Duration.Valid {
-			meetingData["duration"] = meeting.Duration.Int64
 		}
 		if meeting.Location.Valid {
 			meetingData["location"] = meeting.Location.String
