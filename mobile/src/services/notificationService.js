@@ -8,6 +8,119 @@ class NotificationService {
   constructor() {
     this.isInitialized = false;
     this.appState = AppState.currentState;
+
+    // In-app notification tone playback
+    this._toneSound = null;        // loaded expo-av Audio.Sound
+    this._toneUri = null;          // URI the loaded sound was created from
+    this._tonePrefs = null;        // { sound_enabled, notification_sound_id, file_path }
+    this._tonePrefsFetchedAt = 0;
+    this._lastTonePlayedAt = 0;
+    this._audioModeSet = false;
+  }
+
+  // Resolve the user's selected notification tone (cached for 5 min).
+  async _loadTonePreferences(force = false) {
+    const fresh = Date.now() - this._tonePrefsFetchedAt < 5 * 60 * 1000;
+    if (this._tonePrefs && fresh && !force) return this._tonePrefs;
+
+    try {
+      const ApiService = (await import('./api')).default;
+      const res = await ApiService.getNotificationPreferences();
+      if (res?.success && res.data) {
+        const prefs = res.data.preferences || {};
+        const sounds = res.data.available_sounds || res.data.sounds || [];
+        const selected = sounds.find(s => s.id === prefs.notification_sound_id);
+        const fallback = sounds.find(s => s.is_default) || sounds.find(s => s.file_path);
+        const chosen = selected || fallback || null;
+        this._tonePrefs = {
+          sound_enabled: prefs.sound_enabled !== false,
+          notification_sound_id: prefs.notification_sound_id ?? null,
+          file_path: chosen?.file_path || '',
+          name: chosen?.name || '',
+        };
+        this._tonePrefsFetchedAt = Date.now();
+      }
+    } catch (error) {
+      // Network/permission issues shouldn't block playback of a default tone.
+      if (!this._tonePrefs) {
+        this._tonePrefs = { sound_enabled: true, notification_sound_id: null, file_path: '/notification_sound/ring.mp3', name: 'Default Ring' };
+      }
+    }
+    return this._tonePrefs;
+  }
+
+  _resolveToneUri(filePath) {
+    if (!filePath) return null;
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+    const baseUrl = API_BASE_URL.replace(/\/api\/v1$/, '');
+    return filePath.startsWith('/') ? `${baseUrl}${filePath}` : `${baseUrl}/${filePath}`;
+  }
+
+  // Invalidate the cached tone so the next play re-fetches (call after the user
+  // changes their notification tone in settings).
+  resetTonePreferences() {
+    this._tonePrefs = null;
+    this._tonePrefsFetchedAt = 0;
+  }
+
+  /**
+   * Play the user's selected notification tone for an in-app notification.
+   * Real playback via expo-av — works on web and native, in-app (foreground),
+   * where the OS notification sound never fires. Throttled to once / 2s.
+   */
+  async playNotificationSound() {
+    try {
+      const now = Date.now();
+      if (now - this._lastTonePlayedAt < 2000) return false;
+
+      const prefs = await this._loadTonePreferences();
+      if (!prefs || prefs.sound_enabled === false) return false;
+
+      const uri = this._resolveToneUri(prefs.file_path);
+      if (!uri) return false; // "Silent" tone selected
+
+      this._lastTonePlayedAt = now;
+
+      if (!this._audioModeSet) {
+        try {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            staysActiveInBackground: false,
+            playsInSilentModeIOS: true,
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+          });
+          this._audioModeSet = true;
+        } catch {}
+      }
+
+      // Reuse the loaded sound when the tone hasn't changed.
+      if (this._toneSound && this._toneUri === uri) {
+        try {
+          await this._toneSound.replayAsync();
+          return true;
+        } catch {
+          // fall through to a fresh load
+          try { await this._toneSound.unloadAsync(); } catch {}
+          this._toneSound = null;
+          this._toneUri = null;
+        }
+      }
+
+      if (this._toneSound) {
+        try { await this._toneSound.unloadAsync(); } catch {}
+        this._toneSound = null;
+        this._toneUri = null;
+      }
+
+      const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true, volume: 1.0 });
+      this._toneSound = sound;
+      this._toneUri = uri;
+      return true;
+    } catch (error) {
+      console.warn('playNotificationSound failed:', error?.message || error);
+      return false;
+    }
   }
 
   async initialize() {

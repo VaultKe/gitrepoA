@@ -1,14 +1,42 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { useLightningData, useOptimisticUpdate } from './useLightningData';
 import ApiService from '../services/api';
 import notificationService from '../services/notificationService';
 
+// Read / deleted notification IDs are mirrored to device storage so the state
+// survives a reload / re-navigation even if the backend read-state write is
+// slow or lagging behind a deploy. IDs are globally unique and never reused, so
+// keeping them client-side can only ever suppress a stale "unread", never hide
+// a genuinely new notification.
+const READ_KEY = (uid) => `notif_read_ids_${uid || 'anon'}`;
+const DEL_KEY = (uid) => `notif_deleted_ids_${uid || 'anon'}`;
+const MAX_STORED_IDS = 800;
+
+const loadIdSet = async (key) => {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const saveIdSet = async (key, set) => {
+  try {
+    const arr = Array.from(set).slice(-MAX_STORED_IDS);
+    await AsyncStorage.setItem(key, JSON.stringify(arr));
+  } catch {}
+};
+
 const useNotificationsScreen = ({ navigation }) => {
-  const { theme, notifications: contextNotifications } = useApp();
+  const { theme, notifications: contextNotifications, user } = useApp();
   const hasRefreshedOnFocusRef = useRef(false);
+  const userId = user?.id;
 
   const smartNavigate = useCallback((screenName) => {
     try {
@@ -44,6 +72,37 @@ const useNotificationsScreen = ({ navigation }) => {
   const [invitationsCount, setInvitationsCount] = useState(0);
   const [pendingReadIds, setPendingReadIds] = useState(new Set());
   const [deletedNotificationIds, setDeletedNotificationIds] = useState(() => new Set());
+
+  // Hydrate persisted read / deleted IDs for this user.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [read, deleted] = await Promise.all([
+        loadIdSet(READ_KEY(userId)),
+        loadIdSet(DEL_KEY(userId)),
+      ]);
+      if (cancelled) return;
+      if (read.size) setPendingReadIds(prev => new Set([...prev, ...read]));
+      if (deleted.size) setDeletedNotificationIds(prev => new Set([...prev, ...deleted]));
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const persistRead = useCallback((ids) => {
+    setPendingReadIds(prev => {
+      const next = new Set([...prev, ...ids]);
+      saveIdSet(READ_KEY(userId), next);
+      return next;
+    });
+  }, [userId]);
+
+  const persistDeleted = useCallback((id) => {
+    setDeletedNotificationIds(prev => {
+      const next = new Set([...prev, id]);
+      saveIdSet(DEL_KEY(userId), next);
+      return next;
+    });
+  }, [userId]);
 
   const baseNotifications = notifications || contextNotifications || [];
 
@@ -100,8 +159,9 @@ const useNotificationsScreen = ({ navigation }) => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setDeletedNotificationIds(new Set());
-    setPendingReadIds(new Set());
+    // Do NOT clear pendingReadIds / deletedNotificationIds here — they are the
+    // device's own record of what the user has read/removed and must outlive a
+    // refresh regardless of what the server round-trip returns.
     try {
       await refreshNotifications();
     } catch (error) {
@@ -112,59 +172,45 @@ const useNotificationsScreen = ({ navigation }) => {
   }, [refreshNotifications]);
 
   const onMarkAsRead = useCallback(async (notificationId) => {
-    setPendingReadIds(prev => new Set([...prev, notificationId]));
+    persistRead([notificationId]);
     try {
       await markNotificationAsRead(notificationId);
     } catch (error) {
-      setPendingReadIds(prev => {
-        const next = new Set(prev);
-        next.delete(notificationId);
-        return next;
-      });
-      Toast.show({ type: 'error', text1: 'Update Failed', text2: 'Could not mark notification as read.', position: 'bottom', visibilityTime: 3000 });
+      // Keep the local read marker even on API failure: the user acted on it,
+      // and a later successful sync will confirm it. Surfacing it as unread
+      // again is the exact behaviour being complained about.
+      Toast.show({ type: 'error', text1: 'Sync pending', text2: 'Marked as read on this device; will sync when possible.', position: 'bottom', visibilityTime: 2500 });
       return;
     }
     refreshNotifications().catch(() => {});
-  }, [markNotificationAsRead, refreshNotifications]);
+  }, [markNotificationAsRead, refreshNotifications, persistRead]);
 
   const markAllAsRead = useCallback(async () => {
     const unreadNotifications = displayNotifications.filter(n => !n.isRead);
     if (unreadNotifications.length === 0) return;
 
-    setPendingReadIds(prev => {
-      const next = new Set(prev);
-      unreadNotifications.forEach(n => next.add(n.id));
-      return next;
-    });
+    persistRead(unreadNotifications.map(n => n.id));
 
     try {
       await markAllNotificationsAsRead();
     } catch (error) {
-      setPendingReadIds(prev => {
-        const next = new Set(prev);
-        unreadNotifications.forEach(n => next.delete(n.id));
-        return next;
-      });
-      Toast.show({ type: 'error', text1: 'Update Failed', text2: 'Could not mark all notifications as read.', position: 'bottom', visibilityTime: 3000 });
+      // Local read markers are kept (see onMarkAsRead) so the list does not
+      // snap back to unread; the write retries on the next mark/refresh.
+      Toast.show({ type: 'error', text1: 'Sync pending', text2: 'Marked all as read on this device; will sync when possible.', position: 'bottom', visibilityTime: 2500 });
       return;
     }
 
     refreshNotifications().catch(() => {});
-  }, [displayNotifications, markAllNotificationsAsRead, refreshNotifications]);
+  }, [displayNotifications, markAllNotificationsAsRead, refreshNotifications, persistRead]);
 
   const onDelete = useCallback(async (notificationId) => {
-    setDeletedNotificationIds(prev => new Set([...prev, notificationId]));
+    persistDeleted(notificationId);
     try {
       await deleteNotification(notificationId);
     } catch (error) {
-      setDeletedNotificationIds(prev => {
-        const next = new Set(prev);
-        next.delete(notificationId);
-        return next;
-      });
-      Toast.show({ type: 'error', text1: 'Delete Failed', text2: 'Could not delete the notification.', position: 'bottom', visibilityTime: 3000 });
+      Toast.show({ type: 'error', text1: 'Sync pending', text2: 'Removed on this device; will sync when possible.', position: 'bottom', visibilityTime: 2500 });
     }
-  }, [deleteNotification]);
+  }, [deleteNotification, persistDeleted]);
 
   const loadInvitationsCount = useCallback(async () => {
     try {

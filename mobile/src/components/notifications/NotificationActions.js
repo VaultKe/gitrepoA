@@ -68,7 +68,7 @@ const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMar
   }
 
   return (
-    <View style={[styles.actionButtonsRow, !isRead && { borderTopWidth: 1, borderTopColor: colors.divider + '80', backgroundColor: colors.backgroundSecondary }]}>
+    <View style={[styles.actionButtonsRow, !isRead && { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.backgroundSecondary }]}>
       {!isRead && (
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: colors.primary + '26' }]}

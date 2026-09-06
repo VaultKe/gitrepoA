@@ -17,8 +17,12 @@ const NotificationCard = memo(({ item, colors, screenWidth, onMarkAsRead, onDele
 
   return (
     <Card variant="outlined" style={[styles.notificationCard, {
-      backgroundColor: isRead ? colors.background : colors.primary + '14',
-      borderColor: isRead ? colors.divider : colors.primary + '4D',
+      // Read cards sit on `surface` (not `background`) so they stay distinct
+      // from the page, and use the stronger `border` token — `divider` is
+      // near-invisible against the dark-mode background. Unread cards get a
+      // solid primary border (no alpha) so it reads in both themes.
+      backgroundColor: isRead ? colors.surface : colors.primary + '1F',
+      borderColor: isRead ? colors.border : colors.primary,
       borderWidth: isRead ? 1 : 2,
     }]}>
       <View style={styles.notificationContent}>

@@ -158,6 +158,8 @@ const useNotificationToneScreen = ({ navigation }) => {
 
       if (success) {
         setSelectedSoundId(soundId);
+        // Drop the cached tone so in-app notification sounds pick up the change.
+        notificationService.resetTonePreferences?.();
         Alert.alert(
           'Success',
           'Notification tone updated successfully',

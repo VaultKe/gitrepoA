@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing } from '../../utils/theme';
 import ApiService from '../../services/api';
+import notificationService from '../../services/notificationService';
 
 /**
  * Real-time Notification Bell Component
@@ -15,6 +16,8 @@ const NotificationBell = ({ navigation, size = 24, showBadge = true }) => {
   
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  // Baseline for the 30s poll — starts null so the first fetch is silent.
+  const prevCountRef = useRef(null);
 
   // Fetch unread notification count
   const fetchUnreadCount = async () => {
@@ -24,7 +27,12 @@ const NotificationBell = ({ navigation, size = 24, showBadge = true }) => {
       setLoading(true);
       const response = await ApiService.getUnreadNotificationCount();
       if (response.success && response.data) {
-        setUnreadCount(response.data.count || 0);
+        const count = response.data.count || 0;
+        setUnreadCount(count);
+        if (prevCountRef.current !== null && count > prevCountRef.current) {
+          notificationService.playNotificationSound().catch(() => {});
+        }
+        prevCountRef.current = count;
       } else {
         console.warn('Invalid response format for notification count:', response);
         setUnreadCount(0);
@@ -54,6 +62,7 @@ const NotificationBell = ({ navigation, size = 24, showBadge = true }) => {
   const handlePress = () => {
     // Reset unread count immediately for better UX
     setUnreadCount(0);
+    prevCountRef.current = 0;
 
     // Navigate to notifications screen
     if (navigation) {

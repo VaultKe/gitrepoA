@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ApiService from '../services/api';
 import webSocketService from '../services/websocket';
 import lightningDataService from '../services/cacheDataService';
+import notificationService from '../services/notificationService';
 import { setAppLogout } from '../utils/authLogout';
 
 // Initial state
@@ -191,6 +192,35 @@ const AppContext = createContext();
     useEffect(() => {
       initializeApp();
     }, []);
+
+    // Ring the user's notification tone whenever the unread count rises.
+    // This is the single chokepoint every path funnels through (WebSocket
+    // push, polling fallback, manual refresh all dispatch SET_NOTIFICATIONS),
+    // so the tone plays for a genuinely new notification and not on reload.
+    const unreadBaselineRef = useRef(0);
+    const notifSettleUntilRef = useRef(0);
+    useEffect(() => {
+      if (state.isAuthenticated) {
+        // Ignore count changes during the initial data load / hydration window,
+        // otherwise a slow preload looks like a burst of "new" notifications.
+        notifSettleUntilRef.current = Date.now() + 8000;
+        unreadBaselineRef.current = 0;
+      }
+    }, [state.isAuthenticated]);
+
+    useEffect(() => {
+      const list = Array.isArray(state.notifications) ? state.notifications : [];
+      const unread = list.filter(n => !(n?.isRead === true || n?.is_read === true)).length;
+
+      if (Date.now() < notifSettleUntilRef.current) {
+        unreadBaselineRef.current = unread;
+        return;
+      }
+      if (unread > unreadBaselineRef.current) {
+        notificationService.playNotificationSound().catch(() => {});
+      }
+      unreadBaselineRef.current = unread;
+    }, [state.notifications]);
 
 
   const initializeApp = async () => {

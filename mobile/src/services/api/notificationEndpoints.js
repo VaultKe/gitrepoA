@@ -1,4 +1,15 @@
-import { makeRequest, makeRequestWithRetry } from './client';
+import { makeRequest, makeRequestWithRetry, invalidateCache } from './client';
+
+// The auto-invalidation in client.js keys off the mutation's own path
+// (e.g. /notifications/<id>/read), which never matches the cached list key
+// (GET:/notifications/?limit=...). Clear the list + unread-count cache
+// explicitly so a read/deleted notification does not reappear from the 30s
+// response cache on the next reload.
+const invalidateNotificationCaches = () => {
+  invalidateCache('/notifications/');
+  invalidateCache('/notifications?');
+  invalidateCache('/notifications/unread-count');
+};
 
 const getNotifications = async (limit = 20, offset = 0) => {
   return await makeRequest(`/notifications/?limit=${limit}&offset=${offset}`);
@@ -9,21 +20,27 @@ const getUnreadNotificationCount = async () => {
 };
 
 const markNotificationAsRead = async (notificationId) => {
-  return await makeRequest(`/notifications/${notificationId}/read`, {
+  const res = await makeRequest(`/notifications/${notificationId}/read`, {
     method: 'PUT',
   });
+  invalidateNotificationCaches();
+  return res;
 };
 
 const markAllNotificationsAsRead = async () => {
-  return await makeRequest('/notifications/read-all', {
+  const res = await makeRequest('/notifications/read-all', {
     method: 'POST',
   });
+  invalidateNotificationCaches();
+  return res;
 };
 
 const deleteNotification = async (notificationId) => {
-  return await makeRequest(`/notifications/${notificationId}`, {
+  const res = await makeRequest(`/notifications/${notificationId}`, {
     method: 'DELETE',
   });
+  invalidateNotificationCaches();
+  return res;
 };
 
 const getNotificationPreferences = async () => {
