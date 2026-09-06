@@ -52,6 +52,10 @@ const useChamaLoansScreen = ({ route, navigation, onRouteChange }) => {
         if (navigation?.setParams) {
           navigation.setParams({ loanApplicationSuccess: undefined });
         }
+        // The just-submitted loan won't be in the (short-lived) GET cache yet.
+        try { ApiService.invalidateCache?.('/loans/'); } catch (e) {}
+        loadLoans(1);
+        setCurrentPage(1);
         const timeoutId = setTimeout(() => {
           setSuccessBanner({ visible: false, message: '' });
         }, 5000);

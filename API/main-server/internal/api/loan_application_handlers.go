@@ -100,6 +100,14 @@ func getNotificationSMSEnabled(notificationType string) int {
 	}
 }
 
+// nullTimeRFC3339 renders a nullable timestamp, or "" when NULL.
+func nullTimeRFC3339(t sql.NullTime) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.Time.Format(time.RFC3339)
+}
+
 // parseFlexBool interprets the assorted truthy encodings a boolean-ish column
 // may hold ("true"/"t"/"1"/"yes") across TEXT and BOOLEAN column types.
 func parseFlexBool(s string) bool {
@@ -197,26 +205,26 @@ func GetLoanApplications(c *gin.Context) {
 	var loans []map[string]interface{}
 	for rows.Next() {
 		var loan struct {
-			ID                 string    `json:"id"`
-			BorrowerID         string    `json:"borrowerId"`
-			ChamaID            string    `json:"chamaId"`
-			Amount             float64   `json:"amount"`
-			InterestRate       float64   `json:"interestRate"`
-			Duration           int       `json:"duration"`
-			Purpose            string    `json:"purpose"`
-			Status             string    `json:"status"`
-			TotalAmount        float64   `json:"totalAmount"`
-			RemainingAmount    float64   `json:"remainingAmount"`
-			RequiredGuarantors int       `json:"requiredGuarantors"`
-			ApprovedGuarantors int       `json:"approvedGuarantors"`
-			DueDate            time.Time `json:"dueDate"`
-			CreatedAt          time.Time `json:"createdAt"`
-			BorrowerFirstName  string    `json:"borrowerFirstName"`
-			BorrowerLastName   string    `json:"borrowerLastName"`
-			BorrowerEmail      string    `json:"borrowerEmail"`
-			RequiredReferees   int       `json:"requiredReferees"`
-			ApprovedReferees   int       `json:"approvedReferees"`
-			ApprovalStage      string    `json:"approvalStage"`
+			ID                 string
+			BorrowerID         string
+			ChamaID            string
+			Amount             float64
+			InterestRate       float64
+			Duration           int
+			Purpose            string
+			Status             string
+			TotalAmount        float64
+			RemainingAmount    float64
+			RequiredGuarantors int
+			ApprovedGuarantors int
+			DueDate            sql.NullTime
+			CreatedAt          sql.NullTime
+			BorrowerFirstName  string
+			BorrowerLastName   string
+			BorrowerEmail      string
+			RequiredReferees   int
+			ApprovedReferees   int
+			ApprovalStage      string
 		}
 
 		err := rows.Scan(
@@ -227,6 +235,7 @@ func GetLoanApplications(c *gin.Context) {
 			&loan.RequiredReferees, &loan.ApprovedReferees, &loan.ApprovalStage,
 		)
 		if err != nil {
+			fmt.Printf("GetLoanApplications: skipped loan row: %v\n", err)
 			continue // Skip invalid rows
 		}
 
@@ -246,8 +255,8 @@ func GetLoanApplications(c *gin.Context) {
 			"requiredReferees":   loan.RequiredReferees,
 			"approvedReferees":   loan.ApprovedReferees,
 			"approvalStage":      loan.ApprovalStage,
-			"dueDate":            loan.DueDate.Format(time.RFC3339),
-			"createdAt":          loan.CreatedAt.Format(time.RFC3339),
+			"dueDate":            nullTimeRFC3339(loan.DueDate),
+			"createdAt":          nullTimeRFC3339(loan.CreatedAt),
 			"borrower": map[string]interface{}{
 				"id":        loan.BorrowerID,
 				"firstName": loan.BorrowerFirstName,
