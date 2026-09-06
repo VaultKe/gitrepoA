@@ -100,6 +100,16 @@ func getNotificationSMSEnabled(notificationType string) int {
 	}
 }
 
+// columnExists reports whether a column is present on a table (Postgres).
+func columnExists(db *sql.DB, table, column string) bool {
+	var exists bool
+	err := db.QueryRow(
+		"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2)",
+		table, column,
+	).Scan(&exists)
+	return err == nil && exists
+}
+
 // Loan application handlers
 func GetLoanApplications(c *gin.Context) {
 	startTime := time.Now()
@@ -145,20 +155,25 @@ func GetLoanApplications(c *gin.Context) {
 		chamaRows.Close()
 	}
 
-	// Query loan applications
-	rows, err := db.(*sql.DB).Query(`
+	// Query loan applications. Referee columns are read defensively so a database
+	// that has not yet run the referee migration still works.
+	refCols := "COALESCE(l.required_referees, 0), COALESCE(l.approved_referees, 0)"
+	if !columnExists(db.(*sql.DB), "loans", "required_referees") {
+		refCols = "0, 0"
+	}
+	rows, err := db.(*sql.DB).Query(fmt.Sprintf(`
 		SELECT
 			l.id, l.borrower_id, l.chama_id, l.amount, l.interest_rate,
 			l.duration, l.purpose, l.status, l.total_amount, l.remaining_amount,
 			l.required_guarantors, l.approved_guarantors, l.due_date, l.created_at,
 			u.first_name, u.last_name, u.email,
-			COALESCE(l.required_referees, 0), COALESCE(l.approved_referees, 0),
+			%s,
 			COALESCE(l.approval_stage, '')
 		FROM loans l
 		JOIN users u ON l.borrower_id = u.id
 		WHERE l.chama_id = $1
 		ORDER BY l.created_at DESC
-	`, chamaID)
+	`, refCols), chamaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -420,17 +435,18 @@ func CreateLoanApplication(c *gin.Context) {
 		refereeRecords = append(refereeRecords, backerInfo{userID: realID, recordID: fmt.Sprintf("referee-%d-%s", time.Now().UnixNano(), realID)})
 	}
 
-	// Insert loan application
+	// Insert loan application. The referee columns are set separately below so a
+	// database that has not yet run the referee migration still accepts the loan.
 	_, err = tx.Exec(`
 		INSERT INTO loans (
 			id, borrower_id, chama_id, loan_type_id, type, amount, interest_rate,
 			duration, purpose, status, total_amount, remaining_amount,
-			required_guarantors, approved_guarantors, required_referees, approved_referees,
+			required_guarantors, approved_guarantors,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'regular'), $6, $7, $8, $9, 'pending', $10, $10, $11, 0, $12, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, loanID, userID, req.ChamaID, req.LoanTypeID, req.LoanTypeName, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, len(guarantorRecords), len(refereeRecords))
+		) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'regular'), $6, $7, $8, $9, 'pending', $10, $10, $11, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, loanID, userID, req.ChamaID, req.LoanTypeID, req.LoanTypeName, req.Amount, req.InterestRate, req.RepaymentPeriod, req.Purpose, totalAmount, len(guarantorRecords))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"success": false,
 			"error":   "Failed to create loan application: " + err.Error(),
 		})
@@ -446,20 +462,9 @@ func CreateLoanApplication(c *gin.Context) {
 				INSERT INTO guarantors (id, loan_id, user_id, amount, status, created_at)
 				VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP)
 			`, info.recordID, loanID, info.userID, startingExposure); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to add guarantor: " + err.Error()})
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"success": false, "error": "Failed to add guarantor: " + err.Error()})
 				return
 			}
-		}
-	}
-
-	// Referees vouch for character only — no amount is ever stored against them.
-	for _, info := range refereeRecords {
-		if _, err = tx.Exec(`
-			INSERT INTO loan_referees (id, loan_id, user_id, status, created_at)
-			VALUES ($1, $2, $3, 'pending', CURRENT_TIMESTAMP)
-		`, info.recordID, loanID, info.userID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to add referee: " + err.Error()})
-			return
 		}
 	}
 
@@ -470,6 +475,23 @@ func CreateLoanApplication(c *gin.Context) {
 			"error":   "Failed to commit transaction",
 		})
 		return
+	}
+
+	// Referees vouch for character only — no amount is ever stored against them.
+	// Recorded outside the loan transaction and best-effort so a lagging schema
+	// cannot block loan creation.
+	if len(refereeRecords) > 0 {
+		if _, uerr := sqlDB.Exec("UPDATE loans SET required_referees = $1, approved_referees = 0 WHERE id = $2", len(refereeRecords), loanID); uerr != nil {
+			fmt.Printf("Failed to set required_referees for loan %s: %v\n", loanID, uerr)
+		}
+		for _, info := range refereeRecords {
+			if _, rerr := sqlDB.Exec(`
+				INSERT INTO loan_referees (id, loan_id, user_id, status, created_at)
+				VALUES ($1, $2, $3, 'pending', CURRENT_TIMESTAMP)
+			`, info.recordID, loanID, info.userID); rerr != nil {
+				fmt.Printf("Failed to add referee %s to loan %s: %v\n", info.userID, loanID, rerr)
+			}
+		}
 	}
 
 	// Create notifications after successful commit (outside transaction)
