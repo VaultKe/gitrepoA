@@ -327,12 +327,12 @@ func createNotificationsTables(db *sql.DB) error {
 			user_id TEXT NOT NULL,
 			title VARCHAR(255) NOT NULL,
 			message TEXT NOT NULL,
-			type VARCHAR(20) NOT NULL CHECK (type IN ('chama', 'transaction', 'reminder', 'system', 'alert')),
-			priority VARCHAR(10) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+			type VARCHAR(64) NOT NULL,
+			priority VARCHAR(16) DEFAULT 'normal',
 			category VARCHAR(100) DEFAULT NULL,
 			reference_type VARCHAR(50) DEFAULT NULL,
 			reference_id INTEGER DEFAULT NULL,
-			status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'read', 'failed')),
+			status VARCHAR(32) DEFAULT 'pending',
 			is_read BOOLEAN DEFAULT false,
 			read_at TIMESTAMP NULL,
 			scheduled_for TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -397,82 +397,123 @@ func createNotificationsTables(db *sql.DB) error {
 }
 
 func migrateExistingNotificationsTable(db *sql.DB) error {
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_name='notifications'").Scan(&count)
-	if err != nil {
+	var hasNotifications bool
+	if err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'notifications')`,
+	).Scan(&hasNotifications); err != nil {
 		return err
 	}
 
-	if count > 0 {
-		rows, err := db.Query(`
-			SELECT column_name
-			FROM information_schema.columns
-			WHERE table_name = 'notifications'
-			ORDER BY ordinal_position
-		`)
+	// If a real `notifications` table already carries the modern columns, it has
+	// been migrated before. Re-running the copy/drop/rename dance on every boot
+	// is both destructive (it only preserves a subset of columns) and fragile
+	// (it fails the moment a legit row type isn't in the old CHECK list). Skip it.
+	if hasNotifications {
+		var modernCols int
+		_ = db.QueryRow(`
+			SELECT COUNT(*) FROM information_schema.columns
+			WHERE table_name = 'notifications' AND column_name IN ('data', 'priority', 'status')
+		`).Scan(&modernCols)
+		if modernCols >= 3 {
+			_, _ = db.Exec("DROP TABLE IF EXISTS notifications_new")
+			return nil
+		}
+	}
+
+	// Legacy path: an old-schema `notifications` table needs upgrading. Build a
+	// fresh transient table WITHOUT the narrow CHECK constraints so any existing
+	// row type copies cleanly.
+	if _, err := db.Exec("DROP TABLE IF EXISTS notifications_new CASCADE"); err != nil {
+		return fmt.Errorf("failed to reset notifications_new: %w", err)
+	}
+	if _, err := db.Exec(`
+		CREATE TABLE notifications_new (
+			id SERIAL PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			message TEXT NOT NULL,
+			type VARCHAR(64) NOT NULL,
+			priority VARCHAR(16) DEFAULT 'normal',
+			category VARCHAR(100) DEFAULT NULL,
+			reference_type VARCHAR(50) DEFAULT NULL,
+			reference_id INTEGER DEFAULT NULL,
+			status VARCHAR(32) DEFAULT 'pending',
+			is_read BOOLEAN DEFAULT false,
+			read_at TIMESTAMP NULL,
+			scheduled_for TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			sent_at TIMESTAMP NULL,
+			delivered_at TIMESTAMP NULL,
+			data TEXT DEFAULT NULL,
+			sound_played BOOLEAN DEFAULT false,
+			retry_count INTEGER DEFAULT 0,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create notifications_new: %w", err)
+	}
+
+	if !hasNotifications {
+		_, err := db.Exec("ALTER TABLE notifications_new RENAME TO notifications")
 		if err != nil {
+			log.Println("Note: notifications table rename failed, might already be correct")
+		}
+		return nil
+	}
+
+	rows, err := db.Query(`
+		SELECT column_name FROM information_schema.columns
+		WHERE table_name = 'notifications' ORDER BY ordinal_position
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	existingColumns := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
 			return err
 		}
-		defer rows.Close()
-
-		existingColumns := make(map[string]bool)
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				return err
-			}
-			existingColumns[name] = true
-		}
-
-		selectParts := []string{
-			"CAST(id AS INTEGER) as id",
-			"user_id",
-			"title",
-			"message",
-			"CASE WHEN type IS NULL THEN 'system' ELSE type END as type",
-			"COALESCE(is_read, FALSE) as is_read",
-		}
-
-		if existingColumns["read_at"] {
-			selectParts = append(selectParts, "read_at")
-		} else {
-			selectParts = append(selectParts, "NULL as read_at")
-		}
-
-		selectParts = append(selectParts, "created_at")
-
-		if existingColumns["updated_at"] {
-			selectParts = append(selectParts, "COALESCE(updated_at, created_at) as updated_at")
-		} else {
-			selectParts = append(selectParts, "created_at as updated_at")
-		}
-
-		selectQuery := strings.Join(selectParts, ", ")
-
-		copyQuery := fmt.Sprintf(`
-			INSERT INTO notifications_new
-			(id, user_id, title, message, type, is_read, read_at, created_at, updated_at)
-			SELECT %s FROM notifications
-			ON CONFLICT (id) DO NOTHING
-		`, selectQuery)
-
-		_, err = db.Exec(copyQuery)
-		if err != nil {
-			return fmt.Errorf("failed to copy data: %w", err)
-		}
-
-		if _, err = db.Exec("DROP TABLE notifications CASCADE"); err != nil {
-			return fmt.Errorf("failed to drop old table: %w", err)
-		}
-
-		log.Println("Migrated existing notifications table data")
+		existingColumns[name] = true
 	}
 
-	_, err = db.Exec("ALTER TABLE notifications_new RENAME TO notifications")
-	if err != nil {
-		log.Println("Note: notifications table rename failed, might already be correct")
+	selectParts := []string{
+		"CAST(id AS INTEGER) as id",
+		"user_id",
+		"title",
+		"message",
+		"CASE WHEN type IS NULL OR type = '' THEN 'system' ELSE type END as type",
+		"COALESCE(is_read, FALSE) as is_read",
+	}
+	if existingColumns["read_at"] {
+		selectParts = append(selectParts, "read_at")
+	} else {
+		selectParts = append(selectParts, "NULL as read_at")
+	}
+	selectParts = append(selectParts, "created_at")
+	if existingColumns["updated_at"] {
+		selectParts = append(selectParts, "COALESCE(updated_at, created_at) as updated_at")
+	} else {
+		selectParts = append(selectParts, "created_at as updated_at")
 	}
 
+	copyQuery := fmt.Sprintf(`
+		INSERT INTO notifications_new
+		(id, user_id, title, message, type, is_read, read_at, created_at, updated_at)
+		SELECT %s FROM notifications
+		ON CONFLICT (id) DO NOTHING
+	`, strings.Join(selectParts, ", "))
+	if _, err = db.Exec(copyQuery); err != nil {
+		return fmt.Errorf("failed to copy data: %w", err)
+	}
+	if _, err = db.Exec("DROP TABLE notifications CASCADE"); err != nil {
+		return fmt.Errorf("failed to drop old table: %w", err)
+	}
+	if _, err = db.Exec("ALTER TABLE notifications_new RENAME TO notifications"); err != nil {
+		return fmt.Errorf("failed to rename notifications_new: %w", err)
+	}
+	log.Println("Migrated existing notifications table data to modern schema")
 	return nil
 }
 
