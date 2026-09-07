@@ -203,21 +203,58 @@ class NotificationService {
    */
   async registerForPushNotificationsAsync() {
     try {
-      if (Platform.OS === 'web' || !Device.isDevice) return null;
+      if (Platform.OS === 'web') return null;
+      try { if (!Device.isDevice) return null; } catch { return null; }
 
-      await this.setupNotificationChannels();
+      // Expo Go (SDK 53) cannot obtain a remote push token on Android and the
+      // native call can crash — never attempt it there.
+      const env = Constants?.executionEnvironment;
+      if (env === 'storeClient' || Constants?.appOwnership === 'expo') return null;
 
-      const granted = await this.requestPermissionsFromUser();
-      if (!granted) return null;
+      // On Android, a remote push token requires Firebase (google-services.json).
+      // Without it the native FCM call can hard-crash the app, so bail early.
+      if (Platform.OS === 'android') {
+        const gsf =
+          Constants?.expoConfig?.android?.googleServicesFile ||
+          Constants?.expoConfig?.extra?.googleServicesFile;
+        if (!gsf) {
+          console.warn('Push: skipping token registration — no google-services.json configured for Android.');
+          return null;
+        }
+      }
+
+      try { await this.setupNotificationChannels(); } catch {}
+
+      // Only proceed if permission is already granted or freely askable — never
+      // force a Settings nag from this background path.
+      let perm;
+      try { perm = await Notifications.getPermissionsAsync(); } catch { return null; }
+      if (!perm?.granted) {
+        if (!perm?.canAskAgain) return null;
+        try {
+          const asked = await Notifications.requestPermissionsAsync({
+            ios: { allowAlert: true, allowBadge: true, allowSound: true },
+          });
+          if (!asked?.granted) return null;
+        } catch { return null; }
+      }
 
       const projectId =
         Constants?.expoConfig?.extra?.eas?.projectId ||
         Constants?.easConfig?.projectId ||
         Constants?.manifest?.extra?.eas?.projectId;
 
-      const tokenResponse = projectId
-        ? await Notifications.getExpoPushTokenAsync({ projectId })
-        : await Notifications.getExpoPushTokenAsync();
+      // getExpoPushTokenAsync hits native FCM/APNs code. On a build without
+      // Firebase configured it can throw hard — keep it fully isolated.
+      let tokenResponse = null;
+      try {
+        tokenResponse = projectId
+          ? await Notifications.getExpoPushTokenAsync({ projectId })
+          : await Notifications.getExpoPushTokenAsync();
+      } catch (tokenErr) {
+        console.warn('getExpoPushTokenAsync failed (push delivery not configured?):', tokenErr?.message || tokenErr);
+        return null;
+      }
 
       const token = tokenResponse?.data;
       if (!token) return null;

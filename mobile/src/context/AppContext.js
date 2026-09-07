@@ -205,13 +205,19 @@ const AppContext = createContext();
         // otherwise a slow preload looks like a burst of "new" notifications.
         notifSettleUntilRef.current = Date.now() + 8000;
         unreadBaselineRef.current = 0;
-        // Register this device for OS push notifications (tray + lock screen).
-        notificationService.initialize()
-          .then(() => notificationService.registerForPushNotificationsAsync())
-          .catch(() => {});
-      } else {
-        notificationService.unregisterPushToken().catch(() => {});
+
+        // Register this device for OS push notifications (tray + lock screen),
+        // but only WELL AFTER login: the moment right after auth is already
+        // heavy (dashboard mount + parallel preload) and native push-token
+        // retrieval can force-close the app there on some builds. Fire-and-forget.
+        const pushTimer = setTimeout(() => {
+          notificationService.initialize()
+            .then(() => notificationService.registerForPushNotificationsAsync())
+            .catch(() => {});
+        }, 12000);
+        return () => clearTimeout(pushTimer);
       }
+      notificationService.unregisterPushToken().catch(() => {});
     }, [state.isAuthenticated]);
 
     useEffect(() => {

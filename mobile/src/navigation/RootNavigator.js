@@ -37,10 +37,12 @@ export default function RootNavigator() {
     }
   }, [isAuthenticated, currentDashboard, switchToUserDashboard]);
 
-  // Show auth stack if not authenticated
+  // Show auth stack if not authenticated. No ref here — deep-link targets
+  // (LoanDetails, Notifications) only exist in the authenticated tree, and
+  // sharing one ref across two conditionally-mounted containers is fragile.
   if (!isAuthenticated) {
     return (
-      <NavigationContainer ref={navigationRef}>
+      <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Auth" component={AuthStack} />
         </Stack.Navigator>
