@@ -252,11 +252,73 @@ func dropChecksOn(db *sql.DB, table string) {
 	}
 }
 
-// backfillBackerNotifications removes any stored guarantor_request /
-// referee_request rows. These are now served live from the guarantors /
-// loan_referees tables by getGuarantorRefereeNotifications (mirroring chama
-// invitations), so stored rows would only ever double up or fail to clear.
+// backfillBackerNotifications reconciles the loan-backing world.
+//
+// Older builds wrote a `notifications` row of type guarantor_request /
+// referee_request but often FAILED to create the matching guarantors /
+// loan_referees row (best-effort insert, table missing at the time, etc). The
+// result: the backer sees a request they can never action ("not found or not
+// authorized" on accept/decline).
+//
+// So first rebuild any missing guarantors / loan_referees rows FROM those stored
+// notifications (the notification's user_id is the backer, its data JSON carries
+// loan_id + the intended record id), THEN drop the stored rows — they are now
+// served live by getGuarantorRefereeNotifications.
 func backfillBackerNotifications(db *sql.DB) {
+	// Per-row exception handling: a single malformed data payload must not abort
+	// the whole reconciliation.
+	reconcile := `
+DO $$
+DECLARE
+	n RECORD;
+	j json;
+	rec_id text;
+	ln_id text;
+BEGIN
+	FOR n IN SELECT id, user_id, data, created_at, type FROM notifications
+	         WHERE type IN ('guarantor_request', 'referee_request')
+	           AND data IS NOT NULL AND data::text LIKE '{%'
+	LOOP
+		BEGIN
+			j := n.data::text::json;
+		EXCEPTION WHEN others THEN
+			CONTINUE;
+		END;
+		ln_id := j ->> 'loan_id';
+		IF ln_id IS NULL OR NOT EXISTS (SELECT 1 FROM loans WHERE id = ln_id) THEN
+			CONTINUE;
+		END IF;
+
+		IF n.type = 'referee_request' THEN
+			rec_id := j ->> 'referee_id';
+			IF rec_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM loan_referees WHERE id = rec_id) THEN
+				BEGIN
+					INSERT INTO loan_referees (id, loan_id, user_id, status, created_at)
+					VALUES (rec_id, ln_id, n.user_id, 'pending', COALESCE(n.created_at, CURRENT_TIMESTAMP))
+					ON CONFLICT DO NOTHING;
+				EXCEPTION WHEN others THEN NULL;
+				END;
+			END IF;
+		ELSE
+			rec_id := j ->> 'guarantor_id';
+			IF rec_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM guarantors WHERE id = rec_id) THEN
+				BEGIN
+					INSERT INTO guarantors (id, loan_id, user_id, amount, status, created_at)
+					VALUES (rec_id, ln_id, n.user_id,
+					        COALESCE((SELECT amount FROM loans WHERE id = ln_id), 0),
+					        'pending', COALESCE(n.created_at, CURRENT_TIMESTAMP))
+					ON CONFLICT DO NOTHING;
+				EXCEPTION WHEN others THEN NULL;
+				END;
+			END IF;
+		END IF;
+	END LOOP;
+END $$;
+`
+	if _, err := db.Exec(reconcile); err != nil {
+		log.Printf("Warning: backer row reconciliation skipped: %v", err)
+	}
+
 	if _, err := db.Exec(
 		`DELETE FROM notifications WHERE type IN ('guarantor_request', 'referee_request')`,
 	); err != nil {
