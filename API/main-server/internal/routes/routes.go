@@ -574,6 +574,7 @@ func SetupRoutes(
 				loans.GET("/", api.GetLoanApplications)
 				loans.POST("/apply", api.CreateLoanApplication)
 				loans.GET("/:id/repayment-history", api.GetLoanRepaymentHistory)
+				loans.GET("/:id/report", api.DownloadLoanReport)
 				loans.GET("/:id", api.GetLoanApplication)
 				loans.PUT("/:id", api.UpdateLoanApplication)
 				loans.DELETE("/:id", api.DeleteLoanApplication)

@@ -8,6 +8,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import RecordPaymentModal from '../../../components/chama-loans/RecordPaymentModal';
+import LoanJourneyCard from '../../../components/chama-loans/LoanJourneyCard';
 import useLoanDetails from '../../../hooks/useLoanDetails';
 
 const LoanDetails = ({ route, navigation }) => {
@@ -286,6 +287,14 @@ const LoanDetails = ({ route, navigation }) => {
           </View>
         )}
 
+        <LoanJourneyCard
+          loan={screen.loan}
+          disbursement={screen.disbursement}
+          guarantors={screen.guarantors}
+          referees={screen.referees}
+          colors={colors}
+        />
+
         <View style={styles.actions}>
           {(screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && !(isFirstApprovalStage && !backersReady) && (
             <View style={{ marginBottom: spacing.md }}>
@@ -347,10 +356,12 @@ const LoanDetails = ({ route, navigation }) => {
 
           <View style={styles.secondaryActions}>
             <Button
-              title="Loan Report"
+              title={screen.downloadingReport ? 'Preparing…' : 'Loan Report (PDF)'}
               size="small"
               variant="outline"
-              onPress={() => Alert.alert('Coming Soon', 'Loan reports will be available in the next update.')}
+              loading={screen.downloadingReport}
+              disabled={screen.downloadingReport}
+              onPress={screen.handleDownloadReport}
               style={{ alignSelf: 'flex-start' }}
               icon={<Ionicons name="document-text" size={14} color={colors.primary} />}
             />

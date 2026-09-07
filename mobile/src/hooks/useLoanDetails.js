@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Alert, StyleSheet, View, Text } from 'react-native';
+import { Alert, StyleSheet, View, Text, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { API_BASE_URL } from '../config/environment';
+import { getAuthToken } from '../services/api/auth';
 import { useApp } from '../context/AppContext';
 import { useChamaContext } from '../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
@@ -344,6 +348,53 @@ const useLoanDetails = ({ route, navigation }) => {
     ]);
   };
 
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const handleDownloadReport = async () => {
+    if (!loanId || downloadingReport) return;
+    setDownloadingReport(true);
+    try {
+      const token = await getAuthToken();
+      const base = String(API_BASE_URL || '').replace(/\/$/, '');
+      const url = `${base}/loans/${encodeURIComponent(loanId)}/report`;
+      const safeId = String(loanId).replace(/[^\w-]/g, '-');
+
+      if (Platform.OS === 'web') {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error(`Report failed (${res.status})`);
+        const blob = await res.blob();
+        const href = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = `loan-report-${safeId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(href), 4000);
+        return;
+      }
+
+      const dest = `${FileSystem.cacheDirectory}loan-report-${safeId}.pdf`;
+      const { uri, status } = await FileSystem.downloadAsync(url, dest, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (status >= 400) throw new Error(`Report failed (${status})`);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Loan Report',
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        Alert.alert('Report saved', `Saved to:\n${uri}`);
+      }
+    } catch (error) {
+      Alert.alert('Report failed', error?.message || 'Could not generate the loan report. Please try again.');
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+
   const handleRecordPayment = async () => {
     if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid payment amount');
@@ -390,6 +441,7 @@ const useLoanDetails = ({ route, navigation }) => {
     approvalStep,
     approving,
     backersLoaded,
+    downloadingReport,
     currentPage,
     totalPages,
     totalItems,
@@ -428,6 +480,7 @@ const useLoanDetails = ({ route, navigation }) => {
     handleConfirmApproval,
     handleRejectLoan,
     handleRecordPayment,
+    handleDownloadReport,
     // Navigation
     navigation,
     colors,
