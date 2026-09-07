@@ -39,12 +39,6 @@ func GetNotifications(c *gin.Context) {
 		return
 	}
 
-	// Self-heal: make sure this user has a notification row for every loan they
-	// are a pending guarantor / referee on. This does not depend on the loan
-	// application flow, migrations, or the notifications.type CHECK having been
-	// dropped — if a request is outstanding, the user sees it here.
-	ensureBackerNotifications(db.(*sql.DB), userID)
-
 	// Get all notifications from different sources in parallel.
 	allNotifications := []map[string]interface{}{}
 
@@ -56,58 +50,45 @@ func GetNotifications(c *gin.Context) {
 
 		systemNotifs, invitationNotifs, meetingNotifs []map[string]interface{}
 		financialNotifs, chamaNotifs, supportNotifs   []map[string]interface{}
-
-		systemErr                                                     error
-		invitationErr, meetingErr, financialErr, chamaErr, supportErr error
+		backingNotifs                                 []map[string]interface{}
 	)
 
-	wg.Add(6)
-	go func() {
-		defer wg.Done()
-		systemNotifs, systemErr = getSystemNotifications(db.(*sql.DB), userID)
-		if systemErr != nil {
-			fmt.Printf("GetNotifications: getSystemNotifications failed for %s: %v\n", userID, systemErr)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		invitationNotifs, invitationErr = getChamaInvitationNotifications(db.(*sql.DB), userID)
-		if invitationErr == nil {
-			invitationNotifs = filterDeletedNotifications(invitationNotifs, deletedVirtualNotifications)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		meetingNotifs, meetingErr = getMeetingNotifications(db.(*sql.DB), userID)
-		if meetingErr == nil {
-			meetingNotifs = filterDeletedNotifications(meetingNotifs, deletedVirtualNotifications)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		financialNotifs, financialErr = getFinancialNotifications(db.(*sql.DB), userID)
-		if financialErr == nil {
-			financialNotifs = filterDeletedNotifications(financialNotifs, deletedVirtualNotifications)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		chamaNotifs, chamaErr = getChamaActivityNotifications(db.(*sql.DB), userID)
-		if chamaErr == nil {
-			chamaNotifs = filterDeletedNotifications(chamaNotifs, deletedVirtualNotifications)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		supportNotifs, supportErr = getSupportRequestNotifications(db.(*sql.DB), userID)
-		if supportErr == nil {
-			supportNotifs = filterDeletedNotifications(supportNotifs, deletedVirtualNotifications)
-		}
-	}()
+	sqlDB := db.(*sql.DB)
+
+	// Each source runs isolated: a panic or error in one must never take down
+	// the endpoint or hide the others. filterDeletedNotifications is applied
+	// per source.
+	run := func(name string, fn func(*sql.DB, string) ([]map[string]interface{}, error), dst *[]map[string]interface{}) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("GetNotifications: %s panicked for %s: %v\n", name, userID, r)
+				}
+			}()
+			list, err := fn(sqlDB, userID)
+			if err != nil {
+				fmt.Printf("GetNotifications: %s failed for %s: %v\n", name, userID, err)
+			}
+			*dst = filterDeletedNotifications(list, deletedVirtualNotifications)
+		}()
+	}
+
+	run("system", getSystemNotifications, &systemNotifs)
+	run("loan_backing", getGuarantorRefereeNotifications, &backingNotifs)
+	run("chama_invitations", getChamaInvitationNotifications, &invitationNotifs)
+	run("meetings", getMeetingNotifications, &meetingNotifs)
+	run("financial", getFinancialNotifications, &financialNotifs)
+	run("chama_activity", getChamaActivityNotifications, &chamaNotifs)
+	run("support", getSupportRequestNotifications, &supportNotifs)
 	wg.Wait()
 
 	if len(systemNotifs) > 0 {
 		allNotifications = append(allNotifications, systemNotifs...)
+	}
+	if len(backingNotifs) > 0 {
+		allNotifications = append(allNotifications, backingNotifs...)
 	}
 	if len(invitationNotifs) > 0 {
 		allNotifications = append(allNotifications, invitationNotifs...)
@@ -132,13 +113,19 @@ func GetNotifications(c *gin.Context) {
 	// Sort all notifications by created_at (most recent first)
 	sortNotificationsByDate(allNotifications)
 
-	// Apply pagination
+	// Apply pagination (guard against out-of-range / negative inputs)
 	totalCount := len(allNotifications)
+	if limit <= 0 {
+		limit = 50
+	}
 	start := offset
-	end := offset + limit
+	if start < 0 {
+		start = 0
+	}
 	if start > totalCount {
 		start = totalCount
 	}
+	end := start + limit
 	if end > totalCount {
 		end = totalCount
 	}
@@ -174,16 +161,13 @@ func GetUnreadNotificationCount(c *gin.Context) {
 		return
 	}
 
-	// For now, return a simple count from the notifications table
-	// This can be enhanced later to include counts from other notification sources
-	query := `
+	var count int
+	err := db.QueryRow(`
 		SELECT COUNT(*)
 		FROM notifications
 		WHERE user_id = $1 AND is_read = false
-	`
-
-	var count int
-	err := db.QueryRow(query, userID).Scan(&count)
+		  AND (type IS NULL OR type NOT IN ('guarantor_request', 'referee_request'))
+	`, userID).Scan(&count)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -191,6 +175,16 @@ func GetUnreadNotificationCount(c *gin.Context) {
 		})
 		return
 	}
+
+	// Add outstanding guarantor / referee requests (served virtually, so not in
+	// the notifications table).
+	var pendingBackers int
+	_ = db.QueryRow(`
+		SELECT
+			(SELECT COUNT(*) FROM guarantors WHERE user_id = $1 AND lower(status) = 'pending')
+			+ (SELECT COUNT(*) FROM loan_referees WHERE user_id = $1 AND lower(status) = 'pending')
+	`, userID).Scan(&pendingBackers)
+	count += pendingBackers
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

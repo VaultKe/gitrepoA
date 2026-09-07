@@ -12,10 +12,14 @@ import (
 
 // getSystemNotifications retrieves system notifications from the notifications table
 func getSystemNotifications(db *sql.DB, userID string) ([]map[string]interface{}, error) {
+	// guarantor_request / referee_request are served live by
+	// getGuarantorRefereeNotifications — never also emit any stored rows of
+	// those types (would double up / never clear).
 	query := `
 		SELECT id, user_id, title, message, type, data, is_read, created_at
 		FROM notifications
 		WHERE user_id = $1
+		  AND (type IS NULL OR type NOT IN ('guarantor_request', 'referee_request'))
 		ORDER BY created_at DESC
 	`
 
@@ -28,14 +32,14 @@ func getSystemNotifications(db *sql.DB, userID string) ([]map[string]interface{}
 	var notifications []map[string]interface{}
 	for rows.Next() {
 		var notification struct {
-			ID        string         `json:"id"`
-			UserID    string         `json:"userId"`
-			Title     string         `json:"title"`
-			Message   string         `json:"message"`
-			Type      string         `json:"type"`
-			Data      []byte         `json:"data"`
-			IsRead    bool           `json:"isRead"`
-			CreatedAt string         `json:"createdAt"`
+			ID        string `json:"id"`
+			UserID    string `json:"userId"`
+			Title     string `json:"title"`
+			Message   string `json:"message"`
+			Type      string `json:"type"`
+			Data      []byte `json:"data"`
+			IsRead    bool   `json:"isRead"`
+			CreatedAt string `json:"createdAt"`
 		}
 
 		err := rows.Scan(
@@ -128,23 +132,23 @@ func getChamaInvitationNotifications(db *sql.DB, userID string) ([]map[string]in
 		}
 
 		notificationMap := map[string]interface{}{
-			"id":        id,
-			"user_id":   userID,
-			"title":     title,
-			"message":   messageText,
-			"type":      "chama_invitation",
-			"is_read":   false, // Invitations are always unread until responded
+			"id":         id,
+			"user_id":    userID,
+			"title":      title,
+			"message":    messageText,
+			"type":       "chama_invitation",
+			"is_read":    false, // Invitations are always unread until responded
 			"created_at": createdAt,
-			"source":    "chama_invitation",
+			"source":     "chama_invitation",
 			"data": map[string]interface{}{
-				"invitation_id":           id,
-				"chama_id":                chamaID,
-				"chama_name":              chamaName,
-				"chama_description":       chamaDescription,
-				"contribution_amount":     contributionAmount,
-				"contribution_frequency":  contributionFrequency,
-				"inviter_name":            inviterName,
-				"expires_at":              expiresAt,
+				"invitation_id":          id,
+				"chama_id":               chamaID,
+				"chama_name":             chamaName,
+				"chama_description":      chamaDescription,
+				"contribution_amount":    contributionAmount,
+				"contribution_frequency": contributionFrequency,
+				"inviter_name":           inviterName,
+				"expires_at":             expiresAt,
 			},
 		}
 
@@ -287,6 +291,113 @@ func getFinancialNotifications(db *sql.DB, userID string) ([]map[string]interfac
 	}
 
 	return notifications, nil
+}
+
+// getGuarantorRefereeNotifications builds the guarantor / referee loan-backing
+// requests for a user LIVE from the guarantors and loan_referees tables — the
+// exact same pattern getChamaInvitationNotifications uses for chama invites:
+// only PENDING requests are returned, and the moment the user accepts/declines
+// (the row's status changes) the request drops off the list. Nothing is ever
+// written to the notifications table for these, so they cannot be lost to
+// schema drift or a failed insert.
+func getGuarantorRefereeNotifications(db *sql.DB, userID string) ([]map[string]interface{}, error) {
+	var out []map[string]interface{}
+	if db == nil || userID == "" {
+		return out, nil
+	}
+
+	// Insurance: if the loan-backing migration never ran, referees would be
+	// invisible forever. Cheap idempotent guard.
+	_, _ = db.Exec(`
+		CREATE TABLE IF NOT EXISTS loan_referees (
+			id TEXT PRIMARY KEY,
+			loan_id TEXT NOT NULL,
+			user_id TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			message TEXT,
+			responded_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(loan_id, user_id)
+		)`)
+
+	collect := func(query, role, idKey, notifType, title string, msg func(borrower string, amount float64, chama string) string) {
+		rows, err := db.Query(query, userID)
+		if err != nil {
+			fmt.Printf("getGuarantorRefereeNotifications: %s query failed: %v\n", role, err)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				recordID, loanID, createdAt    string
+				amount                         float64
+				borrowerID, chamaID            string
+				firstName, lastName, chamaName string
+			)
+			if err := rows.Scan(&recordID, &loanID, &createdAt, &amount,
+				&borrowerID, &chamaID, &firstName, &lastName, &chamaName); err != nil {
+				continue
+			}
+			borrower := strings.TrimSpace(firstName + " " + lastName)
+			if borrower == "" {
+				borrower = "A member"
+			}
+			// data as a map (not a hand-built JSON string) so record ids that
+			// contain quotes/backslashes can never break the payload.
+			data := map[string]interface{}{
+				"loan_id":      loanID,
+				idKey:          recordID,
+				"role":         role,
+				"amount":       amount,
+				"chama_id":     chamaID,
+				"requester_id": borrowerID,
+			}
+			out = append(out, map[string]interface{}{
+				"id":         role + "_req_" + recordID,
+				"user_id":    userID,
+				"title":      title,
+				"message":    msg(borrower, amount, chamaName),
+				"type":       notifType,
+				"is_read":    false,
+				"isRead":     false,
+				"createdAt":  createdAt,
+				"created_at": createdAt,
+				"source":     "loan_backing",
+				"data":       data,
+			})
+		}
+	}
+
+	collect(`
+		SELECT g.id, g.loan_id, g.created_at, l.amount, l.borrower_id, l.chama_id,
+		       COALESCE(u.first_name, ''), COALESCE(u.last_name, ''), COALESCE(c.name, 'a chama')
+		FROM guarantors g
+		JOIN loans l ON l.id = g.loan_id
+		LEFT JOIN users u ON u.id = l.borrower_id
+		LEFT JOIN chamas c ON c.id = l.chama_id
+		WHERE g.user_id = $1 AND lower(g.status) = 'pending'
+		ORDER BY g.created_at DESC
+	`, "guarantor", "guarantor_id", "guarantor_request", "Guarantor Request",
+		func(b string, a float64, ch string) string {
+			return fmt.Sprintf("%s has asked you to guarantee a loan of KES %.2f in %s.", b, a, ch)
+		})
+
+	// loan_referees may not exist on a very old schema — collect() swallows the error.
+	collect(`
+		SELECT r.id, r.loan_id, r.created_at, l.amount, l.borrower_id, l.chama_id,
+		       COALESCE(u.first_name, ''), COALESCE(u.last_name, ''), COALESCE(c.name, 'a chama')
+		FROM loan_referees r
+		JOIN loans l ON l.id = r.loan_id
+		LEFT JOIN users u ON u.id = l.borrower_id
+		LEFT JOIN chamas c ON c.id = l.chama_id
+		WHERE r.user_id = $1 AND lower(r.status) = 'pending'
+		ORDER BY r.created_at DESC
+	`, "referee", "referee_id", "referee_request", "Referee Request",
+		func(b string, a float64, ch string) string {
+			return fmt.Sprintf("%s has listed you as a referee for a loan of KES %.2f in %s. Being a referee carries no financial liability.", b, a, ch)
+		})
+
+	return out, nil
 }
 
 // getLoanNotifications retrieves loan-related notifications

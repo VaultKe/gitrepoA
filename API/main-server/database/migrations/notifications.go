@@ -252,65 +252,15 @@ func dropChecksOn(db *sql.DB, table string) {
 	}
 }
 
-// backfillBackerNotifications re-creates the guarantor/referee request
-// notifications that were silently dropped while the notifications.type CHECK
-// constraint was still in place, so people already asked to back a pending loan
-// finally see the request. Best-effort — never blocks startup.
+// backfillBackerNotifications removes any stored guarantor_request /
+// referee_request rows. These are now served live from the guarantors /
+// loan_referees tables by getGuarantorRefereeNotifications (mirroring chama
+// invitations), so stored rows would only ever double up or fail to clear.
 func backfillBackerNotifications(db *sql.DB) {
-	guarantorSQL := `
-		INSERT INTO notifications
-			(user_id, title, message, type, priority, category, status, is_read, data, scheduled_for, created_at, updated_at)
-		SELECT g.user_id,
-		       'Guarantor Request',
-		       'You have been requested to guarantee a loan of KES ' || l.amount::numeric(14,2)::text,
-		       'guarantor_request', 'high', 'financial', 'pending', false,
-		       '{"loan_id": "' || l.id || '", "amount": ' || l.amount::numeric(14,2)::text ||
-		       ', "purpose": "' || replace(coalesce(l.purpose, ''), '"', '') ||
-		       '", "requester_id": "' || l.borrower_id || '", "guarantor_id": "' || g.id || '", "role": "guarantor"}',
-		       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-		FROM guarantors g
-		JOIN loans l ON l.id = g.loan_id
-		WHERE lower(g.status) = 'pending'
-		  AND lower(l.status) IN ('pending', 'guarantors_approved', 'guarantors_declined')
-		  AND NOT EXISTS (
-		      SELECT 1 FROM notifications n
-		      WHERE n.user_id = g.user_id AND n.type = 'guarantor_request'
-		        AND n.data LIKE '%' || g.id || '%'
-		  )`
-	if _, err := db.Exec(guarantorSQL); err != nil {
-		log.Printf("Warning: guarantor notification backfill skipped: %v", err)
-	}
-
-	// loan_referees is created by MigrateLoans (runs earlier); guard anyway.
-	var hasReferees bool
-	if err := db.QueryRow(
-		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'loan_referees')`,
-	).Scan(&hasReferees); err != nil || !hasReferees {
-		return
-	}
-	refereeSQL := `
-		INSERT INTO notifications
-			(user_id, title, message, type, priority, category, status, is_read, data, scheduled_for, created_at, updated_at)
-		SELECT r.user_id,
-		       'Referee Request',
-		       'You have been listed as a referee for a loan of KES ' || l.amount::numeric(14,2)::text ||
-		       '. Being a referee carries no financial liability.',
-		       'referee_request', 'high', 'financial', 'pending', false,
-		       '{"loan_id": "' || l.id || '", "amount": ' || l.amount::numeric(14,2)::text ||
-		       ', "purpose": "' || replace(coalesce(l.purpose, ''), '"', '') ||
-		       '", "requester_id": "' || l.borrower_id || '", "referee_id": "' || r.id || '", "role": "referee"}',
-		       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-		FROM loan_referees r
-		JOIN loans l ON l.id = r.loan_id
-		WHERE lower(r.status) = 'pending'
-		  AND lower(l.status) IN ('pending', 'guarantors_approved', 'guarantors_declined')
-		  AND NOT EXISTS (
-		      SELECT 1 FROM notifications n
-		      WHERE n.user_id = r.user_id AND n.type = 'referee_request'
-		        AND n.data LIKE '%' || r.id || '%'
-		  )`
-	if _, err := db.Exec(refereeSQL); err != nil {
-		log.Printf("Warning: referee notification backfill skipped: %v", err)
+	if _, err := db.Exec(
+		`DELETE FROM notifications WHERE type IN ('guarantor_request', 'referee_request')`,
+	); err != nil {
+		log.Printf("Warning: could not clean up stored backer notifications: %v", err)
 	}
 }
 

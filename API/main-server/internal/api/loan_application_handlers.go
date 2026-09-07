@@ -603,28 +603,25 @@ func CreateLoanApplication(c *gin.Context) {
 		}
 	}
 
-	// Create notifications after successful commit (outside transaction)
+	// The in-app notification for guarantors / referees is generated live from
+	// the guarantors / loan_referees tables by getGuarantorRefereeNotifications
+	// (see notification_fetchers_handlers.go) — nothing to write here. Just fire
+	// the OS push so backed members are alerted immediately.
 	for _, info := range guarantorRecords {
-		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
-		if nerr := createNotification(sqlDB, notificationID, info.userID, "guarantor_request",
-			"Guarantor Request",
-			fmt.Sprintf("You have been requested to guarantee a loan of KES %.2f", req.Amount),
-			fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f, "purpose": "%s", "requester_id": "%s", "guarantor_id": "%s", "role": "guarantor"}`,
-				loanID, req.Amount, req.Purpose, userID.(string), info.recordID),
-			"loan", nil); nerr != nil {
-			fmt.Printf("Failed to create notification for guarantor %s: %v\n", info.userID, nerr)
+		data := map[string]interface{}{
+			"loan_id": loanID, "guarantor_id": info.recordID, "role": "guarantor",
+			"amount": req.Amount, "chama_id": req.ChamaID,
 		}
+		go services.PushToUser(sqlDB, info.userID, "Guarantor Request",
+			fmt.Sprintf("You have been requested to guarantee a loan of KES %.2f", req.Amount), data)
 	}
 	for _, info := range refereeRecords {
-		notificationID := fmt.Sprintf("notif-%d", time.Now().UnixNano())
-		if nerr := createNotification(sqlDB, notificationID, info.userID, "referee_request",
-			"Referee Request",
-			fmt.Sprintf("You have been listed as a referee for a loan of KES %.2f. Being a referee carries no financial liability.", req.Amount),
-			fmt.Sprintf(`{"loan_id": "%s", "amount": %.2f, "purpose": "%s", "requester_id": "%s", "referee_id": "%s", "role": "referee"}`,
-				loanID, req.Amount, req.Purpose, userID.(string), info.recordID),
-			"loan", nil); nerr != nil {
-			fmt.Printf("Failed to create notification for referee %s: %v\n", info.userID, nerr)
+		data := map[string]interface{}{
+			"loan_id": loanID, "referee_id": info.recordID, "role": "referee",
+			"amount": req.Amount, "chama_id": req.ChamaID,
 		}
+		go services.PushToUser(sqlDB, info.userID, "Referee Request",
+			fmt.Sprintf("You have been listed as a referee for a loan of KES %.2f. Being a referee carries no financial liability.", req.Amount), data)
 	}
 
 	backerMsg := "Loan application submitted successfully."

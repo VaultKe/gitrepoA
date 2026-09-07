@@ -1,5 +1,16 @@
-import { makeRequest, makeRequestWithRetry } from './client';
+import { makeRequest, makeRequestWithRetry, invalidateCache } from './client';
 import { getUserChamas } from './chamaEndpoints';
+
+// After a backer responds, the guarantor/referee request must vanish from the
+// notifications list immediately — clear the cached list + count.
+const invalidateBackingCaches = () => {
+  try {
+    invalidateCache('/notifications/');
+    invalidateCache('/notifications?');
+    invalidateCache('/notifications/unread-count');
+    invalidateCache('/loans/');
+  } catch {}
+};
 
 const getLoans = async (chamaId, limit = 20, offset = 0) => {
   const response = await makeRequest(`/loans/?chamaId=${chamaId}&limit=${limit}&offset=${offset}&includeUserContext=true`);
@@ -35,10 +46,12 @@ const applyForLoan = async (loanData) => {
 };
 
 const respondToGuarantorRequest = async (loanId, response) => {
-  return await makeRequest(`/loans/${loanId}/guarantor-response`, {
+  const res = await makeRequest(`/loans/${loanId}/guarantor-response`, {
     method: 'POST',
     body: response,
   });
+  invalidateBackingCaches();
+  return res;
 };
 
 const approveLoan = async (loanId, approvalData) => {
@@ -64,10 +77,12 @@ const getLoanReferees = async (loanId) => {
 };
 
 const respondToRefereeRequest = async (refereeId, action, reason = '') => {
-  return await makeRequest(`/loans/referees/${refereeId}/respond`, {
+  const res = await makeRequest(`/loans/referees/${refereeId}/respond`, {
     method: 'POST',
     body: { refereeId, action, reason },
   });
+  invalidateBackingCaches();
+  return res;
 };
 
 const getRefereeRequests = async (userId) => {

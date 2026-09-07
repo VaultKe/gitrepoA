@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import ApiService from '../../services/api';
 import { getThemeColors, spacing, typography, borderRadius } from '../../utils/theme';
 
 const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMarkAsRead, onDelete }) => {
+  const [submitting, setSubmitting] = React.useState(null); // 'accept' | 'decline' | null
+
   // Fall back to the data payload's role so the Accept/Decline UI still renders
   // if the notification type was stored under a different label.
   let parsedData = {};
@@ -29,43 +31,72 @@ const NotificationActions = React.memo(({ item, isRead, colors, iconColor, onMar
     }
 
     const respond = async (action) => {
+      if (submitting) return; // guard double-tap
+      setSubmitting(action);
+      const loanData = parsedData;
+      const refId = loanData.referee_id;
+      const gId = loanData.guarantor_id;
+      const loanId = loanData.loan_id;
+
+      // No usable identifiers → tell the user plainly instead of a silent no-op.
+      if (isReferee ? !refId : (!gId || !loanId)) {
+        setSubmitting(null);
+        Toast.show({ type: 'error', text1: 'Cannot respond', text2: 'This request is missing information. Pull to refresh and try again.', position: 'bottom', visibilityTime: 3000 });
+        return;
+      }
+
       try {
-        const loanData = parsedData;
         const response = isReferee
-          ? await ApiService.respondToRefereeRequest(loanData.referee_id, action)
-          : await ApiService.respondToGuarantorRequest(loanData.loan_id, { guarantorId: loanData.guarantor_id, action });
-        if (response.success) {
-          await onMarkAsRead(item.id);
+          ? await ApiService.respondToRefereeRequest(refId, action)
+          : await ApiService.respondToGuarantorRequest(loanId, { guarantorId: gId, action });
+
+        const msg = (response && (response.error || response.message)) || '';
+        const alreadyDone = /not found|already|not authorized|no longer/i.test(msg);
+
+        if (response?.success || alreadyDone) {
+          // Best-effort mark-read — never let its failure look like the whole
+          // action failed (the response already succeeded).
+          try { await onMarkAsRead(item.id); } catch {}
           Toast.show({
             type: action === 'accept' ? 'success' : 'info',
-            text1: action === 'accept' ? 'Request Accepted' : 'Request Declined',
-            text2: `You have ${action}ed the loan ${roleLabel} request`,
+            text1: alreadyDone ? 'Already handled' : (action === 'accept' ? 'Request Accepted' : 'Request Declined'),
+            text2: alreadyDone
+              ? 'This request was already responded to.'
+              : `You have ${action}ed the loan ${roleLabel} request`,
             position: 'bottom',
             visibilityTime: 2000,
           });
         } else {
-          throw new Error(response.error || `Failed to ${action} ${roleLabel}`);
+          throw new Error(msg || `Failed to ${action} ${roleLabel}`);
         }
       } catch (error) {
         Toast.show({ type: 'error', text1: 'Action Failed', text2: error?.message || `Could not ${action}. Please try again.`, position: 'bottom', visibilityTime: 3000 });
+      } finally {
+        setSubmitting(null);
       }
     };
 
     return (
       <View style={[styles.actionButtonsRow, styles.guarantorActions]}>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: colors.success + '26', borderColor: colors.success, borderWidth: 1 }]}
+          disabled={!!submitting}
+          style={[styles.actionButton, { backgroundColor: colors.success + '26', borderColor: colors.success, borderWidth: 1 }, submitting && submitting !== 'accept' && { opacity: 0.4 }]}
           onPress={() => respond('accept')}
         >
-          <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+          {submitting === 'accept'
+            ? <ActivityIndicator size="small" color={colors.success} />
+            : <Ionicons name="checkmark-circle" size={16} color={colors.success} />}
           <Text style={[styles.actionButtonText, { color: colors.success }]}>Accept</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: colors.error + '26', borderColor: colors.error, borderWidth: 1 }]}
+          disabled={!!submitting}
+          style={[styles.actionButton, { backgroundColor: colors.error + '26', borderColor: colors.error, borderWidth: 1 }, submitting && submitting !== 'decline' && { opacity: 0.4 }]}
           onPress={() => respond('decline')}
         >
-          <Ionicons name="close-circle" size={16} color={colors.error} />
+          {submitting === 'decline'
+            ? <ActivityIndicator size="small" color={colors.error} />
+            : <Ionicons name="close-circle" size={16} color={colors.error} />}
           <Text style={[styles.actionButtonText, { color: colors.error }]}>Decline</Text>
         </TouchableOpacity>
       </View>
