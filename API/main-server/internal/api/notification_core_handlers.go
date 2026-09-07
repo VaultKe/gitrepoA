@@ -161,6 +161,9 @@ func GetUnreadNotificationCount(c *gin.Context) {
 		return
 	}
 
+	// Genuinely-unread stored notification rows only. Guarantor/referee requests
+	// are excluded (they are served virtually and are cleared by acting on them,
+	// not by "reading" — counting them here left the bell stuck above zero).
 	var count int
 	err := db.QueryRow(`
 		SELECT COUNT(*)
@@ -175,16 +178,6 @@ func GetUnreadNotificationCount(c *gin.Context) {
 		})
 		return
 	}
-
-	// Add outstanding guarantor / referee requests (served virtually, so not in
-	// the notifications table).
-	var pendingBackers int
-	_ = db.QueryRow(`
-		SELECT
-			(SELECT COUNT(*) FROM guarantors WHERE user_id = $1 AND lower(status) = 'pending')
-			+ (SELECT COUNT(*) FROM loan_referees WHERE user_id = $1 AND lower(status) = 'pending')
-	`, userID).Scan(&pendingBackers)
-	count += pendingBackers
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

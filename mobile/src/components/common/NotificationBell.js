@@ -1,68 +1,67 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getThemeColors, spacing } from '../../utils/theme';
-import ApiService from '../../services/api';
-import notificationService from '../../services/notificationService';
+import { READ_KEY, DEL_KEY, loadIdSet, countUnread } from '../../utils/notificationReadState';
 
 /**
- * Real-time Notification Bell Component
- * Shows notification count and handles navigation to notifications screen
+ * Notification bell + badge.
+ *
+ * The badge count is derived from the SAME data and the SAME device-local
+ * read/deleted state that the notifications screen uses, so the two never
+ * disagree. It does NOT play a sound — that is owned solely by AppContext's
+ * new-notification detector, so there is exactly one, id-based sound trigger.
  */
 const NotificationBell = ({ navigation, size = 24, showBadge = true }) => {
-  const { theme, user } = useApp();
+  const { theme, user, notifications, refreshSpecificData } = useApp();
   const colors = getThemeColors(theme);
-  
+
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  // Baseline for the 30s poll — starts null so the first fetch is silent.
-  const prevCountRef = useRef(null);
+  const busyRef = useRef(false);
 
-  // Fetch unread notification count
-  const fetchUnreadCount = async () => {
-    if (!user?.id || loading) return;
-
+  const recomputeBadge = useCallback(async () => {
     try {
-      setLoading(true);
-      const response = await ApiService.getUnreadNotificationCount();
-      if (response.success && response.data) {
-        const count = response.data.count || 0;
-        setUnreadCount(count);
-        if (prevCountRef.current !== null && count > prevCountRef.current) {
-          notificationService.playNotificationSound().catch(() => {});
-        }
-        prevCountRef.current = count;
-      } else {
-        console.warn('Invalid response format for notification count:', response);
-        setUnreadCount(0);
-      }
-    } catch (error) {
-      console.warn('Failed to fetch notification count:', error.message || error);
-      // Don't show error to user, just silently fail and show no badge
+      const list = Array.isArray(notifications) ? notifications : [];
+      const [readSet, delSet] = await Promise.all([
+        loadIdSet(READ_KEY(user?.id)),
+        loadIdSet(DEL_KEY(user?.id)),
+      ]);
+      setUnreadCount(countUnread(list, readSet, delSet));
+    } catch {
       setUnreadCount(0);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [notifications, user?.id]);
 
-  // Real-time updates - fetch count on mount and set up interval
-  useEffect(() => {
-    if (user?.id) {
-      fetchUnreadCount();
-      
-      // Set up real-time polling every 30 seconds
-      const interval = setInterval(fetchUnreadCount, 30000);
-      
-      return () => clearInterval(interval);
+  // Keep the badge in sync with context notifications + local read state.
+  useEffect(() => { recomputeBadge(); }, [recomputeBadge]);
+
+  // Pull fresh notifications into context on a slow heartbeat and whenever the
+  // bell's screen regains focus. AppContext's effect turns any genuinely new
+  // one into a single tone.
+  const pull = useCallback(async () => {
+    if (!user?.id || busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await refreshSpecificData?.('notifications');
+    } catch {} finally {
+      busyRef.current = false;
+      recomputeBadge();
     }
-  }, [user?.id]);
+  }, [user?.id, refreshSpecificData, recomputeBadge]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const interval = setInterval(pull, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id, pull]);
+
+  useFocusEffect(useCallback(() => { pull(); }, [pull]));
 
   // Handle notification press
   const handlePress = () => {
-    // Reset unread count immediately for better UX
     setUnreadCount(0);
-    prevCountRef.current = 0;
 
     // Navigate to notifications screen
     if (navigation) {

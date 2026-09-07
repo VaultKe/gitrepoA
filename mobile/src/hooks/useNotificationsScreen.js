@@ -1,37 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { useLightningData, useOptimisticUpdate } from './useLightningData';
 import ApiService from '../services/api';
 import notificationService from '../services/notificationService';
-
-// Read / deleted notification IDs are mirrored to device storage so the state
-// survives a reload / re-navigation even if the backend read-state write is
-// slow or lagging behind a deploy. IDs are globally unique and never reused, so
-// keeping them client-side can only ever suppress a stale "unread", never hide
-// a genuinely new notification.
-const READ_KEY = (uid) => `notif_read_ids_${uid || 'anon'}`;
-const DEL_KEY = (uid) => `notif_deleted_ids_${uid || 'anon'}`;
-const MAX_STORED_IDS = 800;
-
-const loadIdSet = async (key) => {
-  try {
-    const raw = await AsyncStorage.getItem(key);
-    const arr = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(arr) ? arr : []);
-  } catch {
-    return new Set();
-  }
-};
-
-const saveIdSet = async (key, set) => {
-  try {
-    const arr = Array.from(set).slice(-MAX_STORED_IDS);
-    await AsyncStorage.setItem(key, JSON.stringify(arr));
-  } catch {}
-};
+import { READ_KEY, DEL_KEY, loadIdSet, saveIdSet } from '../utils/notificationReadState';
 
 const useNotificationsScreen = ({ navigation }) => {
   const { theme, notifications: contextNotifications, user } = useApp();

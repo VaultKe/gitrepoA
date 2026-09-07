@@ -193,18 +193,18 @@ const AppContext = createContext();
       initializeApp();
     }, []);
 
-    // Ring the user's notification tone whenever the unread count rises.
-    // This is the single chokepoint every path funnels through (WebSocket
-    // push, polling fallback, manual refresh all dispatch SET_NOTIFICATIONS),
-    // so the tone plays for a genuinely new notification and not on reload.
-    const unreadBaselineRef = useRef(0);
+    // Ring the user's tone ONLY when a notification the user has never seen
+    // before shows up. Tracking IDs (not a count) means reloads, read/unread
+    // toggles on virtual notifications, and slow preloads can never trigger a
+    // false ring.
+    const seenNotifIdsRef = useRef(null);   // Set of ids, null until first settle
     const notifSettleUntilRef = useRef(0);
     useEffect(() => {
       if (state.isAuthenticated) {
-        // Ignore count changes during the initial data load / hydration window,
-        // otherwise a slow preload looks like a burst of "new" notifications.
+        // Hold sound for the initial data-load window so hydration isn't heard
+        // as a burst of "new" notifications.
         notifSettleUntilRef.current = Date.now() + 8000;
-        unreadBaselineRef.current = 0;
+        seenNotifIdsRef.current = null;
 
         // Register this device for OS push notifications (tray + lock screen),
         // but only WELL AFTER login: the moment right after auth is already
@@ -217,21 +217,33 @@ const AppContext = createContext();
         }, 12000);
         return () => clearTimeout(pushTimer);
       }
+      seenNotifIdsRef.current = null;
       notificationService.unregisterPushToken().catch(() => {});
     }, [state.isAuthenticated]);
 
     useEffect(() => {
       const list = Array.isArray(state.notifications) ? state.notifications : [];
-      const unread = list.filter(n => !(n?.isRead === true || n?.is_read === true)).length;
+      const ids = list.map(n => String(n?.id)).filter(Boolean);
 
-      if (Date.now() < notifSettleUntilRef.current) {
-        unreadBaselineRef.current = unread;
+      // First settled snapshot: remember everything, ring nothing.
+      if (seenNotifIdsRef.current === null || Date.now() < notifSettleUntilRef.current) {
+        seenNotifIdsRef.current = new Set(ids);
         return;
       }
-      if (unread > unreadBaselineRef.current) {
+
+      const seen = seenNotifIdsRef.current;
+      const freshUnread = list.some(n => {
+        const id = String(n?.id);
+        const isRead = n?.isRead === true || n?.is_read === true;
+        return id && !isRead && !seen.has(id);
+      });
+
+      // Update the seen-set with every id currently present.
+      ids.forEach(id => seen.add(id));
+
+      if (freshUnread) {
         notificationService.playNotificationSound().catch(() => {});
       }
-      unreadBaselineRef.current = unread;
     }, [state.notifications]);
 
 
