@@ -76,13 +76,30 @@ func RespondToRefereeRequest(c *gin.Context) {
 	}
 	db := dbVal.(*sql.DB)
 
+	// Insurance for older loans whose loan_referees row was never written.
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS loan_referees (
+		id TEXT PRIMARY KEY, loan_id TEXT NOT NULL, user_id TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending', message TEXT, responded_at TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(loan_id, user_id))`)
+
 	var loanID, currentStatus, borrowerID string
-	err := db.QueryRow(`
-		SELECT r.loan_id, r.status, l.borrower_id
-		FROM loan_referees r
-		JOIN loans l ON r.loan_id = l.id
-		WHERE r.id = $1 AND r.user_id = $2
-	`, refereeID, userID).Scan(&loanID, &currentStatus, &borrowerID)
+	lookup := func() error {
+		return db.QueryRow(`
+			SELECT r.loan_id, r.status, l.borrower_id
+			FROM loan_referees r
+			JOIN loans l ON r.loan_id = l.id
+			WHERE r.id = $1 AND r.user_id = $2
+		`, refereeID, userID).Scan(&loanID, &currentStatus, &borrowerID)
+	}
+	err := lookup()
+	if err == sql.ErrNoRows {
+		// Rebuild the row from the stored request notification, if one exists,
+		// then retry. This makes accept/decline work for loans applied before
+		// the loan_referees row was reliably created.
+		if uid, ok := userID.(string); ok && reconstructBackerRow(db, "referee", refereeID, uid) {
+			err = lookup()
+		}
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Referee request not found or not authorized"})

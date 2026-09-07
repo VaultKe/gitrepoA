@@ -90,12 +90,22 @@ func RespondToGuarantorRequest(c *gin.Context) {
 	var requesterID string
 	var currentStatus string
 	var actualLoanID string
-	err = db.(*sql.DB).QueryRow(`
-		SELECT l.borrower_id as requester_id, g.status, g.loan_id
-		FROM guarantors g
-		JOIN loans l ON g.loan_id = l.id
-		WHERE g.id = $1 AND g.user_id = $2
-	`, guarantorID, userID).Scan(&requesterID, &currentStatus, &actualLoanID)
+	guarantorLookup := func() error {
+		return db.(*sql.DB).QueryRow(`
+			SELECT l.borrower_id as requester_id, g.status, g.loan_id
+			FROM guarantors g
+			JOIN loans l ON g.loan_id = l.id
+			WHERE g.id = $1 AND g.user_id = $2
+		`, guarantorID, userID).Scan(&requesterID, &currentStatus, &actualLoanID)
+	}
+	err = guarantorLookup()
+	if err == sql.ErrNoRows {
+		// Older loans may never have had a guarantors row written — rebuild it
+		// from the stored request notification and retry.
+		if uid, ok := userID.(string); ok && reconstructBackerRow(db.(*sql.DB), "guarantor", guarantorID, uid) {
+			err = guarantorLookup()
+		}
+	}
 
 	if err != nil {
 		if err == sql.ErrNoRows {

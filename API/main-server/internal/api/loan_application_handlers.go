@@ -16,6 +16,52 @@ import (
 
 var relaxNotifTypeOnce sync.Once
 
+// reconstructBackerRow rebuilds a missing guarantors / loan_referees row for a
+// backer whose request notification exists but whose backing row was never
+// written (older builds inserted it best-effort). role is "guarantor" or
+// "referee"; recordID is the intended row id; userID is the backer. Returns true
+// when a row now exists for (recordID, userID).
+func reconstructBackerRow(db *sql.DB, role, recordID, userID string) bool {
+	if db == nil || recordID == "" || userID == "" {
+		return false
+	}
+	idKey := role + "_id"
+
+	var loanID string
+	err := db.QueryRow(fmt.Sprintf(`
+		SELECT data::text::json ->> 'loan_id'
+		FROM notifications
+		WHERE type = '%s_request' AND user_id = $1
+		  AND data IS NOT NULL AND data::text LIKE '{%%'
+		  AND data::text::json ->> '%s' = $2
+		LIMIT 1
+	`, role, idKey), userID, recordID).Scan(&loanID)
+	if err != nil || loanID == "" {
+		return false
+	}
+
+	var loanExists bool
+	if e := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM loans WHERE id = $1)`, loanID).Scan(&loanExists); e != nil || !loanExists {
+		return false
+	}
+
+	if role == "referee" {
+		_, e := db.Exec(`
+			INSERT INTO loan_referees (id, loan_id, user_id, status, created_at)
+			VALUES ($1, $2, $3, 'pending', CURRENT_TIMESTAMP)
+			ON CONFLICT DO NOTHING`, recordID, loanID, userID)
+		return e == nil
+	}
+
+	var amount float64
+	_ = db.QueryRow(`SELECT COALESCE(amount, 0) FROM loans WHERE id = $1`, loanID).Scan(&amount)
+	_, e := db.Exec(`
+		INSERT INTO guarantors (id, loan_id, user_id, amount, status, created_at)
+		VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP)
+		ON CONFLICT DO NOTHING`, recordID, loanID, userID, amount)
+	return e == nil
+}
+
 // relaxNotificationTypeConstraint strips the narrow CHECK on notifications.type
 // (which only allowed 'chama','transaction','reminder','system','alert') so that
 // types like 'guarantor_request' / 'referee_request' can be stored. This is a

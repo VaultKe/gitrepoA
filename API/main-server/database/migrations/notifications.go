@@ -260,10 +260,12 @@ func dropChecksOn(db *sql.DB, table string) {
 // result: the backer sees a request they can never action ("not found or not
 // authorized" on accept/decline).
 //
-// So first rebuild any missing guarantors / loan_referees rows FROM those stored
+// It rebuilds any missing guarantors / loan_referees rows FROM those stored
 // notifications (the notification's user_id is the backer, its data JSON carries
-// loan_id + the intended record id), THEN drop the stored rows — they are now
-// served live by getGuarantorRefereeNotifications.
+// loan_id + the intended record id). The stored rows are then left in place but
+// harmless — getSystemNotifications and the unread count both exclude these
+// types, and getGuarantorRefereeNotifications now serves them live. Keeping them
+// means a later boot can still reconcile a request this run couldn't.
 func backfillBackerNotifications(db *sql.DB) {
 	// Per-row exception handling: a single malformed data payload must not abort
 	// the whole reconciliation.
@@ -317,12 +319,6 @@ END $$;
 `
 	if _, err := db.Exec(reconcile); err != nil {
 		log.Printf("Warning: backer row reconciliation skipped: %v", err)
-	}
-
-	if _, err := db.Exec(
-		`DELETE FROM notifications WHERE type IN ('guarantor_request', 'referee_request')`,
-	); err != nil {
-		log.Printf("Warning: could not clean up stored backer notifications: %v", err)
 	}
 }
 
