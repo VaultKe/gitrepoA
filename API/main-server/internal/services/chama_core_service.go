@@ -999,6 +999,10 @@ func (s *ChamaService) getActivityStatistics(chamaID string) (map[string]interfa
 	return stats, nil
 }
 
+// getChamaWalletBalance returns the chama's headline wallet balance shown on the
+// dashboard. It is the SUM of every chama sub-wallet EXCEPT welfare and
+// merry-go-round, which are standalone pools. Loan repayments (principal,
+// interest and fines) land in these sub-wallets and therefore count towards it.
 func (s *ChamaService) getChamaWalletBalance(chamaID string) (float64, error) {
 	// First, ensure chama wallet exists
 	err := s.ensureChamaWallet(chamaID)
@@ -1007,9 +1011,11 @@ func (s *ChamaService) getChamaWalletBalance(chamaID string) (float64, error) {
 	}
 
 	query := `
-		SELECT COALESCE(balance, 0) as balance
+		SELECT COALESCE(SUM(balance), 0) AS balance
 		FROM wallets
-		WHERE owner_id = $1 AND type = 'chama'
+		WHERE owner_id = $1
+		  AND type = 'chama'
+		  AND COALESCE(subwallet_type, 'main') NOT IN ('welfare', 'merry_go_round', 'merry-go-round')
 	`
 	var balance float64
 	err = s.db.QueryRow(query, chamaID).Scan(&balance)

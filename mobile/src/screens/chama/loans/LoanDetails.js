@@ -371,7 +371,9 @@ const LoanDetails = ({ route, navigation }) => {
             </View>
           )}
 
-          {['active', 'delinquent', 'partial', 'recovery_active'].includes(screen.loan?.status?.toLowerCase()) && (
+          {/* Recording a repayment is an officer action — the applicant cannot
+              act on their own loan at all (maker-checker). */}
+          {!screen.isApplicant && ['active', 'delinquent', 'partial', 'recovery_active'].includes(screen.loan?.status?.toLowerCase()) && (
             <Button title="Record Payment" size="medium" onPress={() => screen.setPaymentModalVisible(true)} style={{ backgroundColor: colors.success, marginBottom: spacing.md }} icon={<Ionicons name="cash" size={16} color={colors.white} />} />
           )}
 

@@ -108,9 +108,10 @@ func makeCashContribution(c *gin.Context, db *sql.DB, tx *sql.Tx, req *MakeContr
 	if _, err := db.Exec(`
 		UPDATE chamas
 		SET total_funds = (
-			SELECT COALESCE(balance, 0)
+			SELECT COALESCE(SUM(balance), 0)
 			FROM wallets
 			WHERE owner_id = $1 AND type = 'chama'
+			  AND COALESCE(subwallet_type, 'main') NOT IN ('welfare', 'merry_go_round', 'merry-go-round')
 		), updated_at = CURRENT_TIMESTAMP
 		WHERE id = $2
 	`, req.ChamaID, req.ChamaID); err != nil {

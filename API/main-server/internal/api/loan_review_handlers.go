@@ -557,10 +557,10 @@ func RejectLoan(c *gin.Context) {
 	}
 
 	// Check if loan exists and get current status
-	var currentStatus, chamaID string
+	var currentStatus, chamaID, rlBorrowerID string
 	err := db.(*sql.DB).QueryRow(`
-		SELECT status, chama_id FROM loans WHERE id = $1
-	`, loanID).Scan(&currentStatus, &chamaID)
+		SELECT status, chama_id, borrower_id FROM loans WHERE id = $1
+	`, loanID).Scan(&currentStatus, &chamaID, &rlBorrowerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -572,6 +572,15 @@ func RejectLoan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to fetch loan: " + err.Error(),
+		})
+		return
+	}
+
+	// Maker-checker: the applicant may only CANCEL their own loan, never reject it.
+	if uid, _ := userID.(string); uid != "" && uid == rlBorrowerID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "You cannot reject your own loan. Use 'Cancel Loan Application' instead.",
 		})
 		return
 	}
@@ -677,12 +686,17 @@ func DisburseLoan(c *gin.Context) {
 		return
 	}
 
-	// Only a chama officer may release loan funds.
+	// Only a chama officer may release loan funds — and never the borrower,
+	// even if they hold an officer role (maker-checker).
 	if dbVal, ok := c.Get("db"); ok {
 		if database, ok := dbVal.(*sql.DB); ok {
-			var loanChamaID string
-			if err := database.QueryRow("SELECT chama_id FROM loans WHERE id = $1", loanID).Scan(&loanChamaID); err != nil {
+			var loanChamaID, dlBorrowerID string
+			if err := database.QueryRow("SELECT chama_id, borrower_id FROM loans WHERE id = $1", loanID).Scan(&loanChamaID, &dlBorrowerID); err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Loan not found"})
+				return
+			}
+			if dlBorrowerID == userID {
+				c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "You cannot disburse your own loan"})
 				return
 			}
 			if _, err := requireActiveChamaOfficer(database, loanChamaID, userID); err != nil {

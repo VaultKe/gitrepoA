@@ -387,6 +387,35 @@ func (s *LoanService) MakeLoanPayment(loanID, payerID string, amount float64, pa
 		return nil, fmt.Errorf("failed to update loan: %w", err)
 	}
 
+	// The repayment — principal AND the interest gain — flows back into the same
+	// chama sub-wallet the loan was disbursed from (the 'contribution' pool), so
+	// the interest earned becomes part of the chama's headline balance.
+	// Best-effort: a missing wallet row must not fail the payment.
+	contribWallet := fmt.Sprintf("wallet-%s-contribution", loan.ChamaID)
+	if res, werr := tx.Exec(
+		`UPDATE wallets SET balance = COALESCE(balance,0) + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+		amount, contribWallet,
+	); werr == nil {
+		if n, _ := res.RowsAffected(); n > 0 {
+			_, _ = tx.Exec(`
+				INSERT INTO transactions
+					(id, to_wallet_id, chama_id, member_id, type, status, amount, currency, description, reference, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, 'loan_payment', 'completed', $5, 'KES', $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				ON CONFLICT (id) DO NOTHING
+			`, "loanpay-"+payment.ID, contribWallet, loan.ChamaID, payerID, amount,
+				fmt.Sprintf("Loan repayment (principal %.2f + interest %.2f) for loan %s", principalPortion, interestPortion, loanID),
+				"LOANPAY-"+loanID+"-"+payment.ID)
+			_, _ = tx.Exec(`
+				UPDATE chamas SET total_funds = (
+					SELECT COALESCE(SUM(balance), 0) FROM wallets
+					WHERE owner_id = $1 AND type = 'chama'
+					  AND COALESCE(subwallet_type, 'main') NOT IN ('welfare', 'merry_go_round', 'merry-go-round')
+				), updated_at = CURRENT_TIMESTAMP WHERE id = $1`, loan.ChamaID)
+		}
+	} else {
+		fmt.Printf("loan repayment wallet credit failed for loan %s: %v\n", loanID, werr)
+	}
+
 	// Commit transaction
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
@@ -1114,6 +1143,12 @@ func (s *LoanService) InitiateLoanApproval(loanID, userID, role, comment string)
 		return "", fmt.Errorf("loan not found: %w", err)
 	}
 
+	// Maker-checker: the applicant can never act on their own loan, even if they
+	// also hold an officer role in the chama.
+	if loan.BorrowerID == userID {
+		return "", fmt.Errorf("you cannot approve your own loan application")
+	}
+
 	if loan.Status != models.LoanStatusPending && loan.Status != models.LoanStatusApproved {
 		return "", fmt.Errorf("loan cannot be approved in current status: %s", loan.Status)
 	}
@@ -1212,6 +1247,12 @@ func (s *LoanService) sendLoanApprovalOTPEmail(userID, role, otp string, amount 
 
 // ConfirmLoanApproval verifies OTP and records the approval
 func (s *LoanService) ConfirmLoanApproval(loanID, userID, role, otp, comment string) error {
+	// Maker-checker: the applicant can never finalise an approval on their own loan.
+	var borrowerID string
+	if err := s.db.QueryRow("SELECT borrower_id FROM loans WHERE id = $1", loanID).Scan(&borrowerID); err == nil && borrowerID == userID {
+		return fmt.Errorf("you cannot approve your own loan application")
+	}
+
 	// Validate OTP
 	var otpRecord struct {
 		id        string
