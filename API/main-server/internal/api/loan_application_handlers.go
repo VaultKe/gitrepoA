@@ -773,12 +773,39 @@ func GetLoanApplication(c *gin.Context) {
 		borrowerEmail = ""
 	}
 
+	// Extra fields not in the shared GetLoanByID scan — best effort (columns may
+	// be absent on an un-migrated DB). Referee counts come straight from the
+	// live table so the loan-details screen's approval gating is always correct.
+	var loanTypeID sql.NullString
+	_ = db.(*sql.DB).QueryRow("SELECT loan_type_id FROM loans WHERE id = $1", loan.ID).Scan(&loanTypeID)
+
+	var requiredReferees, approvedReferees int
+	_ = db.(*sql.DB).QueryRow(`
+		SELECT
+			(SELECT COUNT(*) FROM loan_referees WHERE loan_id = $1),
+			(SELECT COUNT(*) FROM loan_referees WHERE loan_id = $1 AND lower(status) = 'accepted')
+	`, loan.ID).Scan(&requiredReferees, &approvedReferees)
+
+	// Re-derive the guarantor accept count from the live table too (don't trust a
+	// possibly-stale denormalised counter).
+	var acceptedGuarantors, totalGuarantors int
+	_ = db.(*sql.DB).QueryRow(`
+		SELECT
+			(SELECT COUNT(*) FROM guarantors WHERE loan_id = $1),
+			(SELECT COUNT(*) FROM guarantors WHERE loan_id = $1 AND lower(status) = 'accepted')
+	`, loan.ID).Scan(&totalGuarantors, &acceptedGuarantors)
+	requiredGuarantors := loan.RequiredGuarantors
+	if totalGuarantors > requiredGuarantors {
+		requiredGuarantors = totalGuarantors
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": map[string]interface{}{
 			"id":                    loan.ID,
 			"borrowerId":            loan.BorrowerID,
 			"chamaId":               loan.ChamaID,
+			"loanTypeId":            loanTypeID.String,
 			"type":                  loan.Type,
 			"amount":                loan.Amount,
 			"interestRate":          loan.InterestRate,
@@ -792,8 +819,10 @@ func GetLoanApplication(c *gin.Context) {
 			"totalAmount":           loan.TotalAmount,
 			"paidAmount":            loan.PaidAmount,
 			"remainingAmount":       loan.RemainingAmount,
-			"requiredGuarantors":    loan.RequiredGuarantors,
-			"approvedGuarantors":    loan.ApprovedGuarantors,
+			"requiredGuarantors":    requiredGuarantors,
+			"approvedGuarantors":    acceptedGuarantors,
+			"requiredReferees":      requiredReferees,
+			"approvedReferees":      approvedReferees,
 			"approvalStage":         loan.ApprovalStage,
 			"secretaryApprovedBy":   loan.SecretaryApprovedBy,
 			"secretaryApprovedAt":   loan.SecretaryApprovedAt,

@@ -194,7 +194,8 @@ const refreshAccessToken = async () => {
     const cacheKey = getCacheKey(endpoint, options);
 
     // For GET-like requests, serve from cache or in-flight promise when possible.
-    if (method === 'GET') {
+    // `options.skipCache` forces a fresh network read (used by real-time pollers).
+    if (method === 'GET' && !options.skipCache) {
       const cached = getCachedResponse(cacheKey);
       if (cached) {
         return cached;
@@ -205,6 +206,9 @@ const refreshAccessToken = async () => {
         console.log('[api] in-flight hit', endpoint);
         return inFlight;
       }
+    }
+    if (options.skipCache) {
+      responseCache.delete(cacheKey);
     }
 
     const token = await getAuthToken();

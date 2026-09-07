@@ -1,10 +1,29 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert, StyleSheet, View, Text } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 import { useChamaContext } from '../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
 import ApiService from '../services/api';
-import { getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanReferees, getLoanFines } from '../services/api/loanEndpoints';
+import { getLoanApplication, getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanReferees, getLoanFines } from '../services/api/loanEndpoints';
+
+// While the loan is still moving through the approval pipeline, poll fast (5s) so
+// actionable buttons reflect other officers' / backers' actions instantly.
+const APPROVAL_PIPELINE = [
+  'pending', 'pending_approval', 'guarantors_approved', 'guarantors_declined',
+  'secretary_approved', 'treasurer_approved', 'approved', 'disbursing',
+];
+// Fully closed — nothing changes, no poll at all. Everything else (disbursed,
+// active, delinquent, partial, recovery_active, defaulted, ...) is a live
+// repayment/recovery state that we still track, just at a relaxed cadence.
+const FINAL_STATUSES = ['completed', 'rejected', 'cancelled', 'closed', 'written_off'];
+
+const pollIntervalFor = (status) => {
+  const s = (status || '').toLowerCase();
+  if (APPROVAL_PIPELINE.includes(s)) return 5000;
+  if (FINAL_STATUSES.includes(s)) return 0;
+  return 20000;
+};
 
 const useLoanDetails = ({ route, navigation }) => {
   const { theme } = useApp();
@@ -32,11 +51,75 @@ const useLoanDetails = ({ route, navigation }) => {
   const [approvalOTP, setApprovalOTP] = useState('');
   const [approvalStep, setApprovalStep] = useState('idle');
   const [approving, setApproving] = useState(false);
+  const [backersLoaded, setBackersLoaded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const pageSize = 10;
   const scrollViewRef = useRef(null);
+  const mountedRef = useRef(true);
+  const loanRef = useRef(null);
+  loanRef.current = loan;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const loadLoanDetails = useCallback(async ({ silent = false, fresh = false } = {}) => {
+    if (!loanId) { setLoading(false); return; }
+    if (!silent) setLoading(true);
+
+    // 1) The loan itself — a single fast row carrying the full approval state.
+    //    The action buttons gate on this, so resolve it first and unblock the
+    //    screen immediately; heavier data streams in afterwards.
+    try {
+      const res = await getLoanApplication(loanId, { fresh });
+      if (res?.success && res.data) {
+        if (mountedRef.current) setLoan(prev => ({ ...(prev || {}), ...res.data }));
+      } else if (!silent) {
+        const list = await ApiService.getLoans(chamaId || currentChamaId);
+        const found = list?.data?.find(l => l.id === loanId);
+        if (found && mountedRef.current) setLoan(found);
+      }
+    } catch (error) {
+      if (!silent) {
+        console.error('Error loading loan:', error);
+        try {
+          const list = await ApiService.getLoans(chamaId || currentChamaId);
+          const found = list?.data?.find(l => l.id === loanId);
+          if (found && mountedRef.current) setLoan(found);
+        } catch {}
+      }
+    } finally {
+      if (!silent && mountedRef.current) setLoading(false);
+    }
+
+    // 2) Everything else in parallel, in the background — never blocks the UI.
+    const [history, gua, ref, fin] = await Promise.allSettled([
+      getLoanRepaymentHistory(loanId),
+      getLoanGuarantors(loanId),
+      getLoanReferees(loanId),
+      getLoanFines(loanId),
+    ]);
+    if (!mountedRef.current) return;
+
+    if (history.status === 'fulfilled' && history.value?.success && history.value?.data) {
+      const d = history.value.data;
+      setRepaymentHistory(d);
+      setDisbursement(d.disbursement || null);
+      setSchedule(Array.isArray(d.schedule) ? d.schedule : []);
+      const paymentList = Array.isArray(d.payments) ? d.payments : [];
+      setAllPayments(paymentList);
+      setTotalItems(paymentList.length);
+      setTotalPages(Math.max(1, Math.ceil(paymentList.length / pageSize)));
+    }
+
+    setGuarantors(gua.status === 'fulfilled' && Array.isArray(gua.value?.data) ? gua.value.data : []);
+    setReferees(ref.status === 'fulfilled' && Array.isArray(ref.value?.data) ? ref.value.data : []);
+    setFines(fin.status === 'fulfilled' && Array.isArray(fin.value?.data) ? fin.value.data : []);
+    setBackersLoaded(true);
+  }, [loanId, chamaId, currentChamaId]);
 
   useEffect(() => {
     if (loanId) {
@@ -44,7 +127,27 @@ const useLoanDetails = ({ route, navigation }) => {
     } else {
       setLoading(false);
     }
-  }, [loanId]);
+  }, [loanId, loadLoanDetails]);
+
+  // Refresh the moment the screen regains focus (e.g. coming back from an
+  // approval action elsewhere) — silent, no spinner.
+  useFocusEffect(
+    useCallback(() => {
+      if (loanId) loadLoanDetails({ silent: true, fresh: true });
+    }, [loanId, loadLoanDetails])
+  );
+
+  // Real-time poll. Fast while the loan is in the approval pipeline, relaxed for
+  // ongoing repayment/recovery states, off once fully closed.
+  useEffect(() => {
+    if (!loanId) return;
+    const interval = pollIntervalFor(loan?.status);
+    if (!interval) return;
+    const id = setInterval(() => {
+      loadLoanDetails({ silent: true, fresh: true });
+    }, interval);
+    return () => clearInterval(id);
+  }, [loanId, loan?.status, loadLoanDetails]);
 
   useEffect(() => {
     if (allPayments.length > 0) {
@@ -54,78 +157,6 @@ const useLoanDetails = ({ route, navigation }) => {
       setPayments([]);
     }
   }, [currentPage, allPayments]);
-
-  const loadLoanDetails = async () => {
-    try {
-      setLoading(true);
-      const loansResponse = await ApiService.getLoans(chamaId || currentChamaId);
-      if (loansResponse.success) {
-        const foundLoan = loansResponse.data?.find(l => l.id === loanId);
-        setLoan(foundLoan);
-      }
-
-      try {
-        const historyResponse = await getLoanRepaymentHistory(loanId);
-        if (historyResponse?.success && historyResponse?.data) {
-          setRepaymentHistory(historyResponse.data);
-          setDisbursement(historyResponse.data.disbursement || null);
-          setSchedule(Array.isArray(historyResponse.data.schedule) ? historyResponse.data.schedule : []);
-          const paymentList = Array.isArray(historyResponse.data.payments) ? historyResponse.data.payments : [];
-          setAllPayments(paymentList);
-          setTotalItems(paymentList.length);
-          setTotalPages(Math.max(1, Math.ceil(paymentList.length / pageSize)));
-          setCurrentPage(1);
-        }
-      } catch (historyError) {
-        console.error('Failed to load repayment history:', historyError);
-        setAllPayments([]);
-        setTotalItems(0);
-        setTotalPages(1);
-        setCurrentPage(1);
-      }
-
-      try {
-        const guarantorsResponse = await getLoanGuarantors(loanId);
-        if (guarantorsResponse?.success) {
-          setGuarantors(Array.isArray(guarantorsResponse.data) ? guarantorsResponse.data : []);
-        } else {
-          setGuarantors([]);
-        }
-      } catch (guarantorError) {
-        console.error('Failed to load guarantors:', guarantorError);
-        setGuarantors([]);
-      }
-
-      try {
-        const refereesResponse = await getLoanReferees(loanId);
-        if (refereesResponse?.success) {
-          setReferees(Array.isArray(refereesResponse.data) ? refereesResponse.data : []);
-        } else {
-          setReferees([]);
-        }
-      } catch (refereeError) {
-        console.error('Failed to load referees:', refereeError);
-        setReferees([]);
-      }
-
-      try {
-        const finesResponse = await getLoanFines(loanId);
-        if (finesResponse?.success) {
-          setFines(Array.isArray(finesResponse.data) ? finesResponse.data : []);
-        } else {
-          setFines([]);
-        }
-      } catch (finesError) {
-        console.error('Failed to load fines:', finesError);
-        setFines([]);
-      }
-    } catch (error) {
-      console.error('Error loading loan details:', error);
-      Alert.alert('Error', 'Failed to load loan details');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     if (loan?.loanTypeId) {
@@ -210,7 +241,7 @@ const useLoanDetails = ({ route, navigation }) => {
             const response = await disburseLoan(loanId);
             if (response?.success) {
               Alert.alert('Success', 'Loan disbursed successfully');
-              loadLoanDetails();
+              loadLoanDetails({ silent: true, fresh: true });
             } else {
               Alert.alert('Error', response?.error || 'Failed to disburse loan');
             }
@@ -271,7 +302,7 @@ const useLoanDetails = ({ route, navigation }) => {
         setApprovalStep('idle');
         setApprovalComment('');
         setApprovalOTP('');
-        loadLoanDetails();
+        loadLoanDetails({ silent: true, fresh: true });
       } else {
         Alert.alert('Error', response?.error || 'Failed to confirm approval');
       }
@@ -299,7 +330,7 @@ const useLoanDetails = ({ route, navigation }) => {
             if (response?.success) {
               Alert.alert('Success', 'Loan rejected successfully');
               setApprovalComment('');
-              loadLoanDetails();
+              loadLoanDetails({ silent: true, fresh: true });
             } else {
               Alert.alert('Error', response?.error || 'Failed to reject loan');
             }
@@ -326,7 +357,7 @@ const useLoanDetails = ({ route, navigation }) => {
         setPaymentModalVisible(false);
         setPaymentAmount('');
         setPaymentMethod('mobile_money');
-        loadLoanDetails();
+        loadLoanDetails({ silent: true, fresh: true });
       } else {
         Alert.alert('Error', response?.error || 'Failed to record payment');
       }
@@ -358,6 +389,7 @@ const useLoanDetails = ({ route, navigation }) => {
     approvalOTP,
     approvalStep,
     approving,
+    backersLoaded,
     currentPage,
     totalPages,
     totalItems,

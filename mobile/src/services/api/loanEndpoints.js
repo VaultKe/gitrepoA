@@ -133,6 +133,12 @@ const getLoanRepaymentHistory = async (loanId) => {
   return await makeRequest(`/loans/${loanId}/repayment-history`);
 };
 
+// Single-loan fetch — fast, returns full approval state. `fresh: true` bypasses
+// the 30s response cache (used by the loan-details real-time poller).
+const getLoanApplication = async (loanId, { fresh = false } = {}) => {
+  return await makeRequest(`/loans/${loanId}`, fresh ? { skipCache: true } : {});
+};
+
 const getLoanType = async (loanTypeId) => {
   return await makeRequest(`/loans/loan-types/${loanTypeId}`);
 };
@@ -177,6 +183,7 @@ export {
   updateLoanType,
   deleteLoanType,
   getLoanRepaymentHistory,
+  getLoanApplication,
   initiateLoanApproval,
   confirmLoanApproval,
 };

@@ -100,12 +100,26 @@ const LoanDetails = ({ route, navigation }) => {
   });
 
   // Officer approval can only begin once every guarantor AND referee has accepted.
+  // Gate on the loan's OWN counts (they arrive with the fast single-loan fetch and
+  // are authoritative) so the Approve button never flickers while the separate
+  // guarantor/referee lists are still loading.
   const guarantorsList = screen.guarantors || [];
   const refereesList = screen.referees || [];
   const backers = [...guarantorsList, ...refereesList];
-  const acceptedBackers = backers.filter((b) => String(b.status).toLowerCase() === 'accepted').length;
-  const anyBackerDeclined = backers.some((b) => ['declined', 'rejected'].includes(String(b.status).toLowerCase()));
-  const backersReady = backers.length === 0 || acceptedBackers === backers.length;
+  const reqGuarantors = Number(screen.loan?.requiredGuarantors ?? 0);
+  const accGuarantors = Number(screen.loan?.approvedGuarantors ?? 0);
+  const reqReferees = Number(screen.loan?.requiredReferees ?? 0);
+  const accReferees = Number(screen.loan?.approvedReferees ?? 0);
+  const totalRequiredBackers = reqGuarantors + reqReferees;
+  const totalAcceptedBackers = accGuarantors + accReferees;
+  const acceptedBackers = totalAcceptedBackers;
+  const anyBackerDeclined =
+    backers.some((b) => ['declined', 'rejected'].includes(String(b.status).toLowerCase())) ||
+    screen.loan?.approvalStage === 'guarantors_declined';
+  const backersReady =
+    totalRequiredBackers === 0
+      ? true
+      : (accGuarantors >= reqGuarantors && accReferees >= reqReferees && !anyBackerDeclined);
   const isFirstApprovalStage = screen.loan?.approvalStage === 'pending';
 
   const fineHeaders = ['Date', 'Reason', 'Amount', 'Status'];
@@ -291,7 +305,7 @@ const LoanDetails = ({ route, navigation }) => {
               <Text style={{ color: anyBackerDeclined ? colors.error : colors.warning, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
                 {anyBackerDeclined
                   ? 'A guarantor or referee declined — this loan cannot be approved.'
-                  : `Waiting for all guarantors and referees to accept (${acceptedBackers}/${backers.length}).`}
+                  : `Waiting for all guarantors and referees to accept (${totalAcceptedBackers}/${totalRequiredBackers}).`}
               </Text>
             </View>
           )}
