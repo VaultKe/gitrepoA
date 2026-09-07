@@ -4,7 +4,6 @@ import { useApp } from '../../../context/AppContext';
 import { getThemeColors } from '../../../utils/theme';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import useChamaDashboard from '../../../hooks/useChamaDashboard';
-import ChamaSelectorCard from '../../../components/chama-dashboard/ChamaSelectorCard';
 import QuickStatsCard from '../../../components/chama-dashboard/QuickStatsCard';
 import QuickActionsCard from '../../../components/chama-dashboard/QuickActionsCard';
 import EmptyState from '../../../components/chama-dashboard/EmptyState';
@@ -17,6 +16,7 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
   const {
     userChamas,
     refreshing,
+    loading,
     selectedChama,
     chamaFeatures,
     realTimeData,
@@ -37,16 +37,12 @@ const ChamaDashboard = ({ navigation, onRouteChange, route }) => {
           }
           showsVerticalScrollIndicator={false}
         >
-          {userChamas.length === 0 && !selectedChama ? (
+          {userChamas.length === 0 && !selectedChama && !loading ? (
             <EmptyState />
           ) : (
             <>
-              <ChamaSelectorCard
-                userChamas={userChamas}
-                selectedChama={selectedChama}
-                getUserRole={dashboard.getUserRole}
-                switchToChama={dashboard.switchToChama}
-              />
+              {/* The active chama is chosen upstream — on My Chamas or the Chama
+                  Details screen — so there is no in-dashboard picker. */}
               <QuickStatsCard
                 selectedChama={selectedChama}
                 realTimeData={realTimeData}

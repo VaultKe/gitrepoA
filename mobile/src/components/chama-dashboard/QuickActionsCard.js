@@ -346,8 +346,6 @@ const QuickActionsCard = ({ selectedChama, chamaFeatures, onRouteChange, navigat
 
   const mainActions = filteredActions;
 
-  const isDisabled = !selectedChama;
-
   return (
     <Card style={[styles.actionsCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginVertical: spacing.xs }]} variant="outlined">
       <Text style={[styles.cardTitle, { color: colors.text }]}>
@@ -358,12 +356,11 @@ const QuickActionsCard = ({ selectedChama, chamaFeatures, onRouteChange, navigat
         {mainActions.map((action) => (
           <TouchableOpacity
             key={action.id}
-            style={[styles.actionItem, isDisabled && { opacity: 0.4 }]}
+            style={styles.actionItem}
             onPress={() => {
               action.onPress();
             }}
-            disabled={isDisabled}
-            activeOpacity={isDisabled ? 1 : 0.7}
+            activeOpacity={0.7}
           >
             <View style={[styles.actionIcon, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
               <Ionicons name={action.icon} size={24} color={action.color} />

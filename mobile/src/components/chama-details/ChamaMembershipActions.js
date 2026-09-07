@@ -29,10 +29,10 @@ const ChamaMembershipActions = ({ userMembership, chama, colors, handleJoinChama
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}
-          onPress={switchToChamaDashboard}
+          onPress={() => switchToChamaDashboard(chama)}
           activeOpacity={0.7}
         >
-          <Text style={[styles.actionButtonText, { color: colors.primary }]}>Switch to Dashboard</Text>
+          <Text style={[styles.actionButtonText, { color: colors.primary }]}>Open Dashboard</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
