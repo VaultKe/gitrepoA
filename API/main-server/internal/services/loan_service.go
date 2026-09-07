@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -1167,15 +1168,46 @@ func (s *LoanService) InitiateLoanApproval(loanID, userID, role, comment string)
 		return "", fmt.Errorf("failed to create approval OTP: %w", err)
 	}
 
-	// Send OTP via SMS/notification
-	go func() {
-		var phone string
-		if err := s.db.QueryRow("SELECT phone FROM users WHERE id = $1", userID).Scan(&phone); err == nil {
-			fmt.Printf("Sending loan approval OTP to %s for %s: %s\n", phone, role, otp)
-		}
-	}()
+	// Deliver the OTP to the approving officer's e-mail. Entering it back on the
+	// confirm step finalises this officer's approval.
+	go s.sendLoanApprovalOTPEmail(userID, role, otp, loan.Amount)
 
 	return otpID, nil
+}
+
+// sendLoanApprovalOTPEmail e-mails the 6-digit approval code to the officer.
+func (s *LoanService) sendLoanApprovalOTPEmail(userID, role, otp string, amount float64) {
+	var email, firstName string
+	if err := s.db.QueryRow(
+		"SELECT COALESCE(email,''), COALESCE(first_name,'') FROM users WHERE id = $1", userID,
+	).Scan(&email, &firstName); err != nil || email == "" {
+		fmt.Printf("loan approval OTP: no e-mail for user %s (%s): code %s\n", userID, role, otp)
+		return
+	}
+	if firstName == "" {
+		firstName = "there"
+	}
+	roleTitle := strings.Title(role)
+	subject := fmt.Sprintf("VaultKe - %s approval code: %s", roleTitle, otp)
+	body := fmt.Sprintf(`<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#111827;background:#f3f4f6;padding:24px">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+    <div style="background:#0f172a;color:#fff;padding:18px 24px">
+      <div style="font-size:18px;font-weight:bold">VaultKe</div>
+      <div style="font-size:12px;color:#c7d2e3">Loan approval verification</div>
+    </div>
+    <div style="padding:24px">
+      <p style="margin:0 0 12px">Hi %s,</p>
+      <p style="margin:0 0 12px">You have started approving a loan of <strong>KES %.2f</strong> as <strong>%s</strong>. Enter this code on the confirmation step to finalise your approval:</p>
+      <div style="font-size:30px;letter-spacing:8px;font-weight:bold;text-align:center;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:16px 0;margin:16px 0">%s</div>
+      <p style="margin:0 0 6px;color:#6b7280;font-size:13px">This code expires in 10 minutes and can be used once.</p>
+      <p style="margin:12px 0 0;color:#6b7280;font-size:13px">If you did not start this approval, ignore this e-mail and do not share the code.</p>
+    </div>
+  </div>
+</body></html>`, firstName, amount, roleTitle, otp)
+
+	if err := NewEmailService().SendHTMLEmail(email, subject, body); err != nil {
+		fmt.Printf("loan approval OTP e-mail to %s failed: %v (code %s)\n", email, err, otp)
+	}
 }
 
 // ConfirmLoanApproval verifies OTP and records the approval

@@ -581,6 +581,7 @@ func SetupRoutes(
 				loans.POST("/:id/approve", api.InitiateLoanApproval)
 				loans.POST("/:id/approve/confirm", api.ConfirmLoanApproval)
 				loans.POST("/:id/reject", api.RejectLoan)
+				loans.POST("/:id/cancel", api.CancelLoan)
 				loans.POST("/:id/disburse", api.DisburseLoan)
 				loans.POST("/:id/payments", api.RecordLoanPayment)
 				loans.GET("/:id/guarantors", api.GetLoanGuarantors)

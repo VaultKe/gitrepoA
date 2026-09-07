@@ -139,6 +139,16 @@ const getLoanApplication = async (loanId, { fresh = false } = {}) => {
   return await makeRequest(`/loans/${loanId}`, fresh ? { skipCache: true } : {});
 };
 
+// Borrower withdraws their own loan (only before chairperson approval).
+const cancelLoan = async (loanId, reason = '') => {
+  const res = await makeRequest(`/loans/${loanId}/cancel`, {
+    method: 'POST',
+    body: { reason },
+  });
+  invalidateBackingCaches();
+  return res;
+};
+
 const getLoanType = async (loanTypeId) => {
   return await makeRequest(`/loans/loan-types/${loanTypeId}`);
 };
@@ -184,6 +194,7 @@ export {
   deleteLoanType,
   getLoanRepaymentHistory,
   getLoanApplication,
+  cancelLoan,
   initiateLoanApproval,
   confirmLoanApproval,
 };

@@ -9,7 +9,10 @@ import { useApp } from '../context/AppContext';
 import { useChamaContext } from '../context/ChamaContext';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
 import ApiService from '../services/api';
-import { getLoanApplication, getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanReferees, getLoanFines } from '../services/api/loanEndpoints';
+import { getLoanApplication, getLoanRepaymentHistory, makeLoanPayment, disburseLoan, initiateLoanApproval, confirmLoanApproval, getLoanGuarantors, getLoanReferees, getLoanFines, cancelLoan } from '../services/api/loanEndpoints';
+
+// Statuses / stages in which the applicant can still withdraw their loan.
+const CANCELLABLE = ['pending', 'pending_approval', 'guarantors_approved', 'guarantors_declined', 'secretary_approved', 'treasurer_approved', 'under_review'];
 
 // While the loan is still moving through the approval pipeline, poll fast (5s) so
 // actionable buttons reflect other officers' / backers' actions instantly.
@@ -30,7 +33,7 @@ const pollIntervalFor = (status) => {
 };
 
 const useLoanDetails = ({ route, navigation }) => {
-  const { theme } = useApp();
+  const { theme, user } = useApp();
   const { currentChamaId } = useChamaContext();
   const colors = getThemeColors(theme);
   const styles = createStyles(colors);
@@ -278,7 +281,7 @@ const useLoanDetails = ({ route, navigation }) => {
       const response = await initiateLoanApproval(loanId, approvalComment.trim());
       if (response?.success) {
         setApprovalStep('confirm');
-        Alert.alert('OTP Sent', response.message || 'Please enter the OTP sent to your phone.');
+        Alert.alert('Check your e-mail', response.message || 'Enter the verification code we just e-mailed you.');
       } else {
         Alert.alert('Error', response?.error || 'Failed to initiate approval');
       }
@@ -291,7 +294,7 @@ const useLoanDetails = ({ route, navigation }) => {
 
   const handleConfirmApproval = async () => {
     if (!approvalOTP.trim() || approvalOTP.trim().length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter the 6-digit OTP sent to your phone.');
+      Alert.alert('Invalid code', 'Please enter the 6-digit code e-mailed to you.');
       return;
     }
     if (!approvalComment.trim()) {
@@ -346,6 +349,47 @@ const useLoanDetails = ({ route, navigation }) => {
         },
       },
     ]);
+  };
+
+  // Applicant-side: the borrower may withdraw their own loan before the
+  // chairperson approves it, and sees NO other action buttons.
+  const borrowerId = loan?.borrowerId || loan?.borrower_id || loan?.borrower?.id;
+  const isApplicant = !!(user?.id && borrowerId && String(user.id) === String(borrowerId));
+  const canCancel = isApplicant
+    && !loan?.chairpersonApprovedBy
+    && (loan?.approvalStage ? loan.approvalStage !== 'fully_approved' : true)
+    && CANCELLABLE.includes(String(loan?.status || '').toLowerCase());
+
+  const [cancelling, setCancelling] = useState(false);
+  const handleCancelLoan = async () => {
+    if (!canCancel || cancelling) return;
+    Alert.alert(
+      'Cancel loan application',
+      'Withdraw this loan application? This cannot be undone.',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              const res = await cancelLoan(loanId);
+              if (res?.success) {
+                Alert.alert('Cancelled', 'Your loan application has been withdrawn.');
+                loadLoanDetails({ silent: true, fresh: true });
+              } else {
+                Alert.alert('Could not cancel', res?.error || 'Please try again.');
+              }
+            } catch (error) {
+              Alert.alert('Could not cancel', error?.message || 'Please try again.');
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const [downloadingReport, setDownloadingReport] = useState(false);
@@ -442,6 +486,9 @@ const useLoanDetails = ({ route, navigation }) => {
     approving,
     backersLoaded,
     downloadingReport,
+    isApplicant,
+    canCancel,
+    cancelling,
     currentPage,
     totalPages,
     totalItems,
@@ -481,6 +528,7 @@ const useLoanDetails = ({ route, navigation }) => {
     handleRejectLoan,
     handleRecordPayment,
     handleDownloadReport,
+    handleCancelLoan,
     // Navigation
     navigation,
     colors,

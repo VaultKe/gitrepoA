@@ -296,7 +296,28 @@ const LoanDetails = ({ route, navigation }) => {
         />
 
         <View style={styles.actions}>
-          {(screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && !(isFirstApprovalStage && !backersReady) && (
+          {/* Applicant view: only a Cancel button, and only before chairperson approval. */}
+          {screen.isApplicant && (
+            screen.canCancel ? (
+              <Button
+                title={screen.cancelling ? 'Withdrawing…' : 'Cancel Loan Application'}
+                size="medium"
+                loading={screen.cancelling}
+                disabled={screen.cancelling}
+                onPress={screen.handleCancelLoan}
+                style={{ backgroundColor: colors.error, marginBottom: spacing.md }}
+                icon={<Ionicons name="close-circle" size={16} color={colors.white} />}
+              />
+            ) : (
+              <View style={{ marginBottom: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.textSecondary + '12', borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.fontSize.sm }}>
+                  This application can no longer be withdrawn. Its status is tracked in the Loan Journey above.
+                </Text>
+              </View>
+            )
+          )}
+
+          {!screen.isApplicant && (screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && !(isFirstApprovalStage && !backersReady) && (
             <View style={{ marginBottom: spacing.md }}>
               <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Approval Comment (Required)</Text>
               <TextInput
@@ -309,7 +330,7 @@ const LoanDetails = ({ route, navigation }) => {
             </View>
           )}
 
-          {screen.approvalStep === 'idle' && isFirstApprovalStage && !backersReady && (
+          {!screen.isApplicant && screen.approvalStep === 'idle' && isFirstApprovalStage && !backersReady && (
             <View style={{ marginBottom: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: (anyBackerDeclined ? colors.error : colors.warning) + '15', borderWidth: 1, borderColor: (anyBackerDeclined ? colors.error : colors.warning) }}>
               <Text style={{ color: anyBackerDeclined ? colors.error : colors.warning, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
                 {anyBackerDeclined
@@ -319,7 +340,7 @@ const LoanDetails = ({ route, navigation }) => {
             </View>
           )}
 
-          {screen.approvalStep === 'idle' && (screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && (() => {
+          {!screen.isApplicant && screen.approvalStep === 'idle' && (screen.loan?.approvalStage === 'pending' || screen.loan?.approvalStage === 'secretary_approved' || screen.loan?.approvalStage === 'treasurer_approved') && (() => {
             const canApprove = !isFirstApprovalStage || (backersReady && !anyBackerDeclined);
             return (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md }}>
@@ -331,9 +352,9 @@ const LoanDetails = ({ route, navigation }) => {
             );
           })()}
 
-          {screen.approvalStep === 'confirm' && (
+          {!screen.isApplicant && screen.approvalStep === 'confirm' && (
             <View style={{ marginBottom: spacing.md }}>
-              <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Enter OTP sent to your phone</Text>
+              <Text style={[styles.label, { color: colors.text, marginBottom: spacing.xs }]}>Enter the verification code e-mailed to you</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, color: colors.text, marginBottom: spacing.sm }]}
                 value={screen.approvalOTP}

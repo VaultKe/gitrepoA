@@ -413,7 +413,7 @@ func InitiateLoanApproval(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": fmt.Sprintf("Approval OTP sent to your phone. Please verify to approve as %s.", role),
+		"message": fmt.Sprintf("A verification code has been e-mailed to you. Enter it to finalise your approval as %s.", role),
 		"data": map[string]interface{}{
 			"otpId": otpID,
 			"role":  role,

@@ -28,7 +28,7 @@ const fmtMoney = (n) => {
 const POST_DISBURSE = ['disbursed', 'active', 'delinquent', 'partial', 'recovery_active', 'defaulted', 'completed', 'closed', 'written_off'];
 
 function buildJourney(loan, disbursement, guarantorList = [], refereeList = []) {
-  if (!loan) return { steps: [], doneCount: 0, currentIndex: -1, rejected: false };
+  if (!loan) return { steps: [], doneCount: 0, currentIndex: -1, rejected: false, cancelled: false };
 
   const status = String(loan.status || '').toLowerCase();
   const stage = String(loan.approvalStage || '').toLowerCase();
@@ -146,17 +146,22 @@ function buildJourney(loan, disbursement, guarantorList = [], refereeList = []) 
     });
   }
 
-  // Rejection short-circuits the journey.
-  const rejected = status === 'rejected' || !!loan.rejectedAt;
+  // Rejection or applicant cancellation short-circuits the journey.
+  const cancelled = status === 'cancelled';
+  const rejected = status === 'rejected' || cancelled || (!!loan.rejectedAt && status !== 'completed');
   if (rejected) {
     const firstPending = steps.findIndex((s) => !s.done);
     const insertAt = firstPending === -1 ? steps.length : firstPending;
     steps.splice(insertAt, steps.length - insertAt, {
-      key: 'rejected',
-      label: 'Rejected',
-      icon: 'close-circle',
+      key: cancelled ? 'cancelled' : 'rejected',
+      label: cancelled ? 'Withdrawn by Applicant' : 'Rejected',
+      icon: cancelled ? 'remove-circle' : 'close-circle',
       failed: true,
-      sub: loan.rejectedReason ? `Reason: ${loan.rejectedReason}` : (loan.rejectedAt ? `Rejected ${fmtDate(loan.rejectedAt)}` : 'Application rejected'),
+      sub: loan.rejectedReason
+        ? loan.rejectedReason
+        : (loan.rejectedAt
+            ? `${cancelled ? 'Withdrawn' : 'Rejected'} ${fmtDate(loan.rejectedAt)}`
+            : (cancelled ? 'Application withdrawn' : 'Application rejected')),
     });
   }
 
@@ -165,7 +170,7 @@ function buildJourney(loan, disbursement, guarantorList = [], refereeList = []) 
     ? steps.findIndex((s) => s.failed)
     : steps.findIndex((s) => !s.done && !s.failed);
 
-  return { steps, doneCount, currentIndex, rejected };
+  return { steps, doneCount, currentIndex, rejected, cancelled };
 }
 
 /* ------------------------------------------------------------------ *
@@ -236,7 +241,7 @@ const NodeIcon = ({ state, icon, colors }) => {
 const LoanJourneyCard = ({ loan, disbursement, guarantors, referees, colors, defaultCollapsed = false }) => {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
-  const { steps, doneCount, currentIndex, rejected } = useMemo(
+  const { steps, doneCount, currentIndex, rejected, cancelled } = useMemo(
     () => buildJourney(loan, disbursement, guarantors, referees),
     [loan, disbursement, guarantors, referees]
   );
@@ -247,11 +252,13 @@ const LoanJourneyCard = ({ loan, disbursement, guarantors, referees, colors, def
   const progress = rejected ? doneCount / total : Math.min(1, (doneCount + (currentIndex >= 0 ? 0.5 : 0)) / total);
   const pct = Math.round((doneCount / total) * 100);
 
-  const headline = rejected
-    ? 'Application rejected'
-    : currentIndex === -1
-      ? 'Journey complete'
-      : `Now at: ${steps[currentIndex]?.label}`;
+  const headline = cancelled
+    ? 'Withdrawn by the applicant'
+    : rejected
+      ? 'Application rejected'
+      : currentIndex === -1
+        ? 'Journey complete'
+        : `Now at: ${steps[currentIndex]?.label}`;
 
   const accent = rejected ? colors.error : currentIndex === -1 ? colors.success : colors.primary;
 
