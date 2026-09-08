@@ -7,6 +7,7 @@ import { showInAppToast } from '../services/disbursementNotificationService';
 import {
   initiateMerryGoRoundDisbursement,
   confirmMerryGoRoundDisbursement,
+  getMerryGoRoundDisbursements,
 } from '../services/api/chamaEndpoints';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
 
@@ -183,6 +184,7 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
 
   const [maryGoRoundCycles, setMaryGoRoundCycles] = useState([]);
   const [allMaryGoRoundCycles, setAllMaryGoRoundCycles] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -213,11 +215,11 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   const [approvalActionType, setApprovalActionType] = useState(null);
 
   const filters = [
-    { id: 'all', name: 'All Cycles', icon: 'list' },
-    { id: 'pending', name: 'Pending', icon: 'time' },
-    { id: 'ready', name: 'Ready for Disbursement', icon: 'checkmark-circle' },
-    { id: 'disbursed', name: 'Disbursed', icon: 'cash' },
-    { id: 'completed', name: 'Completed', icon: 'trophy' },
+    { id: 'all', name: 'All rounds', icon: 'list' },
+    { id: 'ready', name: 'Ready to disburse', icon: 'cash-outline' },
+    { id: 'awaiting_confirmation', name: 'Awaiting chairperson', icon: 'hourglass-outline' },
+    { id: 'collecting', name: 'Collecting', icon: 'time-outline' },
+    { id: 'disbursed', name: 'Disbursed', icon: 'checkmark-circle' },
   ];
 
   useEffect(() => {
@@ -226,33 +228,19 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     }
   }, [currentChamaId]);
 
+  // Derive the visible page from the full record set whenever the filter,
+  // search or page changes.
   useEffect(() => {
-    if (searchQuery.trim()) {
-      const filteredData = filterMaryGoRoundCyclesData(allMaryGoRoundCycles, searchQuery, selectedFilter);
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      setMaryGoRoundCycles(filteredData.slice(startIndex, endIndex));
-      setTotalItems(filteredData.length);
-      setTotalPages(Math.ceil(filteredData.length / pageSize));
-    } else {
-      loadMaryGoRoundCycles(currentPage);
-    }
-  }, [currentPage, selectedFilter]);
+    const filtered = filterMaryGoRoundCyclesData(allMaryGoRoundCycles, searchQuery, selectedFilter);
+    const start = (currentPage - 1) * pageSize;
+    setMaryGoRoundCycles(filtered.slice(start, start + pageSize));
+    setTotalItems(filtered.length);
+    setTotalPages(Math.max(1, Math.ceil(filtered.length / pageSize)));
+  }, [allMaryGoRoundCycles, selectedFilter, searchQuery, currentPage]);
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      const filteredData = filterMaryGoRoundCyclesData(allMaryGoRoundCycles, searchQuery, selectedFilter);
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      setMaryGoRoundCycles(filteredData.slice(startIndex, endIndex));
-      setTotalItems(filteredData.length);
-      setTotalPages(Math.ceil(filteredData.length / pageSize));
-      setCurrentPage(1);
-    } else {
-      loadMaryGoRoundCycles(1);
-      setCurrentPage(1);
-    }
-  }, [searchQuery]);
+    setCurrentPage(1);
+  }, [selectedFilter, searchQuery]);
 
   const loadInitialData = async () => {
     try {
@@ -288,163 +276,86 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     }
   };
 
-  const loadMaryGoRoundCycles = async (page = 1, search = '') => {
+  // Map a server record (one round of one merry-go-round) to a table row.
+  const STATE_TO_STATUS = {
+    ready: 'ready',
+    awaiting_confirmation: 'awaiting_confirmation',
+    processing: 'processing',
+    disbursed: 'disbursed',
+    failed: 'failed',
+    collecting: 'collecting',
+    upcoming: 'upcoming',
+  };
+
+  const mapRecord = (r) => ({
+    id: r.merryGoRoundId,
+    key: `${r.merryGoRoundId}-${r.roundNumber}`,
+    merryGoRoundId: r.merryGoRoundId,
+    name: r.merryGoRoundName,
+    roundNumber: r.roundNumber,
+    current_position: r.roundNumber,
+    recipientId: r.recipientId,
+    recipientName: r.recipientName,
+    recipient: { id: r.recipientId, name: r.recipientName },
+    amount: r.disbursedAmount || r.collected || 0,
+    amount_per_round: r.disbursedAmount || r.collected || 0,
+    expectedAmount: r.expectedAmount,
+    collected: r.collected,
+    state: r.state,
+    status: STATE_TO_STATUS[r.state] || r.state,
+    disbursedAt: r.disbursedAt,
+    next_payout_date: r.disbursedAt,
+    mpesaCode: r.mpesaCode,
+    transactionStatus: r.transactionStatus,
+    isCurrentRound: r.isCurrentRound,
+    pendingDisbursement:
+      r.state === 'awaiting_confirmation'
+        ? {
+            amount: r.collected,
+            recipientName: r.recipientName,
+            roundNumber: r.roundNumber,
+            expiresAt: r.otpExpiresAt,
+          }
+        : null,
+  });
+
+  const loadMaryGoRoundCycles = async () => {
     try {
       setLoading(true);
-      const offset = (page - 1) * pageSize;
-      const response = await ApiService.getMerryGoRounds(currentChamaId, pageSize, offset);
-
+      const response = await getMerryGoRoundDisbursements(currentChamaId);
       if (response.success) {
-        let cyclesData = response.data || [];
-
-        const enrichedCycles = await Promise.all(
-          cyclesData.map(async (cycle) => {
-            try {
-              const participants = cycle.members || cycle.participants || [];
-              const currentPosition = cycle.current_position || cycle.currentRound || 1;
-              const currentRecipient = participants[currentPosition - 1];
-
-              if (currentRecipient) {
-                const userId = currentRecipient.user_id || currentRecipient.user?.id || currentRecipient.id;
-                if (userId) {
-                  const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                  if (userResponse.success && userResponse.data) {
-                    const userData = userResponse.data;
-                    const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-                    return {
-                      ...cycle,
-                      recipientId: userId,
-                      recipientName: fullName,
-                      recipient: {
-                        id: userId,
-                        first_name: userData.firstName || userData.first_name,
-                        last_name: userData.lastName || userData.last_name,
-                        name: fullName,
-                        username: userData.username || userData.email
-                      }
-                    };
-                  }
-                }
-              }
-
-              return {
-                ...cycle,
-                recipientId: currentRecipient?.user_id || currentRecipient?.id,
-                recipientName: currentRecipient?.name || 'Unknown Recipient',
-                recipient: {
-                  id: currentRecipient?.user_id || currentRecipient?.id,
-                  name: currentRecipient?.name || 'Unknown Recipient',
-                  first_name: 'Unknown',
-                  last_name: 'Recipient',
-                  username: 'unknown'
-                }
-              };
-            } catch (error) {
-              console.warn(`Failed to enrich cycle ${cycle.id}:`, error);
-              return {
-                ...cycle,
-                recipientId: cycle.recipientId,
-                recipientName: cycle.recipientName || 'Unknown Recipient',
-              };
-            }
-          })
-        );
-
-        setMaryGoRoundCycles(enrichedCycles);
-
-        if (search.trim()) {
-          const allResponse = await ApiService.getMerryGoRounds(currentChamaId, 1000, 0);
-          if (allResponse.success) {
-            let allCyclesData = allResponse.data || [];
-            const enrichedAllCycles = await Promise.all(
-              allCyclesData.map(async (cycle) => {
-                try {
-                  const participants = cycle.members || cycle.participants || [];
-                  const currentPosition = cycle.current_position || cycle.currentRound || 1;
-                  const currentRecipient = participants[currentPosition - 1];
-
-                  if (currentRecipient) {
-                    const userId = currentRecipient.user_id || currentRecipient.user?.id || currentRecipient.id;
-                    if (userId) {
-                      const userResponse = await ApiService.makeRequest(`/users/${userId}`);
-                      if (userResponse.success && userResponse.data) {
-                        const userData = userResponse.data;
-                        const fullName = `${userData.firstName || userData.first_name || ''} ${userData.lastName || userData.last_name || ''}`.trim();
-
-                        return {
-                          ...cycle,
-                          recipientId: userId,
-                          recipientName: fullName,
-                          recipient: {
-                            id: userId,
-                            first_name: userData.firstName || userData.first_name,
-                            last_name: userData.lastName || userData.last_name,
-                            name: fullName,
-                            username: userData.username || userData.email
-                          }
-                        };
-                      }
-                    }
-                  }
-
-                  return {
-                    ...cycle,
-                    recipientId: currentRecipient?.user_id || currentRecipient?.id,
-                    recipientName: currentRecipient?.name || 'Unknown Recipient',
-                  };
-                } catch (error) {
-                  return {
-                    ...cycle,
-                    recipientId: cycle.recipientId,
-                    recipientName: cycle.recipientName || 'Unknown Recipient',
-                  };
-                }
-              })
-            );
-
-            setAllMaryGoRoundCycles(enrichedAllCycles);
-            const filteredData = filterMaryGoRoundCyclesData(enrichedAllCycles, search, selectedFilter);
-            setTotalItems(filteredData.length);
-            setTotalPages(Math.ceil(filteredData.length / pageSize));
-          }
-        } else {
-          setAllMaryGoRoundCycles(enrichedCycles);
-          setTotalItems(response.totalCount || response.data?.length || enrichedCycles.length);
-          setTotalPages(Math.ceil((response.totalCount || enrichedCycles.length) / pageSize));
-        }
+        const rows = (response.data || []).map(mapRecord);
+        setAllMaryGoRoundCycles(rows);
+        setSummary(response.summary || null);
       } else {
-        console.error('Failed to load merry go round cycles:', response.error);
-        setMaryGoRoundCycles([]);
+        console.error('Failed to load merry-go-round disbursements:', response.error);
         setAllMaryGoRoundCycles([]);
-        setTotalItems(0);
-        setTotalPages(1);
       }
     } catch (error) {
-      console.error('Error loading merry go round cycles:', error);
-      setMaryGoRoundCycles([]);
+      console.error('Error loading merry-go-round disbursements:', error);
       setAllMaryGoRoundCycles([]);
-      setTotalItems(0);
-      setTotalPages(1);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterMaryGoRoundCyclesData = (cyclesData, search, filter) => {
-    let filtered = cyclesData;
+  const filterMaryGoRoundCyclesData = (rows, search, filter) => {
+    let filtered = rows || [];
 
-    if (filter !== 'all') {
-      filtered = filtered.filter(cycle =>
-        cycle.status?.toLowerCase().replace(' ', '_') === filter.toLowerCase()
-      );
+    if (filter && filter !== 'all') {
+      filtered = filtered.filter((row) => {
+        if (filter === 'disbursed') return row.state === 'disbursed' || row.state === 'processing';
+        return row.state === filter;
+      });
     }
 
-    if (search.trim()) {
-      filtered = filtered.filter(cycle =>
-        cycle.recipientName?.toLowerCase().includes(search.toLowerCase()) ||
-        cycle.name?.toLowerCase().includes(search.toLowerCase()) ||
-        cycle.cycleNumber?.toString().includes(search) ||
-        cycle.amount?.toString().includes(search)
+    const q = (search || '').trim().toLowerCase();
+    if (q) {
+      filtered = filtered.filter((row) =>
+        row.recipientName?.toLowerCase().includes(q) ||
+        row.name?.toLowerCase().includes(q) ||
+        String(row.roundNumber).includes(q) ||
+        row.mpesaCode?.toLowerCase().includes(q)
       );
     }
 
@@ -455,35 +366,20 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     setRefreshing(true);
     await loadMaryGoRoundCycles();
     setRefreshing(false);
-  }, []);
+  }, [currentChamaId]);
 
-  const getStatusColor = (item) => {
-    const participants = item.members || item.participants || [];
-    const totalParticipants = participants.length || item.total_participants || 0;
-    const currentPosition = item.current_position || item.currentRound || 1;
-    const roundComplete = item.roundComplete || false;
-
-    if (roundComplete || currentPosition > totalParticipants) {
-      return colors.primary;
-    } else if (currentPosition >= 1) {
-      return colors.success;
-    }
-    return colors.textSecondary;
+  const STATE_META = {
+    ready: { label: 'Ready to disburse', color: colors.success },
+    awaiting_confirmation: { label: 'Awaiting chairperson', color: colors.warning },
+    processing: { label: 'Sending…', color: colors.info },
+    disbursed: { label: 'Disbursed', color: colors.primary },
+    failed: { label: 'Failed', color: colors.error },
+    collecting: { label: 'Collecting contributions', color: colors.textSecondary },
+    upcoming: { label: 'Upcoming', color: colors.textSecondary },
   };
 
-  const getStatusText = (item) => {
-    const participants = item.members || item.participants || [];
-    const totalParticipants = participants.length || item.total_participants || 0;
-    const currentPosition = item.current_position || item.currentRound || 1;
-    const roundComplete = item.roundComplete || false;
-
-    if (roundComplete || currentPosition > totalParticipants) {
-      return 'Completed';
-    } else if (currentPosition >= 1) {
-      return 'Ready for Disbursement';
-    }
-    return 'Pending';
-  };
+  const getStatusColor = (item) => (STATE_META[item.state] || STATE_META.upcoming).color;
+  const getStatusText = (item) => (STATE_META[item.state] || STATE_META.upcoming).label;
 
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined || isNaN(amount)) {
@@ -697,6 +593,7 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   return {
     colors,
     maryGoRoundCycles,
+    summary,
     loading,
     refreshing,
     selectedFilter,

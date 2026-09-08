@@ -30,6 +30,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
 
   const {
     maryGoRoundCycles,
+    summary,
     loading,
     refreshing,
     selectedFilter,
@@ -84,74 +85,87 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   const renderTableRow = ({ item, index }) => {
     const rowBackgroundColor = index % 2 === 0 ? colors.background : colors.surface;
 
+    const showInitiate =
+      canDisburseMaryGoRound() && !item.pendingDisbursement && item.state === 'ready';
+    const showConfirm = canApproveMaryGoRound() && item.state === 'awaiting_confirmation';
+    const showAwaiting = canDisburseMaryGoRound() && item.state === 'awaiting_confirmation';
+
     return (
-      <View style={[tableStyles.tableRow, { backgroundColor: rowBackgroundColor }]}>
-        {/* Recipient Name */}
-        <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-          <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
-            {item.recipientName || item.recipient?.name || 'Unknown Recipient'}
-          </Text>
-          <Text style={[tableStyles.tableCellText, { fontSize: 7, color: colors.textSecondary }]}>
-            {item.name || 'Merry Go Round'}
-          </Text>
-        </View>
+      <View style={{ backgroundColor: rowBackgroundColor, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={[tableStyles.tableRow, { borderBottomWidth: 0 }]}
+          onPress={() => navigation.navigate('MaryGoRoundDetails', { record: item, chamaId: currentChamaId })}
+        >
+          {/* Recipient + state */}
+          <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
+            <Text style={[tableStyles.tableCellText, tableStyles.nameText]} numberOfLines={1}>
+              {item.recipientName || 'Unknown Recipient'}
+            </Text>
+            <Text style={[tableStyles.tableCellText, { fontSize: 9, color: getStatusColor(item), fontWeight: typography.fontWeight.bold, textAlign: 'left' }]} numberOfLines={1}>
+              {getStatusText(item)}
+            </Text>
+            {item.mpesaCode ? (
+              <Text style={[tableStyles.tableCellText, { fontSize: 8, color: colors.textSecondary, textAlign: 'left' }]} numberOfLines={1}>
+                M-Pesa: {item.mpesaCode}
+              </Text>
+            ) : null}
+          </View>
 
-        {/* Amount */}
-        <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-          <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium }]}>
-            {formatCurrency(item.amount_per_round || item.amountPerRound || item.amount || item.totalAmount || 0)}
-          </Text>
-        </View>
+          {/* Amount */}
+          <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
+            <Text style={[tableStyles.tableCellText, { fontWeight: typography.fontWeight.medium }]}>
+              {formatCurrency(item.amount || 0)}
+            </Text>
+            {item.state === 'collecting' && item.expectedAmount ? (
+              <Text style={[tableStyles.tableCellText, { fontSize: 8, color: colors.textSecondary }]}>
+                of ~{formatCurrency(item.expectedAmount)}
+              </Text>
+            ) : null}
+          </View>
 
-        {/* Round Info */}
-        <View style={[tableStyles.tableCell, tableStyles.roundCell]}>
-          <Text style={tableStyles.tableCellText}>
-            {item.current_position || item.currentRound || item.cycleNumber || 1}
-          </Text>
-        </View>
+          {/* Round */}
+          <View style={[tableStyles.tableCell, tableStyles.roundCell]}>
+            <Text style={tableStyles.tableCellText}>{item.roundNumber}</Text>
+          </View>
 
-        {/* Expected Date */}
-        <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-          <Text style={tableStyles.tableCellText}>
-            {formatDate(item.next_payout_date || item.nextPayoutDate || item.expectedDate || item.createdAt)}
-          </Text>
-        </View>
+          {/* Date */}
+          <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
+            <Text style={tableStyles.tableCellText}>
+              {item.disbursedAt ? formatDate(item.disbursedAt) : '—'}
+            </Text>
+          </View>
+        </TouchableOpacity>
 
-        {/* Actions */}
-        <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-          <View style={tableStyles.actionButtons}>
-            <TouchableOpacity
-              style={[tableStyles.actionButton, { backgroundColor: colors.info + '20' }]}
-              onPress={() => navigation.navigate('MaryGoRoundDetails', { cycleId: item.id, chamaId: currentChamaId })}
-            >
-              <Ionicons name="eye" size={14} color={colors.info} />
-            </TouchableOpacity>
-            {/* Chairperson: confirm a payout the treasurer has initiated */}
-            {canApproveMaryGoRound() && item.pendingDisbursement && (
+        {/* Action bar — full width, only when there is an action */}
+        {(showInitiate || showConfirm || showAwaiting) && (
+          <View style={styles.rowActionBar}>
+            {showInitiate && (
               <TouchableOpacity
-                style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
-                onPress={() => handleInitiateApprove(item)}
-              >
-                <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
-              </TouchableOpacity>
-            )}
-            {/* Treasurer: initiate a payout (only when none is already pending) */}
-            {canDisburseMaryGoRound() && !item.pendingDisbursement && item.status?.toLowerCase().includes('ready') && (
-              <TouchableOpacity
-                style={[tableStyles.actionButton, { backgroundColor: colors.success + '20' }]}
+                style={[styles.rowActionBtn, { backgroundColor: colors.success }]}
                 onPress={() => handleDisburse(item)}
               >
-                <Ionicons name="cash" size={14} color={colors.success} />
+                <Ionicons name="cash" size={15} color={colors.white} />
+                <Text style={styles.rowActionText}>Initiate disbursement</Text>
               </TouchableOpacity>
             )}
-            {/* Treasurer: a payout is already awaiting the chairperson */}
-            {canDisburseMaryGoRound() && item.pendingDisbursement && (
-              <View style={[tableStyles.actionButton, { backgroundColor: colors.warning + '20' }]}>
-                <Ionicons name="hourglass" size={14} color={colors.warning} />
+            {showConfirm && (
+              <TouchableOpacity
+                style={[styles.rowActionBtn, { backgroundColor: colors.primary }]}
+                onPress={() => handleInitiateApprove(item)}
+              >
+                <Ionicons name="shield-checkmark" size={15} color={colors.white} />
+                <Text style={styles.rowActionText}>Confirm & disburse</Text>
+              </TouchableOpacity>
+            )}
+            {showAwaiting && (
+              <View style={[styles.rowActionBtn, { backgroundColor: colors.warning + '22' }]}>
+                <Ionicons name="hourglass" size={15} color={colors.warning} />
+                <Text style={[styles.rowActionText, { color: colors.warning }]}>Awaiting chairperson</Text>
               </View>
             )}
           </View>
-        </View>
+        )}
       </View>
     );
   };
@@ -160,12 +174,12 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     <View style={styles.emptyState}>
       <Ionicons name="refresh-circle" size={64} color={colors.textTertiary} />
       <Text style={[styles.emptyTitle, { color: colors.text }]}>
-        No Merry Go Round Cycles Found
+        No rounds to show
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         {selectedFilter === 'all'
-          ? 'No merry go round cycles have been created yet'
-          : `No cycles with status "${selectedFilter}" found`
+          ? 'No merry-go-round rounds have been recorded yet'
+          : `No rounds match this filter`
         }
       </Text>
     </View>
@@ -221,6 +235,23 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {renderHeader()}
 
+        {summary && (
+          <View style={styles.summaryBar}>
+            <View style={[styles.summaryPill, { backgroundColor: colors.warning + '18' }]}>
+              <Text style={[styles.summaryNum, { color: colors.warning }]}>{summary.pendingDisbursement || 0}</Text>
+              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>pending payout</Text>
+            </View>
+            <View style={[styles.summaryPill, { backgroundColor: colors.success + '18' }]}>
+              <Text style={[styles.summaryNum, { color: colors.success }]}>{summary.disbursed || 0}</Text>
+              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>disbursed</Text>
+            </View>
+            <View style={[styles.summaryPill, { backgroundColor: colors.primary + '18' }]}>
+              <Text style={[styles.summaryNum, { color: colors.primary, fontSize: 12 }]}>{formatCurrency(summary.disbursedTotal || 0)}</Text>
+              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>paid out total</Text>
+            </View>
+          </View>
+        )}
+
         {/* Dropdown Overlay */}
         {showFilterDropdown && (
           <TouchableOpacity
@@ -236,7 +267,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
             {/* Table Header */}
             <View style={tableStyles.tableHeader}>
               <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-                <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Recipient & Cycle</Text>
+                <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Recipient & status</Text>
               </View>
               <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
                 <Text style={tableStyles.tableHeaderText}>Amount</Text>
@@ -245,10 +276,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
                 <Text style={tableStyles.tableHeaderText}>Round</Text>
               </View>
               <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-                <Text style={tableStyles.tableHeaderText}>Date</Text>
-              </View>
-              <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-                <Text style={tableStyles.tableHeaderText}>Actions</Text>
+                <Text style={tableStyles.tableHeaderText}>Disbursed</Text>
               </View>
             </View>
 
@@ -256,7 +284,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
             <FlatList
               data={maryGoRoundCycles}
               renderItem={renderTableRow}
-              keyExtractor={(item) => item.id?.toString()}
+              keyExtractor={(item) => item.key}
               style={{ flex: 1, zIndex: 1 }}
               showsVerticalScrollIndicator={false}
               refreshControl={
@@ -555,6 +583,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
+  },
+  rowActionBar: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs / 2,
+  },
+  rowActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  rowActionText: {
+    color: '#fff',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  summaryBar: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  summaryPill: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+  },
+  summaryNum: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  summaryLbl: {
+    fontSize: 9,
+    marginTop: 2,
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,

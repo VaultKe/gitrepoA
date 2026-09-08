@@ -278,6 +278,13 @@ const confirmMerryGoRoundDisbursement = async (chamaId, cycleId, otp) => {
   });
 };
 
+// Round-by-round disbursement ledger for the chama: rounds collected and still
+// needing a payout, rounds awaiting the chairperson's code, and records of
+// rounds already paid out (amount, date, M-Pesa code).
+const getMerryGoRoundDisbursements = async (chamaId) => {
+  return await makeRequest(`/chamas/${chamaId}/mgr-disbursements`);
+};
+
 export {
   getChamas,
   getAllChamasForAdmin,
@@ -325,4 +332,5 @@ export {
   disburseMerryGoRoundCyclesBulk,
   initiateMerryGoRoundDisbursement,
   confirmMerryGoRoundDisbursement,
+  getMerryGoRoundDisbursements,
 };
