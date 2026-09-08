@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ApiService from '../services/api';
 import { useApp } from '../context/AppContext';
+import { downloadBackendPdf } from '../services/pdfDownload';
 
 const useTransactionHistoryScreen = ({ navigation }) => {
   const { user } = useApp();
@@ -12,9 +13,29 @@ const useTransactionHistoryScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [statementLoading, setStatementLoading] = useState(false);
   const [showTransactionMenu, setShowTransactionMenu] = useState(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const fetchRef = useRef(false);
+
+  // Whole wallet statement as a table-based PDF from the backend (same style as
+  // the loan report). `filter` maps to the API's `type` query param.
+  const handleDownloadStatement = useCallback(async () => {
+    if (statementLoading) return;
+    setStatementLoading(true);
+    try {
+      const typeParam = filter && filter !== 'all' ? `?type=${encodeURIComponent(filter)}` : '';
+      await downloadBackendPdf({
+        path: `/wallets/transactions/report${typeParam}`,
+        fileName: `VaultKe_Wallet_Statement_${new Date().toISOString().split('T')[0]}.pdf`,
+        dialogTitle: 'Wallet statement',
+      });
+    } catch (error) {
+      Alert.alert('Statement failed', error.message || 'Could not generate the statement.', [{ text: 'OK' }]);
+    } finally {
+      setStatementLoading(false);
+    }
+  }, [filter, statementLoading]);
 
   const loadAllUserTransactions = useCallback(async () => {
     if (fetchRef.current) return;
@@ -153,6 +174,9 @@ const useTransactionHistoryScreen = ({ navigation }) => {
     loading,
     refreshing,
     receiptLoading,
+    setReceiptLoading,
+    statementLoading,
+    handleDownloadStatement,
     showTransactionMenu,
     setShowTransactionMenu,
     showHeaderMenu,

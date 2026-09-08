@@ -6,19 +6,13 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Modal,
-  ScrollView,
   Alert,
-  Platform,
   Dimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../../context/AppContext';
 import { getThemeColors, spacing, typography, borderRadius } from '../../../utils/theme';
-import ApiService from '../../../services/api';
+import { downloadTransactionReceiptPdf } from '../../../services/pdfDownload';
 import Card from '../../../components/common/Card';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import TransactionFilterBar from '../../../components/wallet/TransactionFilterBar';
@@ -44,16 +38,14 @@ const TransactionHistoryScreen = ({ navigation }) => {
     loading,
     refreshing,
     receiptLoading,
+    setReceiptLoading,
+    statementLoading,
+    handleDownloadStatement,
     showTransactionMenu,
     setShowTransactionMenu,
-    showHeaderMenu,
-    setShowHeaderMenu,
     filterTypes,
     filteredTransactions,
     formatDate,
-    getReceiptFileName,
-    buildUserInfo,
-    loadAllUserTransactions,
     onRefresh,
   } = screen;
 
@@ -63,176 +55,27 @@ const TransactionHistoryScreen = ({ navigation }) => {
     return colors.primary;
   };
 
-  const downloadReceiptPDF = async (transactionId, fileName) => {
-    const token = await ApiService.getAuthToken();
-    const response = await fetch(
-      `${ApiService.getApiBaseUrl()}/receipts/transactions/${encodeURIComponent(transactionId)}/download?format=pdf`,
-      {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Receipt download failed: ${response.status} ${errorText}`);
+  // All three receipt actions resolve to the same backend PDF, handed to the OS
+  // share sheet (from which the user can print, save or share).
+  const handleReceiptAction = async (transaction) => {
+    const transactionId = transaction?.id;
+    if (!transactionId) {
+      Alert.alert('Receipt unavailable', 'This record has no transaction reference.', [{ text: 'OK' }]);
+      return;
     }
-
-    if (Platform.OS === 'web') {
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-      return { success: true, fileName, uri: url };
-    }
-
-    if (!FileSystem?.documentDirectory || !Sharing?.isAvailableAsync) {
-      throw new Error('Download is not available on this device');
-    }
-
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (!isAvailable) {
-      throw new Error('Download is not available on this device');
-    }
-
-    const blob = await response.blob();
-    const reader = new FileReader();
-    const base64Data = await new Promise((resolve, reject) => {
-      reader.onload = () => {
-        const result = reader.result;
-        if (typeof result === 'string') {
-          resolve(result.split(',')[1]);
-        } else {
-          reject(new Error('Failed to read PDF'));
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-
-    const uri = `${FileSystem.documentDirectory}${fileName}`;
-    await FileSystem.writeAsStringAsync(uri, base64Data, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    await Sharing.shareAsync(uri, {
-      mimeType: 'application/pdf',
-      dialogTitle: 'Download transaction receipt',
-      UTI: 'com.adobe.pdf',
-    });
-
-    return { success: true, fileName, uri };
-  };
-
-  const handleInstantDownloadReceipt = async (transaction) => {
-    if (!transaction) return;
-    setReceiptLoading(true);
+    setReceiptLoading?.(true);
     try {
-      const transactionId = transaction.id;
-      if (!transactionId) {
-        throw new Error('Transaction ID not found');
-      }
-      const receiptId = `RCP-${String(transactionId).substring(0, 8).toUpperCase()}`;
-      const fileName = getReceiptFileName(receiptId);
-      const result = await downloadReceiptPDF(transactionId, fileName);
-      if (result.success) {
-        Alert.alert('Downloaded', `Receipt saved as ${result.fileName}`, [{ text: 'OK', style: 'default' }], { cancelable: true });
-      } else {
-        throw new Error(result.error || 'Download failed');
-      }
+      await downloadTransactionReceiptPdf(transactionId);
     } catch (error) {
-      Alert.alert('Download Failed', error.message || 'Unable to download receipt. Please try again.', [{ text: 'OK' }]);
+      Alert.alert('Receipt Failed', error.message || 'Unable to generate the receipt.', [{ text: 'OK' }]);
     } finally {
-      setReceiptLoading(false);
+      setReceiptLoading?.(false);
     }
   };
 
-  const handlePrintReceipt = async (transaction) => {
-    if (!transaction) return;
-    setReceiptLoading(true);
-    try {
-      const transactionId = transaction.id;
-      if (!transactionId) {
-        throw new Error('Transaction ID not found');
-      }
-      const receiptId = `RCP-${String(transactionId).substring(0, 8).toUpperCase()}`;
-      const fileName = getReceiptFileName(receiptId);
-      const result = await downloadReceiptPDF(transactionId, fileName);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to download PDF receipt');
-      }
-
-      if (Platform.OS === 'web') {
-        Alert.alert('Print Ready', 'Transaction receipt has been opened for printing.', [{ text: 'OK' }]);
-        return;
-      }
-
-      if (!FileSystem?.documentDirectory) {
-        throw new Error('Print is not available on this device');
-      }
-
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/pdf',
-        dialogTitle: `Print receipt - ${receiptId}`,
-        UTI: 'com.adobe.pdf',
-      });
-
-      Alert.alert('Print Ready', 'Transaction receipt has been opened for printing.', [{ text: 'OK' }]);
-    } catch (error) {
-      Alert.alert('Print Failed', error.message || 'Failed to print receipt.', [{ text: 'OK' }]);
-    } finally {
-      setReceiptLoading(false);
-    }
-  };
-
-  const handleShareReceipt = async (transaction) => {
-    if (!transaction) return;
-    setReceiptLoading(true);
-    try {
-      const transactionId = transaction.id;
-      if (!transactionId) {
-        throw new Error('Transaction ID not found');
-      }
-      const receiptId = `RCP-${String(transactionId).substring(0, 8).toUpperCase()}`;
-      const fileName = getReceiptFileName(receiptId);
-      const result = await downloadReceiptPDF(transactionId, fileName);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to share receipt');
-      }
-      Alert.alert('Receipt Shared', 'Transaction receipt is ready to share.', [{ text: 'OK' }]);
-    } catch (error) {
-      Alert.alert('Share Failed', error.message || 'Failed to share receipt.', [{ text: 'OK' }]);
-    } finally {
-      setReceiptLoading(false);
-    }
-  };
-
-  const handleReceiptAction = (transaction, action) => {
-    switch (action) {
-      case 'download':
-        handleInstantDownloadReceipt(transaction);
-        break;
-      case 'print':
-        handlePrintReceipt(transaction);
-        break;
-      case 'share':
-        handleShareReceipt(transaction);
-        break;
-    }
-  };
-
-  const handleTransactionMenuAction = (transaction, action) => {
+  const handleTransactionMenuAction = (transaction) => {
     setShowTransactionMenu(null);
-    handleReceiptAction(transaction, action);
+    handleReceiptAction(transaction);
   };
 
   const renderTransactionHeader = () => (
@@ -278,6 +121,36 @@ const TransactionHistoryScreen = ({ navigation }) => {
               filterTypes={filterTypes}
               colors={colors}
             />
+            <TouchableOpacity
+              onPress={handleDownloadStatement}
+              disabled={statementLoading}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: spacing.xs,
+                marginHorizontal: spacing.md,
+                marginBottom: spacing.sm,
+                paddingVertical: spacing.sm,
+                borderRadius: borderRadius.md,
+                backgroundColor: colors.primary,
+                opacity: statementLoading ? 0.6 : 1,
+              }}
+            >
+              <Ionicons
+                name={statementLoading ? 'hourglass-outline' : 'document-text-outline'}
+                size={16}
+                color={colors.white}
+              />
+              <Text style={{ color: colors.white, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
+                {statementLoading
+                  ? 'Preparing…'
+                  : filter === 'all'
+                  ? 'Download full statement (PDF)'
+                  : `Download ${filterTypes.find((f) => f.id === filter)?.name || filter} statement (PDF)`}
+              </Text>
+            </TouchableOpacity>
             <FlatList
               data={filteredTransactions}
               refreshControl={
