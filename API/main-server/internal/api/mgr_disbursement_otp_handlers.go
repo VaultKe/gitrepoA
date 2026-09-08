@@ -2,8 +2,11 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -371,6 +374,283 @@ func (h *DisbursementHandlers) ConfirmMerryGoRoundDisbursement(c *gin.Context) {
 			"recipientName":  strings.TrimSpace(recipientName),
 			"roundNumber":    roundNumber,
 			"status":         "processing",
+		},
+	})
+	c.Abort()
+}
+
+// mgrDisbRecord is one round of one merry-go-round in the disbursement ledger.
+type mgrDisbRecord struct {
+	MerryGoRoundID   string  `json:"merryGoRoundId"`
+	MerryGoRoundName string  `json:"merryGoRoundName"`
+	RoundNumber      int     `json:"roundNumber"`
+	RecipientID      string  `json:"recipientId"`
+	RecipientName    string  `json:"recipientName"`
+	ExpectedAmount   float64 `json:"expectedAmount"`
+	Collected        float64 `json:"collected"`
+	// state: disbursed | processing | failed | awaiting_confirmation | ready | collecting | upcoming
+	State             string  `json:"state"`
+	DisbursedAmount   float64 `json:"disbursedAmount,omitempty"`
+	DisbursedAt       string  `json:"disbursedAt,omitempty"`
+	MpesaCode         string  `json:"mpesaCode,omitempty"`
+	TransactionID     string  `json:"transactionId,omitempty"`
+	TransactionStatus string  `json:"transactionStatus,omitempty"`
+	OtpExpiresAt      string  `json:"otpExpiresAt,omitempty"`
+	IsCurrentRound    bool    `json:"isCurrentRound"`
+}
+
+func mgrExtractReceipt(metadata string) string {
+	if metadata == "" {
+		return ""
+	}
+	var m map[string]interface{}
+	if json.Unmarshal([]byte(metadata), &m) != nil {
+		return ""
+	}
+	for _, k := range []string{"mpesa_receipt_number", "b2c_transaction_receipt"} {
+		if v, ok := m[k].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// ListMerryGoRoundDisbursements — GET /chamas/:id/mgr-disbursements
+// A round-by-round ledger across every merry-go-round of the chama: which rounds
+// have been collected and still need disbursing, which are awaiting the
+// chairperson's confirmation, and the records of those already paid out
+// (amount, date, M-Pesa code).
+func (h *DisbursementHandlers) ListMerryGoRoundDisbursements(c *gin.Context) {
+	userID := c.GetString("userID")
+	chamaID := c.Param("id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "User not authenticated"})
+		return
+	}
+	var isMember bool
+	if err := h.db.QueryRow(
+		"SELECT EXISTS(SELECT 1 FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND COALESCE(is_active, true))",
+		chamaID, userID,
+	).Scan(&isMember); err != nil || !isMember {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "You are not a member of this chama"})
+		return
+	}
+
+	mgrRows, err := h.db.Query(`
+		SELECT id, COALESCE(name,''), COALESCE(amount_per_round,0), COALESCE(total_participants,0),
+		       COALESCE(current_round,1), COALESCE(status,'')
+		FROM merry_go_rounds
+		WHERE chama_id = $1
+		ORDER BY created_at DESC
+	`, chamaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to load merry-go-rounds"})
+		return
+	}
+	defer mgrRows.Close()
+
+	type mgrHdr struct {
+		id, name, status         string
+		amountPerRound           float64
+		totalParticipants, round int
+	}
+	var mgrs []mgrHdr
+	for mgrRows.Next() {
+		var m mgrHdr
+		if mgrRows.Scan(&m.id, &m.name, &m.amountPerRound, &m.totalParticipants, &m.round, &m.status) == nil {
+			mgrs = append(mgrs, m)
+		}
+	}
+
+	records := []mgrDisbRecord{}
+	for _, m := range mgrs {
+		// Participants -> one round each (position == round number).
+		pRows, perr := h.db.Query(`
+			SELECT p.position, p.user_id, COALESCE(p.has_received,false), p.received_at,
+			       TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))
+			FROM merry_go_round_participants p
+			JOIN users u ON u.id = p.user_id
+			WHERE p.merry_go_round_id = $1
+			ORDER BY p.position
+		`, m.id)
+		if perr != nil {
+			continue
+		}
+		type part struct {
+			pos        int
+			uid, name  string
+			received   bool
+			receivedAt sql.NullTime
+		}
+		var parts []part
+		for pRows.Next() {
+			var p part
+			if pRows.Scan(&p.pos, &p.uid, &p.received, &p.receivedAt, &p.name) == nil {
+				parts = append(parts, p)
+			}
+		}
+		pRows.Close()
+
+		// Collected per round.
+		collectedByRound := map[int]float64{}
+		if cRows, cerr := h.db.Query(`
+			SELECT round_number, COALESCE(SUM(amount),0)
+			FROM merry_go_round_payments
+			WHERE merry_go_round_id = $1 AND status = 'completed'
+			GROUP BY round_number
+		`, m.id); cerr == nil {
+			for cRows.Next() {
+				var rn int
+				var amt float64
+				if cRows.Scan(&rn, &amt) == nil {
+					collectedByRound[rn] = amt
+				}
+			}
+			cRows.Close()
+		}
+
+		// Payout transactions for this merry-go-round, keyed by round.
+		type txnRec struct {
+			id, status, code string
+			amount           float64
+			at               time.Time
+		}
+		txnByRound := map[int]txnRec{}
+		prefix := "MGRDISB_" + m.id + "_"
+		if tRows, terr := h.db.Query(`
+			SELECT id, COALESCE(amount,0), COALESCE(status,''), COALESCE(metadata::text,''), updated_at
+			FROM transactions
+			WHERE id LIKE $1
+		`, prefix+"%"); terr == nil {
+			for tRows.Next() {
+				var id, st, meta string
+				var amt float64
+				var at time.Time
+				if tRows.Scan(&id, &amt, &st, &meta, &at) != nil {
+					continue
+				}
+				rest := strings.TrimPrefix(id, prefix)
+				bits := strings.SplitN(rest, "_", 2)
+				if len(bits) == 0 {
+					continue
+				}
+				rn, convErr := strconv.Atoi(bits[0])
+				if convErr != nil {
+					continue
+				}
+				txnByRound[rn] = txnRec{id: id, status: st, code: mgrExtractReceipt(meta), amount: amt, at: at}
+			}
+			tRows.Close()
+		}
+
+		// In-flight confirmation codes, keyed by round.
+		otpByRound := map[int]time.Time{}
+		if oRows, oerr := h.db.Query(`
+			SELECT round_number, expires_at
+			FROM mgr_disbursement_otps
+			WHERE merry_go_round_id = $1 AND consumed = FALSE AND expires_at > NOW()
+		`, m.id); oerr == nil {
+			for oRows.Next() {
+				var rn int
+				var exp time.Time
+				if oRows.Scan(&rn, &exp) == nil {
+					otpByRound[rn] = exp
+				}
+			}
+			oRows.Close()
+		}
+
+		for _, p := range parts {
+			rec := mgrDisbRecord{
+				MerryGoRoundID:   m.id,
+				MerryGoRoundName: m.name,
+				RoundNumber:      p.pos,
+				RecipientID:      p.uid,
+				RecipientName:    strings.TrimSpace(p.name),
+				ExpectedAmount:   m.amountPerRound * float64(m.totalParticipants),
+				Collected:        collectedByRound[p.pos],
+				IsCurrentRound:   p.pos == m.round && m.status == "active",
+			}
+
+			if txn, ok := txnByRound[p.pos]; ok {
+				rec.TransactionID = txn.id
+				rec.TransactionStatus = txn.status
+				rec.DisbursedAmount = txn.amount
+				rec.MpesaCode = txn.code
+				if !txn.at.IsZero() {
+					rec.DisbursedAt = txn.at.Format(time.RFC3339)
+				}
+				switch txn.status {
+				case "failed":
+					rec.State = "failed"
+				case "completed":
+					rec.State = "disbursed"
+				default:
+					rec.State = "processing"
+				}
+			} else if p.received {
+				rec.State = "disbursed"
+				if p.receivedAt.Valid {
+					rec.DisbursedAt = p.receivedAt.Time.Format(time.RFC3339)
+				}
+			} else if exp, ok := otpByRound[p.pos]; ok {
+				rec.State = "awaiting_confirmation"
+				rec.OtpExpiresAt = exp.Format(time.RFC3339)
+			} else if m.status != "active" {
+				rec.State = "upcoming"
+			} else if p.pos < m.round || (p.pos == m.round && rec.Collected > 0) {
+				rec.State = "ready"
+			} else if p.pos == m.round {
+				rec.State = "collecting"
+			} else {
+				rec.State = "upcoming"
+			}
+
+			records = append(records, rec)
+		}
+	}
+
+	// Most actionable / most recent first: awaiting_confirmation, ready,
+	// processing, collecting, disbursed (newest), failed, upcoming.
+	statePriority := map[string]int{
+		"awaiting_confirmation": 0, "ready": 1, "processing": 2, "failed": 3,
+		"collecting": 4, "disbursed": 5, "upcoming": 6,
+	}
+	sort.SliceStable(records, func(i, j int) bool {
+		pi, pj := statePriority[records[i].State], statePriority[records[j].State]
+		if pi != pj {
+			return pi < pj
+		}
+		if records[i].State == "disbursed" {
+			return records[i].DisbursedAt > records[j].DisbursedAt
+		}
+		return records[i].RoundNumber < records[j].RoundNumber
+	})
+
+	// Summary counts for the management view.
+	var pendingCount, disbursedCount int
+	var disbursedTotal float64
+	for _, r := range records {
+		switch r.State {
+		case "disbursed", "processing":
+			disbursedCount++
+			if r.DisbursedAmount > 0 {
+				disbursedTotal += r.DisbursedAmount
+			} else {
+				disbursedTotal += r.Collected
+			}
+		case "ready", "awaiting_confirmation":
+			pendingCount++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    records,
+		"summary": gin.H{
+			"pendingDisbursement": pendingCount,
+			"disbursed":           disbursedCount,
+			"disbursedTotal":      disbursedTotal,
 		},
 	})
 	c.Abort()

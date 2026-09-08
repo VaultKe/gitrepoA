@@ -478,6 +478,7 @@ func SetupRoutes(
 				// what has actually been collected for the round), chairperson
 				// confirms with an e-mailed code, and the B2C payout to the
 				// recipient's M-Pesa fires immediately on confirmation.
+				disbursements.GET("/mgr-disbursements", disbursementHandlers.ListMerryGoRoundDisbursements)
 				disbursements.POST("/mgr-disbursements/:cycleId/initiate", disbursementHandlers.InitiateMerryGoRoundDisbursement)
 				disbursements.POST("/mgr-disbursements/:cycleId/confirm", disbursementHandlers.ConfirmMerryGoRoundDisbursement)
 			}
