@@ -42,6 +42,7 @@ import ChamaTransactionsScreen from '../screens/chama/transactions/ChamaTransact
 import ChamaMembersScreen from '../screens/chama/chamamember/ChamaMembersScreen';
 import ViewMember from '../screens/chama/chamamember/ViewMember';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
+import CreatePollScreen from '../screens/chama/pollsandvoting/CreatePollScreen';
 import ApplyForLoanScreen from '../screens/chama/loans/ApplyForLoanScreen';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
@@ -263,6 +264,14 @@ function UserTabNavigator() {
         component={PollsVotingScreen}
         options={{
           title: 'Polls & Voting',
+          tabBarButton: () => null, // Hide from tab bar
+        }}
+      />
+      <Tab.Screen
+        name="CreatePoll"
+        component={CreatePollScreen}
+        options={{
+          title: 'Create Poll',
           tabBarButton: () => null, // Hide from tab bar
         }}
       />

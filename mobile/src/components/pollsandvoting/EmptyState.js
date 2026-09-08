@@ -11,7 +11,14 @@ const EmptyState = ({
   loadError,
   activeTab,
   onRetry,
+  lastSyncedAt,
+  totalPollCount = 0,
+  activeCount = 0,
+  completedCount = 0,
 }) => {
+  const syncedText = lastSyncedAt
+    ? `Synced ${new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : null;
   if (loading) {
     return (
       <View style={[
@@ -73,32 +80,52 @@ const EmptyState = ({
     );
   }
 
+  // Loaded successfully, but this tab has nothing. Show enough context that the
+  // user can trust it's genuinely empty and not a silent failure.
+  const otherCount = activeTab === 'active' ? completedCount : activeCount;
+  const otherLabel = activeTab === 'active' ? 'completed' : 'active';
+
   return (
     <View style={[
       styles.emptyContainer,
       isDesktop && styles.emptyContainerDesktop
     ]}>
       <Ionicons
-        name="checkmark-circle-outline"
+        name={activeTab === 'active' ? 'megaphone-outline' : 'checkmark-done-outline'}
         size={isDesktop ? 80 : 64}
         color={colors.textSecondary}
       />
       <Text style={[
         styles.emptyText,
-        { color: colors.textSecondary },
+        { color: colors.text, fontWeight: '600' },
         isDesktop && styles.emptyTextDesktop
       ]}>
-        No {activeTab} polls found
+        {activeTab === 'active' ? 'No active polls' : 'No completed polls'}
       </Text>
       <Text style={[
         styles.emptyText,
-        { fontSize: 14, marginTop: 8 },
-        isDesktop && styles.emptyTextDesktop
+        { fontSize: 14, marginTop: 6, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 24 },
       ]}>
-        {activeTab === 'active'
-          ? 'Active polls will appear here'
-          : 'Completed polls will appear here'}
+        {totalPollCount === 0
+          ? 'This chama has not created any polls yet.'
+          : `This chama has ${totalPollCount} poll${totalPollCount === 1 ? '' : 's'}${
+              otherCount > 0 ? ` — ${otherCount} ${otherLabel}.` : `, none ${otherLabel}.`
+            }`}
       </Text>
+      {syncedText ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+          <Text style={{ fontSize: 12, color: colors.textSecondary }}>{syncedText}</Text>
+        </View>
+      ) : null}
+      {onRetry ? (
+        <TouchableOpacity
+          style={[styles.retryButton, { backgroundColor: colors.primary + '15', marginTop: 16 }]}
+          onPress={onRetry}
+        >
+          <Text style={[styles.retryButtonText, { color: colors.primary, fontSize: 14 }]}>Refresh</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 };

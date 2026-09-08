@@ -22,6 +22,7 @@ import CreateMeeting from '../screens/chama/meeting/CreateMeeting';
 import CreateMerryGoRound from '../screens/chama/merry-go-round/CreateMerryGoRound';
 import InviteMembers from '../screens/chama/meeting/InviteMembers';
 import PollsVotingScreen from '../screens/chama/pollsandvoting/PollsVotingScreen';
+import CreatePollScreen from '../screens/chama/pollsandvoting/CreatePollScreen';
 import AccountManagementScreen from '../screens/chama/accountmanagement/AccountManagementScreen';
 import SubscriptionManagementScreen from '../screens/chama/accountmanagement/SubscriptionManagementScreen';
 import LoanManagementScreen from '../screens/chama/loans/LoanManagementScreen';
@@ -121,6 +122,7 @@ const ChamaHomeStack = ({ route }) => {
     { name: 'CreateMerryGoRound', component: CreateMerryGoRound, title: 'Create Merry-Go-Round' },
     { name: 'InviteMembers', component: InviteMembers, title: 'Invite Members' },
     { name: 'PollsVotingScreen', component: PollsVotingScreen, title: 'Polls & Voting' },
+    { name: 'CreatePoll', component: CreatePollScreen, title: 'Create Poll' },
     // Account management
     { name: 'AccountManagementScreen', component: AccountManagementScreen, title: 'Account Management' },
     { name: 'SubscriptionManagement', component: SubscriptionManagementScreen, title: 'Subscriptions' },

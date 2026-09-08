@@ -31,6 +31,8 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
   const [userRole, setUserRole] = useState('member');
   const [chamaMembers, setChamaMembers] = useState([]);
   const [loadError, setLoadError] = useState(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [totalPollCount, setTotalPollCount] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -132,12 +134,14 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
       });
 
       const activeItems = sorted.filter((item) => item.status === 'active');
-      const completedItems = sorted.filter((item) => item.status === 'completed');
+      const completedItems = sorted.filter((item) => item.status !== 'active');
 
       setPolls(activeItems);
       setVotes(activeItems);
       setCompletedPolls(completedItems);
       setAllPolls(sorted);
+      setTotalPollCount(sorted.length);
+      setLastSyncedAt(Date.now());
       setLoadError(null);
     } catch (error) {
       setLoadError(error?.message || 'Failed to load polls and votes');
@@ -496,6 +500,8 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
     filteredMembers,
     memberSearchQuery,
     loadError,
+    lastSyncedAt,
+    totalPollCount,
     retryCount,
     showSuccessBanner,
     successMessage,

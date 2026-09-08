@@ -24,8 +24,6 @@ import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import usePollsVotingScreen from '../../../hooks/usePollsVotingScreen';
 import PollItem from '../../../components/pollsandvoting/PollItem';
 import PollVisualizations from '../../../components/pollsandvoting/PollVisualizations';
-import CreatePollModal from '../../../components/pollsandvoting/CreatePollModal';
-import RoleEscalationModal from '../../../components/pollsandvoting/RoleEscalationModal';
 import VisualizationModal from '../../../components/pollsandvoting/VisualizationModal';
 import EmptyState from '../../../components/pollsandvoting/EmptyState';
 import SuccessBanner from '../../../components/pollsandvoting/SuccessBanner';
@@ -38,8 +36,6 @@ const PollsVotingScreen = ({ route, navigation }) => {
   const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const [isDesktop, setIsDesktop] = useState(Dimensions.get('window').width >= 768);
   const [numColumns, setNumColumns] = useState(Dimensions.get('window').width >= 768 ? 2 : 1);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showRoleModal, setShowRoleModal] = useState(false);
   const [floatingButtonPosition, setFloatingButtonPosition] = useState({ x: Dimensions.get('window').width - 80, y: Dimensions.get('window').height - 160 });
 
   const panResponder = useRef(
@@ -91,6 +87,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
     polls,
     votes,
     allPolls,
+    completedPolls,
     chamaDetails,
     currentPage,
     setCurrentPage,
@@ -100,6 +97,8 @@ const PollsVotingScreen = ({ route, navigation }) => {
     filteredMembers,
     memberSearchQuery,
     loadError,
+    lastSyncedAt,
+    totalPollCount,
     retryCount,
     showSuccessBanner,
     successMessage,
@@ -133,25 +132,19 @@ const PollsVotingScreen = ({ route, navigation }) => {
     getTotalEligibleVoters,
     getVotePercentage,
     isPollFullyVoted,
-  } = usePollsVotingScreen({ 
-    route, 
-    navigation,
-    onCreateSuccess: () => setShowCreateModal(false)
-  });
+  } = usePollsVotingScreen({ route, navigation });
 
   const openCreateModal = () => {
-    setShowCreateModal(true);
+    navigation.navigate('CreatePoll', { chamaId });
   };
 
-  const closeCreateModal = () => {
-    setShowCreateModal(false);
-  };
-
-  const handleRoleEscalationSubmit = async () => {
-    // Reuse handleCreatePoll for role escalation
-    await handleCreatePoll();
-    setShowRoleModal(false);
-  };
+  // Refresh the list when returning from the Create Poll page.
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      if (chamaId) onRefresh();
+    });
+    return unsub;
+  }, [navigation, chamaId, onRefresh]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -178,7 +171,7 @@ const PollsVotingScreen = ({ route, navigation }) => {
       {/* Content */}
       <View style={{ flex: 1, position: 'relative' }}>
         <FlatList
-          data={allPolls}
+          data={activeTab === 'completed' ? completedPolls : polls}
           renderItem={({ item, index }) => (
             <PollItem
               item={item}
@@ -222,6 +215,10 @@ const PollsVotingScreen = ({ route, navigation }) => {
               loadError={loadError}
               activeTab={activeTab}
               onRetry={handleRetry}
+              lastSyncedAt={lastSyncedAt}
+              totalPollCount={totalPollCount}
+              activeCount={polls.length}
+              completedCount={completedPolls.length}
             />
           }
         />
@@ -231,47 +228,6 @@ const PollsVotingScreen = ({ route, navigation }) => {
           <PageRefreshButton onRefresh={onRefresh} refreshing={refreshing} color={colors.primary} bottom={64} absolute={false} />
         </View>
       </View>
-
-      {/* Create Poll Modal */}
-      <CreatePollModal
-        colors={colors}
-        isDesktop={isDesktop}
-        visible={showCreateModal}
-        onClose={closeCreateModal}
-        pollForm={pollForm}
-        setPollForm={setPollForm}
-        roleForm={roleForm}
-        chamaMembers={chamaMembers}
-        filteredMembers={filteredMembers}
-        memberSearchQuery={memberSearchQuery}
-        userRole={userRole}
-        onMemberSearch={handleMemberSearch}
-        onSelectCandidate={handleSelectCandidate}
-        onAddOption={addPollOption}
-        onRemoveOption={removePollOption}
-        onUpdateOption={updatePollOption}
-        onSubmit={handleCreatePoll}
-        getMemberName={getMemberName}
-        getMemberEmail={getMemberEmail}
-      />
-
-      {/* Role Escalation Modal */}
-      <RoleEscalationModal
-        colors={colors}
-        visible={showRoleModal}
-        onClose={() => setShowRoleModal(false)}
-        roleForm={roleForm}
-        setRoleForm={setRoleForm}
-        chamaMembers={chamaMembers}
-        filteredMembers={filteredMembers}
-        memberSearchQuery={memberSearchQuery}
-        userRole={userRole}
-        onMemberSearch={handleMemberSearch}
-        onSelectCandidate={handleSelectCandidate}
-        onSubmit={handleRoleEscalationSubmit}
-        getMemberName={getMemberName}
-        getMemberEmail={getMemberEmail}
-      />
 
       {/* Visualization Modal */}
       <VisualizationModal
