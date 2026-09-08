@@ -18,16 +18,18 @@ const useTransactionHistoryScreen = ({ navigation }) => {
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const fetchRef = useRef(false);
 
-  // Whole wallet statement as a table-based PDF from the backend (same style as
-  // the loan report). `filter` maps to the API's `type` query param.
-  const handleDownloadStatement = useCallback(async () => {
+  // Wallet statement as a table-based PDF from the backend (same style as the
+  // loan report). Pass a `type` ('all' | deposit | withdrawal | transfer) to
+  // scope it; defaults to the active filter.
+  const handleDownloadStatement = useCallback(async (type) => {
     if (statementLoading) return;
+    const t = type || filter || 'all';
     setStatementLoading(true);
     try {
-      const typeParam = filter && filter !== 'all' ? `?type=${encodeURIComponent(filter)}` : '';
+      const typeParam = t && t !== 'all' ? `?type=${encodeURIComponent(t)}` : '';
       await downloadBackendPdf({
         path: `/wallets/transactions/report${typeParam}`,
-        fileName: `VaultKe_Wallet_Statement_${new Date().toISOString().split('T')[0]}.pdf`,
+        fileName: `VaultKe_Wallet_Statement_${t}_${new Date().toISOString().split('T')[0]}.pdf`,
         dialogTitle: 'Wallet statement',
       });
     } catch (error) {

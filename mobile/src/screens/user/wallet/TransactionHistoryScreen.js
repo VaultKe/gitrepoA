@@ -43,6 +43,8 @@ const TransactionHistoryScreen = ({ navigation }) => {
     handleDownloadStatement,
     showTransactionMenu,
     setShowTransactionMenu,
+    showHeaderMenu,
+    setShowHeaderMenu,
     filterTypes,
     filteredTransactions,
     formatDate,
@@ -115,42 +117,27 @@ const TransactionHistoryScreen = ({ navigation }) => {
                 </Text>
               </View>
             )}
-            <TransactionFilterBar
-              filter={filter}
-              setFilter={setFilter}
-              filterTypes={filterTypes}
-              colors={colors}
-            />
-            <TouchableOpacity
-              onPress={handleDownloadStatement}
-              disabled={statementLoading}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: spacing.xs,
-                marginHorizontal: spacing.md,
-                marginBottom: spacing.sm,
-                paddingVertical: spacing.sm,
-                borderRadius: borderRadius.md,
-                backgroundColor: colors.primary,
-                opacity: statementLoading ? 0.6 : 1,
-              }}
-            >
-              <Ionicons
-                name={statementLoading ? 'hourglass-outline' : 'document-text-outline'}
-                size={16}
-                color={colors.white}
-              />
-              <Text style={{ color: colors.white, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
-                {statementLoading
-                  ? 'Preparing…'
-                  : filter === 'all'
-                  ? 'Download full statement (PDF)'
-                  : `Download ${filterTypes.find((f) => f.id === filter)?.name || filter} statement (PDF)`}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xs, paddingTop: spacing.xs }}>
+              <View style={{ flex: 1 }}>
+                <TransactionFilterBar
+                  filter={filter}
+                  setFilter={setFilter}
+                  filterTypes={filterTypes}
+                  colors={colors}
+                />
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowHeaderMenu((v) => !v)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ padding: spacing.xs, marginRight: spacing.xs }}
+              >
+                <Ionicons
+                  name={statementLoading ? 'hourglass-outline' : 'ellipsis-vertical'}
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
             <FlatList
               data={filteredTransactions}
               refreshControl={
@@ -190,6 +177,54 @@ const TransactionHistoryScreen = ({ navigation }) => {
             bottom={64}
           />
         </View>
+
+        {showHeaderMenu && (
+          <>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => setShowHeaderMenu(false)}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 20 }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                top: 44,
+                right: spacing.sm,
+                zIndex: 21,
+                minWidth: 220,
+                backgroundColor: colors.surface,
+                borderRadius: borderRadius.md,
+                borderWidth: 1,
+                borderColor: colors.border,
+                paddingVertical: spacing.xs,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 12,
+                elevation: 8,
+              }}
+            >
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}
+                onPress={() => { setShowHeaderMenu(false); handleDownloadStatement('all'); }}
+              >
+                <Ionicons name="document-text-outline" size={16} color={colors.text} />
+                <Text style={{ color: colors.text, fontSize: typography.fontSize.sm }}>Download full statement (PDF)</Text>
+              </TouchableOpacity>
+              {filter !== 'all' && (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}
+                  onPress={() => { setShowHeaderMenu(false); handleDownloadStatement(filter); }}
+                >
+                  <Ionicons name="filter-outline" size={16} color={colors.text} />
+                  <Text style={{ color: colors.text, fontSize: typography.fontSize.sm }}>
+                    {`Download ${filterTypes.find((f) => f.id === filter)?.name || filter} only`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
+        )}
 
         <ReceiptActionModal
           visible={!!showTransactionMenu}
