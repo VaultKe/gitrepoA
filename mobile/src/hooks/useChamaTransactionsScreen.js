@@ -22,6 +22,7 @@ import {
   getMemberEmail,
 } from '../utils/transactionsHelpers';
 import useChamaTransactionReceipts from './useChamaTransactionReceipts';
+import { downloadBackendPdf } from '../services/pdfDownload';
 
 const useChamaTransactionsScreen = ({ navigation, route }) => {
   const { theme, user } = useApp();
@@ -70,12 +71,15 @@ const useChamaTransactionsScreen = ({ navigation, route }) => {
     escapeReportHTML,
   } = useChamaTransactionReceipts({
     selectedChama,
+    chamaId,
     chamaMembers,
     transactions,
     allRecords,
     exportLoading,
     setExportLoading,
     setShowExportModal,
+    canViewGroup,
+    viewMode,
   });
 
   const isPrivateTransaction = useCallback((item) => {
@@ -371,11 +375,24 @@ const useChamaTransactionsScreen = ({ navigation, route }) => {
         return false;
       }
 
-      if (format !== 'pdf' && format !== 'excel' && format !== 'word') {
-        throw new Error('Unsupported format');
+      if (format !== 'pdf') {
+        Alert.alert('PDF statement', 'Transaction statements are generated as a PDF.', [{ text: 'OK' }]);
+        return false;
       }
 
-      throw new Error('Report export is not available yet');
+      // Backend renders the statement as a table-based PDF (same style as the
+      // loan report). Map the local scope names to the API's.
+      const backendScope = scope === 'all' ? 'group' : scope === 'member' ? 'member' : 'personal';
+      let path = `/chamas/${chamaId}/transactions/report?scope=${backendScope}`;
+      if (backendScope === 'member' && memberId) {
+        path += `&memberId=${encodeURIComponent(memberId)}`;
+      }
+      await downloadBackendPdf({
+        path,
+        fileName: `VaultKe_Transactions_${backendScope}_${new Date().toISOString().split('T')[0]}.pdf`,
+        dialogTitle: 'Transactions statement',
+      });
+      return true;
     } catch (error) {
       console.error('Download error:', error);
       Alert.alert(

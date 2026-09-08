@@ -6,13 +6,14 @@ import * as FileSystem from 'expo-file-system';
 import { getMemberNameFromTransaction } from '../services/receiptService/memberName';
 import { generatePDFOptimizedReceiptHTML } from '../services/receiptService/html/template';
 import { COMPANY_INFO } from '../services/receiptService/config';
+import { downloadBackendPdf, downloadTransactionReceiptPdf } from '../services/pdfDownload';
 import {
   formatDate,
   getTransactionUserName,
   getReportValue,
 } from '../utils/transactionsHelpers';
 
-const useChamaTransactionReceipts = ({ selectedChama, chamaMembers, transactions, allRecords, exportLoading, setExportLoading, setShowExportModal }) => {
+const useChamaTransactionReceipts = ({ selectedChama, chamaId, chamaMembers, transactions, allRecords, exportLoading, setExportLoading, setShowExportModal, canViewGroup, viewMode }) => {
   const getReceiptId = useCallback((transaction) => {
     return `RCP-${String(transaction?.id || transaction?.transaction_id || transaction?.reference || Date.now()).substring(0, 8).toUpperCase()}`;
   }, []);
@@ -362,98 +363,66 @@ const useChamaTransactionReceipts = ({ selectedChama, chamaMembers, transactions
     return (transactions.length > 0 ? transactions : allRecords).filter(Boolean);
   }, [transactions, allRecords]);
 
-  const handleBulkPrintReceipts = useCallback(async () => {
-    const receiptTransactions = getBulkReceiptTransactions();
+  // The statement itself is rendered server-side as a table-based PDF (same
+  // style as the loan report). "Print" and "Share" both fetch that PDF and hand
+  // it to the OS print / share sheet.
+  const downloadStatementPdf = useCallback(async (dialogTitle) => {
+    const scope = canViewGroup && viewMode === 'group' ? 'group' : 'personal';
+    return downloadBackendPdf({
+      path: `/chamas/${chamaId}/transactions/report?scope=${scope}`,
+      fileName: `VaultKe_Transactions_${scope}_${new Date().toISOString().split('T')[0]}.pdf`,
+      dialogTitle,
+    });
+  }, [chamaId, canViewGroup, viewMode]);
 
-    if (receiptTransactions.length === 0) {
-      Alert.alert('No Data', 'No transaction reports found to print.', [{ text: 'OK' }]);
+  const handleBulkPrintReceipts = useCallback(async () => {
+    if (getBulkReceiptTransactions().length === 0) {
+      Alert.alert('No Data', 'No transactions found to include in the statement.', [{ text: 'OK' }]);
       return;
     }
-
     setExportLoading(true);
     try {
-      const html = buildCombinedReceiptsHTML(receiptTransactions);
-      const result = await printReceiptHTML(
-        html,
-        `Transaction Reports - ${selectedChama?.name || 'Chama'}`,
-        'BULK'
-      );
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to print receipts');
-      }
-
-      Alert.alert(
-        'Reports Ready',
-        `${receiptTransactions.length} transaction report(s) opened for printing.`,
-        [{ text: 'OK' }]
-      );
+      await downloadStatementPdf('Transactions statement');
     } catch (error) {
-      console.error('Bulk print error:', error);
-      Alert.alert('Print Failed', error.message || 'Failed to print transaction reports.', [{ text: 'OK' }]);
+      console.error('Bulk statement error:', error);
+      Alert.alert('Failed', error.message || 'Failed to generate the transactions statement.', [{ text: 'OK' }]);
     } finally {
       setExportLoading(false);
     }
-  }, [getBulkReceiptTransactions, buildCombinedReceiptsHTML, printReceiptHTML, selectedChama]);
+  }, [getBulkReceiptTransactions, downloadStatementPdf, setExportLoading]);
 
   const handleBulkShareReceipts = useCallback(async () => {
-    const receiptTransactions = getBulkReceiptTransactions();
-
-    if (receiptTransactions.length === 0) {
-      Alert.alert('No Data', 'No transaction reports found to share.', [{ text: 'OK' }]);
+    if (getBulkReceiptTransactions().length === 0) {
+      Alert.alert('No Data', 'No transactions found to include in the statement.', [{ text: 'OK' }]);
       return;
     }
-
     setExportLoading(true);
     try {
-      const html = buildCombinedReceiptsHTML(receiptTransactions);
-      const fileName = `VaultKe_Transaction_Reports_${new Date().toISOString().split('T')[0]}.html`;
-      const result = await shareReceiptHTML(html, fileName);
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to share receipts');
-      }
-
-      Alert.alert('Reports Shared', 'Transaction reports are ready to share.', [{ text: 'OK' }]);
+      await downloadStatementPdf('Share transactions statement');
     } catch (error) {
       console.error('Bulk share error:', error);
-      Alert.alert('Share Failed', error.message || 'Failed to share transaction reports.', [{ text: 'OK' }]);
+      Alert.alert('Failed', error.message || 'Failed to generate the transactions statement.', [{ text: 'OK' }]);
     } finally {
       setExportLoading(false);
     }
-  }, [getBulkReceiptTransactions, buildCombinedReceiptsHTML, shareReceiptHTML]);
+  }, [getBulkReceiptTransactions, downloadStatementPdf, setExportLoading]);
 
   const handleIndividualReceipt = useCallback(async (transaction) => {
+    const txnId = transaction?.id || transaction?.transaction_id || transaction?.transactionId;
+    if (!txnId) {
+      Alert.alert('Receipt unavailable', 'This record has no transaction reference yet.', [{ text: 'OK' }]);
+      return;
+    }
     try {
       setExportLoading(true);
-      const receiptId = getReceiptId(transaction);
-      const html = buildReceiptHTML(transaction);
-      const result = await printReceiptHTML(
-        html,
-        `Transaction Receipt - ${receiptId}`,
-        receiptId
-      );
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to generate receipt');
-      }
-
-      Alert.alert(
-        'Receipt Generated',
-        'Transaction receipt has been opened successfully.',
-        [{ text: 'OK' }]
-      );
+      await downloadTransactionReceiptPdf(txnId);
     } catch (error) {
       console.error('Individual receipt error:', error);
-      Alert.alert(
-        'Receipt Failed',
-        error.message || 'Failed to generate transaction receipt. Please try again.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Receipt Failed', error.message || 'Failed to generate the transaction receipt.', [{ text: 'OK' }]);
     } finally {
       setExportLoading(false);
     }
-  }, [getReceiptId, buildReceiptHTML, printReceiptHTML]);
+  }, [setExportLoading]);
 
   return {
     handleIndividualReceipt,

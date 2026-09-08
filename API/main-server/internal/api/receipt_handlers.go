@@ -12,7 +12,6 @@ import (
 	"vaultke-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jung-kurt/gofpdf"
 )
 
 // truncateString safely truncates a string to the specified length
@@ -182,7 +181,7 @@ func (h *ReceiptHandlers) DownloadTransactionReceipt(c *gin.Context) {
 		receiptID,
 		time.Now().Format("2006-01-02"),
 		format)
-	
+
 	// Set CORS headers explicitly
 	origin := c.GetHeader("Origin")
 	if origin != "" {
@@ -305,7 +304,7 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 	}
 
 	// Log transaction info for debugging
-	log.Printf("DEBUG: Transaction found id=%s status=%s type=%s initiatedBy=%s metadataChamaID=%v", 
+	log.Printf("DEBUG: Transaction found id=%s status=%s type=%s initiatedBy=%s metadataChamaID=%v",
 		transaction.ID, transaction.Status, transaction.Type, transaction.InitiatedBy, transaction.Metadata["chama_id"])
 
 	return &transaction, nil
@@ -637,115 +636,89 @@ func (h *ReceiptHandlers) generateReceiptHTML(receiptData *ReceiptData) string {
 	return html
 }
 
-// generateReceiptPDF creates a PDF receipt from receipt data
+// generateReceiptPDF creates a PDF receipt from receipt data, using the same
+// table-based visual language as the loan report (header band, section rules,
+// key/value grid, zebra line-items table, standard footer).
 func (h *ReceiptHandlers) generateReceiptPDF(receiptData *ReceiptData) []byte {
-	pdf := gofpdf.New(gofpdf.OrientationPortrait, "mm", "A4", "")
-	pdf.AddPage()
-	
-	// Use core fonts that are always available
-	pdf.SetFont("Helvetica", "B", 16)
-	pdf.Cell(0, 10, receiptData.CompanyInfo.Name)
-	pdf.Ln(12)
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.Cell(0, 6, receiptData.CompanyInfo.Address)
+	t := receiptData.Transaction
+	org := receiptData.CompanyInfo.Name
+	if strings.TrimSpace(org) == "" {
+		org = loanReportAppName
+	}
+
+	pdf, genAt := newStatementPDF(org, "Transaction Receipt", shortRef(receiptData.ReceiptID))
+
+	pdf.SetFont("Helvetica", "B", 13)
+	pdf.CellFormat(120, 8, "Receipt "+shortRef(receiptData.ReceiptID), "", 0, "L", false, 0, "")
+	statusChip(pdf, strings.ToUpper(orDash(string(t.Status))))
+	pdf.Ln(11)
+
+	description := ""
+	if t.Description != nil {
+		description = *t.Description
+	}
+	reference := ""
+	if t.Reference != nil {
+		reference = *t.Reference
+	}
+	mpesaCode := ""
+	phone := ""
+	if t.Metadata != nil {
+		if v, ok := t.Metadata["mpesa_receipt_number"].(string); ok {
+			mpesaCode = v
+		}
+		if v, ok := t.Metadata["b2c_transaction_receipt"].(string); ok && mpesaCode == "" {
+			mpesaCode = v
+		}
+		if v, ok := t.Metadata["mpesa_phone_number"].(string); ok {
+			phone = v
+		}
+	}
+	payer := ""
+	if receiptData.UserInfo != nil {
+		if v, ok := receiptData.UserInfo["name"].(string); ok {
+			payer = v
+		}
+	}
+
+	sectionTitle(pdf, "Details")
+	kvGrid(pdf, [][2]string{
+		{"Transaction ID", orDash(t.ID)},
+		{"Type", title(string(t.Type))},
+		{"Date", t.CreatedAt.Format("2 Jan 2006, 15:04")},
+		{"Status", title(string(t.Status))},
+		{"Payment method", title(orDash(string(t.PaymentMethod)))},
+		{"Reference", orDash(reference)},
+		{"Account holder", orDash(payer)},
+		{"M-Pesa code", orDash(mpesaCode)},
+		{"Phone", orDash(phone)},
+		{"", ""},
+	})
+	if strings.TrimSpace(description) != "" {
+		pdf.Ln(1)
+		pdf.SetFont("Helvetica", "B", 7.5)
+		pdf.SetTextColor(107, 114, 128)
+		pdf.CellFormat(0, 4.5, "DESCRIPTION", "", 1, "L", false, 0, "")
+		pdf.SetFont("Helvetica", "", 9.5)
+		pdf.SetTextColor(17, 24, 39)
+		pdf.MultiCell(0, 5, sanitize(description), "", "L", false)
+	}
+	pdf.Ln(3)
+
+	sectionTitle(pdf, "Amount")
+	w := []float64{120, 58}
+	tableHeader(pdf, []string{"Item", "Amount"}, w)
+	tableRow(pdf, []string{"Transaction amount", money(t.Amount)}, w, false)
+	tableRow(pdf, []string{"Fees", money(t.Fees)}, w, true)
+	tableRow(pdf, []string{"Total", money(t.Amount + t.Fees)}, w, false)
+
 	pdf.Ln(6)
-	pdf.Cell(0, 6, fmt.Sprintf("Phone: %s | Email: %s", receiptData.CompanyInfo.Phone, receiptData.CompanyInfo.Email))
-	pdf.Ln(10)
-
-	pdf.SetFont("Helvetica", "B", 14)
-	pdf.Cell(0, 10, "Transaction Receipt")
-	pdf.Ln(12)
-
-	pdf.SetFont("Helvetica", "B", 10)
-	pdf.Cell(50, 8, "Receipt ID:")
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.Cell(0, 8, receiptData.ReceiptID)
-	pdf.Ln(8)
-
-	pdf.SetFont("Helvetica", "B", 10)
-	pdf.Cell(50, 8, "Transaction ID:")
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.Cell(0, 8, receiptData.Transaction.ID)
-	pdf.Ln(8)
-
-	pdf.SetFont("Helvetica", "B", 10)
-	pdf.Cell(50, 8, "Date:")
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.Cell(0, 8, receiptData.Transaction.CreatedAt.Format("January 2, 2006 at 3:04:05 PM"))
-	pdf.Ln(8)
-
-	pdf.SetFont("Helvetica", "B", 10)
-	pdf.Cell(50, 8, "Status:")
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.Cell(0, 8, strings.ToUpper(string(receiptData.Transaction.Status)))
-	pdf.Ln(12)
-
-	pdf.SetFont("Helvetica", "B", 10)
-	pdf.Cell(0, 8, "Transaction Details")
-	pdf.Ln(8)
-
-	description := "N/A"
-	if receiptData.Transaction.Description != nil && *receiptData.Transaction.Description != "" {
-		description = *receiptData.Transaction.Description
-	}
-
-	details := [][]string{
-		{"Type", strings.ToUpper(string(receiptData.Transaction.Type))},
-		{"Description", description},
-		{"Amount", fmt.Sprintf("%.2f KES", receiptData.Transaction.Amount)},
-		{"Fees", fmt.Sprintf("%.2f KES", receiptData.Transaction.Fees)},
-		{"Total", fmt.Sprintf("%.2f KES", receiptData.Transaction.Amount+receiptData.Transaction.Fees)},
-	}
-
-	for _, row := range details {
-		pdf.SetFont("Helvetica", "B", 10)
-		pdf.Cell(50, 8, row[0])
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.Cell(0, 8, row[1])
-		pdf.Ln(8)
-	}
-
-	if receiptData.Transaction.Reference != nil && *receiptData.Transaction.Reference != "" {
-		pdf.Ln(4)
-		pdf.SetFont("Helvetica", "B", 10)
-		pdf.Cell(50, 8, "Reference:")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.Cell(0, 8, *receiptData.Transaction.Reference)
-		pdf.Ln(8)
-	}
-
-	if receiptData.Transaction.PaymentMethod != "" {
-		pdf.Ln(4)
-		pdf.SetFont("Helvetica", "B", 10)
-		pdf.Cell(50, 8, "Payment Method:")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.Cell(0, 8, string(receiptData.Transaction.PaymentMethod))
-		pdf.Ln(8)
-	}
-
-	if mpesaReceipt, ok := receiptData.Transaction.Metadata["mpesa_receipt_number"].(string); ok && mpesaReceipt != "" {
-		pdf.Ln(4)
-		pdf.SetFont("Helvetica", "B", 10)
-		pdf.Cell(50, 8, "M-Pesa Code:")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.Cell(0, 8, mpesaReceipt)
-		pdf.Ln(8)
-	}
-
-	if phone, ok := receiptData.Transaction.Metadata["mpesa_phone_number"].(string); ok && phone != "" {
-		pdf.Ln(4)
-		pdf.SetFont("Helvetica", "B", 10)
-		pdf.Cell(50, 8, "Phone:")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.Cell(0, 8, phone)
-		pdf.Ln(8)
-	}
-
-	pdf.Ln(12)
-	pdf.SetFont("Helvetica", "", 8)
-	pdf.Cell(0, 6, fmt.Sprintf("Generated: %s", receiptData.GeneratedAt.Format("January 2, 2006 at 3:04:05 PM")))
-	pdf.Ln(6)
-	pdf.Cell(0, 6, "This is a computer-generated receipt and does not require a signature.")
+	pdf.SetFont("Helvetica", "I", 7.5)
+	pdf.SetTextColor(107, 114, 128)
+	pdf.MultiCell(0, 4,
+		fmt.Sprintf("Generated %s. This is a computer-generated receipt and does not require a signature. \"%s\" and the %s wordmark are the property of the %s platform.",
+			genAt.Format("2 Jan 2006 15:04 MST"), loanReportAppName, loanReportAppName, loanReportAppName),
+		"", "L", false)
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
