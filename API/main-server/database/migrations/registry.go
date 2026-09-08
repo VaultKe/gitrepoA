@@ -54,6 +54,9 @@ func MigrateAll(db *sql.DB) error {
 	if err := MigrateMerryGoRoundPayments(db); err != nil {
 		return fmt.Errorf("merry_go_round_payments: %w", err)
 	}
+	if err := MigrateMerryGoRoundDisbursementOTPs(db); err != nil {
+		return fmt.Errorf("mgr_disbursement_otps: %w", err)
+	}
 	if err := MigrateStatisticsIndexes(db); err != nil {
 		return fmt.Errorf("statistics_indexes: %w", err)
 	}

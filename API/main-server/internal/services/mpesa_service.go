@@ -984,6 +984,9 @@ func (s *MpesaService) HandleB2CCallback(callbackData map[string]interface{}) er
 	}
 	if b2cReceipt != "" {
 		metadata["b2c_transaction_receipt"] = b2cReceipt
+		// Surface it under the same key STK callbacks use so clients and receipts
+		// pick up the Safaricom code without knowing which rail paid.
+		metadata["mpesa_receipt_number"] = b2cReceipt
 	}
 	if b2cResultType != "" {
 		metadata["b2c_result_type"] = b2cResultType

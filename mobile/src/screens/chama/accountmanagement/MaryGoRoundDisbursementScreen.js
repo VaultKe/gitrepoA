@@ -44,6 +44,7 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     selectedCycle,
     showBulkDisburseModal,
     disburseForm,
+    initiating,
     bulkDisburseData,
     showOTPModal,
     otpLoading,
@@ -369,47 +370,26 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
               {selectedCycle && (
                 <View>
                   <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-                    Cycle {selectedCycle.cycleNumber} - {selectedCycle.recipientName} - {formatCurrency(selectedCycle.amount)}
+                    Recipient: {selectedCycle.recipientName || selectedCycle.recipient?.name || 'Current recipient'} · Round {selectedCycle.current_position || selectedCycle.currentRound || selectedCycle.cycleNumber || 1}
                   </Text>
 
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: colors.text }]}>
-                      Disbursement Amount (KES) *
+                  <View style={[styles.formGroup, { backgroundColor: colors.primary + '10', borderRadius: borderRadius.md, padding: spacing.md }]}>
+                    <Text style={{ color: colors.text, fontSize: typography.fontSize.sm, lineHeight: 20 }}>
+                      The recipient is paid the amount actually collected for this round so far, drawn from the chama's merry-go-round wallet. VaultKe calculates it — you do not enter it here.
+                      {'\n\n'}
+                      When you continue, a one-time confirmation code is e-mailed to the chairperson. The payout is sent to the recipient's M-Pesa the moment the chairperson confirms.
                     </Text>
-                    <TextInput
-                      style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                      value={disburseForm.amount}
-                      onChangeText={(text) => setDisburseForm(prev => ({ ...prev, amount: text }))}
-                      placeholder="Enter disbursement amount"
-                      placeholderTextColor={colors.textSecondary}
-                      keyboardType="numeric"
-                    />
                   </View>
 
                   <View style={styles.formGroup}>
                     <Text style={[styles.formLabel, { color: colors.text }]}>
-                      Description *
+                      Note (optional)
                     </Text>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                       value={disburseForm.description}
                       onChangeText={(text) => setDisburseForm(prev => ({ ...prev, description: text }))}
-                      placeholder="Enter disbursement description"
-                      placeholderTextColor={colors.textSecondary}
-                      multiline
-                      numberOfLines={2}
-                    />
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: colors.text }]}>
-                      Private Note (Audit Trail)
-                    </Text>
-                    <TextInput
-                      style={[styles.formInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                      value={disburseForm.privateNote}
-                      onChangeText={(text) => setDisburseForm(prev => ({ ...prev, privateNote: text }))}
-                      placeholder="Optional note for audit purposes"
+                      placeholder="Add a note for the records"
                       placeholderTextColor={colors.textSecondary}
                       multiline
                       numberOfLines={2}
@@ -423,10 +403,10 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
                       style={{ backgroundColor: colors.textSecondary, marginRight: spacing.sm }}
                     />
                     <Button
-                      title="Disburse"
+                      title={initiating ? 'Sending…' : 'Send for approval'}
                       onPress={submitDisbursement}
                       style={{ backgroundColor: colors.primary }}
-                      disabled={!disburseForm.amount || !disburseForm.description}
+                      disabled={initiating}
                     />
                   </View>
                 </View>
@@ -526,8 +506,8 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
           setSelectedApprovalItem(null);
           setApprovalActionType(null);
         }}
-        title={approvalActionType === 'approve' ? 'Approve Disbursement' : 'Verify Disbursement'}
-        subtitle={`Enter the OTP sent to your phone to ${approvalActionType} this merry go round disbursement.`}
+        title="Confirm Disbursement"
+        subtitle="Enter the confirmation code e-mailed to you as chairperson. On confirmation the payout is sent to the recipient's M-Pesa immediately."
         onVerify={handleVerifyOTP}
         onResend={handleResendOTP}
         loading={otpLoading}

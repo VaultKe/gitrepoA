@@ -3,8 +3,11 @@ import { Alert } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useChamaContext } from '../context/ChamaContext';
 import ApiService from '../services/api';
-import { sendApprovalNotification, showInAppToast } from '../services/disbursementNotificationService';
-import { approveWelfareDisbursement, getChamaDisbursementApprovals } from '../services/api/welfareEndpoints';
+import { showInAppToast } from '../services/disbursementNotificationService';
+import {
+  initiateMerryGoRoundDisbursement,
+  confirmMerryGoRoundDisbursement,
+} from '../services/api/chamaEndpoints';
 import { getThemeColors, spacing, typography, borderRadius, shadows } from '../utils/theme';
 
 const createTableStyles = (colors, spacing, typography, shadows) => ({
@@ -196,10 +199,9 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
   const [selectedCycle, setSelectedCycle] = useState(null);
   const [showBulkDisburseModal, setShowBulkDisburseModal] = useState(false);
   const [disburseForm, setDisburseForm] = useState({
-    amount: '',
     description: '',
-    privateNote: '',
   });
+  const [initiating, setInitiating] = useState(false);
   const [bulkDisburseData, setBulkDisburseData] = useState({
     selectedCycles: [],
     description: '',
@@ -509,21 +511,19 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     }
   };
 
+  // Treasurer opens the "initiate" modal. The amount is decided by the server
+  // (whatever has been collected for the round so far) — it is not entered here.
   const handleDisburse = (cycle) => {
     if (userRole === 'left') {
       Alert.alert('Access Denied', 'You are no longer a member of this chama and cannot disburse merry-go-round funds.');
       return;
     }
     if (!canDisburseMaryGoRound()) {
-      Alert.alert('Access Denied', 'You do not have permission to disburse merry go round funds.');
+      Alert.alert('Access Denied', 'Only the treasurer can initiate a merry-go-round disbursement.');
       return;
     }
     setSelectedCycle(cycle);
-    setDisburseForm({
-      amount: cycle.amount?.toString() || cycle.totalAmount?.toString() || '',
-      description: `Merry Go Round disbursement - ${cycle.name || `Cycle ${cycle.cycleNumber || cycle.currentRound || 1}`}} to ${cycle.recipientName || cycle.recipient?.name || 'recipient'}`,
-      privateNote: '',
-    });
+    setDisburseForm({ description: '' });
     setShowDisburseModal(true);
   };
 
@@ -550,35 +550,35 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     setShowBulkDisburseModal(true);
   };
 
+  // Step 1 — treasurer initiates. The server computes the amount collected for
+  // the round and e-mails a confirmation code to the chairperson.
   const submitDisbursement = async () => {
-    if (!selectedCycle) return;
-
+    if (!selectedCycle || initiating) return;
+    setInitiating(true);
     try {
-      const disbursementData = {
-        cycleId: selectedCycle.id,
-        recipientId: selectedCycle.recipientId || selectedCycle.recipient?.id,
-        recipientName: selectedCycle.recipientName || selectedCycle.recipient?.name || 'Unknown',
-        cycleNumber: selectedCycle.cycleNumber || selectedCycle.currentRound || 1,
-        amount: parseFloat(disburseForm.amount),
-        description: disburseForm.description,
-        privateNote: disburseForm.privateNote,
-        disbursedBy: userRole,
-        disbursedById: user.id,
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await ApiService.disburseMerryGoRoundCycle(currentChamaId, selectedCycle.id, disbursementData);
+      const response = await initiateMerryGoRoundDisbursement(currentChamaId, selectedCycle.id, {
+        recipientId: selectedCycle.recipientId || selectedCycle.recipient?.id || '',
+        description: disburseForm.description || '',
+      });
 
       if (response.success) {
-        Alert.alert('Success', 'Merry go round disbursement processed successfully - funds sent to recipient MPesa.');
+        const d = response.data || {};
         setShowDisburseModal(false);
+        Alert.alert(
+          'Sent for approval',
+          `KES ${Number(d.amount || 0).toLocaleString()} (collected for round ${d.roundNumber ?? ''}) is ready for ${d.recipientName || 'the recipient'}.\n\n` +
+          `A confirmation code has been e-mailed to the chairperson${d.approver?.email ? ` (${d.approver.email})` : ''}. ` +
+          `The payout is sent to the recipient's M-Pesa as soon as the chairperson confirms.`
+        );
         await loadMaryGoRoundCycles();
       } else {
-        Alert.alert('Error', response.error || 'Failed to process disbursement.');
+        Alert.alert('Cannot initiate', response.error || 'Failed to initiate disbursement.');
       }
     } catch (error) {
-      console.error('Disbursement error:', error);
-      Alert.alert('Error', 'Failed to process disbursement. Please try again.');
+      console.error('MGR initiate error:', error);
+      Alert.alert('Error', 'Failed to initiate disbursement. Please try again.');
+    } finally {
+      setInitiating(false);
     }
   };
 
@@ -613,14 +613,16 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     }
   };
 
+  // Only the treasurer initiates a payout.
   const canDisburseMaryGoRound = () => {
     if (userRole === 'left') return false;
-    return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
+    return userRole.toLowerCase() === 'treasurer';
   };
 
+  // Only the chairperson confirms (with the e-mailed code).
   const canApproveMaryGoRound = () => {
     if (userRole === 'left') return false;
-    return ['treasurer', 'secretary', 'chairperson'].includes(userRole.toLowerCase());
+    return userRole.toLowerCase() === 'chairperson';
   };
 
   const handleInitiateApprove = (cycle) => {
@@ -629,7 +631,7 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
       return;
     }
     if (!canApproveMaryGoRound()) {
-      Alert.alert('Access Denied', 'You do not have permission to approve merry go round disbursements.');
+      Alert.alert('Access Denied', 'Only the chairperson can confirm merry-go-round disbursements.');
       return;
     }
     if (cycle.status?.toLowerCase() === 'disbursed' || cycle.status?.toLowerCase() === 'completed') {
@@ -641,81 +643,46 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     setShowOTPModal(true);
   };
 
+  // Step 2 — chairperson confirms with the code from their e-mail. On success
+  // the B2C payout to the recipient's M-Pesa fires immediately.
   const handleVerifyOTP = async (code) => {
     if (!selectedApprovalItem) return;
     setOtpLoading(true);
     try {
-      const approvalData = {
-        action: approvalActionType,
-        otpCode: code,
-        approvedBy: userRole,
-        approvedById: user.id,
-        approvedByName: user?.fullName || user?.firstName || user?.email || 'Unknown',
-        timestamp: new Date().toISOString(),
-        chamaId: currentChamaId,
-        disbursementType: 'merry-go-round',
-        itemLabel: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || `Cycle #${selectedApprovalItem.id}`,
-        amount: selectedApprovalItem.amount_per_round || selectedApprovalItem.amountPerRound || selectedApprovalItem.amount || selectedApprovalItem.totalAmount || 0,
-      };
-
-      const response = await approveWelfareDisbursement(currentChamaId, selectedApprovalItem.id, approvalData);
+      const response = await confirmMerryGoRoundDisbursement(
+        currentChamaId,
+        selectedApprovalItem.id,
+        (code || '').trim(),
+      );
 
       if (response.success) {
-        showInAppToast({
-          title: 'Success',
-          message: `Merry go round ${approvalActionType}d successfully.`,
-          type: 'success',
-        });
-
-        await sendApprovalNotification({
-          chamaId: currentChamaId,
-          recipientUserId: selectedApprovalItem.recipientId || selectedApprovalItem.recipient?.id || selectedApprovalItem.id,
-          recipientName: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || 'Recipient',
-          recipientPhone: selectedApprovalItem.recipientPhone,
-          recipientEmail: selectedApprovalItem.recipientEmail,
-          disbursementType: 'merry-go-round',
-          disbursementId: selectedApprovalItem.id,
-          entityLabel: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || `Cycle #${selectedApprovalItem.id}`,
-          amount: selectedApprovalItem.amount_per_round || selectedApprovalItem.amountPerRound || selectedApprovalItem.amount || selectedApprovalItem.totalAmount || 0,
-          action: approvalActionType,
-          initiatedBy: userRole,
-          chamaName: '',
-        });
-
+        const d = response.data || {};
         setShowOTPModal(false);
         setSelectedApprovalItem(null);
         setApprovalActionType(null);
+        Alert.alert(
+          'Disbursement confirmed',
+          `KES ${Number(d.amount || 0).toLocaleString()} is being sent to ${d.recipientName || 'the recipient'}'s M-Pesa now. ` +
+          `The M-Pesa transaction code will be recorded against this payout once Safaricom confirms it.`
+        );
         await loadMaryGoRoundCycles();
       } else {
-        Alert.alert('Error', response.error || 'Failed to process approval.');
+        Alert.alert('Could not confirm', response.error || 'Failed to confirm the disbursement.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+      Alert.alert('Error', 'Failed to confirm the disbursement. Please try again.');
     } finally {
       setOtpLoading(false);
     }
   };
 
+  // There is no resend: the code is issued by the treasurer's "initiate" step.
+  // If it expired, the treasurer must initiate the payout again.
   const handleResendOTP = async () => {
-    if (!selectedApprovalItem) return;
     try {
-      await sendApprovalNotification({
-        chamaId: currentChamaId,
-        recipientUserId: user.id,
-        recipientName: user?.fullName || user?.firstName || 'You',
-        recipientPhone: user?.phone || user?.phone_number,
-        recipientEmail: user?.email,
-        disbursementType: 'merry-go-round',
-        disbursementId: selectedApprovalItem.id,
-        entityLabel: selectedApprovalItem.recipientName || selectedApprovalItem.recipient?.name || `Cycle #${selectedApprovalItem.id}`,
-        amount: selectedApprovalItem.amount_per_round || selectedApprovalItem.amountPerRound || selectedApprovalItem.amount || selectedApprovalItem.totalAmount || 0,
-        action: 'otp_resend',
-        initiatedBy: userRole,
-        chamaName: '',
-      });
       showInAppToast({
-        title: 'OTP Resent',
-        message: 'A new OTP has been sent to your phone.',
+        title: 'Ask the treasurer',
+        message: 'The confirmation code is issued when the treasurer initiates the payout. If it expired, ask the treasurer to initiate it again.',
         type: 'info',
       });
     } catch (error) {
@@ -744,6 +711,7 @@ const useMaryGoRoundDisbursementScreen = ({ route, navigation }) => {
     selectedCycle,
     showBulkDisburseModal,
     disburseForm,
+    initiating,
     bulkDisburseData,
     showOTPModal,
     otpLoading,

@@ -46,18 +46,27 @@ func makeCashContribution(c *gin.Context, db *sql.DB, tx *sql.Tx, req *MakeContr
 		return
 	}
 
-	// Get or create chama wallet
-	recipientWalletID := fmt.Sprintf("wallet-%s", req.ChamaID)
-	recipientWallet, err := walletService.GetWalletByID(recipientWalletID)
-	if err != nil {
-		recipientWallet, err = walletService.CreateWallet(req.ChamaID, models.WalletTypeChama)
+	// Get or create the destination chama wallet. Merry-go-round contributions
+	// go to the chama's independent merry-go-round sub-wallet, which is the only
+	// source its payouts are drawn from.
+	var recipientWalletID string
+	var recipientWallet *models.Wallet
+	if req.Type == "merry-go-round" {
+		recipientWalletID = ensureChamaMerryGoRoundWallet(db, req.ChamaID)
+		recipientWallet, err = walletService.GetWalletByID(recipientWalletID)
+	} else {
+		recipientWalletID = fmt.Sprintf("wallet-%s", req.ChamaID)
+		recipientWallet, err = walletService.GetWalletByID(recipientWalletID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   "Failed to ensure chama wallet exists",
-			})
-			return
+			recipientWallet, err = walletService.CreateWallet(req.ChamaID, models.WalletTypeChama)
 		}
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to ensure chama wallet exists",
+		})
+		return
 	}
 
 	if !recipientWallet.IsAvailable() {

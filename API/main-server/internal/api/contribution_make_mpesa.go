@@ -18,17 +18,24 @@ import (
 // makeMpesaContribution initiates an M-Pesa STK push for a contribution. The
 // transaction stays "pending" until the callback confirms it.
 func makeMpesaContribution(c *gin.Context, db *sql.DB, req *MakeContributionRequest, userID, merryGoRoundID string, currentRound int, currentRecipientID string) {
-	targetWalletID := fmt.Sprintf("wallet-%s", req.ChamaID)
-	if _, err := db.Exec(`
-		INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
-		VALUES ($1, $2, 'chama', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		ON CONFLICT (id) DO NOTHING
-	`, targetWalletID, req.ChamaID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to ensure chama wallet exists",
-		})
-		return
+	// Merry-go-round contributions are kept in the chama's independent
+	// merry-go-round sub-wallet, which is also the only source for its payouts.
+	var targetWalletID string
+	if req.Type == "merry-go-round" {
+		targetWalletID = ensureChamaMerryGoRoundWallet(db, req.ChamaID)
+	} else {
+		targetWalletID = fmt.Sprintf("wallet-%s", req.ChamaID)
+		if _, err := db.Exec(`
+			INSERT INTO wallets (id, owner_id, type, balance, created_at, updated_at)
+			VALUES ($1, $2, 'chama', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			ON CONFLICT (id) DO NOTHING
+		`, targetWalletID, req.ChamaID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to ensure chama wallet exists",
+			})
+			return
+		}
 	}
 
 	userPhone := userID
@@ -116,5 +123,5 @@ func makeMpesaContribution(c *gin.Context, db *sql.DB, req *MakeContributionRequ
 			"status":            "pending",
 		},
 	})
-		c.Abort()
+	c.Abort()
 }

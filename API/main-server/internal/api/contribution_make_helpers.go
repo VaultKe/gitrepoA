@@ -29,6 +29,25 @@ type execer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
+// chamaMerryGoRoundWalletID is a chama's dedicated merry-go-round sub-wallet.
+// Merry-go-round money is kept here, independent of the main chama wallet, and
+// merry-go-round payouts are drawn only from it.
+func chamaMerryGoRoundWalletID(chamaID string) string {
+	return fmt.Sprintf("wallet-%s-merry_go_round", chamaID)
+}
+
+// ensureChamaMerryGoRoundWallet creates the merry-go-round sub-wallet row if it
+// is missing and returns its id.
+func ensureChamaMerryGoRoundWallet(ex execer, chamaID string) string {
+	id := chamaMerryGoRoundWalletID(chamaID)
+	_, _ = ex.Exec(`
+		INSERT INTO wallets (id, type, owner_id, subwallet_type, chama_id, balance, currency, is_active, is_locked, created_at, updated_at)
+		VALUES ($1, 'chama', $2, 'merry_go_round', $2, 0, 'KES', true, false, NOW(), NOW())
+		ON CONFLICT (id) DO NOTHING
+	`, id, chamaID)
+	return id
+}
+
 // resolveMerryGoRound validates a merry-go-round contribution: it confirms an
 // active round exists, the amount matches, the recipient is resolvable, and the
 // contributor has not already paid this round. When abort is true the response

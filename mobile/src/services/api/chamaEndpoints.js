@@ -258,6 +258,26 @@ const disburseMerryGoRoundCyclesBulk = async (chamaId, data) => {
   });
 };
 
+// Two-signature merry-go-round payout.
+// Step 1: the treasurer initiates. The server computes the amount actually
+// collected for the current round and e-mails a confirmation code to the
+// chairperson.
+const initiateMerryGoRoundDisbursement = async (chamaId, cycleId, data = {}) => {
+  return await makeRequest(`/chamas/${chamaId}/mgr-disbursements/${cycleId}/initiate`, {
+    method: 'POST',
+    body: data,
+  });
+};
+
+// Step 2: the chairperson confirms with the e-mailed code. On success the B2C
+// payout to the recipient's M-Pesa fires immediately.
+const confirmMerryGoRoundDisbursement = async (chamaId, cycleId, otp) => {
+  return await makeRequest(`/chamas/${chamaId}/mgr-disbursements/${cycleId}/confirm`, {
+    method: 'POST',
+    body: { otp },
+  });
+};
+
 export {
   getChamas,
   getAllChamasForAdmin,
@@ -303,4 +323,6 @@ export {
   payMemberServiceFee,
   disburseMerryGoRoundCycle,
   disburseMerryGoRoundCyclesBulk,
+  initiateMerryGoRoundDisbursement,
+  confirmMerryGoRoundDisbursement,
 };

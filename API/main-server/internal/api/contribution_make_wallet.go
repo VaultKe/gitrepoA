@@ -60,6 +60,18 @@ func makeWalletContribution(c *gin.Context, db *sql.DB, tx *sql.Tx, req *MakeCon
 			})
 			return
 		}
+	} else if req.Type == "merry-go-round" {
+		// Merry-go-round money lives in its own sub-wallet, independent of the
+		// main chama wallet; its payouts are drawn only from here.
+		recipientWalletID = ensureChamaMerryGoRoundWallet(db, req.ChamaID)
+		recipientWallet, err = walletService.GetWalletByID(recipientWalletID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to ensure merry-go-round subwallet exists",
+			})
+			return
+		}
 	} else {
 		recipientWalletID = fmt.Sprintf("wallet-%s", req.ChamaID)
 		recipientWallet, err = walletService.GetWalletByID(recipientWalletID)

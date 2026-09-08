@@ -473,6 +473,13 @@ func SetupRoutes(
 				disbursements.POST("/disbursements/:batchId/process", disbursementHandlers.ProcessDisbursementBatch)
 				disbursements.POST("/disbursements/:batchId/approve", disbursementHandlers.ApproveDisbursementBatch)
 				disbursements.GET("/transparency", disbursementHandlers.GetTransparencyLog)
+
+				// Two-signature merry-go-round payout: treasurer initiates (amount =
+				// what has actually been collected for the round), chairperson
+				// confirms with an e-mailed code, and the B2C payout to the
+				// recipient's M-Pesa fires immediately on confirmation.
+				disbursements.POST("/mgr-disbursements/:cycleId/initiate", disbursementHandlers.InitiateMerryGoRoundDisbursement)
+				disbursements.POST("/mgr-disbursements/:cycleId/confirm", disbursementHandlers.ConfirmMerryGoRoundDisbursement)
 			}
 
 			reports := protected.Group("/chamas/:id")

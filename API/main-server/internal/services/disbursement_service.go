@@ -482,6 +482,116 @@ func (s *DisbursementService) DisburseMerryGoRound(merryGoRoundID, recipientUser
 	return nil
 }
 
+// DisburseMerryGoRoundAmount fires an immediate B2C payout of an explicit amount
+// to a merry-go-round recipient's M-Pesa. Unlike DisburseMerryGoRound it does not
+// assume the full amount_per_round — the caller passes the amount that has
+// actually been collected for the round at the moment of disbursement.
+//
+// Funds are drawn ONLY from the chama's independent merry-go-round sub-wallet
+// (wallet-<chamaID>-merry_go_round), which is where merry-go-round contributions
+// are credited. The sub-wallet is debited by the B2C callback (HandleB2CCallback)
+// once Safaricom confirms, at which point the M-Pesa transaction code is recorded
+// on the transaction metadata.
+//
+// The returned transactionID is deterministic for (mgr, round, recipient) so a
+// duplicate or concurrent confirm cannot pay the same recipient twice.
+func (s *DisbursementService) DisburseMerryGoRoundAmount(merryGoRoundID, recipientUserID string, roundNumber int, amount float64, description, initiatedBy string) (transactionID string, conversationID string, err error) {
+	if amount <= 0 {
+		return "", "", fmt.Errorf("disbursement amount must be greater than zero")
+	}
+
+	mgr, err := s.getMerryGoRoundByID(merryGoRoundID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get merry-go-round: %w", err)
+	}
+
+	var recipientPhone string
+	if err = s.db.QueryRow("SELECT phone FROM users WHERE id = $1", recipientUserID).Scan(&recipientPhone); err != nil {
+		return "", "", fmt.Errorf("failed to get recipient phone: %w", err)
+	}
+
+	sourceWalletID := fmt.Sprintf("wallet-%s-merry_go_round", mgr.ChamaID)
+	var sourceBalance float64
+	if err = s.db.QueryRow("SELECT COALESCE(balance, 0) FROM wallets WHERE id = $1", sourceWalletID).Scan(&sourceBalance); err != nil {
+		return "", "", fmt.Errorf("failed to read merry-go-round wallet balance: %w", err)
+	}
+	if amount > sourceBalance+0.0001 {
+		return "", "", fmt.Errorf("the merry-go-round wallet holds KES %.2f, cannot disburse KES %.2f", sourceBalance, amount)
+	}
+
+	transactionID = fmt.Sprintf("MGRDISB_%s_%d_%s", merryGoRoundID, roundNumber, recipientUserID)
+	var exists bool
+	if err = s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM transactions WHERE id = $1)", transactionID).Scan(&exists); err != nil {
+		return "", "", fmt.Errorf("failed to check for existing payout: %w", err)
+	}
+	if exists {
+		return "", "", fmt.Errorf("this recipient has already been paid for round %d", roundNumber)
+	}
+
+	if description == "" {
+		description = "Merry-go-round payout"
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	reference := fmt.Sprintf("MGR-%s-%d-%s", merryGoRoundID, roundNumber, recipientUserID)
+
+	_, err = tx.Exec(`
+		INSERT INTO transactions (
+			id, from_wallet_id, chama_id, recipient_id, member_id, type, status, amount,
+			currency, description, reference, payment_method, initiated_by, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $4, 'mgr_disbursement', 'pending', $5, 'KES', $6, $7, 'mpesa', $8, $9, $9)
+	`, transactionID, sourceWalletID, mgr.ChamaID, recipientUserID, amount, description, reference, initiatedBy, now)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	// Mark the participant paid inside the same transaction, refusing anyone who
+	// is not a pending participant of this round (when the round tracks them).
+	var participantRows int
+	_ = tx.QueryRow("SELECT COUNT(*) FROM merry_go_round_participants WHERE merry_go_round_id = $1", merryGoRoundID).Scan(&participantRows)
+	if participantRows > 0 {
+		res, uerr := tx.Exec(`
+			UPDATE merry_go_round_participants
+			SET has_received = true, received_at = $1
+			WHERE merry_go_round_id = $2 AND user_id = $3 AND COALESCE(has_received, false) = false
+		`, now, merryGoRoundID, recipientUserID)
+		if uerr != nil {
+			return "", "", fmt.Errorf("failed to reserve payout: %w", uerr)
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return "", "", fmt.Errorf("recipient is not a pending participant in this round, or has already received their payout")
+		}
+	}
+
+	b2cResp, berr := s.mpesaService.InitiateB2C(recipientPhone, amount, description)
+	if berr != nil {
+		return "", "", fmt.Errorf("failed to initiate B2C payment: %w", berr)
+	}
+	conversationID = b2cResp.ConversationID
+
+	_, err = tx.Exec(
+		"UPDATE transactions SET status = 'processing', metadata = $1, updated_at = $2 WHERE id = $3",
+		fmt.Sprintf(`{"conversation_id": "%s", "originator_conversation_id": "%s", "b2c_phone_number": "%s"}`, b2cResp.ConversationID, b2cResp.OriginatorConversationID, recipientPhone),
+		now, transactionID,
+	)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to update transaction: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return "", "", fmt.Errorf("failed to commit MGR disbursement transaction: %w", err)
+	}
+
+	log.Printf("MGR payout initiated: mgr=%s round=%d recipient=%s amount=%.2f conv=%s", merryGoRoundID, roundNumber, recipientUserID, amount, conversationID)
+	return transactionID, conversationID, nil
+}
+
 func (s *DisbursementService) DisburseWelfare(welfareFundID, beneficiaryUserID string, amount float64) error {
 	wf, err := s.getWelfareFundByID(welfareFundID)
 	if err != nil {
