@@ -126,21 +126,29 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
             >
               <Ionicons name="eye" size={14} color={colors.info} />
             </TouchableOpacity>
-            {canApproveMaryGoRound() && (item.status?.toLowerCase() === 'pending' || item.status?.toLowerCase().includes('ready')) && (
+            {/* Chairperson: confirm a payout the treasurer has initiated */}
+            {canApproveMaryGoRound() && item.pendingDisbursement && (
               <TouchableOpacity
                 style={[tableStyles.actionButton, { backgroundColor: colors.primary + '20' }]}
                 onPress={() => handleInitiateApprove(item)}
               >
-                <Ionicons name="checkmark-done" size={14} color={colors.primary} />
+                <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
               </TouchableOpacity>
             )}
-            {canDisburseMaryGoRound() && item.status?.toLowerCase().includes('ready') && (
+            {/* Treasurer: initiate a payout (only when none is already pending) */}
+            {canDisburseMaryGoRound() && !item.pendingDisbursement && item.status?.toLowerCase().includes('ready') && (
               <TouchableOpacity
                 style={[tableStyles.actionButton, { backgroundColor: colors.success + '20' }]}
                 onPress={() => handleDisburse(item)}
               >
                 <Ionicons name="cash" size={14} color={colors.success} />
               </TouchableOpacity>
+            )}
+            {/* Treasurer: a payout is already awaiting the chairperson */}
+            {canDisburseMaryGoRound() && item.pendingDisbursement && (
+              <View style={[tableStyles.actionButton, { backgroundColor: colors.warning + '20' }]}>
+                <Ionicons name="hourglass" size={14} color={colors.warning} />
+              </View>
             )}
           </View>
         </View>
@@ -507,7 +515,11 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
           setApprovalActionType(null);
         }}
         title="Confirm Disbursement"
-        subtitle="Enter the confirmation code e-mailed to you as chairperson. On confirmation the payout is sent to the recipient's M-Pesa immediately."
+        subtitle={
+          selectedApprovalItem?.pendingDisbursement
+            ? `Enter the code e-mailed to you to send KES ${Number(selectedApprovalItem.pendingDisbursement.amount || 0).toLocaleString()} to ${selectedApprovalItem.pendingDisbursement.recipientName || 'the recipient'}'s M-Pesa now.`
+            : "Enter the confirmation code e-mailed to you as chairperson. On confirmation the payout is sent to the recipient's M-Pesa immediately."
+        }
         onVerify={handleVerifyOTP}
         onResend={handleResendOTP}
         loading={otpLoading}

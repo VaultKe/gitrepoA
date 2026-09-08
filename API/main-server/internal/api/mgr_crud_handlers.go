@@ -210,13 +210,13 @@ func GetMerryGoRounds(c *gin.Context) {
 					}
 
 					participant := map[string]interface{}{
-					"id":                         fmt.Sprintf("%s-%d", mgr.ID, p.Position), // Unique participant ID
-					"user_id":                    p.UserID,
-					"position":                   p.Position,
-					"status":                     status,
-					"has_received":               p.HasReceived,
-					"is_active":                  p.IsActive,
-					"user": map[string]interface{}{
+						"id":           fmt.Sprintf("%s-%d", mgr.ID, p.Position), // Unique participant ID
+						"user_id":      p.UserID,
+						"position":     p.Position,
+						"status":       status,
+						"has_received": p.HasReceived,
+						"is_active":    p.IsActive,
+						"user": map[string]interface{}{
 							"id":         p.UserID,
 							"first_name": p.FirstName,
 							"last_name":  p.LastName,
@@ -236,32 +236,61 @@ func GetMerryGoRounds(c *gin.Context) {
 		// Calculate total payout (amount per round * number of participants)
 		totalPayout := mgr.AmountPerRound * float64(len(participants))
 
+		// Surface an in-flight two-signature payout: the treasurer has initiated
+		// a disbursement for the current round and it is awaiting the
+		// chairperson's confirmation code.
+		var pendingDisbursement map[string]interface{}
+		{
+			var pdID, pdRecipient, pdRecipientName string
+			var pdAmount float64
+			var pdExpires time.Time
+			perr := db.(*sql.DB).QueryRow(`
+				SELECT id, recipient_id, COALESCE(recipient_name,''), amount, expires_at
+				FROM mgr_disbursement_otps
+				WHERE merry_go_round_id = $1 AND round_number = $2
+				  AND consumed = FALSE AND expires_at > NOW()
+				ORDER BY created_at DESC
+				LIMIT 1
+			`, mgr.ID, mgr.CurrentRound).Scan(&pdID, &pdRecipient, &pdRecipientName, &pdAmount, &pdExpires)
+			if perr == nil {
+				pendingDisbursement = map[string]interface{}{
+					"otpId":         pdID,
+					"recipientId":   pdRecipient,
+					"recipientName": pdRecipientName,
+					"amount":        pdAmount,
+					"roundNumber":   mgr.CurrentRound,
+					"expiresAt":     pdExpires.Format(time.RFC3339),
+				}
+			}
+		}
+
 		mgrMap := map[string]interface{}{
-			"id":                 mgr.ID,
-			"chamaId":            mgr.ChamaID,
-			"name":               mgr.Name,
-			"description":        mgr.Description,
-			"amountPerRound":     mgr.AmountPerRound,
-			"amount_per_round":   mgr.AmountPerRound, // Alternative field name
-			"frequency":          mgr.Frequency,
-			"totalParticipants":  mgr.TotalParticipants,
-			"total_participants": len(participants), // Use actual participant count
-			"currentRound":       mgr.CurrentRound,
-			"current_round":      mgr.CurrentRound,     // Alternative field name
-			"current_position":   mgr.CurrentRound - 1, // Zero-based position
-			"status":             mgr.Status,
-			"startDate":          mgr.StartDate.Format("2006-01-02"),
-			"start_date":         mgr.StartDate.Format("2006-01-02"), // Alternative field name
-			"nextPayoutDate":     nextPayoutDateStr,
-			"next_payout_date":   nextPayoutDateStr, // Alternative field name
-			"createdBy":          mgr.CreatedBy,
-			"created_by":         mgr.CreatedBy, // Alternative field name
-			"createdAt":          mgr.CreatedAt.Format(time.RFC3339),
-			"created_at":         mgr.CreatedAt.Format(time.RFC3339), // Alternative field name
-			"total_payout":       totalPayout,
-			"members":            participants,
-			"participants":       participants, // Alternative field name
-			"roundComplete":      roundComplete,
+			"id":                  mgr.ID,
+			"chamaId":             mgr.ChamaID,
+			"name":                mgr.Name,
+			"description":         mgr.Description,
+			"amountPerRound":      mgr.AmountPerRound,
+			"amount_per_round":    mgr.AmountPerRound, // Alternative field name
+			"frequency":           mgr.Frequency,
+			"totalParticipants":   mgr.TotalParticipants,
+			"total_participants":  len(participants), // Use actual participant count
+			"currentRound":        mgr.CurrentRound,
+			"current_round":       mgr.CurrentRound,     // Alternative field name
+			"current_position":    mgr.CurrentRound - 1, // Zero-based position
+			"status":              mgr.Status,
+			"startDate":           mgr.StartDate.Format("2006-01-02"),
+			"start_date":          mgr.StartDate.Format("2006-01-02"), // Alternative field name
+			"nextPayoutDate":      nextPayoutDateStr,
+			"next_payout_date":    nextPayoutDateStr, // Alternative field name
+			"createdBy":           mgr.CreatedBy,
+			"created_by":          mgr.CreatedBy, // Alternative field name
+			"createdAt":           mgr.CreatedAt.Format(time.RFC3339),
+			"created_at":          mgr.CreatedAt.Format(time.RFC3339), // Alternative field name
+			"total_payout":        totalPayout,
+			"members":             participants,
+			"participants":        participants, // Alternative field name
+			"roundComplete":       roundComplete,
+			"pendingDisbursement": pendingDisbursement,
 			"creator": map[string]interface{}{
 				"id":        mgr.CreatedBy,
 				"firstName": mgr.CreatorFirstName,
@@ -283,7 +312,7 @@ func GetMerryGoRounds(c *gin.Context) {
 			"chamaId": chamaID,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // GetMerryGoRound returns a single merry-go-round by ID with its participants
@@ -413,14 +442,14 @@ func GetMerryGoRound(c *gin.Context) {
 
 			err := participantRows.Scan(&p.UserID, &p.Position, &p.HasReceived, &p.IsActive, &p.FirstName, &p.LastName, &p.Email)
 			if err == nil {
-			participant := map[string]interface{}{
-				"id":                         fmt.Sprintf("%s-%d", mgr.ID, p.Position),
-				"user_id":                    p.UserID,
-				"position":                   p.Position,
-				"status":                     "pending",
-				"has_received":               p.HasReceived,
-				"is_active":                  p.IsActive,
-				"has_contributed_this_cycle": false,
+				participant := map[string]interface{}{
+					"id":                         fmt.Sprintf("%s-%d", mgr.ID, p.Position),
+					"user_id":                    p.UserID,
+					"position":                   p.Position,
+					"status":                     "pending",
+					"has_received":               p.HasReceived,
+					"is_active":                  p.IsActive,
+					"has_contributed_this_cycle": false,
 					"user": map[string]interface{}{
 						"id":         p.UserID,
 						"first_name": p.FirstName,
@@ -485,7 +514,7 @@ func GetMerryGoRound(c *gin.Context) {
 		"data":    mgrMap,
 		"message": "Merry-go-round found",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // GetMerryGoRoundPayments returns payments for a specific merry-go-round
@@ -682,7 +711,7 @@ func GetMerryGoRoundPayments(c *gin.Context) {
 		"count":   len(payments),
 		"message": fmt.Sprintf("Found %d payments", len(payments)),
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func CreateMerryGoRound(c *gin.Context) {
@@ -690,7 +719,7 @@ func CreateMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Create merry-go-round endpoint - coming soon",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func UpdateMerryGoRound(c *gin.Context) {
@@ -698,7 +727,7 @@ func UpdateMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Update merry-go-round endpoint - coming soon",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 func DeleteMerryGoRound(c *gin.Context) {
@@ -706,5 +735,5 @@ func DeleteMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Delete merry-go-round endpoint - coming soon",
 	})
-		c.Abort()
+	c.Abort()
 }
