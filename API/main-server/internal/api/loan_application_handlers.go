@@ -459,6 +459,21 @@ func CreateLoanApplication(c *gin.Context) {
 	}
 	sqlDB := db.(*sql.DB)
 
+	// Funding gate: the chama must have enough LOANABLE funds
+	// (combined wallet balance − welfare − merry-go-round − already-approved
+	// undisbursed loans) to cover this request before it enters the approval
+	// workflow. Re-checked again just before disbursement.
+	if lf, lerr := chamaLoanableFunds(sqlDB, req.ChamaID, ""); lerr == nil {
+		if req.Amount > lf.Loanable+0.0001 {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"success":  false,
+				"error":    fmt.Sprintf("The chama currently has KES %.2f available for loans. This request (KES %.2f) exceeds that.", lf.Loanable, req.Amount),
+				"loanable": lf,
+			})
+			return
+		}
+	}
+
 	// Resolve the loan type's backing requirements (guarantors and/or referees).
 	// Read each column independently and cast to text: on older databases
 	// `requires_guarantors` may be a TEXT column ('0'/'1'), and the referee

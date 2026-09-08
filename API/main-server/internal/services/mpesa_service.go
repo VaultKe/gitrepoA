@@ -433,7 +433,6 @@ func (s *MpesaService) ProcessMpesaCallback(callback *models.MpesaCallback) erro
 							SELECT COALESCE(SUM(balance), 0)
 							FROM wallets
 							WHERE owner_id = $1 AND type = 'chama'
-							  AND COALESCE(subwallet_type, 'main') NOT IN ('welfare', 'merry_go_round', 'merry-go-round')
 						), updated_at = CURRENT_TIMESTAMP
 						WHERE id = $2
 					`, chamaId, chamaId)

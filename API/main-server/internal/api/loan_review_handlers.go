@@ -706,6 +706,32 @@ func DisburseLoan(c *gin.Context) {
 		}
 	}
 
+	// Immediate pre-disbursement funding re-check: money the chama had when this
+	// loan was applied for / approved may have been consumed by other activity
+	// since. If the loanable pool can no longer cover it, do NOT disburse —
+	// notify the officers instead.
+	if dbVal, ok := c.Get("db"); ok {
+		if database, ok := dbVal.(*sql.DB); ok {
+			var dcChamaID string
+			var dcAmount float64
+			if qerr := database.QueryRow(
+				"SELECT chama_id, COALESCE(NULLIF(amount,0), total_amount, 0) FROM loans WHERE id = $1", loanID,
+			).Scan(&dcChamaID, &dcAmount); qerr == nil && dcChamaID != "" {
+				if lf, lerr := chamaLoanableFunds(database, dcChamaID, loanID); lerr == nil && dcAmount > lf.Loanable+0.0001 {
+					notifyChamaOfficers(database, dcChamaID, userID, "Loan cannot be funded",
+						fmt.Sprintf("Loan %s is approved but the chama only has KES %.2f available for loans (needs KES %.2f). Disbursement was blocked.", loanID, lf.Loanable, dcAmount),
+						fmt.Sprintf(`{"loan_id": "%s", "status": "funding_shortfall"}`, loanID))
+					c.JSON(http.StatusUnprocessableEntity, gin.H{
+						"success":  false,
+						"error":    fmt.Sprintf("Cannot disburse: the chama currently has KES %.2f available for loans, but this loan needs KES %.2f.", lf.Loanable, dcAmount),
+						"loanable": lf,
+					})
+					return
+				}
+			}
+		}
+	}
+
 	disbursementServiceVal, exists := c.Get("disbursementService")
 	if !exists {
 		c.JSON(http.StatusInternalServerError, gin.H{

@@ -789,7 +789,7 @@ func (s *ChamaService) GetChamaStatistics(chamaID, userID string) (map[string]in
 		return nil, fmt.Errorf("failed to get activity statistics: %w", activityErr)
 	}
 
-	stats["chama_info"] = map[string]interface{}{
+	chamaInfo := map[string]interface{}{
 		"id":                     chamaObj.ID,
 		"name":                   chamaObj.Name,
 		"type":                   chamaObj.Type,
@@ -799,9 +799,16 @@ func (s *ChamaService) GetChamaStatistics(chamaID, userID string) (map[string]in
 		"contribution_frequency": chamaObj.ContributionFrequency,
 		"max_members":            chamaObj.MaxMembers,
 		"current_members":        chamaObj.CurrentMembers,
-		"total_funds":            walletBalance, // Use actual wallet balance
+		"total_funds":            walletBalance, // combined balance of every sub-wallet
 		"wallet_balance":         walletBalance,
 	}
+	if lf, lerr := s.getChamaLoanableFunds(chamaID); lerr == nil {
+		chamaInfo["loanable_funds"] = lf["loanable"]
+		chamaInfo["restricted_welfare"] = lf["welfare"]
+		chamaInfo["restricted_merry_go_round"] = lf["merry_go_round"]
+		chamaInfo["reserved_loan_funds"] = lf["reserved"]
+	}
+	stats["chama_info"] = chamaInfo
 	stats["user_stats"] = userStats
 
 	stats["member_stats"] = memberStats
@@ -1000,29 +1007,62 @@ func (s *ChamaService) getActivityStatistics(chamaID string) (map[string]interfa
 }
 
 // getChamaWalletBalance returns the chama's headline wallet balance shown on the
-// dashboard. It is the SUM of every chama sub-wallet EXCEPT welfare and
-// merry-go-round, which are standalone pools. Loan repayments (principal,
-// interest and fines) land in these sub-wallets and therefore count towards it.
+// dashboard — the COMBINED total of every chama sub-wallet (savings, shares,
+// dividends, welfare, merry-go-round, loans, …). Welfare and merry-go-round are
+// restricted PORTIONS of this total, not separate money; the loanable pool is
+// this balance minus those restricted portions (see chamaLoanableFunds).
+// Interest and fines paid by borrowers land in the unrestricted sub-wallets and
+// therefore raise this figure.
 func (s *ChamaService) getChamaWalletBalance(chamaID string) (float64, error) {
-	// First, ensure chama wallet exists
-	err := s.ensureChamaWallet(chamaID)
-	if err != nil {
+	if err := s.ensureChamaWallet(chamaID); err != nil {
 		return 0, fmt.Errorf("failed to ensure chama wallet: %w", err)
 	}
 
-	query := `
-		SELECT COALESCE(SUM(balance), 0) AS balance
-		FROM wallets
-		WHERE owner_id = $1
-		  AND type = 'chama'
-		  AND COALESCE(subwallet_type, 'main') NOT IN ('welfare', 'merry_go_round', 'merry-go-round')
-	`
 	var balance float64
-	err = s.db.QueryRow(query, chamaID).Scan(&balance)
+	err := s.db.QueryRow(`
+		SELECT COALESCE(SUM(balance), 0)
+		FROM wallets
+		WHERE owner_id = $1 AND type = 'chama'
+	`, chamaID).Scan(&balance)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get chama wallet balance: %w", err)
 	}
 	return balance, nil
+}
+
+// getChamaLoanableFunds returns how much the chama can currently lend:
+// combined wallet balance − welfare − merry-go-round − approved-but-undisbursed
+// loan principal (money already committed to other borrowers).
+func (s *ChamaService) getChamaLoanableFunds(chamaID string) (map[string]interface{}, error) {
+	var total, welfare, mgr, reserved float64
+	if err := s.db.QueryRow(`
+		SELECT
+			COALESCE(SUM(balance), 0),
+			COALESCE(SUM(CASE WHEN COALESCE(subwallet_type,'') = 'welfare' THEN balance ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN COALESCE(subwallet_type,'') IN ('merry_go_round','merry-go-round') THEN balance ELSE 0 END), 0)
+		FROM wallets WHERE owner_id = $1 AND type = 'chama'
+	`, chamaID).Scan(&total, &welfare, &mgr); err != nil {
+		return nil, err
+	}
+	_ = s.db.QueryRow(`
+		SELECT COALESCE(SUM(COALESCE(NULLIF(amount,0), total_amount, 0)), 0)
+		FROM loans
+		WHERE chama_id = $1 AND disbursed_at IS NULL
+		  AND (lower(COALESCE(approval_stage,'')) = 'fully_approved' OR lower(COALESCE(status,'')) IN ('approved','disbursing'))
+		  AND lower(COALESCE(status,'')) NOT IN ('rejected','cancelled','completed')
+	`, chamaID).Scan(&reserved)
+
+	loanable := total - welfare - mgr - reserved
+	if loanable < 0 {
+		loanable = 0
+	}
+	return map[string]interface{}{
+		"wallet_balance": total,
+		"welfare":        welfare,
+		"merry_go_round": mgr,
+		"reserved":       reserved,
+		"loanable":       loanable,
+	}, nil
 }
 
 func (s *ChamaService) ensureChamaWallet(chamaID string) error {

@@ -5,10 +5,36 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
 )
+
+// notifyChamaOfficers sends a notification to every active secretary / treasurer
+// / chairperson of a chama (skipping excludeUserID). Best-effort.
+func notifyChamaOfficers(db *sql.DB, chamaID, excludeUserID, title, message, data string) {
+	if db == nil || chamaID == "" {
+		return
+	}
+	rows, err := db.Query(`
+		SELECT user_id FROM chama_members
+		WHERE chama_id = $1 AND lower(role) IN ('secretary','treasurer','chairperson')
+		  AND COALESCE(is_active, true)
+	`, chamaID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uid string
+		if rows.Scan(&uid) != nil || uid == "" || uid == excludeUserID {
+			continue
+		}
+		nid := fmt.Sprintf("notif-%d", time.Now().UnixNano())
+		_ = createNotification(db, nid, uid, "chama", title, message, data, "loan", nil)
+	}
+}
 
 // disbursementOfficerRoles are the chama roles permitted to move chama funds.
 var disbursementOfficerRoles = map[string]bool{
@@ -65,6 +91,60 @@ func validateDisbursementAmount(db *sql.DB, sourceWalletID string, amount float6
 		return fmt.Errorf("insufficient funds: source wallet holds KES %.2f, requested KES %.2f", bal, amount)
 	}
 	return nil
+}
+
+// LoanableFunds describes a chama's lending capacity at a moment in time.
+type LoanableFunds struct {
+	WalletBalance float64 `json:"walletBalance"` // combined total of every sub-wallet
+	Welfare       float64 `json:"welfare"`       // restricted
+	MerryGoRound  float64 `json:"merryGoRound"`  // restricted
+	Reserved      float64 `json:"reserved"`      // approved-but-not-yet-disbursed loans
+	Loanable      float64 `json:"loanable"`      // balance - welfare - MGR - reserved
+}
+
+// chamaLoanableFunds computes how much a chama can actually lend right now:
+//
+//	Loanable = ΣwalletBalances − Welfare − MerryGoRound − Reserved
+//
+// "Reserved" is the total principal of loans that are already approved but not
+// yet disbursed, so two approved loans can never both see the same money.
+// `excludeLoanID` (may be "") drops one loan from the reserved figure — used
+// when re-checking that very loan's own disbursement.
+func chamaLoanableFunds(db *sql.DB, chamaID, excludeLoanID string) (LoanableFunds, error) {
+	var lf LoanableFunds
+	if chamaID == "" {
+		return lf, fmt.Errorf("chama is required")
+	}
+
+	if err := db.QueryRow(`
+		SELECT
+			COALESCE(SUM(balance), 0),
+			COALESCE(SUM(CASE WHEN COALESCE(subwallet_type,'') IN ('welfare')                          THEN balance ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN COALESCE(subwallet_type,'') IN ('merry_go_round','merry-go-round')  THEN balance ELSE 0 END), 0)
+		FROM wallets
+		WHERE owner_id = $1 AND type = 'chama'
+	`, chamaID).Scan(&lf.WalletBalance, &lf.Welfare, &lf.MerryGoRound); err != nil {
+		return lf, fmt.Errorf("failed to read chama wallets: %w", err)
+	}
+
+	// Approved-but-undisbursed loan principal is committed money.
+	if err := db.QueryRow(`
+		SELECT COALESCE(SUM(COALESCE(NULLIF(amount,0), total_amount, 0)), 0)
+		FROM loans
+		WHERE chama_id = $1
+		  AND disbursed_at IS NULL
+		  AND id <> $2
+		  AND (lower(COALESCE(approval_stage,'')) = 'fully_approved' OR lower(COALESCE(status,'')) IN ('approved','disbursing'))
+		  AND lower(COALESCE(status,'')) NOT IN ('rejected','cancelled','completed')
+	`, chamaID, excludeLoanID).Scan(&lf.Reserved); err != nil {
+		return lf, fmt.Errorf("failed to read reserved loan funds: %w", err)
+	}
+
+	lf.Loanable = lf.WalletBalance - lf.Welfare - lf.MerryGoRound - lf.Reserved
+	if lf.Loanable < 0 {
+		lf.Loanable = 0
+	}
+	return lf, nil
 }
 
 // memberActiveShares returns the total active shares a member holds in a chama.
