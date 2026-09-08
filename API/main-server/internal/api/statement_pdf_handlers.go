@@ -216,6 +216,15 @@ var stmtCreditTypes = map[string]bool{
 	"service_fee": true, "share_purchase": true, "shares": true, "merry-go-round": true,
 }
 
+// stmtSuccessStatus is the set of transaction statuses that represent money that
+// actually moved — only these count toward the statement's money totals.
+var stmtSuccessStatus = map[string]bool{
+	"completed": true, "complete": true, "success": true, "successful": true,
+	"paid": true, "disbursed": true, "active": true, "approved": true, "settled": true,
+}
+
+func stmtIsSuccess(s string) bool { return stmtSuccessStatus[strings.ToLower(strings.TrimSpace(s))] }
+
 // DownloadChamaTransactionsReport — GET /chamas/:id/transactions/report?scope=personal|group|member&memberId=&limit=
 func DownloadChamaTransactionsReport(c *gin.Context) {
 	chamaID, ok := requireParam(c, "id", "Chama ID is required")
@@ -301,17 +310,30 @@ func DownloadChamaTransactionsReport(c *gin.Context) {
 		amount                        float64
 	}
 	var recs []txRec
+	// Money totals count ONLY successful transactions; pending / failed are
+	// listed but excluded from the figures.
 	var credit, debit float64
+	var successCount, pendingCount, failedCount int
 	for rows.Next() {
 		var r txRec
 		if rows.Scan(&r.at, &r.kind, &r.desc, &r.amount, &r.status, &r.ref, &r.name) != nil {
 			continue
 		}
 		recs = append(recs, r)
-		if stmtCreditTypes[strings.ToLower(r.kind)] {
-			credit += r.amount
-		} else {
-			debit += r.amount
+		switch {
+		case stmtIsSuccess(r.status):
+			successCount++
+			if stmtCreditTypes[strings.ToLower(r.kind)] {
+				credit += r.amount
+			} else {
+				debit += r.amount
+			}
+		case strings.Contains(strings.ToLower(r.status), "fail"),
+			strings.Contains(strings.ToLower(r.status), "reject"),
+			strings.Contains(strings.ToLower(r.status), "cancel"):
+			failedCount++
+		default:
+			pendingCount++
 		}
 	}
 
@@ -322,13 +344,20 @@ func DownloadChamaTransactionsReport(c *gin.Context) {
 	pdf.Ln(11)
 
 	sectionTitle(pdf, "Summary")
+	pdf.SetFont("Helvetica", "I", 7.5)
+	pdf.SetTextColor(rpMuted[0], rpMuted[1], rpMuted[2])
+	pdf.CellFormat(0, 4, "Totals below reflect successful transactions only.", "", 1, "L", false, 0, "")
+	pdf.SetTextColor(rpInk[0], rpInk[1], rpInk[2])
+	pdf.Ln(1)
 	kvGrid(pdf, [][2]string{
-		{"Inflows", money(credit)},
-		{"Outflows", money(debit)},
+		{"Inflows (successful)", money(credit)},
+		{"Outflows (successful)", money(debit)},
 		{"Net", money(credit - debit)},
-		{"Transactions", fmt.Sprintf("%d", len(recs))},
+		{"Successful", fmt.Sprintf("%d", successCount)},
+		{"Pending", fmt.Sprintf("%d", pendingCount)},
+		{"Failed / cancelled", fmt.Sprintf("%d", failedCount)},
+		{"Records shown", fmt.Sprintf("%d", len(recs))},
 		{"Period end", genAt.Format("2 Jan 2006")},
-		{"", ""},
 	})
 	pdf.Ln(3)
 
@@ -336,7 +365,7 @@ func DownloadChamaTransactionsReport(c *gin.Context) {
 	if len(recs) == 0 {
 		emptyLine(pdf, "No transactions found for the selected scope.")
 	} else {
-		w := []float64{24, 24, 50, 30, 28, 22}
+		w := []float64{22, 26, 48, 30, 28, 24}
 		tableHeader(pdf, []string{"Date", "Type", "Description", "By", "Amount", "Status"}, w)
 		for i, r := range recs {
 			desc := r.desc

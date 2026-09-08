@@ -256,6 +256,14 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 		&transaction.UpdatedAt,
 	)
 
+	if err == sql.ErrNoRows {
+		// Not a row in `transactions`. The chama activity feed also surfaces
+		// merry-go-round / welfare / loan payments that live in their own tables.
+		if synth, sErr := h.synthesizeReceiptTransaction(resolvedTransactionID, userID); sErr == nil {
+			return synth, nil
+		}
+		return nil, sql.ErrNoRows
+	}
 	if err != nil {
 		log.Printf("DEBUG: Failed to scan transaction %s: %v", resolvedTransactionID, err)
 		return nil, err
@@ -310,6 +318,130 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 	return &transaction, nil
 }
 
+// userCanSeeChamaRecord authorizes a receipt: the record owner, or an officer of
+// the record's chama.
+func (h *ReceiptHandlers) userCanSeeChamaRecord(userID, ownerID, chamaID string) bool {
+	if userID != "" && userID == ownerID {
+		return true
+	}
+	if chamaID == "" {
+		return false
+	}
+	var count int
+	_ = h.db.QueryRow(
+		"SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND lower(role) IN ('chairperson','treasurer','secretary','admin') AND COALESCE(is_active, true)",
+		chamaID, userID,
+	).Scan(&count)
+	return count > 0
+}
+
+// buildSyntheticTransaction assembles a models.Transaction for a payment that
+// lives outside the `transactions` table (merry-go-round / welfare / loan
+// payments) so the same receipt renderer can be used.
+func (h *ReceiptHandlers) buildSyntheticTransaction(id, kind, status string, amount float64, method, description, reference, initiatedBy, chamaID string, at time.Time) *models.Transaction {
+	desc := description
+	ref := reference
+	t := &models.Transaction{
+		ID:            id,
+		Type:          models.TransactionType(kind),
+		Status:        models.TransactionStatus(status),
+		Amount:        amount,
+		Currency:      "KES",
+		PaymentMethod: models.PaymentMethod(method),
+		InitiatedBy:   initiatedBy,
+		ChamaID:       chamaID,
+		CreatedAt:     at,
+		UpdatedAt:     at,
+		Metadata:      map[string]interface{}{"chama_id": chamaID, "synthetic": true},
+	}
+	if desc != "" {
+		t.Description = &desc
+	}
+	if ref != "" {
+		t.Reference = &ref
+	}
+	return t
+}
+
+// synthesizeReceiptTransaction looks a record id up across the payment tables
+// that back the chama activity feed but are not rows in `transactions`.
+func (h *ReceiptHandlers) synthesizeReceiptTransaction(recordID, userID string) (*models.Transaction, error) {
+	// Merry-go-round payment — reuse its linked transaction if it has one.
+	{
+		var linkedTxn, chamaID, payer, method, status, desc sql.NullString
+		var amount sql.NullFloat64
+		var round sql.NullInt64
+		var createdAt sql.NullTime
+		err := h.db.QueryRow(`
+			SELECT transaction_id, chama_id, payer_user_id, COALESCE(payment_method,''),
+			       COALESCE(status,'completed'), COALESCE(description,''),
+			       COALESCE(amount,0), COALESCE(round_number,0), created_at
+			FROM merry_go_round_payments WHERE id = $1
+		`, recordID).Scan(&linkedTxn, &chamaID, &payer, &method, &status, &desc, &amount, &round, &createdAt)
+		if err == nil {
+			if linkedTxn.Valid && strings.TrimSpace(linkedTxn.String) != "" {
+				if t, e := h.getTransactionByID(linkedTxn.String, userID); e == nil {
+					return t, nil
+				}
+			}
+			if !h.userCanSeeChamaRecord(userID, payer.String, chamaID.String) {
+				return nil, sql.ErrNoRows
+			}
+			d := strings.TrimSpace(desc.String)
+			if d == "" {
+				d = fmt.Sprintf("Merry-go-round contribution (round %d)", round.Int64)
+			}
+			return h.buildSyntheticTransaction(recordID, "merry-go-round", status.String, amount.Float64,
+				method.String, d, "", payer.String, chamaID.String, createdAt.Time), nil
+		}
+	}
+
+	// Welfare contribution.
+	{
+		var user, method, ref, chamaID string
+		var amount float64
+		var at time.Time
+		err := h.db.QueryRow(`
+			SELECT wc.user_id, COALESCE(wc.payment_method,''), COALESCE(wc.reference,''),
+			       COALESCE(wc.amount,0), wc.contributed_at, COALESCE(wf.chama_id,'')
+			FROM welfare_contributions wc
+			LEFT JOIN welfare_funds wf ON wf.id = wc.welfare_fund_id
+			WHERE wc.id = $1
+		`, recordID).Scan(&user, &method, &ref, &amount, &at, &chamaID)
+		if err == nil {
+			if !h.userCanSeeChamaRecord(userID, user, chamaID) {
+				return nil, sql.ErrNoRows
+			}
+			return h.buildSyntheticTransaction(recordID, "welfare_contribution", "completed", amount,
+				method, "Welfare contribution", ref, user, chamaID, at), nil
+		}
+	}
+
+	// Loan repayment.
+	{
+		var method, ref, borrower, chamaID string
+		var amount float64
+		var at time.Time
+		err := h.db.QueryRow(`
+			SELECT COALESCE(lp.payment_method,''), COALESCE(lp.reference,''),
+			       COALESCE(l.borrower_id,''), COALESCE(l.chama_id,''),
+			       COALESCE(lp.amount,0), lp.paid_at
+			FROM loan_payments lp
+			LEFT JOIN loans l ON l.id = lp.loan_id
+			WHERE lp.id = $1
+		`, recordID).Scan(&method, &ref, &borrower, &chamaID, &amount, &at)
+		if err == nil {
+			if !h.userCanSeeChamaRecord(userID, borrower, chamaID) {
+				return nil, sql.ErrNoRows
+			}
+			return h.buildSyntheticTransaction(recordID, "loan_payment", "completed", amount,
+				method, "Loan repayment", ref, borrower, chamaID, at), nil
+		}
+	}
+
+	return nil, sql.ErrNoRows
+}
+
 // resolveTransactionID attempts to map an external payment reference (e.g. an M-Pesa receipt number)
 // to an internal transaction ID by searching transaction metadata.
 func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, error) {
@@ -327,13 +459,14 @@ func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, er
 	}
 
 	var actualID string
+	// metadata is JSONB — cast to text before lower()/LIKE.
 	query := `
 		SELECT id
 		FROM transactions
 		WHERE payment_method = $1
 		  AND (
-			lower(metadata) LIKE $2
-			OR lower(metadata) LIKE $3
+			lower(metadata::text) LIKE $2
+			OR lower(metadata::text) LIKE $3
 			OR reference LIKE $4
 		  )
 		LIMIT 1
@@ -347,7 +480,7 @@ func (h *ReceiptHandlers) resolveTransactionID(transactionID string) (string, er
 		fallbackQuery := `
 			SELECT id
 			FROM transactions
-			WHERE lower(metadata) LIKE $1
+			WHERE lower(metadata::text) LIKE $1
 			   OR reference ILIKE $2
 			LIMIT 1
 		`

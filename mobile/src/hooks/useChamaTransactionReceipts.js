@@ -408,7 +408,15 @@ const useChamaTransactionReceipts = ({ selectedChama, chamaId, chamaMembers, tra
   }, [getBulkReceiptTransactions, downloadStatementPdf, setExportLoading]);
 
   const handleIndividualReceipt = useCallback(async (transaction) => {
-    const txnId = transaction?.id || transaction?.transaction_id || transaction?.transactionId;
+    // A welfare *request* or a loan record is not a payment — there is no
+    // receipt for it (only its contributions / repayments have one).
+    const kind = String(transaction?.transaction_type || transaction?.type || '').toLowerCase();
+    if (kind === 'welfare' || kind === 'loan') {
+      Alert.alert('No receipt', 'This is a request/record, not a payment. Receipts are available for contributions and repayments.', [{ text: 'OK' }]);
+      return;
+    }
+    // Prefer the linked ledger transaction id when the row carries one.
+    const txnId = transaction?.transaction_id || transaction?.transactionId || transaction?.id;
     if (!txnId) {
       Alert.alert('Receipt unavailable', 'This record has no transaction reference yet.', [{ text: 'OK' }]);
       return;

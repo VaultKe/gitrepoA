@@ -123,7 +123,7 @@ const ChamaHomeStack = ({ route }) => {
     { name: 'PollsVotingScreen', component: PollsVotingScreen, title: 'Polls & Voting' },
     // Account management
     { name: 'AccountManagementScreen', component: AccountManagementScreen, title: 'Account Management' },
-    { name: 'SubscriptionManagementScreen', component: SubscriptionManagementScreen, title: 'Subscriptions' },
+    { name: 'SubscriptionManagement', component: SubscriptionManagementScreen, title: 'Subscriptions' },
     { name: 'LoanManagement', component: LoanManagementScreen, title: 'Loan Management' },
     { name: 'WelfareDisbursement', component: WelfareDisbursementScreen, title: 'Welfare Disbursement' },
     { name: 'LoanTypeCreation', component: LoanTypeCreationScreen, title: 'Loan Type Creation' },
