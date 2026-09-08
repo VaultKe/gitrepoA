@@ -449,7 +449,11 @@ func SetupRoutes(
 
 			polls := protected.Group("/chamas/:id/polls")
 			{
+				// Register both with and without the trailing slash — the app calls
+				// `/chamas/:id/polls` (no slash) and RedirectTrailingSlash is off.
+				polls.POST("", pollsHandlers.CreatePoll)
 				polls.POST("/", pollsHandlers.CreatePoll)
+				polls.GET("", pollsHandlers.GetChamaPolls)
 				polls.GET("/", pollsHandlers.GetChamaPolls)
 				polls.GET("/active", pollsHandlers.GetActivePolls)
 				polls.GET("/results", pollsHandlers.GetPollResults)
