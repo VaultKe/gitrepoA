@@ -33,7 +33,9 @@ func GetContributions(c *gin.Context) {
 			u.first_name, u.last_name, u.email
 		FROM transactions t
 		LEFT JOIN users u ON t.initiated_by = u.id
-		WHERE t.chama_id = $1
+		WHERE (t.chama_id = $1
+			OR t.metadata->>'chamaId' = $1
+			OR t.metadata->>'chama_id' = $1)
 			AND t.type = 'contribution'
 		ORDER BY t.created_at DESC
 		LIMIT 100
@@ -59,10 +61,10 @@ func GetContributions(c *gin.Context) {
 			PaymentMethod string
 			ChamaID       string
 			InitiatedBy   string
-		RecipientID   sql.NullString
-		MetadataJSON  []byte
-		CreatedAt     time.Time
-		UpdatedAt     time.Time
+			RecipientID   sql.NullString
+			MetadataJSON  []byte
+			CreatedAt     time.Time
+			UpdatedAt     time.Time
 			FirstName     sql.NullString
 			LastName      sql.NullString
 			Email         sql.NullString

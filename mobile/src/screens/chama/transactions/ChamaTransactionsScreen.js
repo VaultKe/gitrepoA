@@ -5,7 +5,6 @@ import { useChamaContext } from '../../../context/ChamaContext';
 import { getThemeColors, spacing } from '../../../utils/theme';
 import useChamaTransactionsScreen from '../../../hooks/useChamaTransactionsScreen';
 import ChamaTransactionsHeader from '../../../components/transactions/ChamaTransactionsHeader';
-import ChamaTransactionsFilterChips from '../../../components/transactions/ChamaTransactionsFilterChips';
 import ChamaTransactionsTable from '../../../components/transactions/ChamaTransactionsTable';
 import ChamaTransactionsExportModal from '../../../components/transactions/ChamaTransactionsExportModal';
 import ChamaTransactionsMemberSelectorModal from '../../../components/transactions/ChamaTransactionsMemberSelectorModal';
@@ -79,12 +78,6 @@ const ChamaTransactionsScreen = ({ navigation, route }) => {
             isDropdownOpen={showFilterDropdown}
             canViewGroupRecords={() => canViewGroup}
             onToggleFilter={() => setShowFilterDropdown(!showFilterDropdown)}
-            theme={theme}
-          />
-
-          <ChamaTransactionsFilterChips
-            selectedFilter={selectedFilter}
-            onSelectFilter={handleSelectFilter}
             theme={theme}
           />
 

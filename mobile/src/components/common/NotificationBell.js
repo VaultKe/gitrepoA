@@ -21,35 +21,45 @@ const NotificationBell = ({ navigation, size = 24, showBadge = true }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const busyRef = useRef(false);
 
-  const recomputeBadge = useCallback(async () => {
-    try {
-      const list = Array.isArray(notifications) ? notifications : [];
-      const [readSet, delSet] = await Promise.all([
-        loadIdSet(READ_KEY(user?.id)),
-        loadIdSet(DEL_KEY(user?.id)),
-      ]);
-      setUnreadCount(countUnread(list, readSet, delSet));
-    } catch {
-      setUnreadCount(0);
-    }
-  }, [notifications, user?.id]);
+  // Keep the latest refreshSpecificData without making it a hook dependency —
+  // otherwise a fresh context value on every render churns `pull`, which the
+  // focus effect below re-runs, which dispatches new notifications, which
+  // renders again … an infinite loop.
+  const refreshRef = useRef(refreshSpecificData);
+  useEffect(() => { refreshRef.current = refreshSpecificData; }, [refreshSpecificData]);
 
   // Keep the badge in sync with context notifications + local read state.
-  useEffect(() => { recomputeBadge(); }, [recomputeBadge]);
+  // Depends only on the notifications array + user, and never dispatches.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = Array.isArray(notifications) ? notifications : [];
+        const [readSet, delSet] = await Promise.all([
+          loadIdSet(READ_KEY(user?.id)),
+          loadIdSet(DEL_KEY(user?.id)),
+        ]);
+        if (!cancelled) setUnreadCount(countUnread(list, readSet, delSet));
+      } catch {
+        if (!cancelled) setUnreadCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [notifications, user?.id]);
 
-  // Pull fresh notifications into context on a slow heartbeat and whenever the
-  // bell's screen regains focus. AppContext's effect turns any genuinely new
-  // one into a single tone.
+  // Pull fresh notifications into context on a slow heartbeat and on focus.
+  // Stable across notification updates (only re-created when the user changes),
+  // so it cannot feed back into itself. AppContext turns any genuinely new
+  // notification into a single tone.
   const pull = useCallback(async () => {
     if (!user?.id || busyRef.current) return;
     busyRef.current = true;
     try {
-      await refreshSpecificData?.('notifications');
+      await refreshRef.current?.('notifications');
     } catch {} finally {
       busyRef.current = false;
-      recomputeBadge();
     }
-  }, [user?.id, refreshSpecificData, recomputeBadge]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return undefined;

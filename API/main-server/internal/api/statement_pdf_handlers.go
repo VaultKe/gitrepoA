@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -268,41 +269,25 @@ func DownloadChamaTransactionsReport(c *gin.Context) {
 		chamaName = "Chama"
 	}
 
-	q := `
-		SELECT t.created_at, COALESCE(t.type,''), COALESCE(t.description,''),
-		       COALESCE(t.amount,0), COALESCE(t.status,''), COALESCE(t.reference,''),
-		       TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))
-		FROM transactions t
-		LEFT JOIN users u ON u.id = t.initiated_by
-		WHERE t.chama_id = $1`
-	args := []interface{}{chamaID}
+	// Whose records: "" = whole chama, else this user id.
+	var personID string
 	subject := "Group statement"
 	switch scope {
 	case "personal", "":
-		q += ` AND (t.initiated_by = $2 OR t.recipient_id = $2)`
-		args = append(args, userID)
+		personID = userID
 		subject = "Personal statement"
 	case "member":
 		if memberID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "memberId is required for a member statement"})
 			return
 		}
-		q += ` AND (t.initiated_by = $2 OR t.recipient_id = $2)`
-		args = append(args, memberID)
+		personID = memberID
 		var mn string
 		_ = db.QueryRow("SELECT TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')) FROM users WHERE id = $1", memberID).Scan(&mn)
 		if strings.TrimSpace(mn) != "" {
 			subject = "Statement for " + strings.TrimSpace(mn)
 		}
 	}
-	q += fmt.Sprintf(` ORDER BY t.created_at DESC LIMIT %d`, limit)
-
-	rows, err := db.Query(q, args...)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to read transactions"})
-		return
-	}
-	defer rows.Close()
 
 	type txRec struct {
 		at                            time.Time
@@ -310,16 +295,73 @@ func DownloadChamaTransactionsReport(c *gin.Context) {
 		amount                        float64
 	}
 	var recs []txRec
-	// Money totals count ONLY successful transactions; pending / failed are
-	// listed but excluded from the figures.
+
+	// 1) Ledger transactions. chama_id is frequently NULL on these rows — the
+	//    chama is carried in metadata — so match either.
+	{
+		q := `
+			SELECT t.created_at, COALESCE(t.type,''), COALESCE(t.description,''),
+			       COALESCE(t.amount,0), COALESCE(t.status,''), COALESCE(t.reference,''),
+			       TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))
+			FROM transactions t
+			LEFT JOIN users u ON u.id = t.initiated_by
+			WHERE (t.chama_id = $1
+			       OR t.metadata->>'chamaId' = $1
+			       OR t.metadata->>'chama_id' = $1)`
+		args := []interface{}{chamaID}
+		if personID != "" {
+			q += ` AND (t.initiated_by = $2 OR t.recipient_id = $2)`
+			args = append(args, personID)
+		}
+		q += fmt.Sprintf(` ORDER BY t.created_at DESC LIMIT %d`, limit)
+		if rows, err := db.Query(q, args...); err == nil {
+			for rows.Next() {
+				var r txRec
+				if rows.Scan(&r.at, &r.kind, &r.desc, &r.amount, &r.status, &r.ref, &r.name) == nil {
+					recs = append(recs, r)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	// 2) Loan applications for the chama (they have no ledger row until
+	//    disbursed, but they are part of the chama's financial activity).
+	{
+		q := `
+			SELECT COALESCE(l.disbursed_at, l.created_at), COALESCE(l.status,''),
+			       COALESCE(NULLIF(l.total_amount,0), l.amount, 0),
+			       TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))
+			FROM loans l
+			LEFT JOIN users u ON u.id = l.borrower_id
+			WHERE l.chama_id = $1`
+		args := []interface{}{chamaID}
+		if personID != "" {
+			q += ` AND l.borrower_id = $2`
+			args = append(args, personID)
+		}
+		q += fmt.Sprintf(` ORDER BY COALESCE(l.disbursed_at, l.created_at) DESC LIMIT %d`, limit)
+		if rows, err := db.Query(q, args...); err == nil {
+			for rows.Next() {
+				var r txRec
+				r.kind = "loan"
+				r.desc = "Loan"
+				if rows.Scan(&r.at, &r.status, &r.amount, &r.name) == nil {
+					recs = append(recs, r)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	// Newest first across both sources.
+	sort.SliceStable(recs, func(i, j int) bool { return recs[i].at.After(recs[j].at) })
+
+	// Money totals count ONLY successful entries; pending / failed are listed
+	// but excluded from the figures.
 	var credit, debit float64
 	var successCount, pendingCount, failedCount int
-	for rows.Next() {
-		var r txRec
-		if rows.Scan(&r.at, &r.kind, &r.desc, &r.amount, &r.status, &r.ref, &r.name) != nil {
-			continue
-		}
-		recs = append(recs, r)
+	for _, r := range recs {
 		switch {
 		case stmtIsSuccess(r.status):
 			successCount++

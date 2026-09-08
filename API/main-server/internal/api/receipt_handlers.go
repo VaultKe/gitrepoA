@@ -225,13 +225,13 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 	query := `
 		SELECT id, from_wallet_id, to_wallet_id, type, status, amount, currency,
 			   description, reference, payment_method, metadata, fees, initiated_by,
-			   approved_by, requires_approval, approval_deadline, created_at, updated_at
-		FROM transactions 
+			   recipient_id, approved_by, requires_approval, approval_deadline, created_at, updated_at
+		FROM transactions
 		WHERE id = $1
 	`
 
 	var transaction models.Transaction
-	var fromWalletID, toWalletID, approvedBy sql.NullString
+	var fromWalletID, toWalletID, approvedBy, recipientID sql.NullString
 	var approvalDeadline sql.NullTime
 	var metadataJSON []byte
 
@@ -249,6 +249,7 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 		&metadataJSON,
 		&transaction.Fees,
 		&transaction.InitiatedBy,
+		&recipientID,
 		&approvedBy,
 		&transaction.RequiresApproval,
 		&approvalDeadline,
@@ -274,25 +275,32 @@ func (h *ReceiptHandlers) getTransactionByID(transactionID, userID string) (*mod
 	if len(metadataJSON) > 0 {
 		json.Unmarshal(metadataJSON, &transaction.Metadata)
 	}
+	if recipientID.Valid && recipientID.String != "" {
+		transaction.RecipientID = &recipientID.String
+	}
 
-	// Authorize: direct initiator/approver OR chama admin
-	if transaction.InitiatedBy != userID && (transaction.ApprovedBy == nil || *transaction.ApprovedBy != userID) {
-		// Check if user is a chama admin by looking up chama_id in metadata
-		var isChamaAdmin bool
-		if chamaID, ok := transaction.Metadata["chama_id"].(string); ok && chamaID != "" {
-			var count int
-			if scanErr := h.db.QueryRow(
-				"SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND role IN ($3, $4, $5)",
-				chamaID, userID, "chairperson", "treasurer", "secretary",
-			).Scan(&count); scanErr == nil && count > 0 {
-				isChamaAdmin = true
+	// Authorize: direct initiator/approver, the named recipient, OR a chama officer.
+	recipientMatches := transaction.RecipientID != nil && *transaction.RecipientID == userID
+	if transaction.InitiatedBy != userID && !recipientMatches &&
+		(transaction.ApprovedBy == nil || *transaction.ApprovedBy != userID) {
+		// The chama id may be on the column or in metadata under either casing.
+		chamaID := ""
+		for _, k := range []string{"chama_id", "chamaId"} {
+			if v, ok := transaction.Metadata[k].(string); ok && v != "" {
+				chamaID = v
+				break
 			}
-			if !isChamaAdmin {
-				log.Printf("DEBUG: Auth denied - user %s not admin of chama %s for transaction %s", userID, chamaID, transaction.ID)
-				return nil, sql.ErrNoRows
-			}
-		} else {
-			log.Printf("DEBUG: Auth denied - no chama_id in metadata for transaction %s, user %s", transaction.ID, userID)
+		}
+		if chamaID == "" {
+			log.Printf("DEBUG: Auth denied - no chama on transaction %s, user %s", transaction.ID, userID)
+			return nil, sql.ErrNoRows
+		}
+		var count int
+		if scanErr := h.db.QueryRow(
+			"SELECT COUNT(*) FROM chama_members WHERE chama_id = $1 AND user_id = $2 AND lower(role) IN ('chairperson','treasurer','secretary','admin') AND COALESCE(is_active, true)",
+			chamaID, userID,
+		).Scan(&count); scanErr != nil || count == 0 {
+			log.Printf("DEBUG: Auth denied - user %s not officer of chama %s for transaction %s", userID, chamaID, transaction.ID)
 			return nil, sql.ErrNoRows
 		}
 	}

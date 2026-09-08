@@ -1164,7 +1164,9 @@ func (s *ChamaService) GetChamaTransactions(chamaID string, limit, offset int) (
 			u.first_name, u.last_name, u.email, u.phone
 		FROM transactions t
 		LEFT JOIN users u ON t.initiated_by = u.id
-		WHERE t.chama_id = $1
+		WHERE (t.chama_id = $1
+		       OR t.metadata->>'chamaId' = $1
+		       OR t.metadata->>'chama_id' = $1)
 		ORDER BY t.created_at DESC
 		LIMIT $2 OFFSET $3
 	`

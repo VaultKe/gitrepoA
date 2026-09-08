@@ -7,6 +7,7 @@ import { getThemeColors, breakpoints } from '../utils/theme';
 import api from '../services/api';
 import { getMemberServiceFeePayments, payMemberServiceFee, payServiceFeePayment, removeMemberFromChama, getChamaMember } from '../services/api/chamaEndpoints';
 import { getMemberName } from '../utils/chamaMembersUtils';
+import { downloadTransactionReceiptPdf } from '../services/pdfDownload';
 import { sendApprovalNotification, showInAppToast } from '../services/disbursementNotificationService';
 import { getChamaDisbursementApprovals, approveWelfareDisbursement } from '../services/api/welfareEndpoints';
 import {
@@ -323,56 +324,14 @@ const useViewMember = ({ route, navigation }) => {
 
   const handleDownloadReceipt = async (member, payment) => {
     if (!member || !payment?.id) return;
+    const transactionId = payment.transactionId || payment.transaction_id;
+    if (!transactionId) {
+      Alert.alert('ETR Receipt Failed', 'A receipt is available once the payment is confirmed.', [{ text: 'OK' }]);
+      return;
+    }
     setReceiptLoading(true);
     try {
-      const transactionId = payment.transactionId || payment.transaction_id;
-      if (!transactionId) {
-        throw new Error('Payment transaction ID not found. Please contact support or try again after payment is confirmed.');
-      }
-      const token = await api.getAuthToken();
-      const response = await fetch(`${api.getApiBaseUrl()}/receipts/transactions/${encodeURIComponent(transactionId)}/download?format=pdf`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Receipt download failed: ${response.status} ${errorText}`);
-      }
-      const blob = await response.blob();
-      const fileName = `VaultKe_ETR_Receipt_${String(transactionId).substring(0, 8).toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`;
-
-      if (Platform.OS === 'web') {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-        Toast.show({ type: 'success', text1: 'ETR Receipt Downloaded', text2: 'PDF receipt has been downloaded successfully.' });
-        return;
-      }
-
-      if (!FileSystem?.documentDirectory || !Sharing?.isAvailableAsync) {
-        throw new Error('Download is not available on this device');
-      }
-
-      const reader = new FileReader();
-      const base64Data = await new Promise((resolve, reject) => {
-        reader.onload = () => {
-          const result = reader.result;
-          if (typeof result === 'string') resolve(result.split(',')[1]);
-          else reject(new Error('Failed to read PDF'));
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
-      await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Download ETR Receipt', UTI: 'com.adobe.pdf' });
+      await downloadTransactionReceiptPdf(transactionId);
       Toast.show({ type: 'success', text1: 'ETR Receipt Ready', text2: 'PDF receipt has been generated.' });
     } catch (error) {
       console.error('Receipt download failed:', error);
