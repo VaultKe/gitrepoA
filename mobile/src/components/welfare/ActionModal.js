@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const ActionModal = ({ visible, onClose, colors, styles, selectedTableItem, activeTab, handleVote, navigation, chamaId, votingInProgress, setViewModalItem, setShowViewModal }) => {
+const ActionModal = ({ visible, onClose, colors, styles, selectedTableItem, activeTab, handleVote, navigation, chamaId, votingInProgress }) => {
   return (
     <Modal
       visible={visible && selectedTableItem !== null}
@@ -110,26 +110,6 @@ const ActionModal = ({ visible, onClose, colors, styles, selectedTableItem, acti
                       </Text>
                       <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
                         Vote against this request
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
-                {selectedTableItem && (
-                  <TouchableOpacity
-                    style={[styles.actionModalButton, { backgroundColor: colors.info + '10' }]}
-                    onPress={() => {
-                      onClose();
-                      setViewModalItem(selectedTableItem);
-                      setShowViewModal(true);
-                    }}
-                  >
-                    <Ionicons name="information-circle" size={18} color={colors.info} />
-                    <View style={styles.actionModalButtonText}>
-                      <Text style={[styles.actionModalButtonTitle, { color: colors.info }]}>
-                        View Details
-                      </Text>
-                      <Text style={[styles.actionModalButtonSubtitle, { color: colors.textSecondary }]}>
-                        See full request information
                       </Text>
                     </View>
                   </TouchableOpacity>

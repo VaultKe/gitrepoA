@@ -7,12 +7,11 @@ import { getThemeColors, spacing, typography, borderRadius, shadows } from '../.
 import Card from '../../../components/common/Card';
 import PageRefreshButton from '../../../components/common/PageRefreshButton';
 import useWelfareScreen from '../../../hooks/useWelfareScreen';
-import WelfareRequestTableRow from '../../../components/welfare/WelfareRequestTableRow';
+import WelfareRequestListCard from '../../../components/welfare/WelfareRequestListCard';
 import ApprovedWelfareRequestRow from '../../../components/welfare/ApprovedWelfareRequestRow';
 import WelfareContributionRow from '../../../components/welfare/WelfareContributionRow';
 import CreateWelfareRequestModal from '../../../components/welfare/CreateWelfareRequestModal';
 import BeneficiaryPickerModal from '../../../components/welfare/BeneficiaryPickerModal';
-import ViewDetailsModal from '../../../components/welfare/ViewDetailsModal';
 import ActionModal from '../../../components/welfare/ActionModal';
 import styles from './WelfareScreenStyles';
 
@@ -49,10 +48,6 @@ const WelfareScreen = ({ route, navigation }) => {
     showActionModal,
     setShowActionModal,
     selectedTableItem,
-    showViewModal,
-    setShowViewModal,
-    viewModalItem,
-    setViewModalItem,
     welfareCategories,
     urgencyLevels,
     itemsPerPage,
@@ -154,42 +149,37 @@ const WelfareScreen = ({ route, navigation }) => {
         >
           <View style={styles.content}>
             {activeTab === 'requests' ? (
-              <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View>
-                    <View style={[tableStyles.tableHeader, { backgroundColor: colors.primary + '10', borderBottomColor: colors.primary }]}>
-                      <View style={[tableStyles.tableCell, tableStyles.nameCell]}>
-                        <Text style={[tableStyles.tableHeaderText, { textAlign: 'left' }]}>Title</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Category</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Amount</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Priority</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.typeCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Requester</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.dateCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Date</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.amountCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Votes</Text>
-                      </View>
-                      <View style={[tableStyles.tableCell, tableStyles.actionsCell]}>
-                        <Text style={tableStyles.tableHeaderText}>Actions</Text>
-                      </View>
+              <View>
+                {welfareRequests.length === 0 && !loading ? (
+                  <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
+                    <View style={styles.emptyState}>
+                      <Ionicons name="heart-outline" size={64} color={colors.textTertiary} />
+                      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                        No welfare requests
+                      </Text>
+                      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                        Be the first to create a welfare request for your community
+                      </Text>
                     </View>
-                    {welfareRequests.map((item, index) => (
-                      <View key={item.id}>
-                        <WelfareRequestTableRow
+                  </Card>
+                ) : (
+                  welfareRequests
+                    .slice((requestsCurrentPage - 1) * itemsPerPage, requestsCurrentPage * itemsPerPage)
+                    .map((item) => (
+                      <Card
+                        key={item.id}
+                        variant="outlined"
+                        style={{
+                          borderRadius: 14,
+                          marginBottom: spacing.sm,
+                          padding: spacing.md,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                        }}
+                      >
+                        <WelfareRequestListCard
                           item={item}
-                          index={index}
-                          colors={colors}
-                          tableStyles={tableStyles}
                           formatCurrency={formatCurrency}
                           formatDate={formatDate}
                           welfareCategories={welfareCategories}
@@ -197,33 +187,25 @@ const WelfareScreen = ({ route, navigation }) => {
                           getCategoryIcon={getCategoryIcon}
                           getCategoryColor={getCategoryColor}
                           getUrgencyColor={getUrgencyColor}
+                          getStatusColor={getStatusColor}
                           isUserIdLeft={isUserIdLeft}
                           getRequesterDisplayName={getRequesterDisplayName}
-                          setSelectedTableItem={screen.setSelectedTableItem}
-                          setShowActionModal={screen.setShowActionModal}
+                          getBeneficiaryDisplayName={getBeneficiaryDisplayName}
+                          onAction={(r) => {
+                            screen.setSelectedTableItem(r);
+                            screen.setShowActionModal(true);
+                          }}
                         />
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
-                {welfareRequests.length === 0 && !loading && (
-                  <View style={styles.emptyState}>
-                    <Ionicons name="heart-outline" size={64} color={colors.textTertiary} />
-                    <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                      No welfare requests
-                    </Text>
-                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                      Be the first to create a welfare request for your community
-                    </Text>
-                  </View>
+                      </Card>
+                    ))
                 )}
                 {welfareRequests.length > itemsPerPage && (
-                  <View style={[styles.pagination, { borderTopColor: colors.border }]}>
+                  <View style={[styles.pagination, { borderTopColor: colors.border, borderTopWidth: 0 }]}>
                     <TouchableOpacity
                       style={[
                         styles.pageButton,
                         { backgroundColor: colors.surface, borderColor: colors.border },
-                        requestsCurrentPage === 1 && styles.pageButtonDisabled
+                        requestsCurrentPage === 1 && styles.pageButtonDisabled,
                       ]}
                       onPress={() => requestsCurrentPage > 1 && setRequestsCurrentPage(requestsCurrentPage - 1)}
                       disabled={requestsCurrentPage === 1}
@@ -237,7 +219,7 @@ const WelfareScreen = ({ route, navigation }) => {
                       style={[
                         styles.pageButton,
                         { backgroundColor: colors.surface, borderColor: colors.border },
-                        requestsCurrentPage === Math.ceil(welfareRequests.length / itemsPerPage) && styles.pageButtonDisabled
+                        requestsCurrentPage === Math.ceil(welfareRequests.length / itemsPerPage) && styles.pageButtonDisabled,
                       ]}
                       onPress={() => requestsCurrentPage < Math.ceil(welfareRequests.length / itemsPerPage) && setRequestsCurrentPage(requestsCurrentPage + 1)}
                       disabled={requestsCurrentPage === Math.ceil(welfareRequests.length / itemsPerPage)}
@@ -246,7 +228,7 @@ const WelfareScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                   </View>
                 )}
-              </Card>
+              </View>
             ) : (
               <Card variant="outlined" style={{ borderRadius: 8, overflow: 'hidden' }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -356,23 +338,6 @@ const WelfareScreen = ({ route, navigation }) => {
         getSelectedBeneficiaries={getSelectedBeneficiaries}
         newRequest={newRequest}
       />
-      <ViewDetailsModal
-        visible={showViewModal}
-        onClose={() => setShowViewModal(false)}
-        colors={colors}
-        styles={styles}
-        viewModalItem={viewModalItem}
-        activeTab={activeTab}
-        formatCurrency={formatCurrency}
-        formatDate={formatDate}
-        welfareCategories={welfareCategories}
-        urgencyLevels={urgencyLevels}
-        getCategoryIcon={getCategoryIcon}
-        getCategoryColor={getCategoryColor}
-        isUserIdLeft={isUserIdLeft}
-        getRequesterDisplayName={getRequesterDisplayName}
-        getBeneficiaryDisplayName={getBeneficiaryDisplayName}
-      />
       <ActionModal
         visible={showActionModal}
         onClose={() => setShowActionModal(false)}
@@ -384,8 +349,6 @@ const WelfareScreen = ({ route, navigation }) => {
         navigation={navigation}
         chamaId={chamaId}
         votingInProgress={votingInProgress}
-        setViewModalItem={setViewModalItem}
-        setShowViewModal={setShowViewModal}
       />
     </SafeAreaView>
   );
