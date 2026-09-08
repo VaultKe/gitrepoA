@@ -365,6 +365,7 @@ func SetupRoutes(
 				wallets.GET("/", api.GetWallets)
 				wallets.GET("/balance", api.GetWalletBalance)
 				wallets.GET("/transactions", api.GetUserTransactions)
+				wallets.GET("/transactions/report", api.DownloadUserTransactionsReport)
 				wallets.GET("/:id", api.GetWallet)
 				wallets.GET("/:id/transactions", api.GetWalletTransactions)
 				wallets.POST("/transfer", api.TransferMoney)

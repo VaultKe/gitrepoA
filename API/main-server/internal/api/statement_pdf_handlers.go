@@ -428,3 +428,158 @@ func DownloadChamaTransactionsReport(c *gin.Context) {
 	statementDisclaimer(pdf, chamaName, genAt)
 	writeStatementPDF(c, pdf, fmt.Sprintf("transactions-statement-%s-%s.pdf", safeFilePart(chamaID), scope))
 }
+
+/* ------------------------------------------------------------------ *
+ *  Personal wallet statement
+ * ------------------------------------------------------------------ */
+
+// DownloadUserTransactionsReport — GET /wallets/transactions/report?type=&limit=
+// The signed-in user's own transactions (initiated by or addressed to them),
+// across every chama and their personal wallet.
+func DownloadUserTransactionsReport(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "User not authenticated"})
+		return
+	}
+	db := dbFromContext(c)
+	if db == nil {
+		return
+	}
+
+	limit := 1000
+	if v, err := strconv.Atoi(c.Query("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+	typeFilter := strings.ToLower(strings.TrimSpace(c.Query("type")))
+
+	var name, email string
+	_ = db.QueryRow(
+		"SELECT TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')), COALESCE(email,'') FROM users WHERE id = $1",
+		userID,
+	).Scan(&name, &email)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Account holder"
+	}
+
+	q := `
+		SELECT t.created_at, COALESCE(t.type,''), COALESCE(t.description,''),
+		       COALESCE(t.amount,0), COALESCE(t.status,''), COALESCE(t.reference,''),
+		       COALESCE(NULLIF(c.name,''), '')
+		FROM transactions t
+		LEFT JOIN LATERAL (
+			SELECT ch.name
+			FROM chamas ch
+			WHERE ch.id::text = COALESCE(
+				NULLIF(t.chama_id::text, ''),
+				t.metadata->>'chamaId',
+				t.metadata->>'chama_id'
+			)
+			LIMIT 1
+		) c ON TRUE
+		WHERE (t.initiated_by = $1 OR t.recipient_id = $1)`
+	args := []interface{}{userID}
+	if typeFilter != "" && typeFilter != "all" {
+		q += ` AND lower(COALESCE(t.type,'')) = $2`
+		args = append(args, typeFilter)
+	}
+	q += fmt.Sprintf(` ORDER BY t.created_at DESC LIMIT %d`, limit)
+
+	rows, err := db.Query(q, args...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to read transactions"})
+		return
+	}
+	defer rows.Close()
+
+	type txRec struct {
+		at                             time.Time
+		kind, desc, status, ref, chama string
+		amount                         float64
+	}
+	var recs []txRec
+	var credit, debit float64
+	var successCount, pendingCount, failedCount int
+	for rows.Next() {
+		var r txRec
+		if rows.Scan(&r.at, &r.kind, &r.desc, &r.amount, &r.status, &r.ref, &r.chama) != nil {
+			continue
+		}
+		recs = append(recs, r)
+		switch {
+		case stmtIsSuccess(r.status):
+			successCount++
+			if stmtCreditTypes[strings.ToLower(r.kind)] {
+				credit += r.amount
+			} else {
+				debit += r.amount
+			}
+		case strings.Contains(strings.ToLower(r.status), "fail"),
+			strings.Contains(strings.ToLower(r.status), "reject"),
+			strings.Contains(strings.ToLower(r.status), "cancel"):
+			failedCount++
+		default:
+			pendingCount++
+		}
+	}
+
+	pdf, genAt := newStatementPDF(loanReportAppName, "Wallet Statement", "")
+
+	pdf.SetFont("Helvetica", "B", 13)
+	pdf.CellFormat(120, 8, name, "", 0, "L", false, 0, "")
+	pdf.Ln(7)
+	if email != "" {
+		pdf.SetFont("Helvetica", "", 8.5)
+		pdf.SetTextColor(rpMuted[0], rpMuted[1], rpMuted[2])
+		pdf.CellFormat(120, 4, email, "", 1, "L", false, 0, "")
+		pdf.SetTextColor(rpInk[0], rpInk[1], rpInk[2])
+	}
+	pdf.Ln(4)
+
+	sectionTitle(pdf, "Summary")
+	pdf.SetFont("Helvetica", "I", 7.5)
+	pdf.SetTextColor(rpMuted[0], rpMuted[1], rpMuted[2])
+	pdf.CellFormat(0, 4, "Totals below reflect successful transactions only.", "", 1, "L", false, 0, "")
+	pdf.SetTextColor(rpInk[0], rpInk[1], rpInk[2])
+	pdf.Ln(1)
+	kvGrid(pdf, [][2]string{
+		{"Inflows (successful)", money(credit)},
+		{"Outflows (successful)", money(debit)},
+		{"Net", money(credit - debit)},
+		{"Successful", fmt.Sprintf("%d", successCount)},
+		{"Pending", fmt.Sprintf("%d", pendingCount)},
+		{"Failed / cancelled", fmt.Sprintf("%d", failedCount)},
+		{"Records shown", fmt.Sprintf("%d", len(recs))},
+		{"Period end", genAt.Format("2 Jan 2006")},
+	})
+	pdf.Ln(3)
+
+	sectionTitle(pdf, "Transactions")
+	if len(recs) == 0 {
+		emptyLine(pdf, "No transactions found.")
+	} else {
+		w := []float64{22, 24, 46, 32, 28, 22}
+		tableHeader(pdf, []string{"Date", "Type", "Description", "Chama", "Amount", "Status"}, w)
+		for i, r := range recs {
+			desc := r.desc
+			if strings.TrimSpace(desc) == "" {
+				desc = orDash(r.ref)
+			}
+			tableRow(pdf, []string{
+				r.at.Format("2 Jan 06"),
+				title(orDash(r.kind)),
+				desc,
+				orDash(r.chama),
+				money(r.amount),
+				title(orDash(r.status)),
+			}, w, i%2 == 1)
+		}
+	}
+
+	statementDisclaimer(pdf, name, genAt)
+	writeStatementPDF(c, pdf, fmt.Sprintf("wallet-statement-%s.pdf", safeFilePart(userID)))
+}
