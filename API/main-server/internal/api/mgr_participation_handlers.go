@@ -34,6 +34,21 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 		return fmt.Errorf("merry-go-round is not active")
 	}
 
+	// Sequential rule: the round only moves to the next person once the CURRENT
+	// recipient has actually received their payout (treasurer initiated +
+	// chairperson confirmed the disbursement). Contributions being complete is
+	// not enough on its own.
+	var currentRecipientReceived sql.NullBool
+	recErr := db.QueryRow(`
+		SELECT has_received
+		FROM merry_go_round_participants
+		WHERE merry_go_round_id = $1 AND position = $2
+	`, merryGoRoundID, currentRound).Scan(&currentRecipientReceived)
+	if recErr == nil && !currentRecipientReceived.Bool {
+		// Current recipient has not been paid yet — do not advance.
+		return nil
+	}
+
 	// Count contributions for the current round (contributions made TO the current recipient)
 	// Check both transactions and merry_go_round_payments tables
 	var contributionCount int
@@ -65,8 +80,11 @@ func checkAndAdvanceMerryGoRound(db *sql.DB, merryGoRoundID, chamaID, userID str
 		}
 	}
 
-	// Check if all non-recipient participants have contributed (100% completion)
-	if contributionCount >= (totalParticipants - 1) {
+	// Advance when the current recipient has been paid (the disbursement was
+	// confirmed by the chairperson). If the participant row could not be read,
+	// fall back to the legacy "everyone has contributed" trigger.
+	recipientPaid := recErr == nil && currentRecipientReceived.Bool
+	if recipientPaid || (recErr != nil && contributionCount >= (totalParticipants-1)) {
 		// Advance to next round
 		nextRound := currentRound + 1
 
@@ -122,7 +140,7 @@ func JoinMerryGoRound(c *gin.Context) {
 		"success": true,
 		"message": "Join merry-go-round endpoint - coming soon",
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // CheckUserContributionStatus checks if a user has already contributed to the current round
@@ -356,7 +374,7 @@ func CheckUserContributionStatus(c *gin.Context) {
 			"roundComplete": totalContributions >= totalParticipants && totalParticipants > 0,
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // CheckAndAdvanceRound checks if all members have contributed to the current recipient
@@ -698,7 +716,7 @@ func GetMerryGoRoundCalendarAddEventURL(c *gin.Context) {
 			"url": template + "?" + params.Encode(),
 		},
 	})
-		c.Abort()
+	c.Abort()
 }
 
 // CreateMerryGoRoundCalendarEvent creates the event in the user's Google Calendar

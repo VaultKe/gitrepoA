@@ -297,17 +297,9 @@ const MaryGoRoundDisbursementScreen = ({ route, navigation }) => {
               </View>
             )}
 
-            {/* Bulk Actions */}
-            {canDisburseMaryGoRound() && maryGoRoundCycles.filter(cycle => cycle.status?.toLowerCase().includes('ready')).length > 0 && (
-              <View style={[styles.bulkActions, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-                <Button
-                  title={`Bulk Disburse (${maryGoRoundCycles.filter(cycle => cycle.status?.toLowerCase().includes('ready')).length} ready cycles)`}
-                  onPress={handleBulkDisburse}
-                  style={{ backgroundColor: colors.primary }}
-                  icon={<Ionicons name="cash" size={16} color={colors.white} />}
-                />
-              </View>
-            )}
+            {/* Merry-go-round payouts are strictly one recipient at a time
+                (treasurer initiates → chairperson confirms), so there is no
+                bulk disbursement. */}
           </Card>
         </View>
 
