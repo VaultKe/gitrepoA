@@ -15,6 +15,7 @@ class NotificationService {
     this.appState = AppState.currentState;
     this._pushToken = null;
     this._responseSub = null;
+    this._receivedSub = null;
     this._navigate = null; // set by the navigator; (routeName, params) => void
 
     // In-app notification tone playback
@@ -136,6 +137,7 @@ class NotificationService {
     this.setupNotificationHandler();
     this.setupAppStateListener();
     this.setupResponseListener();
+    this.setupReceivedListener();
 
     // Setup Android notification channels
     await this.setupNotificationChannels();
@@ -301,12 +303,29 @@ class NotificationService {
 
   setupNotificationHandler() {
     Notifications.setNotificationHandler({
+      // Foreground: we play the user's own selected tone from JS
+      // (setupReceivedListener -> playNotificationSound), so the OS should not
+      // also play its default sound. Background/killed notifications are handled
+      // by the OS channel and still ring.
       handleNotification: async () => ({
         shouldShowAlert: true,
-        shouldPlaySound: true,
+        shouldPlaySound: false,
         shouldSetBadge: true,
       }),
     });
+  }
+
+  // Foreground: when any notification (reminder, push, local schedule) is
+  // delivered while the app is open, ring the user's selected notification tone.
+  setupReceivedListener() {
+    if (this._receivedSub) return;
+    try {
+      this._receivedSub = Notifications.addNotificationReceivedListener(() => {
+        this.playNotificationSound().catch(() => {});
+      });
+    } catch (error) {
+      console.warn('Failed to attach notification received listener:', error?.message || error);
+    }
   }
 
   async handleNotificationAlert(request) {

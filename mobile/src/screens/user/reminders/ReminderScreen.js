@@ -101,15 +101,14 @@ const ReminderScreen = ({ navigation }) => {
             </Card>
 
             {filteredReminders.length > 0 ? (
-              filteredReminders.map((item, index) => (
+              filteredReminders.map((item) => (
                 <Card
                   key={item.id}
                   variant="outlined"
                   style={{
-                    borderRadius: 12,
+                    borderRadius: 14,
                     marginBottom: spacing.sm,
-                    paddingVertical: 8,
-                    paddingHorizontal: 8,
+                    padding: spacing.md,
                     borderWidth: 1,
                     borderColor: colors.border,
                     backgroundColor: colors.surface,
@@ -120,7 +119,6 @@ const ReminderScreen = ({ navigation }) => {
                     onToggle={handleToggleReminder}
                     onEdit={(r) => navigation.navigate('ReminderCreate', { reminder: r })}
                     onDelete={handleDeleteReminder}
-                    index={index}
                   />
                 </Card>
               ))

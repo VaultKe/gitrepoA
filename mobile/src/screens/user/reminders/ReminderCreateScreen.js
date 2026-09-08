@@ -213,25 +213,13 @@ const ReminderCreateScreen = ({ navigation, route }) => {
           <Switch value={formData.isEnabled} onValueChange={(v) => updateForm('isEnabled', v)} />
         </Card>
 
-        <Card variant="outlined" style={{ marginBottom: spacing.md, borderRadius: 8, padding: spacing.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-          <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600', marginBottom: 8 }}>Notification Tone</Text>
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {['default', 'chime', 'bell', 'alert'].map((tone) => (
-              <TouchableOpacity
-                key={tone}
-                onPress={() => updateForm('sound', tone)}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                  backgroundColor: formData.sound === tone ? colors.primary : colors.surface,
-                  borderWidth: 1,
-                  borderColor: formData.sound === tone ? colors.primary : colors.border,
-                }}
-              >
-                <Text style={{ color: formData.sound === tone ? '#fff' : colors.text }}>{tone}</Text>
-              </TouchableOpacity>
-            ))}
+        <Card variant="outlined" style={{ marginBottom: spacing.md, borderRadius: 8, padding: spacing.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <Ionicons name="musical-notes-outline" size={20} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>Notification tone</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+              This reminder rings with the tone you chose in Settings › Notification Tone.
+            </Text>
           </View>
         </Card>
 
