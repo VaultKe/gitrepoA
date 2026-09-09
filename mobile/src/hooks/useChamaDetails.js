@@ -55,6 +55,7 @@ const useChamaDetails = ({ route, navigation }) => {
   const loadingRef = useRef(false);
   const lastLoadedAtRef = useRef(0);
   const creatingChatRoomRef = useRef(false);
+  const sectionsLoadingRef = useRef(false);
 
   useEffect(() => {
     if (chamaId) {
@@ -83,6 +84,121 @@ const useChamaDetails = ({ route, navigation }) => {
     return unsubscribe;
   }, [navigation, chamaId]);
 
+  // Lightweight real-time refresh of the on-page tables (polls, transactions,
+  // meetings, stats) while the screen is focused. Runs silently — no loaders,
+  // no state resets — so the UI never flickers.
+  useEffect(() => {
+    if (!chamaId) return undefined;
+    let intervalId = null;
+    const tick = () => {
+      if (loadingRef.current || sectionsLoadingRef.current) return;
+      loadSections(chamaId, { silent: true });
+    };
+    const start = () => {
+      if (intervalId) return;
+      intervalId = setInterval(tick, 15000);
+    };
+    const stop = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    start();
+    const unsubFocus = navigation.addListener('focus', start);
+    const unsubBlur = navigation.addListener('blur', stop);
+    return () => {
+      stop();
+      unsubFocus();
+      unsubBlur();
+    };
+  }, [navigation, chamaId]);
+
+  // Loads only the table sections of the page. Independent of the chama/members
+  // fetch so it can run in parallel with it (fast first paint) and on its own
+  // for background polling.
+  const loadSections = async (targetChamaId = chamaId, { silent = false } = {}) => {
+    if (!targetChamaId) return;
+    if (sectionsLoadingRef.current) return;
+    sectionsLoadingRef.current = true;
+    if (!silent) setPollsLoading(true);
+
+    const userId = String(user?.id);
+
+    try {
+      const [txRes, pollRes, meetRes, statRes] = await Promise.allSettled([
+        ApiService.getTransactions(1000, 0),
+        ApiService.getChamaVotes(targetChamaId, 10, 0),
+        ApiService.getMeetings(targetChamaId),
+        ApiService.getChamaStatistics(targetChamaId),
+      ]);
+
+      if (txRes.status === 'fulfilled' && txRes.value?.success && Array.isArray(txRes.value.data)) {
+        const allTransactions = txRes.value.data || [];
+        const userTransactions = allTransactions.filter((transaction) => {
+          const initiatedBy = String(transaction.initiatedBy || '');
+          const memberId = String(transaction.memberId || '');
+          const recipientId = String(transaction.recipientId || '');
+          const fromWalletId = String(transaction.fromWalletId || '');
+          const toWalletId = String(transaction.toWalletId || '');
+          const transactionUserId = String(transaction.user?.id || transaction.member?.user_id || '');
+          return initiatedBy === userId ||
+            memberId === userId ||
+            recipientId === userId ||
+            fromWalletId === userId ||
+            toWalletId === userId ||
+            transactionUserId === userId;
+        });
+        setTransactions(userTransactions);
+      } else if (!silent) {
+        setTransactions([]);
+      }
+
+      if (pollRes.status === 'fulfilled' && pollRes.value?.success && Array.isArray(pollRes.value.data)) {
+        const allPolls = pollRes.value.data || [];
+        const normalized = allPolls.map((poll) => {
+          const voted = poll.user_voted === 1 || poll.user_voted === true || !!poll.user_vote_option;
+          const votedOption = poll.user_vote_option || null;
+          return {
+            ...poll,
+            type: poll.poll_type || poll.type,
+            ends_at: poll.end_date || poll.ends_at,
+            created_by: poll.created_by_name || poll.created_by,
+            description: poll.description || '',
+            userVoted: voted,
+            user_voted: voted,
+            user_has_voted: voted,
+            userVote: votedOption,
+            user_vote_option: votedOption,
+          };
+        });
+        const sorted = normalized.sort((a, b) => {
+          const aActive = a.status === 'active' && (!a.ends_at || new Date(a.ends_at) > new Date());
+          const bActive = b.status === 'active' && (!b.ends_at || new Date(b.ends_at) > new Date());
+          if (aActive && !bActive) return -1;
+          if (!aActive && bActive) return 1;
+          return new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0);
+        });
+        setPolls(sorted);
+      } else if (!silent) {
+        setPolls([]);
+      }
+
+      if (meetRes.status === 'fulfilled' && meetRes.value?.success) {
+        setMeetings(meetRes.value.data || []);
+      }
+
+      if (statRes.status === 'fulfilled' && statRes.value?.success) {
+        setStatistics(statRes.value.data);
+      }
+    } catch (error) {
+      // Silent — tables keep their last-known data.
+    } finally {
+      sectionsLoadingRef.current = false;
+      if (!silent) setPollsLoading(false);
+    }
+  };
+
   const loadChamaDetails = async (targetChamaId = chamaId) => {
     if (loadingRef.current) return;
     loadingRef.current = true;
@@ -91,19 +207,23 @@ const useChamaDetails = ({ route, navigation }) => {
         return;
       }
 
-      let memberIsLeft = false;
-      let chamaResponse;
-      let membersResponse;
-      try {
-        chamaResponse = await ApiService.getChamaById(targetChamaId);
-      } catch (chamaError) {
-        chamaResponse = { success: false, data: null };
-      }
+      // Fire the table loads immediately so they race the chama/members fetch
+      // instead of waiting behind it.
+      const sectionsPromise = loadSections(targetChamaId);
 
-      try {
-        membersResponse = await ApiService.getChamaMembers(targetChamaId, { include_inactive: 'true' });
-      } catch (membersError) {
-        membersResponse = { success: false, data: [] };
+      let memberIsLeft = false;
+      let chamaResponse = { success: false, data: null };
+      let membersResponse = { success: false, data: [] };
+
+      const [chamaSettled, membersSettled] = await Promise.allSettled([
+        ApiService.getChamaById(targetChamaId),
+        ApiService.getChamaMembers(targetChamaId, { include_inactive: 'true' }),
+      ]);
+      if (chamaSettled.status === 'fulfilled' && chamaSettled.value) {
+        chamaResponse = chamaSettled.value;
+      }
+      if (membersSettled.status === 'fulfilled' && membersSettled.value) {
+        membersResponse = membersSettled.value;
       }
 
       if (chamaResponse.success && chamaResponse.data) {
@@ -193,90 +313,9 @@ const useChamaDetails = ({ route, navigation }) => {
           }, 50);
           return;
         }
-        setPollsLoading(true);
-       Promise.all([
-        ApiService.getTransactions(1000, 0).then(response => {
-          console.log('[DEBUG] getTransactions response:', response);
-          if (response.success && Array.isArray(response.data)) {
-            const allTransactions = response.data || [];
-            console.log('[DEBUG] allTransactions count:', allTransactions.length);
-            const userId = String(user?.id);
-            const userTransactions = allTransactions.filter(transaction => {
-              const initiatedBy = String(transaction.initiatedBy || '');
-              const memberId = String(transaction.memberId || '');
-              const recipientId = String(transaction.recipientId || '');
-              const fromWalletId = String(transaction.fromWalletId || '');
-              const toWalletId = String(transaction.toWalletId || '');
-              const transactionUserId = String(transaction.user?.id || transaction.member?.user_id || '');
-              const matches = initiatedBy === userId ||
-                     memberId === userId ||
-                     recipientId === userId ||
-                     fromWalletId === userId ||
-                     toWalletId === userId ||
-                     transactionUserId === userId;
-              if (matches) {
-                console.log('[DEBUG] matching transaction:', transaction.id, transaction.type, transaction.chamaId);
-              }
-              return matches;
-            });
-            console.log('[DEBUG] userTransactions count:', userTransactions.length);
-            setTransactions(userTransactions);
-          } else {
-            console.log('[DEBUG] getTransactions failed or no data');
-          }
-        }).catch(error => {
-          console.log('[DEBUG] getTransactions error:', error);
-          setTransactions([]);
-        }),
 
-        ApiService.getChamaVotes(targetChamaId, 10, 0).then(response => {
-          if (response.success && Array.isArray(response.data)) {
-            const allPolls = response.data || [];
-            const normalized = allPolls.map(poll => ({
-              ...poll,
-              type: poll.poll_type || poll.type,
-              ends_at: poll.end_date || poll.ends_at,
-              created_by: poll.created_by_name || poll.created_by,
-              description: poll.description || '',
-              userVoted: poll.user_voted === 1 || poll.user_voted === true,
-              user_has_voted: poll.user_voted === 1 || poll.user_voted === true,
-            }));
-            const sorted = normalized.sort((a, b) => {
-              const aActive = a.status === 'active' && (!a.ends_at || new Date(a.ends_at) > new Date());
-              const bActive = b.status === 'active' && (!b.ends_at || new Date(b.ends_at) > new Date());
-              if (aActive && !bActive) return -1;
-              if (!aActive && bActive) return 1;
-              return new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0);
-            });
-            setPolls(sorted);
-          } else {
-            setPolls([]);
-          }
-        }).catch(() => {
-          setPolls([]);
-        }).finally(() => {
-          setPollsLoading(false);
-        }),
-
-        ApiService.getMeetings(targetChamaId).then(response => {
-          if (response.success) {
-            const meetingsData = response.data || [];
-            setMeetings(meetingsData);
-          }
-        }).catch(error => {
-          setMeetings([]);
-        }),
-
-        ApiService.getChamaStatistics(targetChamaId).then(response => {
-          if (response.success) {
-            setStatistics(response.data);
-          }
-        }).catch(error => {
-          setStatistics(null);
-        })
-      ]);
-
-      setLoans([]);
+        await sectionsPromise;
+        setLoans([]);
 
     } catch (error) {
       // Silent catch for load errors

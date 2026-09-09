@@ -33,6 +33,15 @@ const DURATIONS = [
 
 const ROLES = ['chairperson', 'treasurer', 'secretary'];
 
+// Bordered card (no shadow) that groups a section of the form. Defined at module
+// scope so it is not recreated every render (which would drop TextInput focus).
+const Section = ({ title, children, styles, style: st }) => (
+  <View style={[styles.card, st]}>
+    {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
+    {children}
+  </View>
+);
+
 const CreatePollScreen = ({ route, navigation }) => {
   const { theme, user } = useApp();
   const colors = getThemeColors(theme);
@@ -175,7 +184,7 @@ const CreatePollScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Poll type */}
-        <Text style={s.sectionLabel}>Poll type</Text>
+        <Section title="Poll type" styles={s}>
         <View style={{ gap: spacing.sm }}>
           {POLL_TYPES.map((t) => {
             const selected = type === t.value;
@@ -210,31 +219,34 @@ const CreatePollScreen = ({ route, navigation }) => {
             );
           })}
         </View>
+        </Section>
 
         {/* Regular poll: title + description + options */}
         {!isRole && (
           <>
-            <Text style={s.sectionLabel}>Title</Text>
+            <Section title="Title" styles={s}>
             <TextInput
-              style={s.input}
+              style={[s.input, { marginBottom: 0 }]}
               value={title}
               onChangeText={setTitle}
               placeholder="What are members deciding on?"
               placeholderTextColor={colors.textTertiary}
               maxLength={140}
             />
+            </Section>
 
-            <Text style={s.sectionLabel}>Description (optional)</Text>
+            <Section title="Description (optional)" styles={s}>
             <TextInput
-              style={[s.input, s.textArea]}
+              style={[s.input, s.textArea, { marginBottom: 0 }]}
               value={description}
               onChangeText={setDescription}
               placeholder="Add context to help members decide"
               placeholderTextColor={colors.textTertiary}
               multiline
             />
+            </Section>
 
-            <Text style={s.sectionLabel}>Options</Text>
+            <Section title="Options" styles={s}>
             <View style={{ gap: spacing.sm }}>
               {options.map((opt, i) => (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -259,13 +271,14 @@ const CreatePollScreen = ({ route, navigation }) => {
                 <Text style={[s.addBtnText, { color: colors.primary }]}>Add option</Text>
               </TouchableOpacity>
             )}
+            </Section>
           </>
         )}
 
         {/* Role change: role + candidates */}
         {isRole && (
           <>
-            <Text style={s.sectionLabel}>Role to fill</Text>
+            <Section title="Role to fill" styles={s}>
             <View style={s.chipRow}>
               {ROLES.map((r) => {
                 const selected = requestedRole === r;
@@ -285,8 +298,9 @@ const CreatePollScreen = ({ route, navigation }) => {
                 );
               })}
             </View>
+            </Section>
 
-            <Text style={s.sectionLabel}>Candidates</Text>
+            <Section title="Candidates" styles={s}>
             <TextInput
               style={s.input}
               value={memberQuery}
@@ -327,11 +341,12 @@ const CreatePollScreen = ({ route, navigation }) => {
                 })}
               </View>
             )}
+            </Section>
           </>
         )}
 
         {/* Duration */}
-        <Text style={s.sectionLabel}>Voting closes in</Text>
+        <Section title="Voting closes in" styles={s}>
         <View style={s.chipRow}>
           {DURATIONS.map((d) => {
             const selected = durationDays === d.days;
@@ -351,32 +366,35 @@ const CreatePollScreen = ({ route, navigation }) => {
             );
           })}
         </View>
+        </Section>
 
         {/* Settings */}
-        <View style={[s.settingRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.settingTitle, { color: colors.text }]}>Anonymous voting</Text>
-            <Text style={[s.settingDesc, { color: colors.textSecondary }]}>Hide who voted for what</Text>
+        <Section title="Settings" styles={s}>
+          <View style={s.settingRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.settingTitle, { color: colors.text }]}>Anonymous voting</Text>
+              <Text style={[s.settingDesc, { color: colors.textSecondary }]}>Hide who voted for what</Text>
+            </View>
+            <Switch
+              value={isAnonymous}
+              onValueChange={setIsAnonymous}
+              trackColor={{ false: colors.border, true: colors.primary + '55' }}
+              thumbColor={isAnonymous ? colors.primary : colors.textSecondary}
+            />
           </View>
-          <Switch
-            value={isAnonymous}
-            onValueChange={setIsAnonymous}
-            trackColor={{ false: colors.border, true: colors.primary + '55' }}
-            thumbColor={isAnonymous ? colors.primary : colors.textSecondary}
-          />
-        </View>
-        <View style={[s.settingRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.settingTitle, { color: colors.text }]}>Require majority</Text>
-            <Text style={[s.settingDesc, { color: colors.textSecondary }]}>Pass only with more than half the votes</Text>
+          <View style={[s.settingRow, { borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.sm, paddingTop: spacing.sm }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.settingTitle, { color: colors.text }]}>Require majority</Text>
+              <Text style={[s.settingDesc, { color: colors.textSecondary }]}>Pass only with more than half the votes</Text>
+            </View>
+            <Switch
+              value={requiresMajority}
+              onValueChange={setRequiresMajority}
+              trackColor={{ false: colors.border, true: colors.primary + '55' }}
+              thumbColor={requiresMajority ? colors.primary : colors.textSecondary}
+            />
           </View>
-          <Switch
-            value={requiresMajority}
-            onValueChange={setRequiresMajority}
-            trackColor={{ false: colors.border, true: colors.primary + '55' }}
-            thumbColor={requiresMajority ? colors.primary : colors.textSecondary}
-          />
-        </View>
+        </Section>
       </ScrollView>
 
       {/* Footer */}
@@ -410,13 +428,26 @@ const CreatePollScreen = ({ route, navigation }) => {
 const makeStyles = (colors) =>
   StyleSheet.create({
     container: { flex: 1 },
-    sectionLabel: {
-      fontSize: 13,
+    // Bordered card, no shadow.
+    card: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.surface,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      shadowColor: 'transparent',
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 0,
+    },
+    cardTitle: {
+      fontSize: 12,
       fontWeight: typography.fontWeight.bold,
       color: colors.textSecondary,
       textTransform: 'uppercase',
-      letterSpacing: 0.4,
-      marginTop: spacing.lg,
+      letterSpacing: 0.5,
       marginBottom: spacing.sm,
     },
     input: {
@@ -476,11 +507,6 @@ const makeStyles = (colors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      borderWidth: 1,
-      borderRadius: borderRadius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm + 2,
-      marginTop: spacing.sm,
     },
     settingTitle: { fontSize: 14, fontWeight: typography.fontWeight.semibold },
     settingDesc: { fontSize: 12, marginTop: 1 },

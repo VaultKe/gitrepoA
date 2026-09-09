@@ -9,6 +9,7 @@ import (
 	"vaultke-backend/internal/models"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // PollsService handles poll-related business logic
@@ -114,6 +115,13 @@ func (s *PollsService) CreatePoll(chamaID, createdBy string, req *models.CreateP
 
 // GetChamaPolls retrieves polls for a chama
 func (s *PollsService) GetChamaPolls(chamaID string, limit, offset int) ([]models.PollWithDetails, error) {
+	return s.GetChamaPollsForUser(chamaID, "", limit, offset)
+}
+
+// GetChamaPollsForUser is GetChamaPolls plus per-user vote state (UserVoted /
+// UserVoteOption / UserCanVote) so the client can hide the ballot immediately
+// after a vote.
+func (s *PollsService) GetChamaPollsForUser(chamaID, userID string, limit, offset int) ([]models.PollWithDetails, error) {
 	query := `
 		SELECT p.id, p.chama_id, p.title, p.description, p.poll_type, p.created_by,
 			   p.start_date, p.end_date, p.status, p.is_anonymous, p.requires_majority,
@@ -161,6 +169,40 @@ func (s *PollsService) GetChamaPolls(chamaID string, limit, offset int) ([]model
 		}
 
 		polls = append(polls, poll)
+	}
+
+	// Per-user vote state so the client can hide the ballot immediately after a
+	// vote without waiting for a full reload.
+	if userID != "" && len(polls) > 0 {
+		hashToPoll := make(map[string]int, len(polls))
+		hashes := make([]string, 0, len(polls))
+		for i := range polls {
+			h := models.GenerateVoterHash(userID, polls[i].ID)
+			hashToPoll[h] = i
+			hashes = append(hashes, h)
+		}
+		rows, verr := s.db.Query(
+			`SELECT voter_hash, option_id FROM poll_votes WHERE voter_hash = ANY($1) AND is_valid = TRUE`,
+			pq.Array(hashes),
+		)
+		if verr == nil {
+			for rows.Next() {
+				var vh, optID string
+				if rows.Scan(&vh, &optID) == nil {
+					if idx, ok := hashToPoll[vh]; ok {
+						polls[idx].UserVoted = true
+						oid := optID
+						polls[idx].UserVoteOption = &oid
+					}
+				}
+			}
+			rows.Close()
+		} else {
+			log.Printf("Warning: failed to load user vote state: %v", verr)
+		}
+	}
+	for i := range polls {
+		polls[i].UserCanVote = !polls[i].UserVoted && polls[i].Poll.CanVote()
 	}
 
 	return polls, nil
@@ -266,20 +308,37 @@ func (s *PollsService) GetPollDetails(pollID, userID string) (*models.PollWithDe
 	// Check if user has voted
 	voterHash := models.GenerateVoterHash(userID, pollID)
 	userVoted := s.hasUserVoted(pollID, voterHash)
+	var userVoteOption *string
+	if userVoted {
+		userVoteOption = s.getUserVotedOption(pollID, voterHash)
+	}
 
 	// Check if user can vote
 	userCanVote := poll.CanVote() && s.isEligibleToVote(userID, poll.ChamaID) && !userVoted
 
 	pollDetails := &models.PollWithDetails{
-		Poll:          *poll,
-		CreatedByName: creatorName,
-		Options:       options,
-		UserVoted:     userVoted,
-		UserCanVote:   userCanVote,
-		TimeRemaining: poll.GetTimeRemaining(),
+		Poll:           *poll,
+		CreatedByName:  creatorName,
+		Options:        options,
+		UserVoted:      userVoted,
+		UserVoteOption: userVoteOption,
+		UserCanVote:    userCanVote,
+		TimeRemaining:  poll.GetTimeRemaining(),
 	}
 
 	return pollDetails, nil
+}
+
+func (s *PollsService) getUserVotedOption(pollID, voterHash string) *string {
+	var optID string
+	err := s.db.QueryRow(
+		`SELECT option_id FROM poll_votes WHERE poll_id = $1 AND voter_hash = $2 AND is_valid = TRUE LIMIT 1`,
+		pollID, voterHash,
+	).Scan(&optID)
+	if err != nil || optID == "" {
+		return nil
+	}
+	return &optID
 }
 
 // CreateRoleEscalationPoll creates a poll for role escalation

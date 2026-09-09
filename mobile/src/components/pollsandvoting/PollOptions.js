@@ -22,8 +22,10 @@ const PollOptions = ({
     ]}>
       {item.options.map((option, index) => {
         const percentage = getVotePercentage(option.vote_count, totalVotesCast);
-        const canVote = item.status === 'active' && !item.user_voted;
-        const showVotingInterface = item.status === 'active' && !item.user_voted;
+        const voted = item.user_voted || item.userVoted || item.user_has_voted;
+        const myChoice = (item.userVote || item.user_vote_option) === option.id;
+        const canVote = item.status === 'active' && !voted;
+        const showVotingInterface = item.status === 'active' && !voted;
 
         return (
           <View
@@ -37,11 +39,13 @@ const PollOptions = ({
                 borderWidth: 2,
                 backgroundColor: colors.primary + '08'
               },
-              item.user_voted && {
+              myChoice && {
                 borderColor: colors.success,
-                backgroundColor: colors.success + '08'
+                borderWidth: 2,
+                backgroundColor: colors.success + '12'
               },
-              item.status === 'completed' && {
+              voted && !myChoice && { opacity: 0.7 },
+              item.status === 'completed' && !myChoice && {
                 borderColor: colors.textSecondary,
                 backgroundColor: colors.textSecondary + '05'
               }
@@ -81,8 +85,8 @@ const PollOptions = ({
               </View>
             )}
 
-            {/* User Already Voted Icon - Smaller and cleaner */}
-            {item.user_voted && (
+            {/* The option this user picked */}
+            {myChoice && (
               <View style={[styles.voteIconContainer, { backgroundColor: colors.success + '15', borderRadius: 12, padding: 6 }]}>
                 <Ionicons
                   name="checkmark-circle"
@@ -93,7 +97,7 @@ const PollOptions = ({
             )}
 
             {/* Completed Vote Icon - Smaller */}
-            {item.status === 'completed' && !item.user_voted && (
+            {item.status === 'completed' && !voted && (
               <View style={[styles.voteIconContainer, { backgroundColor: colors.textSecondary + '15', borderRadius: 12, padding: 6 }]}>
                 <Ionicons
                   name="time"
@@ -131,16 +135,16 @@ const PollOptions = ({
             )}
 
             {/* Voted Indicator - Compact */}
-            {item.user_voted && (
+            {myChoice && (
               <View style={[styles.actionIndicator, { backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2 }]}>
                 <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
-                  VOTED
+                  YOUR VOTE
                 </Text>
               </View>
             )}
 
             {/* Completed Indicator - Compact */}
-            {item.status === 'completed' && !item.user_voted && (
+            {item.status === 'completed' && !voted && (
               <View style={[styles.actionIndicator, { backgroundColor: colors.textSecondary, paddingHorizontal: 6, paddingVertical: 2 }]}>
                 <Text style={[styles.actionText, { color: colors.surface, fontSize: 12 }]}>
                   ENDED
@@ -192,16 +196,16 @@ const PollBadges = ({ item, colors }) => {
         </View>
       )}
 
-      {item.user_voted && (
+      {(item.user_voted || item.userVoted) && (
         <View style={[styles.votedBadge, { backgroundColor: colors.success + '15', borderColor: colors.success, borderWidth: 1 }]}>
           <Ionicons name="checkmark-circle" size={10} color={colors.success} />
           <Text style={[styles.votedText, { color: colors.success, fontSize: 12 }]}>
-            VOTED
+            YOU VOTED
           </Text>
         </View>
       )}
 
-      {item.status === 'active' && !item.user_voted && (
+      {item.status === 'active' && !(item.user_voted || item.userVoted) && (
         <View style={[styles.canVoteBadge, { backgroundColor: colors.primary + '15', borderColor: colors.primary, borderWidth: 1 }]}>
           <Ionicons name="radio-button-off" size={10} color={colors.primary} />
           <Text style={[styles.canVoteText, { color: colors.primary, fontSize: 12 }]}>

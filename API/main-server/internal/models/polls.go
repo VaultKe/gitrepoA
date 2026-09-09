@@ -134,11 +134,12 @@ type CreateRoleEscalationRequest struct {
 // PollWithDetails represents a poll with additional details
 type PollWithDetails struct {
 	Poll
-	CreatedByName string       `json:"created_by_name"`
-	Options       []PollOption `json:"options"`
-	UserVoted     bool         `json:"user_voted"`
-	UserCanVote   bool         `json:"user_can_vote"`
-	TimeRemaining *int64       `json:"time_remaining,omitempty"` // seconds
+	CreatedByName  string       `json:"created_by_name"`
+	Options        []PollOption `json:"options"`
+	UserVoted      bool         `json:"user_voted"`
+	UserVoteOption *string      `json:"user_vote_option,omitempty"` // option id the user voted for
+	UserCanVote    bool         `json:"user_can_vote"`
+	TimeRemaining  *int64       `json:"time_remaining,omitempty"` // seconds
 }
 
 // PollResponse represents the response structure for poll operations

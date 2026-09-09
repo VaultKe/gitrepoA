@@ -85,6 +85,12 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
       if (endsAt && status === 'active') {
         timeRemaining = Math.max(0, Math.floor((endsAt - now) / 1000));
       }
+      const voted =
+        normalized.user_voted === 1 ||
+        normalized.user_voted === true ||
+        normalized.userVoted === true ||
+        !!normalized.user_vote_option;
+      const votedOption = normalized.user_vote_option || normalized.userVote || null;
       return {
         ...normalized,
         status,
@@ -92,8 +98,11 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
         completionStatus: isFullyVoted ? 'All votes cast' : null,
         timeRemaining,
         totalVotes,
-        userVoted: normalized.user_voted === 1 || normalized.user_voted === true,
-        user_has_voted: normalized.user_voted === 1 || normalized.user_voted === true,
+        userVoted: voted,
+        user_voted: voted,
+        user_has_voted: voted,
+        userVote: votedOption,
+        user_vote_option: votedOption,
       };
     });
   };
@@ -399,6 +408,31 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
     }
   };
 
+  // Apply a transform to a poll across every list it might live in.
+  const patchPollEverywhere = (pollId, patch) => {
+    const apply = (arr) => arr.map((p) => (p.id === pollId ? patch(p) : p));
+    setPolls(apply);
+    setVotes(apply);
+    setCompletedPolls(apply);
+    setAllPolls(apply);
+  };
+
+  const applyOptimisticVote = (p, optionId) => ({
+    ...p,
+    userVoted: true,
+    user_voted: true,
+    user_has_voted: true,
+    userVote: optionId,
+    user_vote_option: optionId,
+    user_can_vote: false,
+    options: (p.options || []).map((opt) =>
+      opt.id === optionId ? { ...opt, vote_count: (opt.vote_count || 0) + 1 } : opt
+    ),
+    total_votes: (p.total_votes || p.total_votes_cast || 0) + 1,
+    total_votes_cast: (p.total_votes_cast || p.total_votes || 0) + 1,
+    totalVotes: (p.totalVotes || 0) + 1,
+  });
+
   const handleVote = async (pollId, optionId, poll) => {
     if (!pollId || !optionId || !chamaId) {
       Alert.alert('Error', 'Invalid vote parameters. Please try again.');
@@ -408,70 +442,78 @@ const usePollsVotingScreen = ({ route, navigation, onCreateSuccess }) => {
       Alert.alert('Error', 'You must be logged in to vote.');
       return;
     }
+    // Guard against a double-tap while the request is in flight or after voting.
+    const current = allPolls.find((p) => p.id === pollId);
+    if (current && (current.userVoted || current.user_voted)) return;
+
+    // 1. Update the UI immediately so the ballot disappears and the tally moves.
+    patchPollEverywhere(pollId, (p) => applyOptimisticVote(p, optionId));
 
     try {
-      setVotes((prevVotes) => prevVotes.map((vote) => (vote.id === pollId ? { ...vote, userVoted: true } : vote)));
-
       let response;
-      if (poll.type === 'Election / Voting') {
-        // Role escalation polls may still be in the old votes system
+      if (poll?.type === 'Election / Voting') {
         response = await ApiService.makeRequest(`/chamas/${chamaId}/votes/${pollId}/vote`, {
           method: 'POST',
-          body: { optionId },
+          body: { optionId, option_id: optionId },
         });
       } else {
         response = await ApiService.castPollVote(chamaId, pollId, optionId);
       }
 
-      if (response.success) {
-        if (poll.type === 'Election / Voting' && response.data?.pollCompleted) {
-          if (response.data?.result === 'passed') {
-            const candidateName = response.data?.candidateName || 'the candidate';
-            const newRole = response.data?.newRole || 'new role';
-            Alert.alert(
-              'Congratulations!',
-              `${candidateName} has been successfully elected to the ${newRole} position!`,
-              [{ text: 'OK', onPress: () => loadPolls() }]
-            );
-          } else {
-            Alert.alert('Vote Complete', 'The role escalation vote has been completed. The role change was not approved.', [
-              { text: 'OK', onPress: () => loadPolls() },
-            ]);
-          }
-        } else {
-          setVotes((prevVotes) =>
-            prevVotes.map((vote) => {
-              if (vote.id === pollId) {
-                return {
-                  ...vote,
-                  options: vote.options.map((opt) => (opt.id === optionId ? { ...opt, vote_count: (opt.vote_count || 0) + 1 } : opt)),
-                  total_votes: ((vote.total_votes || vote.total_votes_cast || 0) + 1),
-                };
-              }
-              return vote;
-            })
-          );
-          setPolls((prevPolls) =>
-            prevPolls.map((pol) => {
-              if (pol.id === pollId) {
-                return {
-                  ...pol,
-                  options: pol.options.map((opt) => (opt.id === optionId ? { ...opt, vote_count: (opt.vote_count || 0) + 1 } : opt)),
-                  total_votes_cast: ((pol.total_votes_cast || pol.total_votes || 0) + 1),
-                };
-              }
-              return pol;
-            })
-          );
-          Alert.alert('Vote Cast Successfully!', 'Your vote has been recorded and vote counts updated!', [{ text: 'OK' }]);
+      if (response?.success) {
+        // 2. Reconcile with the authoritative poll the server returned.
+        if (response.data && response.data.id) {
+          const [fresh] = normalizePolls([response.data]);
+          if (fresh) patchPollEverywhere(pollId, () => fresh);
         }
+        if (poll?.type === 'Election / Voting' && response.data?.pollCompleted) {
+          const passed = response.data?.result === 'passed';
+          setSuccessMessage(
+            passed
+              ? `${response.data?.candidateName || 'The candidate'} was elected to ${response.data?.newRole || 'the role'}.`
+              : 'The role change vote closed without approval.'
+          );
+          setShowSuccessBanner(true);
+        } else {
+          setSuccessMessage('Your vote was recorded.');
+          setShowSuccessBanner(true);
+        }
+        // 3. Pull the full list in the background for other polls / results.
+        loadPolls();
       } else {
-        setVotes((prevVotes) => prevVotes.map((vote) => (vote.id === pollId ? { ...vote, userVoted: false } : vote)));
-        Alert.alert('Error', response.error || 'Failed to cast vote');
+        // Real failure — undo the optimistic change.
+        patchPollEverywhere(pollId, (p) => {
+          const undoOpt = (p.options || []).map((opt) =>
+            opt.id === optionId ? { ...opt, vote_count: Math.max(0, (opt.vote_count || 0) - 1) } : opt
+          );
+          return {
+            ...p,
+            userVoted: false,
+            user_voted: false,
+            user_has_voted: false,
+            userVote: null,
+            user_vote_option: null,
+            user_can_vote: true,
+            options: undoOpt,
+            total_votes: Math.max(0, (p.total_votes || 1) - 1),
+            total_votes_cast: Math.max(0, (p.total_votes_cast || 1) - 1),
+            totalVotes: Math.max(0, (p.totalVotes || 1) - 1),
+          };
+        });
+        Alert.alert('Could not vote', response?.error || 'Please try again.');
       }
     } catch (error) {
-      setVotes((prevVotes) => prevVotes.map((vote) => (vote.id === pollId ? { ...vote, userVoted: false } : vote)));
-      Alert.alert('Error', 'Failed to cast vote');
+      // The backend now returns success for "already voted"; a thrown error is a
+      // genuine network/other failure. Keep the optimistic state and refresh.
+      const msg = String(error?.message || '').toLowerCase();
+      if (msg.includes('already voted')) {
+        setSuccessMessage('You have already voted on this poll.');
+        setShowSuccessBanner(true);
+        loadPolls();
+        return;
+      }
+      Alert.alert('Could not vote', 'Please check your connection and try again.');
+      loadPolls();
     }
   };
 

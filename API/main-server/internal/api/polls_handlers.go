@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"vaultke-backend/internal/models"
 	"vaultke-backend/internal/services"
@@ -106,7 +107,7 @@ func (h *PollsHandlers) GetChamaPolls(c *gin.Context) {
 		offset = 0
 	}
 
-	polls, err := h.pollsService.GetChamaPolls(chamaID, limit, offset)
+	polls, err := h.pollsService.GetChamaPollsForUser(chamaID, userID, limit, offset)
 	if err != nil {
 		// Log the error server-side for diagnosis
 		log.Printf("[POLLS] Failed to get polls for chama %s: %v", chamaID, err)
@@ -206,10 +207,35 @@ func (h *PollsHandlers) CastVote(c *gin.Context) {
 
 	err := h.pollsService.CastVote(pollID, userID, &req)
 	if err != nil {
+		// "already voted" is not a UI failure — the ballot just needs to catch
+		// up. Return the current poll so the client can reconcile in place.
+		if strings.Contains(strings.ToLower(err.Error()), "already voted") {
+			if pd, gerr := h.pollsService.GetPollDetails(pollID, userID); gerr == nil {
+				c.JSON(http.StatusOK, models.VoteResponse{
+					Success: true,
+					Message: "You have already voted on this poll",
+					Data:    pd,
+				})
+				c.Abort()
+				return
+			}
+		}
 		c.JSON(http.StatusBadRequest, models.VoteResponse{
 			Success: false,
 			Error:   err.Error(),
 		})
+		return
+	}
+
+	// Return the updated poll (with the caller's vote state) so the client can
+	// update the tally and hide the ballot immediately — no reload needed.
+	if pd, gerr := h.pollsService.GetPollDetails(pollID, userID); gerr == nil {
+		c.JSON(http.StatusOK, models.VoteResponse{
+			Success: true,
+			Message: "Vote cast successfully",
+			Data:    pd,
+		})
+		c.Abort()
 		return
 	}
 
