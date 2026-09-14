@@ -5,6 +5,7 @@ import * as Application from 'expo-application';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { securityCheck } from './rootDetection';
 
 const VERSION_CHECK_KEY = 'vaultke_last_version_check';
 const VERSION_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -40,6 +41,19 @@ const getHeaders = async () => {
 };
 
 export const checkForApkUpdate = async (force = false) => {
+  const isSecure = await securityCheck();
+  if (!isSecure) {
+    console.warn('[APK_UPDATE] Device security check failed - update check blocked on rooted/emulator device');
+    return {
+      hasUpdate: false,
+      currentVersionCode: getAppVersionCode(),
+      currentVersionName: getAppVersionName(),
+      latestVersion: null,
+      blocked: true,
+      error: 'Security check failed: device is rooted or running on an emulator',
+    };
+  }
+
   const now = Date.now();
 
   if (!force) {

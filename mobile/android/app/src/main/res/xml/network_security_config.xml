@@ -1,0 +1,13 @@
+<network-security-config>
+    <!-- Pin the backend certificate to prevent MITM attacks -->
+    <domain-config>
+        <domain includeSubdomains="true">gitrepoa-1.onrender.com</domain>
+        <!-- Add your actual certificate pins here -->
+        <!-- Generate with: keytool -printcert -rfc -keystore vaultke-release.keystore -->
+        <!--
+        <pin-set expiration="2027-12-31">
+            <pin digest="SHA-256">YOUR_CERT_PIN_HERE</pin>
+        </pin-set>
+        -->
+    </domain-config>
+</network-security-config>

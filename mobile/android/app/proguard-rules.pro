@@ -1,14 +1,57 @@
-# Add project specific ProGuard rules here.
-# By default, the flags in this file are appended to flags specified
-# in /usr/local/Cellar/android-sdk/24.3.3/tools/proguard/proguard-android.txt
-# You can edit the include path and order by changing the proguardFiles
-# directive in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ----------------------------------------------------------------------------
+# ProGuard / R8 Rules for VaultKe
+# ----------------------------------------------------------------------------
 
-# react-native-reanimated
--keep class com.swmansion.reanimated.** { *; }
--keep class com.facebook.react.turbomodule.** { *; }
+# --- Kotlin ---
+-keepclassmembers class kotlin.Metadata { *; }
+-keep class kotlin.Metadata { *; }
+-assumenosideeffects class kotlin.jvm.internal.Intrinsics {
+    static void checkNotNullArgument(java.lang.Object);
+    static void checkNotNullArgument(java.lang.Object, java.lang.String);
+}
 
-# Add any project specific keep options here:
+# --- React Native / Expo ---
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.react.bridge.** { *; }
+-keep class expo.** { *; }
+-keep class expo.modules.** { *; }
+
+# --- Native methods ---
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# --- Enums ---
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+# --- Generics ---
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes EnclosingClass
+-keepattributes InnerClasses
+
+# --- Keep our app classes ---
+-keep class com.somulos.vaultke.** { *; }
+
+# --- Keep API endpoint interfaces (reflection) ---
+-keep class com.somulos.vaultke.api.** { *; }
+
+# --- Keep Parcelable / Serializable ---
+-keep class * implements android.os.Parcelable {
+    *;
+}
+-keep class * implements java.io.Serializable {
+    *;
+}
+
+# --- Keep Dagger/Hilt (if used) ---
+@ -keep class dagger.** { *; }
+
+# --- Suppress warnings ---
+-dontwarn com.facebook.react.**
+-dontwarn expo.**
+-dontwarn com.somulos.vaultke.**
