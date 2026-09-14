@@ -5,8 +5,10 @@ import ConsolePage from './pages/ConsolePage';
 import DownloadPage from './pages/DownloadPage';
 import VersionCheckPage from './pages/VersionCheckPage';
 import { getAuthToken, removeAuthToken } from './services/auth';
+import { ensureConfigLoaded } from './services/runtimeConfig';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
+import { ToastContainer } from './components/Toast';
 
 function RequireAuth({ children }) {
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,7 @@ function RequireAuth({ children }) {
     checkAuth();
   }, []);
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner text="Loading..." />;
 
   const location = useLocation();
   if (!authenticated) {
@@ -36,30 +38,34 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
+      await ensureConfigLoaded();
       await getAuthToken();
       setInitializing(false);
     };
     init();
   }, []);
 
-  if (initializing) return <LoadingSpinner />;
+  if (initializing) return <LoadingSpinner text="Initializing VaultKe..." />;
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/download" element={<Layout><DownloadPage /></Layout>} />
-      <Route path="/version-check" element={<VersionCheckPage />} />
-      <Route
-        path="/console"
-        element={
-          <RequireAuth>
-            <Layout>
-              <ConsolePage />
-            </Layout>
-          </RequireAuth>
-        }
-      />
-      <Route path="/" element={<Navigate to="/download" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/download" element={<Layout><DownloadPage /></Layout>} />
+        <Route path="/version-check" element={<VersionCheckPage />} />
+        <Route
+          path="/console"
+          element={
+            <RequireAuth>
+              <Layout>
+                <ConsolePage />
+              </Layout>
+            </RequireAuth>
+          }
+        />
+        <Route path="/" element={<Navigate to="/download" replace />} />
+      </Routes>
+      <ToastContainer />
+    </>
   );
 }

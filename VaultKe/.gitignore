@@ -1,9 +1,22 @@
 # VaultKe APK Distribution — Web Frontend
 node_modules/
 dist/
+
+# Environment
 .env
 .env.local
+.env.production
+
+# IDE
 .idea/
 .vscode/
 *.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,4 +1,5 @@
 import api from './api';
+import { getApiBaseUrl } from './runtimeConfig';
 
 const DEFAULT_OPTIONS = {
   currentVersionCode: 1,
@@ -65,8 +66,9 @@ export const checkForUpdate = async (options = {}) => {
 
 export const downloadApk = async (versionName, onProgress) => {
   try {
-    const baseUrl = api.getBaseUrl();
-    const url = `${baseUrl}/api/v1/apk/download/${encodeURIComponent(versionName || '')}`;
+    const baseUrl = await getApiBaseUrl();
+    const downloadBase = baseUrl.replace(/\/api\/v1\/?$/, '');
+    const url = `${downloadBase}/api/v1/apk/download/${encodeURIComponent(versionName || '')}`;
 
     const response = await fetch(url);
 

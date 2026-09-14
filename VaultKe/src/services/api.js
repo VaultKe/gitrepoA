@@ -1,4 +1,4 @@
-const API_BASE_URL = typeof __API_BASE_URL__ !== 'undefined' ? __API_BASE_URL__ : (process.env.VITE_API_BASE_URL || 'https://gitrepoa-1.onrender.com/api/v1');
+import { getApiBaseUrl } from './runtimeConfig';
 
 const defaultHeaders = {
   'Content-Type': 'application/json',
@@ -25,17 +25,26 @@ const handleResponse = async (response) => {
     data = { success: response.ok, data: await response.text() };
   }
   if (!response.ok) {
+    if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
     throw new Error(data?.error || data?.message || `HTTP ${response.status}`);
   }
   return data;
 };
 
+let cachedBaseUrl = null;
+
 const api = {
-  baseURL: API_BASE_URL,
+  baseURL: '/api/v1',
 
   async get(endpoint) {
+    const baseUrl = cachedBaseUrl || await getApiBaseUrl();
+    cachedBaseUrl = baseUrl;
     const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
       method: 'GET',
       headers: { ...defaultHeaders, ...headers },
     });
@@ -43,8 +52,10 @@ const api = {
   },
 
   async post(endpoint, body) {
+    const baseUrl = cachedBaseUrl || await getApiBaseUrl();
+    cachedBaseUrl = baseUrl;
     const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
       method: 'POST',
       headers: { ...defaultHeaders, ...headers },
       body: JSON.stringify(body),
@@ -53,8 +64,10 @@ const api = {
   },
 
   async postFormData(endpoint, formData) {
+    const baseUrl = cachedBaseUrl || await getApiBaseUrl();
+    cachedBaseUrl = baseUrl;
     const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
       method: 'POST',
       headers: { ...headers },
       body: formData,
@@ -63,8 +76,10 @@ const api = {
   },
 
   async put(endpoint, body) {
+    const baseUrl = cachedBaseUrl || await getApiBaseUrl();
+    cachedBaseUrl = baseUrl;
     const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
       method: 'PUT',
       headers: { ...defaultHeaders, ...headers },
       body: JSON.stringify(body),
@@ -73,16 +88,22 @@ const api = {
   },
 
   async del(endpoint) {
+    const baseUrl = cachedBaseUrl || await getApiBaseUrl();
+    cachedBaseUrl = baseUrl;
     const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
       method: 'DELETE',
       headers: { ...defaultHeaders, ...headers },
     });
     return handleResponse(res);
   },
 
-  getBaseUrl() {
-    return API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+  async getBaseUrl() {
+    if (cachedBaseUrl) return cachedBaseUrl;
+    return getApiBaseUrl().then((url) => {
+      cachedBaseUrl = url;
+      return url;
+    });
   },
 };
 

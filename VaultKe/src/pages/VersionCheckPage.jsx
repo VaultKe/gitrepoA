@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getApiBaseUrl } from '../services/runtimeConfig';
 
 const VersionCheckPage = () => {
   const [checkResult, setCheckResult] = useState(null);
@@ -19,9 +20,13 @@ const VersionCheckPage = () => {
     if (!versionCode) return;
     setLoading(true);
     try {
-      const baseUrl = process.env.VITE_API_BASE_URL || 'https://gitrepoa-1.onrender.com/api/v1';
+      const apiUrl = await getApiBaseUrl();
       const res = await fetch(
-        `${baseUrl}/apk/version-check?currentVersionCode=${versionCode}&currentVersionName=${encodeURIComponent(versionName || '')}`
+        `${apiUrl}/apk/version-check?currentVersionCode=${versionCode}&currentVersionName=${encodeURIComponent(versionName || '')}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        }
       );
       const data = await res.json();
       setCheckResult(data);

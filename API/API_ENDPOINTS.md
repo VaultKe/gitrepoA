@@ -223,3 +223,65 @@ All meeting endpoints are proxied through `/api/v1/online-meetings/*` on the mai
 | GET | `/api/v1/rooms/:roomID/participants` | Get participants |
 | GET | `/api/v1/rooms/:roomID/signal` | WebRTC signaling WebSocket |
 | GET | `/stats` | Get server statistics |
+
+---
+
+## APK Distribution Endpoints
+
+### Public (no authentication required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/apk/latest` | Fetch the latest active APK version info (versionCode, versionName, releaseNotes, fileSize, downloadUrl, isMandatory) |
+| GET | `/api/v1/apk/version-check?currentVersionCode=1&currentVersionName=1.0.0` | Version check endpoint for APK clients — returns `hasUpdate`, `updateType` (none/minor/major), and `latest` version info |
+| GET | `/api/v1/apk/history` | List all APK versions (newest first) with metadata |
+| GET | `/api/v1/apk/download/:version` | Download a specific APK by version name (e.g. `/apk/download/latest`). Serves binary APK file only — no source code is exposed |
+
+### Protected (admin/publisher role required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/apk/upload` | Upload a new APK. Multipart form fields: `apk` (file), `versionCode` (int), `versionName` (string), `releaseNotes` (string), `isMandatory` (boolean) |
+| DELETE | `/api/v1/apk/version/:id` | Delete an APK version by ID (removes DB row + file from disk, promotes next-latest if deleted version was `is_latest`) |
+
+### Version Check Response Format
+
+```json
+{
+  "success": true,
+  "data": {
+    "latestVersionCode": 42,
+    "latestVersionName": "2.3.1",
+    "versionCode": 42,
+    "versionName": "2.3.1",
+    "releaseNotes": "Bug fixes and performance improvements",
+    "fileSize": 25678901,
+    "downloadUrl": "/api/v1/apk/download/2.3.1",
+    "isMandatory": false,
+    "hasUpdate": true,
+    "updateType": "minor"
+  }
+}
+```
+
+### Database Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS apk_versions (
+    id SERIAL PRIMARY KEY,
+    version_code INTEGER NOT NULL,
+    version_name VARCHAR(100) NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size BIGINT NOT NULL,
+    release_notes TEXT DEFAULT '',
+    is_mandatory BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_latest BOOLEAN DEFAULT FALSE,
+    uploaded_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    upload_ip TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(version_code)
+);
+```
