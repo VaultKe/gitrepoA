@@ -245,6 +245,18 @@ func SetupRoutes(
 			publicAuth.GET("/google/callback", api.HandleGoogleDriveCallback)
 		}
 
+		// Public APK distribution routes — accessible without authentication.
+		// These serve APK downloads and version-check data to end users.
+		publicApk := apiGroup.Group("/apk")
+		publicApk.Use(dbMiddleware)
+		publicApk.Use(configMiddleware)
+		{
+			publicApk.GET("/latest", api.GetLatestApk)
+			publicApk.GET("/version-check", api.VersionCheck)
+			publicApk.GET("/download/:version", api.DownloadApk)
+			publicApk.GET("/history", api.GetApkHistory)
+		}
+
 		protected := apiGroup.Group("/")
 		protected.Use(authMiddleware.AuthRequired())
 		protected.Use(dbMiddleware)
@@ -617,6 +629,13 @@ func SetupRoutes(
 				loanTypes.GET("/:loanTypeId", api.GetLoanType)
 				loanTypes.PUT("/:loanTypeId", api.UpdateLoanType)
 				loanTypes.DELETE("/:loanTypeId", api.DeleteLoanType)
+			}
+
+			apk := protected.Group("/apk")
+			apk.Use(configMiddleware)
+			{
+				apk.POST("/upload", api.UploadApk)
+				apk.DELETE("/version/:id", api.DeleteApkVersion)
 			}
 
 			if testDataGenerator != nil {

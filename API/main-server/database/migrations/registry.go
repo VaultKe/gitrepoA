@@ -66,5 +66,8 @@ func MigrateAll(db *sql.DB) error {
 	if err := MigrateJSONBConversions(db); err != nil {
 		return fmt.Errorf("jsonb_conversion: %w", err)
 	}
+	if err := MigrateApkVersions(db); err != nil {
+		return fmt.Errorf("apk_versions: %w", err)
+	}
 	return nil
 }

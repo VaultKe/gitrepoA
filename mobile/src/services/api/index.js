@@ -10,6 +10,7 @@ import * as invitationEndpoints from './invitationEndpoints';
 import * as contributionEndpoints from './contributionEndpoints';
 import * as welfareEndpoints from './welfareEndpoints';
 import * as meetingEndpoints from './meetingEndpoints';
+import * as apkEndpoints from './apkEndpoints';
 import { makeRequest, makeRequestWithRetry, checkBackendConnectivity, checkHealth, invalidateCache, clearApiCache, API_BASE_URL, REQUEST_TIMEOUT } from './client';
 import { getAuthToken, setAuthToken, removeAuthToken, storeUserData, getDeviceInfo } from './auth';
 
@@ -31,6 +32,7 @@ const ApiService = {
   ...contributionEndpoints,
   ...welfareEndpoints,
   ...meetingEndpoints,
+	...apkEndpoints,
   makeRequest,
   makeRequestWithRetry,
   checkBackendConnectivity,
