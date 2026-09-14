@@ -103,16 +103,16 @@ android {
             keyPassword 'android'
         }
         release {
-            def storeFilePath = findProperty('VAULTKE_STORE_FILE') ?: 'vaultke-release.keystore'
-            def storePassword = findProperty('VAULTKE_STORE_PASSWORD') ?: System.getenv('VAULTKE_STORE_PASSWORD') ?: ''
-            def keyAlias = findProperty('VAULTKE_KEY_ALIAS') ?: 'vaultke-key'
-            def keyPassword = findProperty('VAULTKE_KEY_PASSWORD') ?: System.getenv('VAULTKE_KEY_PASSWORD') ?: ''
+            def ksStoreFilePath = findProperty('VAULTKE_STORE_FILE') ?: 'vaultke-release.keystore'
+            def ksStorePassword = findProperty('VAULTKE_STORE_PASSWORD') ?: System.getenv('VAULTKE_STORE_PASSWORD') ?: ''
+            def ksKeyAlias = findProperty('VAULTKE_KEY_ALIAS') ?: 'vaultke-key'
+            def ksKeyPassword = findProperty('VAULTKE_KEY_PASSWORD') ?: System.getenv('VAULTKE_KEY_PASSWORD') ?: ''
 
-            if (new File(storeFilePath).exists() && storePassword != null && !storePassword.isEmpty()) {
-                storeFile file(storeFilePath)
-                storePassword storePassword
-                keyAlias keyAlias
-                keyPassword keyPassword
+            if (new File(ksStoreFilePath).exists() && ksStorePassword != null && !ksStorePassword.isEmpty()) {
+                storeFile file(ksStoreFilePath)
+                storePassword ksStorePassword
+                keyAlias ksKeyAlias
+                keyPassword ksKeyPassword
             } else {
                 storeFile file('debug.keystore')
                 storePassword 'android'
