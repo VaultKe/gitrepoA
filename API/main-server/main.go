@@ -105,6 +105,10 @@ func main() {
 	}
 
 	router := gin.New()
+
+	// Allow large APK uploads (up to 200MB) to be parsed into memory.
+	// Gin's default multipart limit is 32MB, which is too small for APK files.
+	router.MaxMultipartMemory = 200 << 20
 	router.Use(gin.CustomRecoveryWithWriter(gin.DefaultErrorWriter, func(c *gin.Context, recovered interface{}) {
 		if c.Writer.Status() == 0 {
 			c.Status(http.StatusInternalServerError)
