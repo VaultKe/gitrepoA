@@ -49,7 +49,7 @@
 }
 
 # --- Keep Dagger/Hilt (if used) ---
-@ -keep class dagger.** { *; }
+-keep class dagger.** { *; }
 
 # --- Suppress warnings ---
 -dontwarn com.facebook.react.**
